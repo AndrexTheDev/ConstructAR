@@ -11,13 +11,13 @@ name: android-build
 # SDK, no NDK). GitHub Actions is where the "zero errors, zero warnings" claim is actually
 # proven, so the build lives here and the numbers are reproducible by anyone with the token.
 #
-# Deliberately NO `android-actions/setup-android`: GitHub-hosted runners already ship the SDK
-# (ANDROID_HOME=/usr/local/lib/android/sdk), and the extra action is one more moving part that
-# can fail before the build even starts. `sdkmanager` is used directly and every install step
-# reports what it could and could not find.
+# Deliberately NO `android-actions/setup-android` and no Gradle wrapper: GitHub-hosted runners
+# already ship the SDK, and the repository does not commit wrapper scripts. Both are installed
+# explicitly so a failure happens in a step that names itself.
 #
-# The build is split into one step per module so a failure names the module instead of "gradle
-# failed": configuration -> JVM modules -> NDK library -> Kotlin -> full gate.
+# The build is split into one step per module (configuration -> JVM modules -> Kotlin -> NDK ->
+# full gate) and every step turns its log tail into a check-run annotation, so a failure is
+# readable through the API even when raw job logs are not reachable.
 on:
   push:
     branches: ["**"]
@@ -92,8 +92,8 @@ jobs:
           install "cmake;${CMAKE_VERSION}"
           install "ndk;${NDK_VERSION}"
 
-          # Fall back to any installed 27.x NDK when the exact pin is not published on the
-          # runner image (the build script is patched in CI only; the repository keeps its pin).
+          # Fall back to the newest installed 27.x NDK when the exact pin is not on the runner
+          # image. The build script is patched in CI only; the repository keeps its pin.
           if [ ! -d "$SDK/ndk/${NDK_VERSION}" ]; then
             ALT=$(ls "$SDK/ndk" 2>/dev/null | sort -V | tail -n 1 || true)
             echo "WARN: NDK ${NDK_VERSION} missing; newest installed is '${ALT:-none}'"
@@ -109,9 +109,6 @@ jobs:
           echo "--- installed packages"; "$SM" --list_installed || true
 
       - name: Install Gradle ${{ env.GRADLE_VERSION }}
-        # No `gradle/actions/setup-gradle` and no wrapper in the repository (the wrapper scripts
-        # and JAR are deliberately not committed), so the distribution is fetched directly and
-        # put on PATH. A 404 for the pinned version falls back to the newest published one.
         run: |
           set -euo pipefail
           base=https://services.gradle.org/distributions
@@ -142,28 +139,73 @@ jobs:
           key: gradle-${{ env.GRADLE_VERSION }}-${{ hashFiles('gradle/libs.versions.toml', '**/build.gradle.kts') }}
           restore-keys: gradle-${{ env.GRADLE_VERSION }}-
 
-      - name: Toolchain versions
-        run: |
-          java -version
-          gradle --version
-
       - name: Configure the build (settings, version catalog, plugins)
-        run: gradle --no-daemon --stacktrace help
+        run: |
+          set +e
+          gradle --no-daemon --stacktrace help > /tmp/step.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            msg=$(tail -n 40 /tmp/step.log | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{print $0 "%0A"}')
+            echo "::error title=configure failed::${msg}"
+            tail -n 200 /tmp/step.log
+            exit $code
+          fi
+          tail -n 20 /tmp/step.log
 
-      - name: JVM modules — :core, :export unit tests
-        run: gradle --no-daemon --stacktrace :core:test :export:test
+      - name: JVM modules - :core and :export unit tests
+        run: |
+          set +e
+          gradle --no-daemon --stacktrace :core:test :export:test > /tmp/step.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            msg=$(tail -n 40 /tmp/step.log | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{print $0 "%0A"}')
+            echo "::error title=JVM tests failed::${msg}"
+            tail -n 200 /tmp/step.log
+            exit $code
+          fi
+          tail -n 20 /tmp/step.log
 
-      - name: Kotlin compile — :ar-engine and :app
-        run: gradle --no-daemon --stacktrace :ar-engine:compileDebugKotlin :app:compileDebugKotlin
+      - name: Kotlin compile - :ar-engine and :app
+        run: |
+          set +e
+          gradle --no-daemon --stacktrace :ar-engine:compileDebugKotlin :app:compileDebugKotlin > /tmp/step.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            msg=$(tail -n 40 /tmp/step.log | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{print $0 "%0A"}')
+            echo "::error title=Kotlin compile failed::${msg}"
+            tail -n 300 /tmp/step.log
+            exit $code
+          fi
+          tail -n 20 /tmp/step.log
 
-      - name: NDK library — :native-slam
-        run: gradle --no-daemon --stacktrace :native-slam:assembleDebug
+      - name: NDK library - :native-slam
+        run: |
+          set +e
+          gradle --no-daemon --stacktrace :native-slam:assembleDebug > /tmp/step.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            msg=$(tail -n 40 /tmp/step.log | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{print $0 "%0A"}')
+            echo "::error title=NDK build failed::${msg}"
+            tail -n 300 /tmp/step.log
+            exit $code
+          fi
+          tail -n 20 /tmp/step.log
 
-      - name: Full gate — assembleDebug + testDebugUnitTest (warnings are failures)
+      - name: Full gate - assembleDebug + testDebugUnitTest (warnings are failures)
         # `allWarningsAsErrors` is set in every module's build.gradle.kts and `-Werror` in
         # CMakeLists.txt; `--warning-mode all` surfaces Gradle deprecations too, so a green run
         # here means "no warnings", not "warnings we chose to ignore".
-        run: gradle --no-daemon --stacktrace --warning-mode all assembleDebug testDebugUnitTest
+        run: |
+          set +e
+          gradle --no-daemon --stacktrace --warning-mode all assembleDebug testDebugUnitTest > /tmp/step.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            msg=$(tail -n 40 /tmp/step.log | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{print $0 "%0A"}')
+            echo "::error title=full gate failed::${msg}"
+            tail -n 300 /tmp/step.log
+            exit $code
+          fi
+          tail -n 20 /tmp/step.log
 
       - name: Verify the native library shipped for arm64
         run: |
