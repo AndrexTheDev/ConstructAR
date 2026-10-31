@@ -35,7 +35,7 @@ permissions:
   pull-requests: write
 
 env:
-  GRADLE_VERSION: "9.1"
+  GRADLE_VERSION: "9.6.0"
   JAVA_VERSION: "21"
   NDK_VERSION: "27.2.12479018"
   CMAKE_VERSION: "3.22.1"

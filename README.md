@@ -120,7 +120,7 @@ format placeholder — so a half-translated release cannot ship.
 
 ## Build
 
-Requirements: **JDK 21**, Gradle **9.1**, Android SDK **37**, NDK **27.2.12479018**,
+Requirements: **JDK 21**, Gradle **9.6.0** (AGP 9.4.1 requires ≥ 9.6), Android SDK **37**, NDK **27.2.12479018**,
 CMake **3.22.1**, and the SceneView **4.63.0** / ARCore **1.57.0** / Filament **1.72.1**
 artifacts (pinned in `gradle/libs.versions.toml`).
 
@@ -131,7 +131,7 @@ gradle :app:assembleDebug                # APK in app/build/outputs/apk/debug/
 python3 scripts/verify_sources.py        # header / reflection / i18n gates, no SDK needed
 ```
 
-`gradle/actions/setup-gradle` supplies Gradle 9.1 in CI; the wrapper scripts and JAR are
+The CI workflow downloads Gradle 9.6.0 and puts it on `PATH`; the wrapper scripts and JAR are
 deliberately not committed, so `gradle` (not `./gradlew`) is the documented entry point here.
 `allWarningsAsErrors` is on for every module, so a deprecation is a build failure.
 

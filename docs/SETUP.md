@@ -45,7 +45,7 @@ python3 scripts/verify_sources.py                    # headers / reflection ban 
 
 | Item | In repo | Where to get it |
 |------|---------|-----------------|
-| Gradle wrapper | ❌ | `gradle wrapper --gradle-version 9.1` once, then commit `gradle/wrapper/*` |
+| Gradle wrapper | ❌ | `gradle wrapper --gradle-version 9.6.0` once, then commit `gradle/wrapper/*` |
 | Depth model `.tflite` | ❌ (25 MB binary, hash-verified) | see §4 |
 | RTAB-Map source | ❌ | see §5, or skip it |
 | Launcher icon | ✅ (vector) | replace with a designed adaptive icon before release |
