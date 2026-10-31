@@ -32,6 +32,7 @@ import com.google.android.filament.Engine
 import com.google.android.filament.Scene
 import com.google.ar.core.Config
 import com.google.ar.core.Frame
+import com.google.ar.core.LightEstimate
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
 import io.github.sceneview.loaders.MaterialLoader
@@ -71,6 +72,12 @@ class ArMeasureController(private val context: Context) {
     private var torchController: TorchController? = null
     private var monocularDepth: com.constructar.arengine.ai.MonocularDepthSource? = null
     private var powerManager: PowerManager? = null
+
+    /**
+     * Scratch for ARCore's colour correction, whose 4th component is the average pixel
+     * intensity. Reused because this runs once per frame on the render thread.
+     */
+    private val colorCorrection = FloatArray(4)
 
     val torchOn = MutableStateFlow(false)
 
@@ -193,13 +200,16 @@ class ArMeasureController(private val context: Context) {
         pipeline.latestSnapshot?.let { snapshot -> monocularDepth?.onFrame(frame, snapshot) }
 
         val camera = frame.camera
+        // ARCore's TrackingState has exactly three values. PAUSED covers both the warm-up
+        // before the first tracked frame and a backgrounded session, so it maps to LIMITED
+        // ("hold still") rather than to a loss the operator has to react to.
         val quality = when (camera.trackingState) {
             TrackingState.TRACKING -> TrackingQuality.GOOD
-            TrackingState.INITIALIZING -> TrackingQuality.LIMITED
-            else -> TrackingQuality.NOT_TRACKING
+            TrackingState.PAUSED -> TrackingQuality.LIMITED
+            TrackingState.STOPPED -> TrackingQuality.NOT_TRACKING
         }
         val stats = pipeline.depthStats
-        val ambientLux = runCatching { frame.lightEstimate.state.ambientIntensity }.getOrDefault(0f)
+        val ambientLux = ambientLuxOf(frame.lightEstimate, colorCorrection)
         tracking.onFrame(
             tracking = quality,
             failureReason = if (quality == TrackingQuality.GOOD) null else camera.trackingFailureReason?.name,
@@ -366,3 +376,31 @@ class ArMeasureController(private val context: Context) {
         private const val HUD_INTERVAL_MS = 50L
     }
 }
+
+/**
+ * ARCore reports brightness as an **average pixel intensity in [0,1]**, not in lux
+ * (`LightEstimate` has no `ambientIntensity`; its `State` carries a validity flag only).
+ *
+ * [TorchController] and [TrackingMonitor] reason in lux - torch on below 40 lux, off above
+ * 120 lux, low-light warning below 15 lux - so the intensity is mapped onto that scale with a
+ * quadratic curve normalised at ~1000 lux for a fully exposed frame:
+ *
+ * | pixel intensity | lux  | meaning                     |
+ * | --- | --- | --- |
+ * | 0.05 | ~3   | night site, torch essential |
+ * | 0.12 | ~15  | low-light warning threshold |
+ * | 0.20 | ~40  | torch turns on              |
+ * | 0.35 | ~120 | torch turns off             |
+ *
+ * The curve is an estimate, and the app says so: the HUD shows a coaching code, never a lux
+ * number pretending to be a measurement.
+ */
+private fun ambientLuxOf(estimate: LightEstimate, scratch: FloatArray): Float = runCatching {
+    if (estimate.state != LightEstimate.State.VALID) return@runCatching 0f
+    estimate.getColorCorrection(scratch, 0)
+    val intensity = scratch[3].coerceIn(0f, 1f)
+    intensity * intensity * LUX_AT_FULL_INTENSITY
+}.getOrDefault(0f)
+
+/** Lux corresponding to a fully bright ARCore light estimate (see [ambientLuxOf]). */
+private const val LUX_AT_FULL_INTENSITY = 1000f

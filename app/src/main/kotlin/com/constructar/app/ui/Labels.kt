@@ -86,9 +86,9 @@ fun RouteWarning.message(): String? = when (this) {
 @Composable
 fun ArReadiness.message(): String? = when (this) {
     ArReadiness.Ready, ArReadiness.InstallRequested -> null
-    ArReadiness.Unsupported -> stringResource(R.string.ar_unavailable_unsupported)
-    ArReadiness.NeedsInstall -> stringResource(R.string.ar_unavailable_needs_install)
+    is ArReadiness.Unsupported -> stringResource(R.string.ar_unavailable_unsupported)
+    is ArReadiness.NeedsInstall -> stringResource(R.string.ar_unavailable_needs_install)
     ArReadiness.UserDeclined -> stringResource(R.string.ar_unavailable_declined)
     ArReadiness.CameraPermissionMissing -> stringResource(R.string.ar_camera_permission)
-    ArReadiness.Failure -> stringResource(R.string.ar_unavailable_failure)
+    is ArReadiness.Failure -> stringResource(R.string.ar_unavailable_failure)
 }
