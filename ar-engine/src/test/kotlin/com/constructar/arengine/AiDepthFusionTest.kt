@@ -132,7 +132,9 @@ class AiDepthFusionTest {
     @Test
     fun `calibration samples come only from confident measurable pixels`() {
         val depth = ShortArray(width * height) { index -> if (index % 3 == 0) 0 else 1500 }
-        val confidence = ByteArray(width * height) { if (it % 2 == 0) 255 else 10 }
+        // 255 does not fit in a Byte, so ARCore's 0..255 confidence is stored as 0xFF.toByte()
+        // (-1) exactly as DepthCapture does when it copies the confidence plane.
+        val confidence = ByteArray(width * height) { if (it % 2 == 0) 0xFF.toByte() else 10 }
         val (relative, metric) = AiDepthFusion.calibrationSamples(
             arcoreMm = depth,
             confidence = confidence,
