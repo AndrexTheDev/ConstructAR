@@ -203,4 +203,9 @@
     <string name="project_measure_again">Weitere Strecke messen</string>
     <string name="project_scan_missing">Noch nicht gescannt - der 3D-Export enthält dann nur die Strecken.</string>
     <string name="help_licence_title">Lizenz</string>
+    <string name="runs_title">Strecken</string>
+    <string name="run_detail">%1$s · %2$s</string>
+    <string name="run_delete">Strecke löschen</string>
+    <string name="technician_title">Monteur vor Ort</string>
+    <string name="technician_hint">Name, wie er auf dem Protokoll stehen soll</string>
 </resources>

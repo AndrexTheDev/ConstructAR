@@ -67,6 +67,8 @@ fun ProjectScreen(
     onExport: () -> Unit,
     onRename: (String) -> Unit,
     onSaveNotes: (String) -> Unit,
+    onSaveTechnician: (String) -> Unit,
+    onRemoveRoute: (String) -> Unit,
     onDelete: () -> Unit,
 ) {
     var renameOpen by remember { mutableStateOf(false) }
@@ -74,6 +76,7 @@ fun ProjectScreen(
     var nameDraft by remember(project.id) { mutableStateOf(project.name) }
     var notesDraft by remember(project.id) { mutableStateOf(project.notes) }
     var notesSaved by remember(project.id) { mutableStateOf(false) }
+    var technicianDraft by remember(project.id) { mutableStateOf(project.technician) }
 
     val scanned = (project.scan?.meshTriangleCount ?: 0) > 0
     val measured = project.routes.isNotEmpty()
@@ -174,6 +177,30 @@ fun ProjectScreen(
             }
         }
 
+        // ── The runs, individually ──────────────────────────────────────────────────
+        if (project.routes.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(R.string.runs_title),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+                project.routes.forEach { route ->
+                    RouteRow(
+                        kind = route.spec.kind.routingLabel(),
+                        detail = stringResource(
+                            R.string.run_detail,
+                            route.spec.label,
+                            route.spec.sizeLabel,
+                        ),
+                        length = LengthFormatter.format(route.polylineLengthMeters),
+                        onDelete = { onRemoveRoute(route.id) },
+                    )
+                }
+            }
+        }
+
         // ── Next action, chosen for the operator ────────────────────────────────────
         GloveButton(
             label = stringResource(if (measured) R.string.project_measure_again else R.string.project_measure),
@@ -189,6 +216,31 @@ fun ProjectScreen(
             onClick = onExport,
             modifier = Modifier.fillMaxWidth(),
         )
+
+        // ── Who signs the protocol ──────────────────────────────────────────────────
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = RoundedCornerShape(18.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.technician_title), style = MaterialTheme.typography.titleMedium)
+                OutlinedTextField(
+                    value = technicianDraft,
+                    onValueChange = { technicianDraft = it },
+                    placeholder = { Text(stringResource(R.string.technician_hint)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                GloveButton(
+                    label = stringResource(R.string.action_save),
+                    icon = Icons.Default.Check,
+                    tone = ActionTone.SECONDARY,
+                    enabled = technicianDraft.trim() != project.technician,
+                    onClick = { onSaveTechnician(technicianDraft) },
+                )
+            }
+        }
 
         // ── The note for the office ─────────────────────────────────────────────────
         Card(
@@ -276,6 +328,37 @@ fun ProjectScreen(
                 TextButton(onClick = { deleteOpen = false }) { Text(stringResource(R.string.home_cancel)) }
             },
         )
+    }
+}
+
+/** One measured run: what it is, where it runs, how long it is, and a way to remove it. */
+@Composable
+private fun RouteRow(kind: String, detail: String, length: String, onDelete: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
+            .padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(kind, style = MaterialTheme.typography.titleSmall)
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(length, style = MaterialTheme.typography.titleSmall, color = SiteColors.gold)
+        IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = stringResource(R.string.run_delete),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

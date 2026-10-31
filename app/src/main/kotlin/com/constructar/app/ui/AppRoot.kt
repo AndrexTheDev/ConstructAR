@@ -139,6 +139,8 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onExport = { navController.navigate(Routes.EXPORT) },
                             onRename = { viewModel.renameProject(it) },
                             onSaveNotes = { viewModel.updateNotes(it) },
+                            onSaveTechnician = { viewModel.updateTechnician(it) },
+                            onRemoveRoute = { routeId -> viewModel.removeRoute(routeId) },
                             onDelete = {
                                 viewModel.deleteProject(project.id) {
                                     navController.popBackStack(Routes.HOME, inclusive = false)

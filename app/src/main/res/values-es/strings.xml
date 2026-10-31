@@ -203,4 +203,9 @@
     <string name="project_measure_again">Añadir otro recorrido</string>
     <string name="project_scan_missing">Sin escanear: la exportación 3D solo tendrá los recorridos.</string>
     <string name="help_licence_title">Licencia</string>
+    <string name="runs_title">Recorridos</string>
+    <string name="run_detail">%1$s · %2$s</string>
+    <string name="run_delete">Borrar recorrido</string>
+    <string name="technician_title">Montador en obra</string>
+    <string name="technician_hint">Nombre tal como debe figurar en el protocolo</string>
 </resources>

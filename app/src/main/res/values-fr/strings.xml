@@ -203,4 +203,9 @@
     <string name="project_measure_again">Ajouter un tracé</string>
     <string name="project_scan_missing">Pas encore scanné : l\'export 3D ne contiendra que les tracés.</string>
     <string name="help_licence_title">Licence</string>
+    <string name="runs_title">Tracés</string>
+    <string name="run_detail">%1$s · %2$s</string>
+    <string name="run_delete">Supprimer le tracé</string>
+    <string name="technician_title">Monteur sur site</string>
+    <string name="technician_hint">Nom tel qu\'il doit figurer sur le protocole</string>
 </resources>

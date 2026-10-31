@@ -203,4 +203,9 @@
     <string name="project_measure_again">Aggiungi un altro percorso</string>
     <string name="project_scan_missing">Non ancora scansionato: l\'export 3D conterrà solo i percorsi.</string>
     <string name="help_licence_title">Licenza</string>
+    <string name="runs_title">Percorsi</string>
+    <string name="run_detail">%1$s · %2$s</string>
+    <string name="run_delete">Elimina percorso</string>
+    <string name="technician_title">Installatore in cantiere</string>
+    <string name="technician_hint">Nome come deve comparire sul protocollo</string>
 </resources>

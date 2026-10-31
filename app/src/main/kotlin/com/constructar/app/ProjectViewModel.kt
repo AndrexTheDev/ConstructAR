@@ -173,6 +173,12 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         mutate(project.copy(name = trimmed), onSaved)
     }
 
+    /** Who is signing the protocol; the name is printed in the PDF header. */
+    fun updateTechnician(name: String, onSaved: (ProjectRecord?) -> Unit = {}) {
+        val project = mutableState.value.openProject ?: return
+        mutate(project.copy(technician = name.trim()), onSaved)
+    }
+
     /** The note the operator leaves for the office — it travels in the JSON and the PDF. */
     fun updateNotes(notes: String, onSaved: (ProjectRecord?) -> Unit = {}) {
         val project = mutableState.value.openProject ?: return

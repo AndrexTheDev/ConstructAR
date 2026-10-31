@@ -207,4 +207,9 @@
     <string name="project_measure_again">Dodaj kolejną trasę</string>
     <string name="project_scan_missing">Jeszcze nie zeskanowano: eksport 3D będzie zawierał tylko trasy.</string>
     <string name="help_licence_title">Licencja</string>
+    <string name="runs_title">Trasy</string>
+    <string name="run_detail">%1$s · %2$s</string>
+    <string name="run_delete">Usuń trasę</string>
+    <string name="technician_title">Monter na budowie</string>
+    <string name="technician_hint">Nazwisko tak, jak ma być w protokole</string>
 </resources>

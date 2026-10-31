@@ -203,4 +203,9 @@
     <string name="project_measure_again">Add another run</string>
     <string name="project_scan_missing">Not scanned yet - the 3D export will only contain the runs.</string>
     <string name="help_licence_title">Licence</string>
+    <string name="runs_title">Runs</string>
+    <string name="run_detail">%1$s · %2$s</string>
+    <string name="run_delete">Delete run</string>
+    <string name="technician_title">Fitter on site</string>
+    <string name="technician_hint">Name as it should appear on the protocol</string>
 </resources>
