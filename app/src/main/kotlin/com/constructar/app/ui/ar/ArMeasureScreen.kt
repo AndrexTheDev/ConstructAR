@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -72,6 +73,7 @@ fun ArMeasureScreen(
     project: ProjectRecord,
     onBack: () -> Unit,
     onRouteFinished: (com.constructar.core.model.ConduitRoute) -> Unit,
+    onScanSummary: (com.constructar.core.model.ScanSummary) -> Unit,
     onOpenExport: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -212,6 +214,9 @@ fun ArMeasureScreen(
                             color = Color.White.copy(alpha = 0.85f),
                         )
                     }
+                    IconButton(onClick = onOpenExport, modifier = Modifier.size(56.dp)) {
+                        Icon(Icons.Default.Share, contentDescription = "Export", tint = Color.White)
+                    }
                     IconButton(onClick = onBack, modifier = Modifier.size(56.dp)) {
                         Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
                     }
@@ -312,7 +317,12 @@ fun ArMeasureScreen(
                     label = "Finish",
                     icon = Icons.Default.Save,
                     onClick = {
-                        controller.finish(label = "${spec.label} run ${project.routes.size + 1}")?.let(onRouteFinished)
+                        controller.finish(label = "${spec.label} run ${project.routes.size + 1}")?.let { route ->
+                            onRouteFinished(route)
+                            // Snapshot the scan statistics with the first finished run: the
+                            // protocol header must describe the room as it was measured.
+                            onScanSummary(controller.scanSummary())
+                        }
                     },
                     tone = ActionTone.PRIMARY,
                     enabled = routeState.canFinish,

@@ -84,6 +84,21 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         mutate(project.removeRoute(routeId), onSaved)
     }
 
+    /**
+     * Persists the scan statistics (triangle count, extents, coverage) into the open project.
+     * Called when a run is finished, so the protocol describes the room as it was scanned
+     * rather than whatever the last frame happened to contain.
+     */
+    fun updateScanSummary(summary: com.constructar.core.model.ScanSummary) {
+        val project = mutableState.value.openProject ?: return
+        val updated = project.copy(scan = summary)
+        mutableState.value = mutableState.value.copy(openProject = updated)
+        viewModelScope.launch {
+            repository.updateScanSummary(updated.id, summary)
+            refresh()
+        }
+    }
+
     fun closeProject() {
         mutableState.value = mutableState.value.copy(openProject = null, materialList = null)
     }

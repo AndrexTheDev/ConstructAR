@@ -66,6 +66,11 @@ fun AppRoot(viewModel: ProjectViewModel) {
                                 if (project != null) navController.navigate(Routes.MEASURE)
                             }
                         },
+                        onExport = { id ->
+                            viewModel.openProject(id) { project ->
+                                if (project != null) navController.navigate(Routes.EXPORT)
+                            }
+                        },
                         onCreate = { name ->
                             viewModel.createProject(name) { navController.navigate(Routes.MEASURE) }
                         },
@@ -89,6 +94,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                                 navController.popBackStack(Routes.HOME, inclusive = false)
                             },
                             onRouteFinished = { route -> viewModel.upsertRoute(route) },
+                            onScanSummary = { summary -> viewModel.updateScanSummary(summary) },
                             onOpenExport = { navController.navigate(Routes.EXPORT) },
                         )
                     }

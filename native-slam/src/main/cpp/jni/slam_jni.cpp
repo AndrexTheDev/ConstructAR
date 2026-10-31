@@ -4,10 +4,13 @@
 //
 //   nativeCreate(voxelSize, truncationVoxels, maxBlocks, workerThreads, minConfidence)
 //   nativeDestroy(handle)
-//   nativeIntegrateDepth(handle, depthDirect, w, h, rowStrideElements,
-//                        confidenceDirect, confW, confH, confRowStride,
+//   nativeReset(handle)
+//   nativeIntegrateDepth(handle, depthShorts, w, h, rowStrideElements,
+//                        confidenceBytes, confW, confH, confRowStride,
 //                        fx, fy, cx, cy, cameraToWorld[16], timestampNs, pixelStep) -> IntArray
+//   nativeIntegrateDepthBuffer(handle, depthDirect, ...same...) -> IntArray   (zero-copy)
 //   nativeIntegrateDepthHardwareBuffer(handle, hwBuffer, ...) -> IntArray   (API 26+, may fail)
+//   nativeLastBounds(handle) -> FloatArray[6]
 //   nativeExtractMesh(handle) -> Array<Any> { FloatArray, IntArray }       (see below)
 //   nativeReset(handle)
 //   nativePoseGraphReset(handle)
@@ -65,7 +68,15 @@ struct EngineContext {
   RtabMapBridge rtabMap;
   Bounds lastBounds;
   int lastTriangleCount = 0;
-  std::mutex meshMutex;
+  /**
+   * Serialises *every* access to the volume.
+   *
+   * The Kotlin pipeline already funnels integration and extraction onto one worker thread, but
+   * `reset()` arrives from the UI thread (a new room was started) and `destroy()` from whatever
+   * thread closed the engine. Without this lock a reset racing an integration corrupts the
+   * block table silently — the kind of bug that shows up as "the scan went weird" days later.
+   */
+  std::mutex volumeMutex;
 };
 
 EngineContext* contextFrom(jlong handle) { return reinterpret_cast<EngineContext*>(handle); }
@@ -113,6 +124,7 @@ JNIEXPORT void JNICALL Java_com_constructar_nativebridge_NativeSlamEngine_native
                                                                                      jlong handle) {
   EngineContext* context = contextFrom(handle);
   if (context == nullptr) return;
+  std::lock_guard<std::mutex> lock(context->volumeMutex);
   context->volume->reset();
   context->lastBounds = Bounds{};
   context->lastTriangleCount = 0;
@@ -142,7 +154,11 @@ static jintArray integrateCommon(JNIEnv* env, EngineContext* context, const uint
   for (int i = 0; i < 16; ++i) frame.cameraToWorld.m[i] = matrix[i];
   frame.timestampNs = timestampNs;
 
-  const constructar::IntegrationStats stats = context->volume->integrate(frame, pixelStep);
+  constructar::IntegrationStats stats;
+  {
+    std::lock_guard<std::mutex> lock(context->volumeMutex);
+    stats = context->volume->integrate(frame, pixelStep);
+  }
 
   jint values[8] = {
       stats.raysProcessed,
@@ -176,22 +192,24 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeIntegrateDepth(
   EngineContext* context = contextFrom(handle);
   if (context == nullptr || depthArray == nullptr) return nullptr;
 
-  auto* depth = static_cast<const uint16_t*>(env->GetShortArrayElements(depthArray, nullptr));
-  if (depth == nullptr) return nullptr;
-  auto* confidence = confidenceArray != nullptr
-                         ? reinterpret_cast<const uint8_t*>(env->GetByteArrayElements(confidenceArray, nullptr))
-                         : nullptr;
+  jshort* rawDepth = env->GetShortArrayElements(depthArray, nullptr);
+  if (rawDepth == nullptr) return nullptr;
+  const uint16_t* depth = reinterpret_cast<const uint16_t*>(rawDepth);
+
+  jbyte* rawConfidence = confidenceArray != nullptr
+                             ? env->GetByteArrayElements(confidenceArray, nullptr)
+                             : nullptr;
+  const uint8_t* confidence = reinterpret_cast<const uint8_t*>(rawConfidence);
 
   jintArray result = integrateCommon(env, context, depth, width, height, rowStrideElements,
                                      confidence, confidenceWidth, confidenceHeight,
                                      confidenceRowStride, fx, fy, cx, cy, cameraToWorld,
                                      timestampNs, pixelStep);
 
-  env->ReleaseShortArrayElements(depthArray, reinterpret_cast<jshort*>(const_cast<uint16_t*>(depth)),
-                                 JNI_ABORT);
-  if (confidenceArray != nullptr && confidence != nullptr) {
-    env->ReleaseByteArrayElements(confidenceArray, const_cast<jbyte*>(reinterpret_cast<const jbyte*>(confidence)),
-                                  JNI_ABORT);
+  // JNI_ABORT: we only read the arrays, so the VM must not copy anything back.
+  env->ReleaseShortArrayElements(depthArray, rawDepth, JNI_ABORT);
+  if (rawConfidence != nullptr) {
+    env->ReleaseByteArrayElements(confidenceArray, rawConfidence, JNI_ABORT);
   }
   return result;
 }
@@ -275,7 +293,7 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeExtractMesh(JNIEnv* env
 
   MeshBuffers mesh;
   {
-    std::lock_guard<std::mutex> lock(context->meshMutex);
+    std::lock_guard<std::mutex> lock(context->volumeMutex);
     mesh = context->volume->extractMesh(isoLevel);
     context->lastTriangleCount = static_cast<int>(mesh.triangleCount());
     if (!mesh.positions.empty()) {

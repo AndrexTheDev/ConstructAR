@@ -111,7 +111,11 @@ class TsdfScanPipeline(
     private val frames = Channel<DepthFrameSnapshot>(capacity = 1, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
     private val capture = DepthCapture()
     private var scope: CoroutineScope? = null
+
+    @Volatile
     private var engine: NativeSlamEngine? = null
+
+    private var workerJob: kotlinx.coroutines.Job? = null
 
     private val workerBusy = AtomicBoolean(false)
     private var extractIntervalMs = EXTRACT_INTERVAL_MS
@@ -132,7 +136,8 @@ class TsdfScanPipeline(
             return
         }
         mutableState.value = mutableState.value.copy(ready = true)
-        scope.launch(dispatcher) {
+        workerJob = scope.launch(dispatcher) {
+            // Ends when the channel is closed and drained — see `stop()`.
             for (snapshot in frames) {
                 integrate(snapshot)
             }
@@ -286,9 +291,25 @@ class TsdfScanPipeline(
         )
     }
 
+    /**
+     * Stops the worker and releases the native volume.
+     *
+     * The join is essential: closing the native engine while the worker is inside
+     * `integrateDepth` is a use-after-free. Closing the channel ends the loop after the current
+     * frame, and the join bounds the wait to half a second so a wedged device cannot hang the
+     * UI thread on teardown.
+     */
     fun stop() {
         latestSnapshot?.let(capture::recycle)
         latestSnapshot = null
+        frames.close()
+        val job = workerJob
+        workerJob = null
+        if (job != null) {
+            kotlinx.coroutines.runBlocking {
+                kotlinx.coroutines.withTimeoutOrNull(500) { job.join() }
+            }
+        }
         engine?.close()
         engine = null
         scope = null
