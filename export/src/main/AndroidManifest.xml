@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- :export has no components and no permissions: it only writes to buffers/URIs the app
+     already owns (Storage Access Framework tree or app-private storage). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

@@ -1,0 +1,23 @@
+*.iml
+.gradle/
+local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.keystore
+!debug.keystore
+.secure/
+*.so
+!src/main/jniLibs/**/*.so
+# Exported measurement artefacts never belong in VCS
+exports/
+# Bundled model binaries (license + size — see docs/SETUP.md §4)
+app/src/main/assets/models/*.tflite
+app/src/main/assets/models/*.onnx
+# RTAB-Map vendored sources are fetched, not committed
+native-slam/third_party/rtabmap/

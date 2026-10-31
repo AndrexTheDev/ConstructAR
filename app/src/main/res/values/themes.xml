@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A dark, high-contrast base: a construction site in daylight and a basement at night
+         both need the maximum contrast the screen can give. Compose still owns every colour
+         that is actually drawn (see Theme.kt); this style only sets the window background and
+         the system bars so there is no white flash before the first frame. -->
+    <style name="Theme.ConstructAR" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

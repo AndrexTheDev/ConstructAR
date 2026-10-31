@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher icon drawn as vectors (no binary assets in the repo):
+     site-signal orange background, a white "cable run with a corner" glyph.
+     Replace with a designed adaptive icon before a store release. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#FF6B00" />
+        </shape>
+    </item>
+    <item
+        android:bottom="24dp"
+        android:left="24dp"
+        android:right="24dp"
+        android:top="24dp">
+        <vector
+            android:width="48dp"
+            android:height="48dp"
+            android:viewportWidth="48"
+            android:viewportHeight="48">
+            <!-- Vertical drop, rounded corner, horizontal run -->
+            <path
+                android:fillColor="#00000000"
+                android:pathData="M12,4 L12,28 Q12,36 20,36 L44,36"
+                android:strokeColor="#FFFFFF"
+                android:strokeLineCap="round"
+                android:strokeWidth="7" />
+            <!-- Anchor dots -->
+            <path
+                android:fillColor="#FFFFFF"
+                android:pathData="M12,4 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+            <path
+                android:fillColor="#FFFFFF"
+                android:pathData="M44,36 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+        </vector>
+    </item>
+</layer-list>

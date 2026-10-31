@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- :native-slam ships no components; the manifest exists only so AGP can attach the
+     native library and consumer proguard rules to the AAR. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
