@@ -54,7 +54,10 @@ data class Quat(val w: Float, val x: Float, val y: Float, val z: Float) {
         val roll = kotlin.math.atan2(sinrCosp, cosrCosp)
 
         val sinp = 2f * (w * y - z * x)
-        val pitch = if (abs(sinp) >= 1f) kotlin.math.copySign(kotlin.math.PI.toFloat() / 2f, sinp) else kotlin.math.asin(sinp)
+        // NOTE: no `copySign` — Kotlin's stdlib exposes it as an extension, and the
+        // fully-qualified call `kotlin.math.copySign(x, y)` does not resolve.
+        val halfPi = (kotlin.math.PI / 2.0).toFloat()
+        val pitch = if (abs(sinp) >= 1f) (if (sinp < 0f) -halfPi else halfPi) else kotlin.math.asin(sinp)
 
         val sinyCosp = 2f * (w * z + x * y)
         val cosyCosp = 1f - 2f * (y * y + z * z)
