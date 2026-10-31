@@ -6,12 +6,18 @@
 
 package com.constructar.app.ui
 
+import android.graphics.Bitmap
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -22,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -41,9 +48,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import com.constructar.app.R
 import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
@@ -71,6 +82,8 @@ fun ProjectScreen(
     onSaveTechnician: (String) -> Unit,
     onRemoveRoute: (String) -> Unit,
     onMaterials: () -> Unit,
+    photo: Bitmap?,
+    onPhoto: (Uri) -> Unit,
     onDelete: () -> Unit,
 ) {
     var renameOpen by remember { mutableStateOf(false) }
@@ -79,6 +92,12 @@ fun ProjectScreen(
     var notesDraft by remember(project.id) { mutableStateOf(project.notes) }
     var notesSaved by remember(project.id) { mutableStateOf(false) }
     var technicianDraft by remember(project.id) { mutableStateOf(project.technician) }
+    val context = LocalContext.current
+    var pendingCapture by remember { mutableStateOf<Uri?>(null) }
+    val captureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+        val target = pendingCapture
+        if (captured && target != null) onPhoto(target)
+    }
 
     val scanned = (project.scan?.meshTriangleCount ?: 0) > 0
     val measured = project.routes.isNotEmpty()
@@ -134,6 +153,53 @@ fun ProjectScreen(
             StepChip(stringResource(R.string.step_scan), number = 1, done = scanned, modifier = Modifier.weight(1f))
             StepChip(stringResource(R.string.step_measure), number = 2, done = measured, modifier = Modifier.weight(1f))
             StepChip(stringResource(R.string.step_export), number = 3, done = false, modifier = Modifier.weight(1f))
+        }
+
+        // ── Documentation photo ─────────────────────────────────────────────────────
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = RoundedCornerShape(18.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(stringResource(R.string.photo_title), style = MaterialTheme.typography.titleMedium)
+                if (photo != null) {
+                    Image(
+                        bitmap = photo.asImageBitmap(),
+                        contentDescription = stringResource(R.string.photo_title),
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(170.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
+                    )
+                } else {
+                    Text(
+                        stringResource(R.string.photo_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                GloveButton(
+                    label = stringResource(if (photo == null) R.string.photo_take else R.string.photo_replace),
+                    icon = Icons.Default.PhotoCamera,
+                    tone = ActionTone.SECONDARY,
+                    onClick = {
+                        // The camera app writes straight into our cache through the FileProvider,
+                        // so no storage permission and no copy of the operator's gallery is needed.
+                        val directory = java.io.File(context.cacheDir, "capture").apply { mkdirs() }
+                        val target = java.io.File(directory, "photo-" + System.currentTimeMillis() + ".jpg")
+                        val uri = FileProvider.getUriForFile(
+                            context,
+                            context.packageName + ".fileprovider",
+                            target,
+                        )
+                        pendingCapture = uri
+                        captureLauncher.launch(uri)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
 
         // ── What has been measured ──────────────────────────────────────────────────

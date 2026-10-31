@@ -7,6 +7,9 @@
 package com.constructar.app.data
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.util.Log
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.model.ScanSummary
@@ -150,6 +153,7 @@ class ProjectRepository(private val context: Context) {
     }
 
     suspend fun delete(id: String): Boolean = withContext(Dispatchers.IO) {
+        photoFile(id).delete()
         fileFor(id).delete()
     }
 
@@ -162,10 +166,58 @@ class ProjectRepository(private val context: Context) {
             updated
         }
 
+    /**
+     * The documentation photo of a project, if the operator took one.
+     *
+     * Stored by convention (`photos/<project id>.jpg`) rather than as a path inside the project
+     * JSON: the file is a rendering of the site, not data the protocol depends on, and a project
+     * that lost its photo must still open, export and bill correctly.
+     */
+    fun photoFile(id: String): File = File(photoDirectory, "$id.jpg")
+
+    /** Copies a picture the camera app wrote into our cache; the project keeps one photo. */
+    suspend fun savePhoto(projectId: String, source: Uri): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val target = photoFile(projectId)
+            val copied = context.contentResolver.openInputStream(source)?.use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+                true
+            } ?: false
+            if (!copied) target.delete()
+            copied
+        }.getOrDefault(false)
+    }
+
+    /**
+     * Decodes the photo at a size fit for a screen and an A4 page.
+     *
+     * A modern phone camera writes 12 MP; decoding that at full size would be ~48 MB twice over
+     * (thumbnail + PDF). Sampling keeps the working set at a few megabytes, and a protocol page
+     * cannot use more detail than this anyway.
+     */
+    suspend fun loadPhoto(projectId: String, maxDimensionPx: Int = 1_200): Bitmap? =
+        withContext(Dispatchers.IO) {
+            val file = photoFile(projectId)
+            if (!file.exists() || file.length() == 0L) return@withContext null
+            runCatching {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(file.absolutePath, bounds)
+                var sample = 1
+                while (bounds.outWidth / (sample * 2) >= maxDimensionPx || bounds.outHeight / (sample * 2) >= maxDimensionPx) {
+                    sample *= 2
+                }
+                BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
+            }.getOrNull()
+        }
+
     /** Where exports are staged before the operator picks a destination folder. */
     fun exportStagingDirectory(): File = File(context.cacheDir, "exports").apply { mkdirs() }
 
     private fun fileFor(id: String) = File(directory, "$id.json")
+
+    private val photoDirectory: File by lazy {
+        File(context.filesDir, "photos").apply { mkdirs() }
+    }
 
     private fun readProject(file: File): ProjectRecord? {
         if (!file.exists() || file.length() == 0L) return null

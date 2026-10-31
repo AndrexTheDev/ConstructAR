@@ -143,6 +143,8 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onSaveTechnician = { viewModel.updateTechnician(it) },
                             onRemoveRoute = { routeId -> viewModel.removeRoute(routeId) },
                             onMaterials = { navController.navigate(Routes.MATERIALS) },
+                            photo = state.photo,
+                            onPhoto = { uri -> viewModel.attachPhoto(uri) },
                             onDelete = {
                                 viewModel.deleteProject(project.id) {
                                     navController.popBackStack(Routes.HOME, inclusive = false)
@@ -182,6 +184,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             operatorName = project.technician,
                             entitlements = state.entitlements,
                             watermark = stringResource(R.string.pdf_watermark),
+                            photo = state.photo,
                             onBack = { navController.popBackStack() },
                             onUpgrade = { navController.navigate(Routes.PAYWALL) },
                         )

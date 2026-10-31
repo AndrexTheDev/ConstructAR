@@ -224,7 +224,7 @@
     <string name="signature_pdf_caption">Firma cliente / installatore - misurato in cantiere con ConstructAR</string>
     <string name="pdf_title">Protocollo di misura</string>
     <string name="pdf_subtitle">Rilievo offline: calcolato sul dispositivo, senza cloud</string>
-    <string name="pdf_screenshot_caption">Sovrapposizione AR al momento della misura (i percorsi sotto sono la stessa geometria).</string>
+    <string name="pdf_screenshot_caption">Foto del cantiere scattata sul dispositivo con ConstructAR.</string>
     <string name="pdf_section_summary">Riepilogo</string>
     <string name="pdf_section_runs">Percorsi</string>
     <string name="pdf_section_procurement">Approvvigionamento</string>
@@ -256,4 +256,8 @@
     <string name="waste_title">Scorta</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>
+    <string name="photo_title">Foto del cantiere</string>
+    <string name="photo_hint">Una foto della parete o del tratto finito: compare sul protocollo.</string>
+    <string name="photo_take">Scatta una foto</string>
+    <string name="photo_replace">Sostituisci la foto</string>
 </resources>

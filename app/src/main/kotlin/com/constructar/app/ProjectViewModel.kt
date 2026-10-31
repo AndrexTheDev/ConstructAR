@@ -7,6 +7,8 @@
 package com.constructar.app
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.constructar.app.billing.EntitlementStore
@@ -70,6 +72,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val onboardingDone: Boolean = false,
         /** Firm-wide waste factor, `null` = each conduit family's default. */
         val wasteOverride: Float? = null,
+        /** Documentation photo of the open project, decoded for screen and protocol. */
+        val photo: Bitmap? = null,
     )
 
     private val mutableState = MutableStateFlow(UiState())
@@ -155,6 +159,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             mutableState.value = mutableState.value.copy(
                 openProject = project,
                 materialList = buildMaterialList(project),
+                photo = repository.loadPhoto(project.id),
                 lastError = null,
             )
             onOpened(project)
@@ -197,7 +202,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             repository.delete(id)
             if (mutableState.value.openProject?.id == id) {
-                mutableState.value = mutableState.value.copy(openProject = null, materialList = null)
+                mutableState.value = mutableState.value.copy(openProject = null, materialList = null, photo = null)
             }
             refresh()
             onDeleted()
@@ -219,8 +224,20 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /** Keeps the photo the camera app just wrote into our cache; one photo per project. */
+    fun attachPhoto(uri: Uri, onDone: (Boolean) -> Unit = {}) {
+        val project = mutableState.value.openProject ?: return
+        viewModelScope.launch {
+            val saved = repository.savePhoto(project.id, uri)
+            mutableState.value = mutableState.value.copy(
+                photo = if (saved) repository.loadPhoto(project.id) else mutableState.value.photo,
+            )
+            onDone(saved)
+        }
+    }
+
     fun closeProject() {
-        mutableState.value = mutableState.value.copy(openProject = null, materialList = null)
+        mutableState.value = mutableState.value.copy(openProject = null, materialList = null, photo = null)
     }
 
     /**

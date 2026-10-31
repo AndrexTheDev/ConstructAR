@@ -224,7 +224,7 @@
     <string name="signature_pdf_caption">Unterschrift Kunde / Monteur - vor Ort mit ConstructAR gemessen</string>
     <string name="pdf_title">Messprotokoll</string>
     <string name="pdf_subtitle">Offline-Aufmaß - auf dem Gerät berechnet, keine Cloud</string>
-    <string name="pdf_screenshot_caption">AR-Überlagerung zum Messzeitpunkt (die Strecken unten sind dieselbe Geometrie).</string>
+    <string name="pdf_screenshot_caption">Foto der Baustelle, vor Ort mit ConstructAR aufgenommen.</string>
     <string name="pdf_section_summary">Übersicht</string>
     <string name="pdf_section_runs">Strecken</string>
     <string name="pdf_section_procurement">Beschaffung</string>
@@ -256,4 +256,8 @@
     <string name="waste_title">Reserve</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>
+    <string name="photo_title">Foto der Baustelle</string>
+    <string name="photo_hint">Ein Foto der Wand oder der fertigen Strecke - es erscheint auf dem Protokoll.</string>
+    <string name="photo_take">Foto aufnehmen</string>
+    <string name="photo_replace">Foto ersetzen</string>
 </resources>

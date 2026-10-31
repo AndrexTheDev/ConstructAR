@@ -224,7 +224,7 @@
     <string name="signature_pdf_caption">Signature client / monteur - mesuré sur site avec ConstructAR</string>
     <string name="pdf_title">Protocole de mesure</string>
     <string name="pdf_subtitle">Relevé hors ligne : calculé sur l\'appareil, sans cloud</string>
-    <string name="pdf_screenshot_caption">Superposition AR au moment du relevé (les tracés ci-dessous sont la même géométrie).</string>
+    <string name="pdf_screenshot_caption">Photo du chantier prise sur l\'appareil avec ConstructAR.</string>
     <string name="pdf_section_summary">Résumé</string>
     <string name="pdf_section_runs">Tracés</string>
     <string name="pdf_section_procurement">Approvisionnement</string>
@@ -256,4 +256,8 @@
     <string name="waste_title">Réserve</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>
+    <string name="photo_title">Photo du chantier</string>
+    <string name="photo_hint">Une photo du mur ou du tracé terminé : elle apparaît sur le protocole.</string>
+    <string name="photo_take">Prendre une photo</string>
+    <string name="photo_replace">Remplacer la photo</string>
 </resources>

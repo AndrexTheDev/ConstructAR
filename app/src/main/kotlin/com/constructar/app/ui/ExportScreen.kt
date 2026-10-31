@@ -71,6 +71,7 @@ fun ExportScreen(
     operatorName: String,
     entitlements: Entitlements,
     watermark: String,
+    photo: android.graphics.Bitmap? = null,
     onBack: () -> Unit,
     onUpgrade: () -> Unit,
 ) {
@@ -114,7 +115,7 @@ fun ExportScreen(
                             project = project,
                             materialList = materialList ?: MaterialListBuilderFallback.build(project),
                             routeMeshes = ExportService.routeMeshes(project),
-                            screenshot = null,
+                            screenshot = photo,
                             operatorName = operatorName,
                             appVersion = appVersion,
                             includePdf = includePdf,

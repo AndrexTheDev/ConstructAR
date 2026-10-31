@@ -224,7 +224,7 @@
     <string name="signature_pdf_caption">Signature customer / fitter - measured on device with ConstructAR</string>
     <string name="pdf_title">Measurement protocol</string>
     <string name="pdf_subtitle">Offline measurement - computed on device, no cloud</string>
-    <string name="pdf_screenshot_caption">AR overlay at time of measurement (the runs below are the same geometry).</string>
+    <string name="pdf_screenshot_caption">Site photo taken on the device with ConstructAR.</string>
     <string name="pdf_section_summary">Summary</string>
     <string name="pdf_section_runs">Runs</string>
     <string name="pdf_section_procurement">Procurement</string>
@@ -256,4 +256,8 @@
     <string name="waste_title">Waste factor</string>
     <string name="waste_default">Default</string>
     <string name="waste_value">%1$d %%</string>
+    <string name="photo_title">Site photo</string>
+    <string name="photo_hint">One photo of the wall or the finished run - it is printed on the protocol.</string>
+    <string name="photo_take">Take a photo</string>
+    <string name="photo_replace">Replace the photo</string>
 </resources>

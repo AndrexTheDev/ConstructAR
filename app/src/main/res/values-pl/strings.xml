@@ -228,7 +228,7 @@
     <string name="signature_pdf_caption">Podpis klienta / montera - pomiar na miejscu w ConstructAR</string>
     <string name="pdf_title">Protokół pomiarowy</string>
     <string name="pdf_subtitle">Pomiar offline - obliczony na urządzeniu, bez chmury</string>
-    <string name="pdf_screenshot_caption">Nakładka AR w momencie pomiaru (trasy poniżej to ta sama geometria).</string>
+    <string name="pdf_screenshot_caption">Zdjęcie budowy wykonane na urządzeniu w ConstructAR.</string>
     <string name="pdf_section_summary">Podsumowanie</string>
     <string name="pdf_section_runs">Trasy</string>
     <string name="pdf_section_procurement">Zaopatrzenie</string>
@@ -260,4 +260,8 @@
     <string name="waste_title">Zapas</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>
+    <string name="photo_title">Zdjęcie budowy</string>
+    <string name="photo_hint">Jedno zdjęcie ściany lub gotowej trasy - trafia na protokół.</string>
+    <string name="photo_take">Zrób zdjęcie</string>
+    <string name="photo_replace">Zmień zdjęcie</string>
 </resources>

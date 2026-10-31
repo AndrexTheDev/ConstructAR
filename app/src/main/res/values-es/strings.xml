@@ -224,7 +224,7 @@
     <string name="signature_pdf_caption">Firma cliente / montador - medido en obra con ConstructAR</string>
     <string name="pdf_title">Protocolo de medición</string>
     <string name="pdf_subtitle">Medición offline: calculada en el dispositivo, sin nube</string>
-    <string name="pdf_screenshot_caption">Superposición AR en el momento de medir (los recorridos de abajo son la misma geometría).</string>
+    <string name="pdf_screenshot_caption">Foto de la obra tomada en el dispositivo con ConstructAR.</string>
     <string name="pdf_section_summary">Resumen</string>
     <string name="pdf_section_runs">Recorridos</string>
     <string name="pdf_section_procurement">Aprovisionamiento</string>
@@ -256,4 +256,8 @@
     <string name="waste_title">Reserva</string>
     <string name="waste_default">Estándar</string>
     <string name="waste_value">%1$d %%</string>
+    <string name="photo_title">Foto de la obra</string>
+    <string name="photo_hint">Una foto de la pared o del tramo terminado: se imprime en el protocolo.</string>
+    <string name="photo_take">Hacer una foto</string>
+    <string name="photo_replace">Cambiar la foto</string>
 </resources>
