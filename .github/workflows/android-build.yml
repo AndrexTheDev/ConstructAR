@@ -28,6 +28,12 @@ concurrency:
   group: android-build-${{ github.ref }}
   cancel-in-progress: true
 
+# `pull-requests: write` is used for one thing only: when the build fails, the tail of the
+# Gradle log is posted as a PR comment so the error is readable without raw job-log access.
+permissions:
+  contents: read
+  pull-requests: write
+
 env:
   GRADLE_VERSION: "9.1"
   JAVA_VERSION: "21"
@@ -184,6 +190,25 @@ jobs:
           echo "APK: $apk"
           unzip -l "$apk" | grep -q "lib/arm64-v8a/libconstructar_slam.so" \
             || { echo "libconstructar_slam.so missing from the arm64 ABI"; unzip -l "$apk" | head -40; exit 1; }
+
+      - name: Report the failure on the pull request
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          pr=$(gh pr list --head "$GITHUB_REF_NAME" --json number -q '.[0].number' 2>/dev/null || true)
+          if [ -z "${pr:-}" ]; then echo "no open PR for $GITHUB_REF_NAME"; exit 0; fi
+          {
+            echo "### android-build failed"
+            echo ""
+            echo "commit \`$GITHUB_SHA\` on \`$GITHUB_REF_NAME\`"
+            echo ""
+            echo '```'
+            tail -n 160 /tmp/step.log 2>/dev/null || echo "no step log captured"
+            echo '```'
+          } > /tmp/comment.md
+          gh pr comment "$pr" --body-file /tmp/comment.md
 
       - name: Upload unit-test reports
         if: always()
