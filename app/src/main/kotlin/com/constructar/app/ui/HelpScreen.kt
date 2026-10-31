@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.constructar.app.BuildConfig
+import com.constructar.app.data.ProjectRepository
 import com.constructar.app.R
 import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
@@ -48,8 +49,10 @@ fun HelpScreen(
     entitlements: Entitlements,
     trialDaysLeft: Long,
     deviceTag: String,
+    repository: ProjectRepository,
     onBack: () -> Unit,
     onUpgrade: () -> Unit,
+    onImported: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -89,6 +92,8 @@ fun HelpScreen(
         Section(title = stringResource(R.string.help_offline_title)) {
             Text(stringResource(R.string.help_offline_body), style = MaterialTheme.typography.bodyMedium)
         }
+
+        BackupCard(repository = repository, onImported = onImported)
 
         Section(title = stringResource(R.string.help_licence_title)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -111,6 +111,44 @@ class ProjectRepository(private val context: Context) {
         }
     }
 
+    /** One project file, verbatim — the unit of a backup. */
+    data class BackupEntry(val fileName: String, val text: String)
+
+    /**
+     * Every project as its raw JSON, for the operator's own backup.
+     *
+     * The files are copied verbatim rather than re-serialised: a backup must be a byte-for-byte
+     * copy of what the app wrote, so a restore of an older app version stays possible and so a
+     * corrupted-but-readable file is not silently "fixed" into something else.
+     */
+    suspend fun backupEntries(): List<BackupEntry> = withContext(Dispatchers.IO) {
+        directory.listFiles { file -> file.extension == "json" }
+            ?.sortedBy { it.name }
+            ?.mapNotNull { file ->
+                runCatching { BackupEntry(file.name, file.readText()) }.getOrNull()
+            }
+            .orEmpty()
+    }
+
+    /**
+     * Imports one project file.
+     *
+     * A project whose id is already present gets a fresh id instead of overwriting: restoring a
+     * backup onto a phone that still has the original must not destroy either copy.
+     * Returns the stored project, or `null` when the text is not a project.
+     */
+    suspend fun importProject(text: String): ProjectRecord? = withContext(Dispatchers.IO) {
+        val parsed = runCatching {
+            json.decodeFromString(ProjectRecord.serializer(), text)
+        }.getOrNull() ?: return@withContext null
+        val target = if (fileFor(parsed.id).exists()) {
+            parsed.copy(id = UUID.randomUUID().toString())
+        } else {
+            parsed
+        }
+        if (save(target)) target else null
+    }
+
     suspend fun delete(id: String): Boolean = withContext(Dispatchers.IO) {
         fileFor(id).delete()
     }

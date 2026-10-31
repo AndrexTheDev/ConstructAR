@@ -83,6 +83,18 @@ runs were saved, or what was left to do.
 
 ---
 
+## Data safety
+
+A project is one JSON file in app-private storage, written atomically (`tmp` + rename), so a crash
+mid-write cannot leave a half project behind. That survives updates and crashes — it does not
+survive a cracked screen or an "app data" wipe, and for a foreman the measurements *are* the job.
+So the help screen can copy every project into a folder the operator picks (through the Storage
+Access Framework — no cloud unless they choose one) and read projects back from any phone.
+Restores never overwrite: a project whose id already exists is imported under a fresh id, so
+restoring onto a phone that still has the original leaves both copies in place.
+
+---
+
 ## Licence and payment (freemium)
 
 The app is proprietary *and* fully usable for free: one room, unlimited runs, the CSV bill of

@@ -246,4 +246,11 @@
     <string name="pdf_procurement_note">Les longueurs de commande incluent la réserve de chantier. Valeurs issues de nœuds affinés par ancres ; vérifie les tracés critiques au mètre avant de couper.</string>
     <string name="pdf_footer">ConstructAR %1$s - généré sur l\'appareil</string>
     <string name="pdf_page_label">Page %1$d</string>
+    <string name="backup_title">Sauvegarde et restauration</string>
+    <string name="backup_note">Chaque projet est un fichier de cette app. Copie-les dans un dossier de ton choix (pas de cloud, sauf si tu en choisis un) et relis-les sur n\'importe quel téléphone.</string>
+    <string name="backup_export">Sauvegarder tous les projets</string>
+    <string name="backup_import">Restaurer des projets</string>
+    <string name="backup_saved">%1$d projets sauvegardés</string>
+    <string name="backup_imported">%1$d projets restaurés</string>
+    <string name="backup_failed">Échec de la sauvegarde : vérifie le dossier et réessaie.</string>
 </resources>

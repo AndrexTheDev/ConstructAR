@@ -221,6 +221,18 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     fun repository(): ProjectRepository = repository
 
+    /** Restores a backup; every reader of [UiState.projects] follows because [refresh] re-reads. */
+    fun importBackup(texts: List<String>, onDone: (Int) -> Unit = {}) {
+        viewModelScope.launch {
+            var imported = 0
+            texts.forEach { text ->
+                if (repository.importProject(text) != null) imported++
+            }
+            refresh()
+            onDone(imported)
+        }
+    }
+
     private fun mutate(updated: ProjectRecord, onSaved: (ProjectRecord?) -> Unit) {
         mutableState.value = mutableState.value.copy(
             openProject = updated,

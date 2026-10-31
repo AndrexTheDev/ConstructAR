@@ -246,4 +246,11 @@
     <string name="pdf_procurement_note">Las longitudes de pedido incluyen la reserva de obra. Valores de nodos refinados con anclas; comprueba los tramos críticos con cinta antes de cortar.</string>
     <string name="pdf_footer">ConstructAR %1$s - generado en el dispositivo</string>
     <string name="pdf_page_label">Página %1$d</string>
+    <string name="backup_title">Copia y restauración</string>
+    <string name="backup_note">Cada proyecto es un archivo de esta app. Cópialos a una carpeta que elijas (sin nube, salvo que la elijas) y recupéralos en cualquier teléfono.</string>
+    <string name="backup_export">Copiar todos los proyectos</string>
+    <string name="backup_import">Restaurar proyectos</string>
+    <string name="backup_saved">%1$d proyectos copiados</string>
+    <string name="backup_imported">%1$d proyectos restaurados</string>
+    <string name="backup_failed">Error en la copia: revisa la carpeta e inténtalo de nuevo.</string>
 </resources>

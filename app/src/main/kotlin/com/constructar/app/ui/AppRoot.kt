@@ -223,8 +223,10 @@ fun AppRoot(viewModel: ProjectViewModel) {
                         entitlements = state.entitlements,
                         trialDaysLeft = state.trialDaysLeft,
                         deviceTag = state.deviceTag,
+                        repository = viewModel.repository(),
                         onBack = { navController.popBackStack() },
                         onUpgrade = { navController.navigate(Routes.PAYWALL) },
+                        onImported = { viewModel.refresh() },
                     )
                 }
             }

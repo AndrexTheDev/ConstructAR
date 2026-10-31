@@ -246,4 +246,11 @@
     <string name="pdf_procurement_note">Order lengths include the site waste factor. Figures come from anchor-refined node positions; check critical runs with a tape measure before cutting.</string>
     <string name="pdf_footer">ConstructAR %1$s - generated on device</string>
     <string name="pdf_page_label">Page %1$d</string>
+    <string name="backup_title">Backup and restore</string>
+    <string name="backup_note">Every project is one file in this app. Copy them into a folder of your choice - no cloud unless you pick one - and read them back on any phone.</string>
+    <string name="backup_export">Back up all projects</string>
+    <string name="backup_import">Restore projects</string>
+    <string name="backup_saved">%1$d projects copied</string>
+    <string name="backup_imported">%1$d projects restored</string>
+    <string name="backup_failed">Backup failed - check the folder and try again.</string>
 </resources>

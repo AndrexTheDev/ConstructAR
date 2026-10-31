@@ -250,4 +250,11 @@
     <string name="pdf_procurement_note">Długości zamówienia zawierają zapas budowlany. Wartości z węzłów doprecyzowanych kotwicami - krytyczne trasy sprawdź miarą przed cięciem.</string>
     <string name="pdf_footer">ConstructAR %1$s - wygenerowano na urządzeniu</string>
     <string name="pdf_page_label">Strona %1$d</string>
+    <string name="backup_title">Kopia i przywracanie</string>
+    <string name="backup_note">Każdy projekt to jeden plik w tej aplikacji. Skopiuj je do wybranego folderu - bez chmury, chyba że sam ją wybierzesz - i wczytaj na dowolnym telefonie.</string>
+    <string name="backup_export">Zrób kopię wszystkich projektów</string>
+    <string name="backup_import">Przywróć projekty</string>
+    <string name="backup_saved">%1$d projektów skopiowano</string>
+    <string name="backup_imported">%1$d projektów przywrócono</string>
+    <string name="backup_failed">Kopia nie powiodła się - sprawdź folder i spróbuj ponownie.</string>
 </resources>

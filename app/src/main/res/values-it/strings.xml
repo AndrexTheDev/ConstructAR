@@ -246,4 +246,11 @@
     <string name="pdf_procurement_note">Le lunghezze d\'ordine includono la scorta di cantiere. Valori da nodi raffinati con ancore; controlla i tratti critici con il metro prima di tagliare.</string>
     <string name="pdf_footer">ConstructAR %1$s - generato sul dispositivo</string>
     <string name="pdf_page_label">Pagina %1$d</string>
+    <string name="backup_title">Backup e ripristino</string>
+    <string name="backup_note">Ogni progetto è un file in questa app. Copiali in una cartella che scegli (nessun cloud, a meno che non lo scelga tu) e rileggili su qualsiasi telefono.</string>
+    <string name="backup_export">Esegui backup di tutti i progetti</string>
+    <string name="backup_import">Ripristina progetti</string>
+    <string name="backup_saved">%1$d progetti salvati</string>
+    <string name="backup_imported">%1$d progetti ripristinati</string>
+    <string name="backup_failed">Backup non riuscito: controlla la cartella e riprova.</string>
 </resources>

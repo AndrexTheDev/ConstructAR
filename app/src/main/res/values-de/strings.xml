@@ -246,4 +246,11 @@
     <string name="pdf_procurement_note">Bestelllängen enthalten die Reserve. Werte aus anker-verfeinerten Knotenpunkten - kritische Strecken vor dem Zuschnitt mit dem Maßband prüfen.</string>
     <string name="pdf_footer">ConstructAR %1$s - auf dem Gerät erzeugt</string>
     <string name="pdf_page_label">Seite %1$d</string>
+    <string name="backup_title">Sichern und wiederherstellen</string>
+    <string name="backup_note">Jedes Projekt ist eine Datei in dieser App. Kopiere sie in einen Ordner deiner Wahl - keine Cloud, außer du wählst eine - und lies sie auf jedem Telefon wieder ein.</string>
+    <string name="backup_export">Alle Projekte sichern</string>
+    <string name="backup_import">Projekte wiederherstellen</string>
+    <string name="backup_saved">%1$d Projekte gesichert</string>
+    <string name="backup_imported">%1$d Projekte wiederhergestellt</string>
+    <string name="backup_failed">Sicherung fehlgeschlagen - prüfe den Ordner und versuche es erneut.</string>
 </resources>
