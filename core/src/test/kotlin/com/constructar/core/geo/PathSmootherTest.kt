@@ -29,9 +29,11 @@ class PathSmootherTest {
         fillet!!
 
         assertEquals(0.1f, fillet.radius, 1e-4f)
-        // t = r·tan(45°) = r for a 90° deflection.
+        // t = r·tan(45°) = r for a 90° deflection: the trim points sit r back along the
+        // incoming leg (-X) and r along the outgoing leg (+Y), so tangentIn is (-r, 0, 0)
+        // and tangentOut is (0, r, 0) - neither one is the arc centre.
         assertEquals(-0.1f, fillet.tangentIn.x, 1e-4f)
-        assertEquals(0.1f, fillet.tangentIn.y, 1e-4f)
+        assertEquals(0f, fillet.tangentIn.y, 1e-4f)
         assertEquals(0f, fillet.tangentOut.x, 1e-4f)
         assertEquals(0.1f, fillet.tangentOut.y, 1e-4f)
         // Centre at (-r, r).

@@ -152,24 +152,23 @@ jobs:
           code=$?
           bash scripts/ci_annotate.sh /tmp/step.log "configure failed" "$code"
 
-      - name: JVM modules - :core and :export unit tests
+      - name: JVM tests + Kotlin compile - :core, :export, :ar-engine, :app
+        # One invocation so that `--continue` walks past a broken module: the Kotlin
+        # compiler reports one diagnostic per task (the build-tools-API worker throws), so
+        # batching every JVM module into a single `--continue` run is what keeps a compile
+        # error in :app from costing another full CI cycle.
         run: |
           set +e
-          gradle --no-daemon --stacktrace :core:test :export:test > /tmp/step.log 2>&1
+          gradle --no-daemon --stacktrace --continue \
+            :core:test :export:test \
+            :ar-engine:compileDebugKotlin :app:compileDebugKotlin > /tmp/step.log 2>&1
           code=$?
-          bash scripts/ci_annotate.sh /tmp/step.log "JVM tests failed" "$code"
-
-      - name: Kotlin compile - :ar-engine and :app
-        run: |
-          set +e
-          gradle --no-daemon --stacktrace :ar-engine:compileDebugKotlin :app:compileDebugKotlin > /tmp/step.log 2>&1
-          code=$?
-          bash scripts/ci_annotate.sh /tmp/step.log "Kotlin compile failed" "$code"
+          bash scripts/ci_annotate.sh /tmp/step.log "JVM tests / Kotlin compile failed" "$code"
 
       - name: NDK library - :native-slam
         run: |
           set +e
-          gradle --no-daemon --stacktrace :native-slam:assembleDebug > /tmp/step.log 2>&1
+          gradle --no-daemon --stacktrace --continue :native-slam:assembleDebug > /tmp/step.log 2>&1
           code=$?
           bash scripts/ci_annotate.sh /tmp/step.log "NDK build failed" "$code"
 
@@ -179,7 +178,7 @@ jobs:
         # here means "no warnings", not "warnings we chose to ignore".
         run: |
           set +e
-          gradle --no-daemon --stacktrace --warning-mode all assembleDebug testDebugUnitTest > /tmp/step.log 2>&1
+          gradle --no-daemon --stacktrace --continue --warning-mode all assembleDebug testDebugUnitTest > /tmp/step.log 2>&1
           code=$?
           bash scripts/ci_annotate.sh /tmp/step.log "full gate failed" "$code"
 
@@ -206,16 +205,31 @@ jobs:
             echo "commit \`$GITHUB_SHA\` on \`$GITHUB_REF_NAME\`"
             echo ""
             if [ -f "$LOG" ]; then
-              echo "#### FAILURE block"
+              tr -d '\r' < "$LOG" > /tmp/log.txt
+              echo "#### Compiler diagnostics"
               echo ""
               echo '```'
-              tr -d '\r' < "$LOG" | awk '/^FAILURE:/{found=1} found' | head -n 70
+              grep -E '^(e|w): ' /tmp/log.txt | head -n 40 || true
               echo '```'
               echo ""
-              echo "<details><summary>first 120 lines of the log</summary>"
+              echo "#### Failed tasks, tests and messages"
               echo ""
               echo '```'
-              tr -d '\r' < "$LOG" | head -n 120
+              # A "FAILED" line is followed by the assertion/exception that caused it; keep a
+              # short tail after each one so a unit-test failure is readable without the log.
+              awk '/FAILED/{print; n=5; next} n>0 && NF{print; n--}' /tmp/log.txt | head -n 90
+              echo '```'
+              echo ""
+              echo "#### What went wrong"
+              echo ""
+              echo '```'
+              awk '/^\* What went wrong:/{f=1} f{print} /^\* Try:/{f=0}' /tmp/log.txt | head -n 60
+              echo '```'
+              echo ""
+              echo "<details><summary>first 60 lines of the log</summary>"
+              echo ""
+              echo '```'
+              head -n 60 /tmp/log.txt
               echo '```'
               echo ""
               echo "</details>"

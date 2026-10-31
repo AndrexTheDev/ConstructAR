@@ -262,7 +262,7 @@ class ProtocolPdfWriter(
         val footer = Paint(textPaint).apply { textSize = 8f; color = Color.GRAY }
         canvas.drawText("ConstructAR $appVersion · generated on device", MARGIN.toFloat(), (y + 14).toFloat(), footer)
         val pageLabel = "Page $pageNumber"
-        canvas.drawText(pageLabel, (pageWidth - MARGIN - footer.measureText(pageLabel)).toFloat(), (y + 14).toFloat(), footer)
+        canvas.drawText(pageLabel, pageWidth - MARGIN - footer.measureText(pageLabel), (y + 14).toFloat(), footer)
     }
 
     private fun routeRow(route: ConduitRoute): List<String> {
