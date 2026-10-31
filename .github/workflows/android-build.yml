@@ -199,14 +199,29 @@ jobs:
           set -uo pipefail
           pr=$(gh pr list --head "$GITHUB_REF_NAME" --json number -q '.[0].number' 2>/dev/null || true)
           if [ -z "${pr:-}" ]; then echo "no open PR for $GITHUB_REF_NAME"; exit 0; fi
+          LOG=/tmp/step.log
           {
             echo "### android-build failed"
             echo ""
             echo "commit \`$GITHUB_SHA\` on \`$GITHUB_REF_NAME\`"
             echo ""
-            echo '```'
-            tail -n 160 /tmp/step.log 2>/dev/null || echo "no step log captured"
-            echo '```'
+            if [ -f "$LOG" ]; then
+              echo "#### FAILURE block"
+              echo ""
+              echo '```'
+              tr -d '\r' < "$LOG" | awk '/^FAILURE:/{found=1} found' | head -n 70
+              echo '```'
+              echo ""
+              echo "<details><summary>first 120 lines of the log</summary>"
+              echo ""
+              echo '```'
+              tr -d '\r' < "$LOG" | head -n 120
+              echo '```'
+              echo ""
+              echo "</details>"
+            else
+              echo "no step log captured"
+            fi
           } > /tmp/comment.md
           gh pr comment "$pr" --body-file /tmp/comment.md
 
