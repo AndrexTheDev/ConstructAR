@@ -15,6 +15,7 @@ import com.constructar.core.model.ProjectRecord
 import com.constructar.export.csv.MaterialCsvWriter
 import com.constructar.export.glb.GlbWriter
 import com.constructar.export.ply.PlyWriter
+import com.constructar.export.pdf.PdfLabels
 import com.constructar.export.pdf.ProtocolPdfWriter
 import java.io.OutputStream
 import java.text.SimpleDateFormat
@@ -72,6 +73,8 @@ class ExportService(
         val signature: Bitmap? = null,
         val signatureTitle: String = "",
         val signatureCaption: String = "",
+        /** All text on the protocol, localised by the caller. See [PdfLabels]. */
+        val labels: PdfLabels = PdfLabels(),
     )
 
     /** Human/machine-readable file stem, e.g. `ConstructAR_Bad-Keller_20260314-1015`. */
@@ -108,6 +111,7 @@ class ExportService(
                             signature = request.signature,
                             signatureTitle = request.signatureTitle,
                             signatureCaption = request.signatureCaption,
+                            labels = request.labels,
                         ),
                         output,
                     )

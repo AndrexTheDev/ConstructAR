@@ -65,6 +65,8 @@ class ProtocolPdfWriter(
         val signatureTitle: String = "",
         /** Line under the signature, e.g. who signed and what for. */
         val signatureCaption: String = "",
+        /** All visible text, localised by the caller. See [PdfLabels]. */
+        val labels: PdfLabels = PdfLabels(),
     )
 
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -99,7 +101,7 @@ class ProtocolPdfWriter(
 
             // ── Header ──────────────────────────────────────────────────────────────────
             var y = MARGIN
-            page.canvas.drawText("Measurement protocol", MARGIN.toFloat(), y.toFloat(), titlePaint)
+            page.canvas.drawText(content.labels.title, MARGIN.toFloat(), y.toFloat(), titlePaint)
             y += 18
             val subtitle = buildString {
                 append(content.project.name)
@@ -110,7 +112,7 @@ class ProtocolPdfWriter(
             val metaLine = listOfNotNull(
                 content.generatedAtLabel.ifBlank { null },
                 content.operatorName.ifBlank { content.project.technician.ifBlank { null } },
-                "Offline measurement — computed on device, no cloud",
+                content.labels.subtitle,
             ).joinToString("  ·  ")
             page.canvas.drawText(metaLine, MARGIN.toFloat(), y.toFloat(), textPaint)
             y += 10
@@ -127,38 +129,44 @@ class ProtocolPdfWriter(
                 page.canvas.drawBitmap(screenshot, null, destination, Paint(Paint.FILTER_BITMAP_FLAG))
                 y += height + 8
                 page.canvas.drawText(
-                    "AR overlay at time of measurement (the runs below are the same geometry).",
+                    content.labels.screenshotCaption,
                     MARGIN.toFloat(), y.toFloat(), subtitlePaint,
                 )
                 y += 18
             }
 
             // ── Summary ─────────────────────────────────────────────────────────────────
-            y = drawSectionTitle(page.canvas, "Summary", y)
+            y = drawSectionTitle(page.canvas, content.labels.sectionSummary, y)
             val scan = content.project.scan
             val summary = ArrayList<Pair<String, String>>()
-            summary += "Runs" to content.project.routes.size.toString()
-            summary += "Total length" to LengthFormatter.format(content.project.totalLengthMeters)
-            summary += "With waste" to LengthFormatter.format(content.materialList.totalWithWasteMeters)
-            summary += "Clips" to content.materialList.totalClips.toString()
-            summary += "Couplings" to content.materialList.totalCouplings.toString()
+            summary += content.labels.labelRuns to content.project.routes.size.toString()
+            summary += content.labels.labelTotalLength to LengthFormatter.format(content.project.totalLengthMeters)
+            summary += content.labels.labelWithWaste to LengthFormatter.format(content.materialList.totalWithWasteMeters)
+            summary += content.labels.labelClips to content.materialList.totalClips.toString()
+            summary += content.labels.labelCouplings to content.materialList.totalCouplings.toString()
             if (scan != null && scan.meshTriangleCount > 0) {
-                summary += "Scanned triangles" to "%,d".format(Locale.ROOT, scan.meshTriangleCount)
+                summary += content.labels.labelScannedTriangles to "%,d".format(Locale.ROOT, scan.meshTriangleCount)
                 if (scan.ceilingHeightMeters > 0f) {
-                    summary += "Ceiling height" to LengthFormatter.format(scan.ceilingHeightMeters)
+                    summary += content.labels.labelCeilingHeight to LengthFormatter.format(scan.ceilingHeightMeters)
                 }
             }
             y = drawKeyValueGrid(page.canvas, summary, y)
 
             // ── Runs table ──────────────────────────────────────────────────────────────
             if (content.project.routes.isNotEmpty()) {
-                y = drawSectionTitle(page.canvas, "Runs", y)
+                y = drawSectionTitle(page.canvas, content.labels.sectionRuns, y)
                 val columns = listOf(180, 90, 60, 55, 80)
-                val header = listOf("Label", "Type", "Net (m)", "Bends", "Confidence")
+                val header = listOf(
+                    content.labels.columnLabel,
+                    content.labels.columnType,
+                    content.labels.columnNetMeters,
+                    content.labels.columnBends,
+                    content.labels.columnConfidence,
+                )
                 y = drawTableHeader(page.canvas, header, columns, y)
                 for (route in content.project.routes) {
                     if (y > pageHeight - FOOTER_HEIGHT - 40) {
-                        drawFooter(page.canvas, pageNumber, content.appVersion, content.watermark)
+                        drawFooter(page.canvas, pageNumber, content)
                         document.finishPage(page)
                         pageNumber++
                         page = newPage(document, pageNumber)
@@ -172,23 +180,35 @@ class ProtocolPdfWriter(
             // ── Procurement table ───────────────────────────────────────────────────────
             if (!content.materialList.isEmpty) {
                 if (y > pageHeight - FOOTER_HEIGHT - 120) {
-                    drawFooter(page.canvas, pageNumber, content.appVersion, content.watermark)
+                    drawFooter(page.canvas, pageNumber, content)
                     document.finishPage(page)
                     pageNumber++
                     page = newPage(document, pageNumber)
                     y = MARGIN
                 }
-                y = drawSectionTitle(page.canvas, "Procurement", y)
+                y = drawSectionTitle(page.canvas, content.labels.sectionProcurement, y)
                 val columns = listOf(150, 80, 60, 60, 90)
-                y = drawTableHeader(page.canvas, listOf("Material", "Type", "Net (m)", "Waste", "Order (m)"), columns, y)
+                y = drawTableHeader(page.canvas, listOf(
+                    content.labels.columnMaterial,
+                    content.labels.columnType,
+                    content.labels.columnNetMeters,
+                    content.labels.columnWaste,
+                    content.labels.columnOrderMeters,
+                ), columns, y)
                 for (line in content.materialList.lines) {
                     if (y > pageHeight - FOOTER_HEIGHT - 30) {
-                        drawFooter(page.canvas, pageNumber, content.appVersion, content.watermark)
+                        drawFooter(page.canvas, pageNumber, content)
                         document.finishPage(page)
                         pageNumber++
                         page = newPage(document, pageNumber)
                         y = MARGIN
-                        y = drawTableHeader(page.canvas, listOf("Material", "Type", "Net (m)", "Waste", "Order (m)"), columns, y)
+                        y = drawTableHeader(page.canvas, listOf(
+                    content.labels.columnMaterial,
+                    content.labels.columnType,
+                    content.labels.columnNetMeters,
+                    content.labels.columnWaste,
+                    content.labels.columnOrderMeters,
+                ), columns, y)
                     }
                     y = drawTableRow(
                         page.canvas,
@@ -204,15 +224,10 @@ class ProtocolPdfWriter(
                     )
                 }
                 y += 6
-                drawNote(
-                    page.canvas,
-                    "Order lengths include the site waste factor. Figures are computed from anchor-refined " +
-                        "node positions; verify critical runs with a tape measure before cutting.",
-                    y,
-                )
+                drawNote(page.canvas, content.labels.procurementNote, y)
             }
 
-            drawFooter(page.canvas, pageNumber, content.appVersion, content.watermark)
+            drawFooter(page.canvas, pageNumber, content)
             document.finishPage(page)
 
             content.signature?.let { signature ->
@@ -250,7 +265,7 @@ class ProtocolPdfWriter(
         if (content.signatureCaption.isNotBlank()) {
             page.canvas.drawText(content.signatureCaption, MARGIN.toFloat(), y.toFloat(), subtitlePaint)
         }
-        drawFooter(page.canvas, pageNumber, content.appVersion, content.watermark)
+        drawFooter(page.canvas, pageNumber, content)
         document.finishPage(page)
     }
 
@@ -330,13 +345,18 @@ class ProtocolPdfWriter(
         canvas.restore()
     }
 
-    private fun drawFooter(canvas: Canvas, pageNumber: Int, appVersion: String, watermark: String = "") {
-        drawWatermark(canvas, watermark)
+    private fun drawFooter(canvas: Canvas, pageNumber: Int, content: Content) {
+        drawWatermark(canvas, content.watermark)
         val y = pageHeight - FOOTER_HEIGHT
         canvas.drawLine(MARGIN.toFloat(), y.toFloat(), (pageWidth - MARGIN).toFloat(), y.toFloat(), rulePaint)
         val footer = Paint(textPaint).apply { textSize = 8f; color = Color.GRAY }
-        canvas.drawText("ConstructAR $appVersion · generated on device", MARGIN.toFloat(), (y + 14).toFloat(), footer)
-        val pageLabel = "Page $pageNumber"
+        canvas.drawText(
+            String.format(Locale.ROOT, content.labels.footer, content.appVersion),
+            MARGIN.toFloat(),
+            (y + 14).toFloat(),
+            footer,
+        )
+        val pageLabel = String.format(Locale.ROOT, content.labels.pageLabel, pageNumber)
         canvas.drawText(pageLabel, pageWidth - MARGIN - footer.measureText(pageLabel), (y + 14).toFloat(), footer)
     }
 

@@ -88,6 +88,7 @@ fun ExportScreen(
     var busy by remember { mutableStateOf(false) }
     val signature = rememberSignaturePadState()
     // Resolved at composition so the export coroutine never touches a resource lookup.
+    val pdfLabels = rememberPdfLabels()
     val signatureTitle = stringResource(R.string.signature_pdf_title)
     val signatureCaption = stringResource(R.string.signature_pdf_caption)
 
@@ -124,6 +125,7 @@ fun ExportScreen(
                             signature = signature.bitmap(),
                             signatureTitle = signatureTitle,
                             signatureCaption = signatureCaption,
+                            labels = pdfLabels,
                         ),
                     )
                     var written = 0
