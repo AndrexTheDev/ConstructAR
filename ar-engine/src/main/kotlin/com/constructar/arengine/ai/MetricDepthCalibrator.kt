@@ -22,9 +22,18 @@ import kotlin.math.min
  *     disparity ≈ s · z⁻¹ + t
  *
  * is affine — i.e. the network output and `1/realDepth` are related by an affine map. Fitting
- * `(s, t)` to ARCore's sparse but metric samples is therefore the correct least-squares
- * model; fitting directly against `depth` produces systematic curvature error at the near
- * end (where 5 % depth error is most visible for cable lengths).
+ * that map to ARCore's sparse but metric samples is therefore the correct least-squares model;
+ * fitting directly against `depth` produces systematic curvature error at the near end (where
+ * 5 % depth error is most visible for cable lengths).
+ *
+ * The fitted model, and therefore the meaning of [Calibration.scale]/[Calibration.shift], is
+ *
+ *     1 / z ≈ scale · relative + shift
+ *
+ * i.e. the *inverse* of the network's own `relative ≈ s·z⁻¹ + t`. For that network,
+ * `scale ≈ 1/s` and `shift ≈ −t/s`; [Calibration.depthMeters] inverts the map back to metres.
+ * Note that `shift` is legitimately negative — a positive-disparity network maps `1/z` down as
+ * the relative output grows, which is exactly why only positivity of `scale` is checked.
  *
  * ## Robustness on construction sites
  *
@@ -66,7 +75,11 @@ class MetricDepthCalibrator(private val config: Config = Config()) {
         val inlierRatio: Float,
         val inlierRmsDisparity: Float,
         val sampleCount: Int,
-        /** Biome-specific guard: a fit with s ≤ 0 or t ≤ 0 is physically implausible. */
+        /**
+         * Whether the caller may use this calibration: the fit converged, `scale > 0` (so the
+         * map stays monotonic and cannot invert depth ordering) and enough samples survived
+         * as inliers. `shift` may be negative - see the class documentation for why.
+         */
         val isUsable: Boolean,
     ) {
         /** Metric depth (metres) from a relative network output. */

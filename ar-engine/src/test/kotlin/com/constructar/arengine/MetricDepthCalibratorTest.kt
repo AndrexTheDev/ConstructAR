@@ -37,8 +37,10 @@ class MetricDepthCalibratorTest {
 
         val calibration = MetricDepthCalibrator().calibrate(relative, metric)
         assertTrue(calibration.isUsable)
-        assertEquals(trueScale, calibration.scale, 0.02f)
-        assertEquals(trueShift, calibration.shift, 0.01f)
+        // The calibrator fits `1/z ≈ scale·relative + shift`, so the network's own affine
+        // parameters come back inverted: scale ≈ 1/s, shift ≈ −t/s.
+        assertEquals(1f / trueScale, calibration.scale, 0.02f)
+        assertEquals(-trueShift / trueScale, calibration.shift, 0.01f)
         // Round-tripping a depth through the calibration must be accurate to ~2 %.
         val probeDepth = 2.5f
         val probeRelative = trueScale / probeDepth + trueShift
@@ -78,7 +80,7 @@ class MetricDepthCalibratorTest {
             metric[i] = if (i % 2 == 0) 0.01f else 100f
         }
         val calibration = MetricDepthCalibrator().calibrate(relative, metric)
-        assertEquals(1.2f, calibration.scale, 0.05f)
+        assertEquals(1f / 1.2f, calibration.scale, 0.05f)
         assertTrue(calibration.inlierRatio > 0.5f)
     }
 

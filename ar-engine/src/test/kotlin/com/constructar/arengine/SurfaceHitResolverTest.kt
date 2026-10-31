@@ -61,7 +61,7 @@ class SurfaceHitResolverTest {
         val hit = resolution.hit
         assertNotNull(hit)
         assertEquals(HitSource.PLANE_POLYGON, hit!!.source)
-        assertEquals(2f, hit.point.z, 1e-4f)
+        assertEquals(-2f, hit.point.z, 1e-4f)
         assertEquals(SurfaceKind.WALL, hit.surfaceKind)
         // Normal must face the operator, never into the plaster.
         assertTrue((hit.normal dot (viewer - hit.point)) > 0f)
@@ -114,7 +114,9 @@ class SurfaceHitResolverTest {
             HitRequest(
                 ray = rayToWall,
                 viewerPosition = viewer,
-                directDepthHit = depthHit(2.1f),
+                // A tier-3 candidate is produced by our own depth march, so it carries the
+                // DIRECT_DEPTH_RAYCAST source; the resolver returns the candidate as-is.
+                directDepthHit = depthHit(2.1f, source = HitSource.DIRECT_DEPTH_RAYCAST),
                 featurePoint = featureHit(2.5f),
             ),
         )
@@ -166,11 +168,15 @@ class SurfaceHitResolverTest {
         assertTrue("normal must face the operator", (hit.normal dot (viewer - hit.point)) > 0f)
     }
 
-    private fun depthHit(distance: Float, point: Vec3 = Vec3(0f, 1.5f, -distance)) = SurfaceHit(
+    private fun depthHit(
+        distance: Float,
+        point: Vec3 = Vec3(0f, 1.5f, -distance),
+        source: HitSource = HitSource.AR_DEPTH_POINT,
+    ) = SurfaceHit(
         point = point,
         normal = Vec3(0f, 0f, 1f),
-        source = HitSource.AR_DEPTH_POINT,
-        confidence = HitSource.AR_DEPTH_POINT.reliability,
+        source = source,
+        confidence = source.reliability,
         distanceMeters = distance,
         surfaceKind = SurfaceKind.WALL,
     )
