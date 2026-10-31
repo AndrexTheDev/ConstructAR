@@ -57,6 +57,40 @@ discarded rather than integrated into geometry the camera has already left.
 
 ---
 
+## How it is used
+
+Four screens, in the order of the job, and no screen that exists only to show off a feature:
+
+1. **Introduction** — three steps (scan, draw, hand over) that can be skipped. Shown once.
+2. **Home** — the first card is always *the room you were last in*, with one button to continue.
+   Below it, every project; at the bottom, one button that starts a new one.
+3. **Project hub** — the screen the operator returns to after every run. A step trail
+   (Scan → Measure → Export) says what is missing, the running metres and the order quantities
+   say what has been got, and one primary button says what to do next. Renaming the room,
+   deleting it and the *note for the office* live here, one tap deeper.
+4. **Measure → Export** — the AR viewfinder with its HUD, then the export screen, where the
+   operator picks a folder once and gets PDF, CSV and (with Pro) GLB/PLY.
+
+This replaced a two-screen design (list → AR) that was technically sufficient and practically
+wrong: a foreman standing in a basement could not tell whether the scan had worked, whether the
+runs were saved, or what was left to do.
+
+---
+
+## Licence and payment (freemium)
+
+The app is proprietary *and* fully usable for free: one room, unlimited runs, the CSV bill of
+materials and a watermarked protocol. **Pro** — EUR 10/month, EUR 100/year, EUR 999 lifetime —
+adds unlimited rooms, a clean protocol and the GLB/PLY exports a BIM workflow consumes.
+
+Payment is **crypto only** (SOL, BTC, ETH), because a store billing library needs the network and
+this app does not have it. A licence is a short signed string verified on the device against a
+public key that ships in the APK; the private key never leaves the developer. Everything about the
+model, the key handling and the honest limits of offline verification is in
+[docs/BILLING.md](docs/BILLING.md).
+
+---
+
 ## Guarantees
 
 **100 % offline.** The app has no `INTERNET` permission in its manifest — it is not "offline
@@ -202,6 +236,12 @@ Known limitations, deliberately documented rather than hidden:
 * **JVM (`:ar-engine`, `:export`)** — hit cascade priority and rejection reasons, metric depth
   calibration (including "refuses to fit on noise"), routing/anchor behaviour, GLB/PLY/CSV
   structural validation.
+* **JVM (`:core` licence)** — the freemium gate: a signed licence verifies, a tampered payload
+  and a key from another signing key are refused, a licence bound to another phone is refused,
+  an expired subscription is reported as *expired* rather than invalid, the URL-safe base64
+  round-trips every byte value, and — the interesting one — a licence minted by
+  `tools/mint_licence.py` with `openssl` verifies inside the app, which pins the
+  openssl↔`java.security` contract rather than assuming it.
 * **Instrumented tests** would need a physical ARCore device; none are included, and nothing in
   this repository claims to have run on one.
 * **CI**: `.github/workflows/native-tests.yml` builds and runs the native suite with both `g++`

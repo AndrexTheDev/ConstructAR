@@ -138,7 +138,7 @@ class LicenceTest {
         assertFalse("url-safe alphabet has no padding or plus", encoded.contains("=") || encoded.contains("+") || encoded.contains("/"))
         assertNotNull(LicenceFormat.base64UrlDecode(encoded))
         assertTrue(LicenceFormat.base64UrlDecode(encoded)!!.contentEquals(bytes))
-        assertNull(LicenceFormat.base64UrlDecode("abc$def"))
+        assertNull("the alphabet has no dot", LicenceFormat.base64UrlDecode("abc.def"))
         assertNull(LicenceFormat.base64UrlDecode(""))
         assertEquals("", LicenceFormat.base64UrlEncode(ByteArray(0)))
     }
