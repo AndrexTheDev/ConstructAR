@@ -86,6 +86,7 @@ class ArSessionController(private val context: Context) {
      * `ARSceneView(sessionConfiguration = ...)`; it must not call `session.configure()`
      * itself, and must not touch Compose state.
      */
+    @Suppress("DEPRECATION") // ARCore offers no undeprecated replacement for the probe below.
     fun applyPolicy(session: Session, config: Config) {
         config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
         config.depthMode = when {
@@ -140,7 +141,6 @@ class ArSessionController(private val context: Context) {
             when (ArCoreApk.getInstance().requestInstall(installer, true)) {
                 ArCoreApk.InstallStatus.INSTALLED -> ArReadiness.Ready
                 ArCoreApk.InstallStatus.INSTALL_REQUESTED -> ArReadiness.InstallRequested
-                else -> ArReadiness.Ready
             }
         } catch (error: UnavailableDeviceNotCompatibleException) {
             ArReadiness.Unsupported(error.message ?: "")

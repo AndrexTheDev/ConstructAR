@@ -98,7 +98,7 @@ object AiDepthFusion {
                 val arcoreValue = readMm(arcoreMm, index)
                 val arcoreConfidence = if (hasConfidence) {
                     val cx = (x * cxScale).toInt().coerceIn(0, confidenceWidth - 1)
-                    confidence!![confidenceRow * confidenceRowStride + cx].toInt() and 0xFF
+                    confidence[confidenceRow * confidenceRowStride + cx].toInt() and 0xFF
                 } else 255
 
                 if (arcoreValue > 0 && arcoreConfidence >= minConfidence) {
@@ -155,7 +155,7 @@ object AiDepthFusion {
                 if (hasConfidence) {
                     val cx = (x.toFloat() / width * confidenceWidth).toInt().coerceIn(0, confidenceWidth - 1)
                     val cy = (y.toFloat() / height * confidenceHeight).toInt().coerceIn(0, confidenceHeight - 1)
-                    val c = confidence!![cy * confidenceRowStride + cx].toInt() and 0xFF
+                    val c = confidence[cy * confidenceRowStride + cx].toInt() and 0xFF
                     if (c < minConfidence) continue
                 }
                 relativeValues[count] = relative.sampleNormalized((x + 0.5f) / width, (y + 0.5f) / height)

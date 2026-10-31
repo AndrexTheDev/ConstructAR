@@ -143,12 +143,14 @@ class ArHitSource(
         val out = ArrayList<PlaneCandidate>(all.size)
         for (plane in all) {
             if (plane.trackingState != TrackingState.TRACKING) continue
+            // `Plane.polygon` returns a non-null FloatBuffer and throws when ARCore has no
+            // polygon for the plane yet, so only the throw needs handling.
             val polygonBuffer = try {
                 plane.polygon
             } catch (error: Throwable) {
                 continue
             }
-            if (polygonBuffer == null || polygonBuffer.remaining() < 9) continue
+            if (polygonBuffer.remaining() < 9) continue
             polygonBuffer.rewind()
             val vertices = ArrayList<Vec3>(polygonBuffer.remaining() / 3)
             while (polygonBuffer.remaining() >= 3) {

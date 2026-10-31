@@ -298,16 +298,6 @@ class RouteSession(
         )
     }
 
-    private fun SurfaceHit.toRouteNode(id: String, anchorId: String? = null) = RouteNodeRecord(
-        id = id,
-        position = point,
-        normal = normal,
-        surface = surfaceKind,
-        hitSource = source,
-        anchorId = anchorId,
-        confidence = confidence,
-    )
-
     companion object {
         /** Two taps closer than this are the same tap (fat fingers + gloves). */
         const val MIN_NODE_SPACING_METERS = 0.02f
