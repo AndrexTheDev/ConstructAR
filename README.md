@@ -40,6 +40,13 @@ Plus: auto-torch with hysteresis, monocular depth (Depth Anything V2 Small) fuse
 metric depth field, loop-closure pose graph, thermal-aware degradation, and explicit handling
 for every way AR can fail on a site.
 
+**Depth fusion policy.** ARCore depth is metric but holey; the network is dense but only
+relative. `AiDepthFusion` therefore lets the network **fill holes only** — a confident ARCore
+sample is never overwritten — after `MetricDepthCalibrator` fits `1/z = s·d + t` against
+ARCore's metric samples with IRLS + Huber weights. If the fit's inlier ratio is below 55 % the
+fusion is refused and the app uses ARCore depth alone. A fused frame older than 800 ms is
+discarded rather than integrated into geometry the camera has already left.
+
 ---
 
 ## Guarantees

@@ -61,6 +61,7 @@ class ArMeasureController(private val context: Context) {
     private var renderer: SceneMeshRenderer? = null
     private var sceneController: RouteSceneController? = null
     private var torchController: TorchController? = null
+    private var monocularDepth: com.constructar.arengine.ai.MonocularDepthSource? = null
     private var powerManager: PowerManager? = null
 
     val torchOn = MutableStateFlow(false)
@@ -97,6 +98,13 @@ class ArMeasureController(private val context: Context) {
         }
         if (powerManager == null) {
             powerManager = context.getSystemService(PowerManager::class.java)
+        }
+        if (monocularDepth == null) {
+            // Optional: silently inactive when no model is bundled or calibration is refused.
+            monocularDepth = com.constructar.arengine.ai.MonocularDepthSource(
+                context = context,
+                onFused = { depth, width, height, _ -> pipeline.submitFusedDepth(depth, width, height) },
+            ).also { it.warmUp() }
         }
         torchController = TorchController(switch = { enabled -> applyTorch(session, enabled) })
     }
@@ -140,6 +148,9 @@ class ArMeasureController(private val context: Context) {
 
         routeSession.onFrame()
         updateHudPosition(frame, viewWidth, viewHeight)
+
+        // Monocular depth: throttled internally to ~2 Hz; copies what it needs immediately.
+        pipeline.latestSnapshot?.let { snapshot -> monocularDepth?.onFrame(frame, snapshot) }
 
         val camera = frame.camera
         val quality = when (camera.trackingState) {
@@ -233,6 +244,8 @@ class ArMeasureController(private val context: Context) {
     fun release() {
         routeSession.release()
         (anchors.delegate as? ArCoreAnchorFactory)?.detachAll()
+        monocularDepth?.close()
+        monocularDepth = null
         pipeline.stop()
         sessionController.close()
         renderer?.release()

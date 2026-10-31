@@ -118,6 +118,18 @@ class TsdfScanPipeline(
     private var workerJob: kotlinx.coroutines.Job? = null
 
     private val workerBusy = AtomicBoolean(false)
+    private val fusedDepth = java.util.concurrent.atomic.AtomicReference<FusedDepth?>(null)
+
+    /**
+     * Depth produced by the monocular path (AI holes filled), with the moment it was produced.
+     * Copied on submission so the producer can reuse its buffer.
+     */
+    private class FusedDepth(
+        val depthMm: ShortArray,
+        val width: Int,
+        val height: Int,
+        val receivedAtMillis: Long,
+    )
     private var extractIntervalMs = EXTRACT_INTERVAL_MS
     private var lastExtractNanos = 0L
     private var lastThermalCheckNanos = 0L
@@ -187,6 +199,20 @@ class TsdfScanPipeline(
     @Volatile
     private var pendingPixelStep: Int = DepthCapture.PIXEL_STEP_NOMINAL
 
+    /**
+     * Hands a densified depth frame to the integrator.
+     *
+     * ARCore's own depth stays authoritative *inside* the fused frame (the fusion only fills
+     * holes), so this is a strictly larger measured region, not a replacement. The frame is
+     * dropped after [FUSION_TTL_MS] so a stale network result can never be integrated into
+     * geometry the camera has already moved past.
+     */
+    fun submitFusedDepth(depthMm: ShortArray, width: Int, height: Int) {
+        fusedDepth.set(
+            FusedDepth(depthMm.copyOf(), width, height, android.os.SystemClock.elapsedRealtime()),
+        )
+    }
+
     private fun integrate(snapshot: DepthFrameSnapshot) {
         val active = engine ?: return
         workerBusy.set(true)
@@ -201,16 +227,23 @@ class TsdfScanPipeline(
         val startedNanos = System.nanoTime()
         // Read the stride once: the render thread may update `pendingPixelStep` concurrently.
         val pixelStep = pendingPixelStep
+        // Prefer the AI-densified frame when it matches this resolution and is fresh. Its
+        // pixels already passed the confidence filter during fusion, so no confidence image is
+        // applied on top (that would throw away exactly the filled holes).
+        val fusion = fusedDepth.get()?.takeIf {
+            it.width == snapshot.width && it.height == snapshot.height &&
+                android.os.SystemClock.elapsedRealtime() - it.receivedAtMillis < FUSION_TTL_MS
+        }
         val result = try {
             active.integrateDepth(
-                depthMm = snapshot.depthMm,
+                depthMm = fusion?.depthMm ?: snapshot.depthMm,
                 width = snapshot.width,
                 height = snapshot.height,
                 rowStrideElements = snapshot.rowStride,
-                confidence = snapshot.confidence,
-                confidenceWidth = snapshot.confidenceWidth,
-                confidenceHeight = snapshot.confidenceHeight,
-                confidenceRowStride = snapshot.confidenceRowStride,
+                confidence = if (fusion != null) null else snapshot.confidence,
+                confidenceWidth = if (fusion != null) 0 else snapshot.confidenceWidth,
+                confidenceHeight = if (fusion != null) 0 else snapshot.confidenceHeight,
+                confidenceRowStride = if (fusion != null) 0 else snapshot.confidenceRowStride,
                 intrinsics = snapshot.intrinsics,
                 cameraToWorld = snapshot.cameraToWorld,
                 timestampNs = snapshot.timestampNs,
@@ -317,6 +350,9 @@ class TsdfScanPipeline(
 
     companion object {
         private const val TAG = "TsdfScanPipeline"
+
+        /** A fused frame older than this is stale: the camera has moved on. */
+        private const val FUSION_TTL_MS = 800L
 
         /** Required by the specification: mesh refresh at ≈3.3 Hz, not per frame. */
         const val EXTRACT_INTERVAL_MS = 300L

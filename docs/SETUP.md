@@ -131,6 +131,13 @@ sha256sum app/src/main/assets/models/depth_anything_v2_small_int8.tflite
 3. `MetricDepthCalibrator` fits `1/z ≈ s·disparity + t` against ARCore's metric depth with IRLS
    + Huber weights. If the inlier ratio is below 55 % it **refuses** and the app falls back to
    ARCore depth — better no number than a wrong number.
+4. `AiDepthFusion` merges the two: ARCore's confident samples are kept verbatim, holes are
+   filled from the calibrated network output, clamped to 0.25–8 m. The fused frame is handed to
+   the TSDF pipeline (`submitFusedDepth`) and expires after 800 ms.
+
+Diagnostics: `MonocularDepthSource.backend` ("nnapi" / "gpu/vulkan" / "cpu/xnnpack"),
+`.lastCalibration.inlierRatio` and `.lastFillRatio` are exposed for a debug screen and for
+field reports.
 
 ---
 

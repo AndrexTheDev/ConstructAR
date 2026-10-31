@@ -38,5 +38,10 @@ this repository redistributes dataset content.
 
 ## Source licence
 
-This repository's own source is Apache-2.0. Add a `LICENSE` file (Apache-2.0 text) and the
-`NOTICE` attributions for SceneView, Filament and Depth Anything V2 before a public release.
+Unless your organisation specifies otherwise, the intended licence for this repository's own
+source is **Apache-2.0** — no `LICENSE` file is committed yet because that is the owner's
+decision, not the tool's. Before a public release add:
+
+1. `LICENSE` with the Apache-2.0 text (if that is the chosen licence);
+2. `NOTICE` with the attributions for SceneView, Filament and Depth Anything V2;
+3. an in-app "Licences" screen listing the components in the table above.

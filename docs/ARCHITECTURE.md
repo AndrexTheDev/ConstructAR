@@ -97,6 +97,14 @@ full step overshoots on a room with one closure), snapshot/rollback so a divergi
 never corrupt the trajectory. Loop closures carry 100× the odometry weight because they are
 appearance-verified.
 
+**Monocular depth fusion.** Optional and strictly additive:
+`YuvFrame` copies the camera planes on the render thread (~0.2 ms), the inference worker runs
+Depth Anything V2 Small through LiteRT (NNAPI → GPU → CPU), `MetricDepthCalibrator` fits
+`1/z = s·d + t` to ARCore's metric samples on the *same* frame, and `AiDepthFusion` writes a
+densified millimetre frame in which confident ARCore pixels are copied verbatim and only holes
+are filled. `TsdfScanPipeline.submitFusedDepth` accepts it with an 800 ms TTL and integrates it
+with no separate confidence gate (the fusion already applied one).
+
 **RTAB-Map bridge.** Optional; compiled only with `-DCONSTRUCTAR_WITH_RTABMAP=ON`. Without it
 the built-in proximity proposer suggests closures (same room visited twice → graph distance
 small, traversed distance large) which the UI asks the operator to confirm.
