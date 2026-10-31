@@ -24,6 +24,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,7 +74,19 @@ fun HelpScreen(
                     contentDescription = stringResource(R.string.paywall_back),
                 )
             }
-            Text(stringResource(R.string.help_title), style = MaterialTheme.typography.headlineSmall)
+            Text(
+                stringResource(R.string.help_title),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.weight(1f),
+            )
+            Image(
+                painter = painterResource(R.drawable.constructar_logo),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape),
+            )
         }
 
         Section(title = stringResource(R.string.help_how_title)) {

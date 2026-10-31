@@ -67,6 +67,13 @@ class ProtocolPdfWriter(
         val signatureCaption: String = "",
         /** All visible text, localised by the caller. See [PdfLabels]. */
         val labels: PdfLabels = PdfLabels(),
+        /**
+         * The product badge, printed top-right on the first page.
+         *
+         * Branding a document that leaves the site is the cheapest marketing there is: the
+         * customer files it, the wholesaler sees it, the next foreman asks what made it.
+         */
+        val logo: Bitmap? = null,
     )
 
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -102,6 +109,15 @@ class ProtocolPdfWriter(
             // ── Header ──────────────────────────────────────────────────────────────────
             var y = MARGIN
             page.canvas.drawText(content.labels.title, MARGIN.toFloat(), y.toFloat(), titlePaint)
+            content.logo?.let { logo ->
+                val target = 46
+                page.canvas.drawBitmap(
+                    logo,
+                    null,
+                    Rect(pageWidth - MARGIN - target, MARGIN - 30, pageWidth - MARGIN, MARGIN - 30 + target),
+                    Paint(Paint.FILTER_BITMAP_FLAG),
+                )
+            }
             y += 18
             val subtitle = buildString {
                 append(content.project.name)

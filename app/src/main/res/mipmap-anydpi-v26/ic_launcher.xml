@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+  All rights reserved. Proprietary and confidential - see LICENSE.
+  SPDX-License-Identifier: LicenseRef-Proprietary
+-->
+<!-- The launcher icon: the themed badge on the app's ink, masked by the launcher.
+     Denser launchers use the PNGs in mipmap-*dpi, which is also what API 24-25 sees. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/theme_ink" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>

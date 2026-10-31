@@ -26,6 +26,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.Image
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -70,19 +74,14 @@ fun OnboardingScreen(onDone: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Box(
+        Image(
+            painter = painterResource(R.drawable.constructar_logo),
+            contentDescription = stringResource(R.string.app_name),
+            contentScale = ContentScale.Crop,
             modifier = Modifier
-                .size(132.dp)
-                .background(Jamaica.SurfaceHigh, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                icons[step],
-                contentDescription = null,
-                tint = SiteColors.accent,
-                modifier = Modifier.size(64.dp),
-            )
-        }
+                .size(148.dp)
+                .clip(CircleShape),
+        )
 
         Spacer(Modifier.height(28.dp))
         Text(

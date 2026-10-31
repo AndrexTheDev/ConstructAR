@@ -90,6 +90,11 @@ fun ExportScreen(
     val signature = rememberSignaturePadState()
     // Resolved at composition so the export coroutine never touches a resource lookup.
     val pdfLabels = rememberPdfLabels()
+    // Decoded once per screen: the protocol carries the badge so the document is recognisable
+    // after it leaves the phone.
+    val logo = remember(context) {
+        android.graphics.BitmapFactory.decodeResource(context.resources, R.drawable.constructar_logo)
+    }
     val signatureTitle = stringResource(R.string.signature_pdf_title)
     val signatureCaption = stringResource(R.string.signature_pdf_caption)
 
@@ -127,6 +132,7 @@ fun ExportScreen(
                             signatureTitle = signatureTitle,
                             signatureCaption = signatureCaption,
                             labels = pdfLabels,
+                            logo = logo,
                         ),
                     )
                     var written = 0

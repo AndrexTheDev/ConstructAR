@@ -75,6 +75,8 @@ class ExportService(
         val signatureCaption: String = "",
         /** All text on the protocol, localised by the caller. See [PdfLabels]. */
         val labels: PdfLabels = PdfLabels(),
+        /** The product badge drawn on the first page. */
+        val logo: Bitmap? = null,
     )
 
     /** Human/machine-readable file stem, e.g. `ConstructAR_Bad-Keller_20260314-1015`. */
@@ -112,6 +114,7 @@ class ExportService(
                             signatureTitle = request.signatureTitle,
                             signatureCaption = request.signatureCaption,
                             labels = request.labels,
+                            logo = request.logo,
                         ),
                         output,
                     )
