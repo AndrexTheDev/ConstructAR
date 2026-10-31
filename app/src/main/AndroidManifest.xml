@@ -4,7 +4,8 @@
   All rights reserved. Proprietary and confidential - see LICENSE.
   SPDX-License-Identifier: LicenseRef-Proprietary
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Camera is the only permission the app needs. There is no INTERNET permission:
          the app is physically incapable of uploading a measurement. -->
@@ -26,8 +27,14 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ConstructAR">
 
-        <!-- Google Play install filter: only devices with ARCore. -->
-        <meta-data android:name="com.google.ar.core" android:value="required" />
+        <!-- Google Play install filter: only devices with ARCore.
+             SceneView declares the same key as "optional" (it must, for apps that merely offer
+             an AR mode); ConstructAR has no non-AR mode, so the merge is resolved in favour of
+             "required" - the Play filter that keeps the app off unsupported hardware. -->
+        <meta-data
+            android:name="com.google.ar.core"
+            android:value="required"
+            tools:replace="android:value" />
 
         <activity
             android:name=".MainActivity"

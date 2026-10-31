@@ -20,8 +20,8 @@ android {
 
         externalNativeBuild {
             cmake {
-                // C++20, no exceptions/RTTI and -O3 are set in CMakeLists.txt so the host
-                // test build and the NDK build compile identical semantics.
+                // C++20, no exceptions/RTTI, -O2 and -Werror are set in CMakeLists.txt so the
+                // host test build and the NDK build compile identical semantics.
                 cppFlags += listOf("-std=c++20")
                 arguments += listOf("-DANDROID_STL=c++_shared")
 

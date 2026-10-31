@@ -164,7 +164,10 @@ jobs:
           set +e
           gradle --no-daemon --stacktrace --continue \
             :core:test :export:test \
-            :ar-engine:compileDebugKotlin :app:compileDebugKotlin > /tmp/step.log 2>&1
+            :ar-engine:compileDebugKotlin :ar-engine:compileDebugUnitTestKotlin \
+            :app:compileDebugKotlin :app:compileDebugUnitTestKotlin \
+            :native-slam:compileDebugKotlin :native-slam:compileDebugUnitTestKotlin \
+            > /tmp/step.log 2>&1
           code=$?
           bash scripts/ci_annotate.sh /tmp/step.log "JVM tests / Kotlin compile failed" "$code"
 
@@ -244,7 +247,9 @@ jobs:
               echo "#### What went wrong"
               echo ""
               echo '```'
-              awk '/^\* What went wrong:/{f=1} f{print} /^\* Try:/{f=0}' /tmp/log.txt | head -n 60
+              # Up to three failed tasks, each with its full "What went wrong" block: the
+              # 60-line cap used to hide every failure after the first.
+              awk '/^\* What went wrong:/{f=1} f{print} /^\* Try:/{f=0}' /tmp/log.txt | head -n 160
               echo '```'
               echo ""
               echo "<details><summary>first 60 lines of the log</summary>"
