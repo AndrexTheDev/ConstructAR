@@ -589,6 +589,8 @@ def sitemap() -> str:
         )
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
+        "<!-- Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com> -->\n"
+        "<!-- All rights reserved. Proprietary and confidential - see LICENSE. -->\n"
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n'
         '        xmlns:xhtml="http://www.w3.org/1999/xhtml">\n'
         + "".join(entries)
