@@ -216,17 +216,35 @@ performance) is [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md).
 
 ## Status
 
-Implemented and verified in this environment:
+**The full gate is green in CI** — `assembleDebug testDebugUnitTest`, every module, warnings as
+errors:
 
-* the complete `:core` maths/geometry/measurement layer;
-* the C++ TSDF + Surface Nets + pose graph, with a passing host test suite;
-* the Kotlin AR engine, export and app layers, reviewed for correctness but **not compiled**
-  here (no JDK/Gradle/Android SDK/NDK in the build sandbox, and no way to install one).
+| Gate | Result |
+|------|--------|
+| `scripts/verify_sources.py` (headers, reflection ban, i18n parity) | pass — 109 files |
+| `:core` / `:export` unit tests | pass |
+| `:ar-engine` unit tests | pass |
+| Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
+| Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 44 checks, 0 failures |
+| NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
+| APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |
 
-Before a store release: build the APK, run it on at least one depth-capable and one
-plane-only device, re-check the SceneView integration points listed in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and retune the TSDF constants from
-[docs/PERFORMANCE.md](docs/PERFORMANCE.md) on the target hardware.
+The build sandbox used during development has no JVM, no Android SDK and no NDK, so every one of
+those numbers comes from the `android-build` workflow on GitHub-hosted runners; the workflow
+posts the failing diagnostic block to the pull request so the result is reproducible by anyone
+with the token, not just by the author.
+
+One console notice remains on purpose: AGP 9 wants to own Kotlin support, and the project opts
+out (`android.builtInKotlin=false` + `android.newDsl=false` in `gradle.properties`) because
+`allWarningsAsErrors`, `jvmTarget` and the Compose compiler are configured through the Kotlin
+Gradle plugin. The opt-out prints a deprecation notice at configure time; it is not a compiler
+warning and does not fail the gate. The full migration to built-in Kotlin is a mechanical change
+for the day AGP removes the switch.
+
+Still true of a release not made from this commit: it has not been run on physical hardware
+here. Before shipping, run it on at least one depth-capable and one plane-only device, re-check
+the SceneView integration points in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and retune the
+TSDF constants from [docs/PERFORMANCE.md](docs/PERFORMANCE.md) on the target hardware.
 
 ---
 
