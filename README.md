@@ -269,11 +269,12 @@ gradle :app:assembleRelease              # the shipping artifact: R8 + resource 
 python3 scripts/verify_sources.py        # header / reflection / i18n gates, no SDK needed
 ```
 
-**Size is a feature.** The release build runs R8 with resource shrinking, ships six locales
-instead of the eighty a dependency tree carries, and keeps the preview/tooling artifacts out of
-the package entirely; `app/build.gradle.kts` documents each lever and CI prints the debug and
-release APK sizes on every push. Cold start verifies the licence once, keeps the device tag lazy
-and puts every file operation on IO. Details and the numbers: **[docs/PERFORMANCE.md](docs/PERFORMANCE.md) §4**.
+**Size is a feature.** The release APK is **25 MB** — R8 with resource shrinking, six locales
+instead of the eighty a dependency tree carries, no preview/tooling artifacts, and native
+libraries for one ABI instead of two (the second existed only for the emulator). `app/build.gradle.kts`
+documents each lever, CI prints the debug and release sizes on every push, and the before/after
+is in **[docs/PERFORMANCE.md](docs/PERFORMANCE.md) §4**. Cold start verifies the licence once,
+keeps the device tag lazy and puts every file operation on IO.
 
 The CI workflow downloads Gradle 9.6.0 and puts it on `PATH`; the wrapper scripts and JAR are
 deliberately not committed, so `gradle` (not `./gradlew`) is the documented entry point here.

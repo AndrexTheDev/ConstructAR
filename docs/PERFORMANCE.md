@@ -107,9 +107,23 @@ it takes before the project list is on screen.
 | `release { ndk.abiFilters = arm64-v8a }` | `app/build.gradle.kts` | The native libraries (Filament, ARCore, LiteRT, `libconstructar_slam.so`) were packaged for two ABIs because the emulator needs x86_64; every ARCore phone is 64-bit ARM. Debug keeps all ABIs |
 | Six locales only, assets excluded from VCS | `res/values-*`, `.gitignore` | The 25 MB depth model is imported by the operator, not shipped |
 
-CI builds `assembleRelease` on every push and prints the size of both APKs in the job summary
-(`Measure the APKs`), so these claims are measured rather than asserted. If the number grows,
-the build log names the largest entries in the package.
+CI builds `assembleRelease` on every push, prints the size of both APKs in the job summary and
+as a check annotation (`Measure the APKs`), and lists the largest entries in the package — so
+these claims are measured rather than asserted.
+
+Measured on 2026-10-31 (AGP 9.4.1, R8 full mode, arm64 release):
+
+| Stage | Release APK |
+|---|---|
+| R8 + resource shrink, six locales, both ABIs | 65 MB |
+| … with the release ABI filter (`arm64-v8a`) | **25 MB** |
+
+The debug APK stays at 87 MB on purpose: it carries every ABI (so the emulator runs), the
+Compose tooling and the inspector. It is a development artifact and is never shipped.
+
+What is left in the 25 MB is the part that cannot be argued away: Filament's material shaders,
+ARCore, LiteRT and `libconstructar_slam.so` for one ABI. Dropping any of them would mean
+dropping depth, rendering or the room scan.
 
 ### Cold start
 
