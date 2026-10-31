@@ -9,6 +9,7 @@ package com.constructar.nativebridge
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
+import com.constructar.core.geo.DepthIntrinsics
 import java.nio.ByteBuffer
 
 /**

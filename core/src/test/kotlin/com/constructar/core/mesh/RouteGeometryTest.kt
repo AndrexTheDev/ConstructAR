@@ -51,7 +51,9 @@ class RouteGeometryTest {
         // Measured length uses the tapped surface points, not the offset centreline.
         assertEquals(1f, result.lengthMeters, 1e-4f)
         val bounds = result.mesh.bounds()!!
-        assertEquals(0.008f, bounds.min.z, 1e-4f)
+        // Flush mounting: the *centreline* sits one radius (8 mm) off the plaster, so the tube
+        // touches the wall at z = 0 and its crown reaches one diameter (16 mm) out.
+        assertEquals(0f, bounds.min.z, 1e-4f)
         assertEquals(0.016f, bounds.max.z, 1e-4f)
         assertTrue(result.bendRadiusCompliant)
     }

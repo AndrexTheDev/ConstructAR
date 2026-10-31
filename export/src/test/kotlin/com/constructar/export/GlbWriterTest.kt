@@ -93,7 +93,9 @@ class GlbWriterTest {
     fun `names with quotes and newlines do not break the json`() {
         val bytes = GlbWriter.write(listOf(GlbWriter.GlbPart("run \"A\"\nlevel 2", quad())))
         val json = jsonOf(bytes)
-        assertTrue(json.contains("run \\\"A\\\" level 2"))
+        // The name is `run "A"<newline>level 2`; JSON needs both the quotes and the newline
+        // escaped, so the chunk must contain the literal characters \" and \n.
+        assertTrue(json.contains("run \\\"A\\\"\\nlevel 2"))
     }
 
     private fun jsonOf(bytes: ByteArray): String {
