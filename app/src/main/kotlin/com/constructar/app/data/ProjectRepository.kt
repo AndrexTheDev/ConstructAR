@@ -12,6 +12,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.model.WorkTime
 import com.constructar.core.model.ScanSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -49,6 +50,10 @@ class ProjectRepository(private val context: Context) {
         val routeCount: Int,
         val totalLengthMeters: Float,
         val updatedAtEpochMs: Long,
+        /** Defects still open — the list shows the count so a punch list cannot be forgotten. */
+        val openDefects: Int = 0,
+        /** True while this room's clock is still running. */
+        val workRunning: Boolean = false,
     )
 
     /** Lists projects, newest first. Corrupt files are skipped, never fatal. */
@@ -63,6 +68,8 @@ class ProjectRepository(private val context: Context) {
                     routeCount = project.routes.size,
                     totalLengthMeters = project.totalLengthMeters,
                     updatedAtEpochMs = project.updatedAtEpochMs,
+                    openDefects = project.openDefectCount,
+                    workRunning = WorkTime.isRunning(project.sessions),
                 )
             }
             ?.sortedByDescending { it.updatedAtEpochMs }

@@ -405,6 +405,12 @@ private fun ProjectMetaLine(project: ProjectRepository.ProjectSummary) {
     // Resolved at composition: `pluralStringResource` is @Composable and must not be called
     // from inside `buildString`.
     val runsText = pluralStringResource(R.plurals.home_runs, project.routeCount, project.routeCount)
+    val runningText = stringResource(R.string.field_time_open)
+    val defectsText = if (project.openDefects > 0) {
+        stringResource(R.string.field_open_count, project.openDefects)
+    } else {
+        ""
+    }
     Text(
         text = buildString {
             append(runsText)
@@ -415,6 +421,14 @@ private fun ProjectMetaLine(project: ProjectRepository.ProjectSummary) {
             if (project.siteName.isNotBlank()) {
                 append(" · ")
                 append(project.siteName)
+            }
+            if (project.workRunning) {
+                append(" · ")
+                append(runningText)
+            }
+            if (defectsText.isNotEmpty()) {
+                append(" · ")
+                append(defectsText)
             }
         },
         style = MaterialTheme.typography.bodySmall,
