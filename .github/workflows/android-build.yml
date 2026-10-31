@@ -108,10 +108,39 @@ jobs:
 
           echo "--- installed packages"; "$SM" --list_installed || true
 
-      - name: Set up Gradle ${{ env.GRADLE_VERSION }}
-        uses: gradle/actions/setup-gradle@v4
+      - name: Install Gradle ${{ env.GRADLE_VERSION }}
+        # No `gradle/actions/setup-gradle` and no wrapper in the repository (the wrapper scripts
+        # and JAR are deliberately not committed), so the distribution is fetched directly and
+        # put on PATH. A 404 for the pinned version falls back to the newest published one.
+        run: |
+          set -euo pipefail
+          base=https://services.gradle.org/distributions
+          ok=""
+          for name in "gradle-${GRADLE_VERSION}-bin.zip" "gradle-${GRADLE_VERSION}.0-bin.zip" "gradle-8.14-bin.zip"; do
+            code=$(curl -sSL -o /tmp/gradle.zip -w '%{http_code}' "$base/$name" || true)
+            if [ "$code" = "200" ]; then echo "downloaded $base/$name"; ok="$name"; break; fi
+            echo "unavailable ($code): $base/$name"
+          done
+          if [ -z "$ok" ]; then
+            latest=$(curl -sSL https://services.gradle.org/versions/current \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')
+            echo "falling back to current Gradle $latest"
+            curl -sSL -o /tmp/gradle.zip "$base/gradle-${latest}-bin.zip"
+          fi
+          rm -rf /opt/gradle && mkdir -p /opt/gradle
+          unzip -q /tmp/gradle.zip -d /opt/gradle
+          GRADLE_BIN=$(dirname "$(find /opt/gradle -maxdepth 3 -name gradle -type f | head -n 1)")
+          echo "$GRADLE_BIN" >> "$GITHUB_PATH"
+          "$GRADLE_BIN/gradle" --version
+
+      - name: Cache Gradle downloads
+        uses: actions/cache@v4
         with:
-          gradle-version: ${{ env.GRADLE_VERSION }}
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/jdks
+          key: gradle-${{ env.GRADLE_VERSION }}-${{ hashFiles('gradle/libs.versions.toml', '**/build.gradle.kts') }}
+          restore-keys: gradle-${{ env.GRADLE_VERSION }}-
 
       - name: Toolchain versions
         run: |
