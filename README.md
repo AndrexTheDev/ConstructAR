@@ -84,6 +84,41 @@ runs were saved, or what was left to do.
 
 ---
 
+## Site file — the paperwork around the measurement
+
+Measured metres are half a job. The other half is the evidence a tradesman still keeps on paper
+today — the hours on the back of a delivery note, the diary in a notebook that gets wet, the
+punch list printed two weeks later — and it all lives in the same project file:
+
+| Part | What it records | Where it ends up |
+|------|-----------------|------------------|
+| **Customer / object** | name, address, phone | header block of the protocol |
+| **Working time** | start/stop, one open session at most, per-session and total hours | *Working time* table with a total |
+| **Site diary** | timestamped free text, newest first | *Site diary* section, printed forwards in time |
+| **Defects** | what, where, severity (minor / important / critical), open or resolved | *Defects* table with status |
+
+Three deliberate choices:
+
+* **The clock cannot be double-started.** `startSession` refuses a second open session, so a
+  double tap on a wet screen cannot double the hours; `stopSession` closes whatever is open.
+  The arithmetic lives in `core/model/FieldNotes.kt` (`WorkTime`) and is unit-tested, because
+  this is the number that appears on an invoice.
+* **Nothing is a second app.** A diary entry is as much "the job moved" as a new run, so it
+  touches `updatedAtEpochMs` and the project list re-sorts with it. One JSON file per room, one
+  backup, one export.
+* **The protocol carries it.** `ProtocolPdfWriter` learned a generic `PdfSection` (table and/or
+  paragraphs plus a note); the app assembles the sections from localised strings, because only
+  the app has the string table. Adding a new kind of on-site note needs no change in `:export`.
+
+The project screen reflects the file back before the operator leaves the site: six readiness
+chips (customer, technician, scan, runs, photo, time) and a line naming exactly what is still
+missing for a handover-quality protocol.
+
+Not done, and on the roadmap rather than in the product: a photo per diary entry or defect,
+and turning the hours into a priced line item.
+
+---
+
 ## Data safety
 
 A project is one JSON file in app-private storage, written atomically (`tmp` + rename), so a crash

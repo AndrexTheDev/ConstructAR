@@ -107,6 +107,10 @@ fun HelpScreen(
             Bullet(stringResource(R.string.help_tip_anchor))
         }
 
+        Section(title = stringResource(R.string.field_title)) {
+            Text(stringResource(R.string.field_subtitle), style = MaterialTheme.typography.bodyMedium)
+        }
+
         Section(title = stringResource(R.string.help_offline_title)) {
             Text(stringResource(R.string.help_offline_body), style = MaterialTheme.typography.bodyMedium)
         }

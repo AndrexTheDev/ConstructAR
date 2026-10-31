@@ -193,6 +193,8 @@ CONTENT: dict[str, dict[str, str]] = {
         "f4t": "A protocol the customer signs", "f4b": "PDF with room scan, runs, order quantities, a site photo and a signature page. Plus CSV and GLB/PLY for BIM.",
         "f5t": "Works without signal", "f5b": "No cloud, no account, no analytics. Everything is computed on the phone — in a cellar it behaves exactly like in the office.",
         "f6t": "Six languages", "f6b": "English, German, Spanish, French, Italian and Polish — both the app and the exported protocol.",
+        "f7t": "The site file is inside",
+        "f7b": "Hours, a timestamped diary and a defect list live in the same project — and on the same signed PDF. No second app, no sync.",
         "how_title": "Three steps, one screen each",
         "how_sub": "If a foreman cannot work it out in ten seconds, it is the wrong app.",
         "s1t": "Scan", "s1b": "Walk the room once, phone at chest height. The mesh appears on the walls.",
@@ -253,6 +255,8 @@ CONTENT: dict[str, dict[str, str]] = {
         "f4t": "Ein Protokoll zum Unterschreiben", "f4b": "PDF mit Raumscan, Strecken, Bestellmengen, Baustellenfoto und Unterschriftenseite. Dazu CSV und GLB/PLY für BIM.",
         "f5t": "Funktioniert ohne Netz", "f5b": "Keine Cloud, kein Konto, keine Analytics. Alles rechnet auf dem Telefon — im Keller genau wie im Büro.",
         "f6t": "Sechs Sprachen", "f6b": "Deutsch, Englisch, Spanisch, Französisch, Italienisch und Polnisch — App und exportiertes Protokoll.",
+        "f7t": "Die Baustellenmappe ist dabei",
+        "f7b": "Zeiten, ein Bautagebuch mit Zeitstempel und eine Mängelliste liegen im selben Projekt — und auf demselben unterschriebenen PDF. Keine zweite App, kein Abgleich.",
         "how_title": "Drei Schritte, je ein Bildschirm",
         "how_sub": "Wenn ein Vorarbeiter es nicht in zehn Sekunden versteht, ist es die falsche App.",
         "s1t": "Scannen", "s1b": "Einmal durch den Raum gehen, Telefon auf Brusthöhe. Das Modell erscheint auf den Wänden.",
@@ -338,7 +342,7 @@ def json_ld(lang: str, c: dict[str, str]) -> str:
                 "url": url_for(lang),
                 "image": f"{BASE_URL}assets/logo.jpg",
                 "description": c["meta_desc"],
-                "featureList": [c[f"f{i}t"] for i in range(1, 7)],
+                "featureList": [c[f"f{i}t"] for i in range(1, 8)],
                 "author": {"@type": "Person", "name": DEVELOPER, "email": EMAIL},
                 "offers": [
                     {"@type": "Offer", "name": c["plan_free"], "price": "0", "priceCurrency": "EUR"},
@@ -382,7 +386,7 @@ def page(lang: str) -> str:
     features = "".join(
         f'<article class="card"><span class="mark">{i}</span><h3>{esc(c[f"f{i}t"])}</h3>'
         f'<p>{esc(c[f"f{i}b"])}</p></article>'
-        for i in range(1, 7)
+        for i in range(1, 8)
     )
     steps = "".join(
         f'<div class="step"><h3>{esc(c[f"s{i}t"])}</h3><p>{esc(c[f"s{i}b"])}</p></div>'
