@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+  All rights reserved. Proprietary and confidential - see LICENSE.
+  SPDX-License-Identifier: LicenseRef-Proprietary
+-->
+<resources>
+    <!-- Window background only. Copied from Jamaica.Ink in Theme.kt because the window is drawn
+         by the platform before Compose exists; a mismatch here shows up as a pale flash. -->
+    <color name="theme_ink">#0A0C07</color>
+</resources>
