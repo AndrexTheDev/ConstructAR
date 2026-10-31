@@ -253,4 +253,7 @@
     <string name="backup_saved">%1$d progetti salvati</string>
     <string name="backup_imported">%1$d progetti ripristinati</string>
     <string name="backup_failed">Backup non riuscito: controlla la cartella e riprova.</string>
+    <string name="waste_title">Scorta</string>
+    <string name="waste_default">Standard</string>
+    <string name="waste_value">%1$d %%</string>
 </resources>

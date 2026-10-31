@@ -19,7 +19,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +57,8 @@ import com.constructar.core.units.LengthFormatter
 fun MaterialsScreen(
     projectName: String,
     materialList: MaterialList?,
+    wasteOverride: Float?,
+    onWasteChange: (Float?) -> Unit,
     onBack: () -> Unit,
 ) {
     Column(
@@ -99,6 +103,30 @@ fun MaterialsScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
+        // ── The firm's waste factor ─────────────────────────────────────────────────
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                stringResource(R.string.waste_title),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                WasteChip(
+                    label = stringResource(R.string.waste_default),
+                    selected = wasteOverride == null,
+                    onClick = { onWasteChange(null) },
+                )
+                listOf(0.05f, 0.10f, 0.15f).forEach { factor ->
+                    WasteChip(
+                        label = stringResource(R.string.waste_value, (factor * 100f).toInt()),
+                        selected = wasteOverride == factor,
+                        onClick = { onWasteChange(factor) },
+                    )
+                }
+            }
+        }
+
         materialList.lines.forEach { line ->
             MaterialCard(line)
         }
@@ -132,6 +160,16 @@ fun MaterialsScreen(
             }
         }
     }
+}
+
+/** One waste factor: the catalogue default, or the firm's own. */
+@Composable
+private fun WasteChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+    )
 }
 
 @Composable

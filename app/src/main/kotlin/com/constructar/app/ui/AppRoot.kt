@@ -196,6 +196,8 @@ fun AppRoot(viewModel: ProjectViewModel) {
                         MaterialsScreen(
                             projectName = project.name,
                             materialList = state.materialList,
+                            wasteOverride = state.wasteOverride,
+                            onWasteChange = { viewModel.setWasteOverride(it) },
                             onBack = { navController.popBackStack() },
                         )
                     } else {

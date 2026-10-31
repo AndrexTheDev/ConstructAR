@@ -253,4 +253,7 @@
     <string name="backup_saved">%1$d projects copied</string>
     <string name="backup_imported">%1$d projects restored</string>
     <string name="backup_failed">Backup failed - check the folder and try again.</string>
+    <string name="waste_title">Waste factor</string>
+    <string name="waste_default">Default</string>
+    <string name="waste_value">%1$d %%</string>
 </resources>

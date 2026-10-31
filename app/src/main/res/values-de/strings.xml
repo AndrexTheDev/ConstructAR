@@ -253,4 +253,7 @@
     <string name="backup_saved">%1$d Projekte gesichert</string>
     <string name="backup_imported">%1$d Projekte wiederhergestellt</string>
     <string name="backup_failed">Sicherung fehlgeschlagen - prüfe den Ordner und versuche es erneut.</string>
+    <string name="waste_title">Reserve</string>
+    <string name="waste_default">Standard</string>
+    <string name="waste_value">%1$d %%</string>
 </resources>

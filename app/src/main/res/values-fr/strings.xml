@@ -253,4 +253,7 @@
     <string name="backup_saved">%1$d projets sauvegardés</string>
     <string name="backup_imported">%1$d projets restaurés</string>
     <string name="backup_failed">Échec de la sauvegarde : vérifie le dossier et réessaie.</string>
+    <string name="waste_title">Réserve</string>
+    <string name="waste_default">Standard</string>
+    <string name="waste_value">%1$d %%</string>
 </resources>

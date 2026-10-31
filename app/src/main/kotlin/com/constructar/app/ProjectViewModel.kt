@@ -12,9 +12,11 @@ import androidx.lifecycle.viewModelScope
 import com.constructar.app.billing.EntitlementStore
 import com.constructar.app.billing.LicencePublicKey
 import com.constructar.app.data.ProjectRepository
+import com.constructar.app.data.SiteSettings
 import com.constructar.app.data.UiPreferences
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.bom.MaterialListBuilder
+import com.constructar.core.bom.MaterialListOptions
 import com.constructar.core.licence.Entitlements
 import com.constructar.core.licence.LicenceCheck
 import com.constructar.core.model.ConduitRoute
@@ -51,6 +53,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     private val repository = ProjectRepository(application)
     private val entitlements = EntitlementStore(application)
     private val preferences = UiPreferences(application)
+    private val settings = SiteSettings(application)
 
     data class UiState(
         val loading: Boolean = true,
@@ -65,6 +68,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         /** True while the bundled licence key is the demo key — surfaced in a debug build only. */
         val demoSigningKey: Boolean = false,
         val onboardingDone: Boolean = false,
+        /** Firm-wide waste factor, `null` = each conduit family's default. */
+        val wasteOverride: Float? = null,
     )
 
     private val mutableState = MutableStateFlow(UiState())
@@ -75,7 +80,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         refreshEntitlements()
-        mutableState.value = mutableState.value.copy(onboardingDone = preferences.onboardingDone())
+        mutableState.value = mutableState.value.copy(
+            onboardingDone = preferences.onboardingDone(),
+            wasteOverride = settings.wasteFactorOverride(),
+        )
         refresh()
     }
 
@@ -146,7 +154,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             }
             mutableState.value = mutableState.value.copy(
                 openProject = project,
-                materialList = MaterialListBuilder.build(project),
+                materialList = buildMaterialList(project),
                 lastError = null,
             )
             onOpened(project)
@@ -215,6 +223,26 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         mutableState.value = mutableState.value.copy(openProject = null, materialList = null)
     }
 
+    /**
+     * Sets the firm's waste factor and rebuilds the open project's material list immediately, so
+     * the number on screen is the number that will be exported.
+     */
+    fun setWasteOverride(value: Float?) {
+        settings.setWasteFactorOverride(value)
+        val project = mutableState.value.openProject
+        mutableState.value = mutableState.value.copy(
+            wasteOverride = value,
+            materialList = project?.let { buildMaterialList(it) },
+        )
+    }
+
+    /** The one place a material list is built, so the screen, the CSV and the PDF cannot diverge. */
+    private fun buildMaterialList(project: ProjectRecord): MaterialList =
+        MaterialListBuilder.build(
+            project = project,
+            options = MaterialListOptions(wasteFactorOverride = mutableState.value.wasteOverride),
+        )
+
     fun clearError() {
         mutableState.value = mutableState.value.copy(lastError = null)
     }
@@ -236,7 +264,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     private fun mutate(updated: ProjectRecord, onSaved: (ProjectRecord?) -> Unit) {
         mutableState.value = mutableState.value.copy(
             openProject = updated,
-            materialList = MaterialListBuilder.build(updated),
+            materialList = buildMaterialList(updated),
         )
         viewModelScope.launch {
             val saved = repository.save(updated)
