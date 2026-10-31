@@ -16,6 +16,7 @@ import com.constructar.export.csv.MaterialCsvWriter
 import com.constructar.export.glb.GlbWriter
 import com.constructar.export.ply.PlyWriter
 import com.constructar.export.pdf.PdfLabels
+import com.constructar.export.pdf.PdfSection
 import com.constructar.export.pdf.ProtocolPdfWriter
 import java.io.OutputStream
 import java.text.SimpleDateFormat
@@ -77,6 +78,8 @@ class ExportService(
         val labels: PdfLabels = PdfLabels(),
         /** The product badge drawn on the first page. */
         val logo: Bitmap? = null,
+        /** Site file sections (customer, time, diary, defects), localised by the caller. */
+        val sections: List<PdfSection> = emptyList(),
     )
 
     /** Human/machine-readable file stem, e.g. `ConstructAR_Bad-Keller_20260314-1015`. */
@@ -114,6 +117,7 @@ class ExportService(
                             signatureTitle = request.signatureTitle,
                             signatureCaption = request.signatureCaption,
                             labels = request.labels,
+                            sections = request.sections,
                             logo = request.logo,
                         ),
                         output,

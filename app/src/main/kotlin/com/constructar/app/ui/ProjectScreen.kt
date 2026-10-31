@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -82,6 +83,8 @@ fun ProjectScreen(
     onSaveTechnician: (String) -> Unit,
     onRemoveRoute: (String) -> Unit,
     onMaterials: () -> Unit,
+    onFieldBook: () -> Unit,
+    onSaveCustomer: (name: String, address: String, phone: String) -> Unit,
     photo: Bitmap?,
     onPhoto: (Uri) -> Unit,
     onDelete: () -> Unit,
@@ -101,6 +104,30 @@ fun ProjectScreen(
 
     val scanned = (project.scan?.meshTriangleCount ?: 0) > 0
     val measured = project.routes.isNotEmpty()
+
+    // ── Handover readiness ──────────────────────────────────────────────────────────────
+    // Six facts, each of them something the protocol or the bill needs. Shown as chips rather
+    // than a checklist to tick, because all of it is already recorded — this only reflects the
+    // project back at the operator before they leave the site.
+    val readyCustomer = project.customerName.isNotBlank()
+    val readyTechnician = project.technician.isNotBlank()
+    val readyRuns = project.routes.isNotEmpty()
+    val readyPhoto = photo != null
+    val readyTime = project.sessions.isNotEmpty()
+    val missing: List<String> = listOf(
+        stringResource(R.string.ready_customer) to readyCustomer,
+        stringResource(R.string.ready_technician) to readyTechnician,
+        stringResource(R.string.ready_scan) to scanned,
+        stringResource(R.string.ready_runs) to readyRuns,
+        stringResource(R.string.ready_photo) to readyPhoto,
+        stringResource(R.string.ready_time) to readyTime,
+    ).filterNot { it.second }.map { it.first }
+    var customerName by remember(project.id) { mutableStateOf(project.customerName) }
+    var customerAddress by remember(project.id) { mutableStateOf(project.customerAddress) }
+    var customerPhone by remember(project.id) { mutableStateOf(project.customerPhone) }
+    val customerDirty = customerName != project.customerName ||
+        customerAddress != project.customerAddress ||
+        customerPhone != project.customerPhone
 
     Column(
         modifier = Modifier
@@ -153,6 +180,36 @@ fun ProjectScreen(
             StepChip(stringResource(R.string.step_scan), number = 1, done = scanned, modifier = Modifier.weight(1f))
             StepChip(stringResource(R.string.step_measure), number = 2, done = measured, modifier = Modifier.weight(1f))
             StepChip(stringResource(R.string.step_export), number = 3, done = false, modifier = Modifier.weight(1f))
+        }
+
+        // ── What is still missing before the customer signs ────────────────────────
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                stringResource(R.string.project_ready_title),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                ReadinessChip(stringResource(R.string.ready_customer), readyCustomer, Modifier.weight(1f))
+                ReadinessChip(stringResource(R.string.ready_technician), readyTechnician, Modifier.weight(1f))
+                ReadinessChip(stringResource(R.string.ready_scan), scanned, Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                ReadinessChip(stringResource(R.string.ready_runs), readyRuns, Modifier.weight(1f))
+                ReadinessChip(stringResource(R.string.ready_photo), readyPhoto, Modifier.weight(1f))
+                ReadinessChip(stringResource(R.string.ready_time), readyTime, Modifier.weight(1f))
+            }
+            Text(
+                text = if (missing.isEmpty()) {
+                    stringResource(R.string.project_ready_ok)
+                } else {
+                    stringResource(R.string.project_ready_missing, missing.joinToString(", "))
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (missing.isEmpty()) SiteColors.accent else SiteColors.warning,
+                modifier = Modifier.padding(start = 4.dp),
+            )
         }
 
         // ── Documentation photo ─────────────────────────────────────────────────────
@@ -292,6 +349,57 @@ fun ProjectScreen(
             onClick = onMaterials,
             modifier = Modifier.fillMaxWidth(),
         )
+        GloveButton(
+            label = stringResource(R.string.project_field_button) +
+                if (project.openDefectCount > 0) {
+                    "  ·  " + stringResource(R.string.field_open_count, project.openDefectCount)
+                } else {
+                    ""
+                },
+            icon = Icons.Default.Timer,
+            tone = ActionTone.SECONDARY,
+            onClick = onFieldBook,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        // ── Who the protocol is for ────────────────────────────────────────────────
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = RoundedCornerShape(18.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.project_customer_title), style = MaterialTheme.typography.titleMedium)
+                OutlinedTextField(
+                    value = customerName,
+                    onValueChange = { customerName = it },
+                    label = { Text(stringResource(R.string.project_customer_name)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = customerAddress,
+                    onValueChange = { customerAddress = it },
+                    label = { Text(stringResource(R.string.project_customer_address)) },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = customerPhone,
+                    onValueChange = { customerPhone = it },
+                    label = { Text(stringResource(R.string.project_customer_phone)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                GloveButton(
+                    label = stringResource(R.string.action_save),
+                    icon = Icons.Default.Check,
+                    tone = ActionTone.SECONDARY,
+                    enabled = customerDirty,
+                    onClick = { onSaveCustomer(customerName, customerAddress, customerPhone) },
+                )
+            }
+        }
 
         // ── Who signs the protocol ──────────────────────────────────────────────────
         Card(
@@ -451,6 +559,33 @@ private fun StepChip(label: String, number: Int, done: Boolean, modifier: Modifi
     ) {
         Text(
             text = if (done) "✓" else number.toString(),
+            style = MaterialTheme.typography.labelMedium,
+            color = foreground,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = foreground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 6.dp),
+        )
+    }
+}
+
+/** One "is it there yet" chip: filled green when the fact is recorded, outlined when not. */
+@Composable
+private fun ReadinessChip(label: String, done: Boolean, modifier: Modifier = Modifier) {
+    val background = if (done) Jamaica.GreenDim.copy(alpha = 0.45f) else MaterialTheme.colorScheme.surfaceVariant
+    val foreground = if (done) SiteColors.accent else MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        modifier = modifier
+            .background(background, RoundedCornerShape(14.dp))
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = if (done) "\u2713" else "\u00b7",
             style = MaterialTheme.typography.labelMedium,
             color = foreground,
         )

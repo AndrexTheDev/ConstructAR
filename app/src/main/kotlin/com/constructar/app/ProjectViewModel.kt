@@ -22,11 +22,16 @@ import com.constructar.core.bom.MaterialListOptions
 import com.constructar.core.licence.Entitlements
 import com.constructar.core.licence.LicenceCheck
 import com.constructar.core.model.ConduitRoute
+import com.constructar.core.model.DefectItem
+import com.constructar.core.model.DefectSeverity
+import com.constructar.core.model.DiaryEntry
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.model.WorkTime
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 /**
  * Application-level state: which project is open, what is licensed, and everything derived
@@ -196,6 +201,86 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun updateNotes(notes: String, onSaved: (ProjectRecord?) -> Unit = {}) {
         val project = mutableState.value.openProject ?: return
         mutate(project.copy(notes = notes.trim()), onSaved)
+    }
+
+    // ── Site file: customer, time, diary, defects ───────────────────────────────────────
+    // All of it goes through [mutate], so a new note or a stopped clock is written with the same
+    // atomic temp-file dance as a measured run and shows up in the project list immediately.
+
+    /** The customer block printed in the protocol header. */
+    fun updateCustomer(name: String, address: String, phone: String, onSaved: (ProjectRecord?) -> Unit = {}) {
+        val project = mutableState.value.openProject ?: return
+        mutate(project.withCustomer(name, address, phone), onSaved)
+    }
+
+    fun addDiaryEntry(text: String, onSaved: (ProjectRecord?) -> Unit = {}) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        val project = mutableState.value.openProject ?: return
+        mutate(
+            project.addDiaryEntry(
+                DiaryEntry(id = UUID.randomUUID().toString(), createdAtEpochMs = System.currentTimeMillis(), text = trimmed),
+            ),
+            onSaved,
+        )
+    }
+
+    fun deleteDiaryEntry(entryId: String) {
+        val project = mutableState.value.openProject ?: return
+        mutate(project.removeDiaryEntry(entryId))
+    }
+
+    fun addDefect(
+        title: String,
+        location: String,
+        severity: DefectSeverity,
+        onSaved: (ProjectRecord?) -> Unit = {},
+    ) {
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) return
+        val project = mutableState.value.openProject ?: return
+        mutate(
+            project.addDefect(
+                DefectItem(
+                    id = UUID.randomUUID().toString(),
+                    createdAtEpochMs = System.currentTimeMillis(),
+                    title = trimmed,
+                    location = location.trim(),
+                    severity = severity,
+                ),
+            ),
+            onSaved,
+        )
+    }
+
+    fun toggleDefect(defectId: String) {
+        val project = mutableState.value.openProject ?: return
+        mutate(project.toggleDefect(defectId))
+    }
+
+    fun deleteDefect(defectId: String) {
+        val project = mutableState.value.openProject ?: return
+        mutate(project.removeDefect(defectId))
+    }
+
+    /**
+     * Starts the clock for the open project.
+     *
+     * [ProjectRecord.startSession] refuses a second open session, so a double tap on a wet,
+     * cold screen cannot double the hours.
+     */
+    fun startWorkSession() {
+        val project = mutableState.value.openProject ?: return
+        val started = project.startSession(
+            WorkSession(id = UUID.randomUUID().toString(), startEpochMs = System.currentTimeMillis()),
+        )
+        if (started !== project) mutate(started)
+    }
+
+    fun stopWorkSession() {
+        val project = mutableState.value.openProject ?: return
+        val stopped = project.stopSession()
+        if (stopped !== project) mutate(stopped)
     }
 
     fun deleteProject(id: String, onDeleted: () -> Unit = {}) {

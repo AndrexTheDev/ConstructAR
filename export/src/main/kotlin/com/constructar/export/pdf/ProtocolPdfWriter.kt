@@ -21,6 +21,27 @@ import java.io.OutputStream
 import java.util.Locale
 
 /**
+ * One extra section of the protocol: a table, some paragraphs, or both, with a heading.
+ *
+ * The site file (time, diary, defects, the customer block) is assembled by the app, because only
+ * the app has the string table; this writer just has to lay it out. Keeping the shape generic
+ * means a new kind of on-site note needs no change here at all.
+ *
+ * [columnWidths] must add up to the printable width (523 pt at A4/72 dpi) or the last column
+ * runs into the margin; [rows] are laid out against those widths and ellipsised.
+ */
+data class PdfSection(
+    val title: String,
+    val columns: List<String> = emptyList(),
+    val columnWidths: List<Int> = emptyList(),
+    val rows: List<List<String>> = emptyList(),
+    /** Free text lines, printed below the table (or instead of it) — the diary lives here. */
+    val paragraphs: List<String> = emptyList(),
+    /** Small grey note under the section, e.g. the elapsed total. */
+    val note: String = "",
+)
+
+/**
  * Writes the on-site measurement protocol as a PDF.
  *
  * Contents (the order a foreman actually needs them):
@@ -67,6 +88,11 @@ class ProtocolPdfWriter(
         val signatureCaption: String = "",
         /** All visible text, localised by the caller. See [PdfLabels]. */
         val labels: PdfLabels = PdfLabels(),
+        /**
+         * The site file, already localised and formatted by the caller: customer block, working
+         * time, diary, defects. Printed after the material table, before the signature page.
+         */
+        val sections: List<PdfSection> = emptyList(),
         /**
          * The product badge, printed top-right on the first page.
          *
@@ -241,6 +267,57 @@ class ProtocolPdfWriter(
                 }
                 y += 6
                 drawNote(page.canvas, content.labels.procurementNote, y)
+                y += 22
+            }
+
+            // ── Site file: customer, time, diary, defects ───────────────────────────────
+            for (section in content.sections) {
+                if (y > pageHeight - FOOTER_HEIGHT - 110) {
+                    drawFooter(page.canvas, pageNumber, content)
+                    document.finishPage(page)
+                    pageNumber++
+                    page = newPage(document, pageNumber)
+                    y = MARGIN
+                }
+                y = drawSectionTitle(page.canvas, section.title, y)
+                val table = section.columns.isNotEmpty() && section.columnWidths.size == section.columns.size
+                if (table) {
+                    y = drawTableHeader(page.canvas, section.columns, section.columnWidths, y)
+                    for (row in section.rows) {
+                        if (y > pageHeight - FOOTER_HEIGHT - 30) {
+                            drawFooter(page.canvas, pageNumber, content)
+                            document.finishPage(page)
+                            pageNumber++
+                            page = newPage(document, pageNumber)
+                            y = MARGIN
+                            y = drawTableHeader(page.canvas, section.columns, section.columnWidths, y)
+                        }
+                        y = drawTableRow(page.canvas, row, section.columnWidths, y)
+                    }
+                    y += 6
+                }
+                if (section.paragraphs.isNotEmpty()) {
+                    val width = pageWidth - 2 * MARGIN
+                    for (paragraph in section.paragraphs) {
+                        for (line in wrap(paragraph, width, textPaint)) {
+                            if (y > pageHeight - FOOTER_HEIGHT - 24) {
+                                drawFooter(page.canvas, pageNumber, content)
+                                document.finishPage(page)
+                                pageNumber++
+                                page = newPage(document, pageNumber)
+                                y = MARGIN
+                            }
+                            page.canvas.drawText(line, MARGIN.toFloat(), y.toFloat(), textPaint)
+                            y += 13
+                        }
+                        y += 4
+                    }
+                }
+                if (section.note.isNotBlank()) {
+                    drawNote(page.canvas, section.note, y)
+                    y += 20
+                }
+                y += 6
             }
 
             drawFooter(page.canvas, pageNumber, content)

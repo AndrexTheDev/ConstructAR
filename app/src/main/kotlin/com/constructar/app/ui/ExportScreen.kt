@@ -98,6 +98,35 @@ fun ExportScreen(
     val signatureTitle = stringResource(R.string.signature_pdf_title)
     val signatureCaption = stringResource(R.string.signature_pdf_caption)
 
+    // The site file, resolved here rather than in the coroutine below: by the time the operator
+    // has picked a folder there is no composition left to read a string from.
+    val siteFileTexts = SiteFileTexts(
+        customerTitle = stringResource(R.string.project_customer_title),
+        customerLabel = stringResource(R.string.pdf_label_customer),
+        addressLabel = stringResource(R.string.pdf_label_address),
+        phoneLabel = stringResource(R.string.pdf_label_phone),
+        timesTitle = stringResource(R.string.pdf_section_times),
+        columnDate = stringResource(R.string.pdf_column_date),
+        columnStart = stringResource(R.string.pdf_column_start),
+        columnEnd = stringResource(R.string.pdf_column_end),
+        columnDuration = stringResource(R.string.pdf_column_duration),
+        totalLabel = stringResource(R.string.pdf_label_work_total),
+        runningLabel = stringResource(R.string.field_time_open),
+        diaryTitle = stringResource(R.string.pdf_section_diary),
+        defectsTitle = stringResource(R.string.pdf_section_defects),
+        columnDefect = stringResource(R.string.pdf_column_note),
+        columnSeverity = stringResource(R.string.pdf_column_severity),
+        columnStatus = stringResource(R.string.pdf_column_status),
+        openStatus = stringResource(R.string.pdf_status_open),
+        resolvedStatus = stringResource(R.string.pdf_status_resolved),
+        severityLow = stringResource(R.string.severity_low),
+        severityMedium = stringResource(R.string.severity_medium),
+        severityHigh = stringResource(R.string.severity_high),
+        hoursMinutes = stringResource(R.string.hours_minutes),
+        minutesOnly = stringResource(R.string.minutes_only),
+    )
+    val siteFileSections = remember(project, siteFileTexts) { buildSiteFileSections(project, siteFileTexts) }
+
     val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         busy = true
@@ -132,6 +161,7 @@ fun ExportScreen(
                             signatureTitle = signatureTitle,
                             signatureCaption = signatureCaption,
                             labels = pdfLabels,
+                            sections = siteFileSections,
                             logo = logo,
                         ),
                     )

@@ -39,6 +39,7 @@ private object Routes {
     const val MEASURE = "measure"
     const val EXPORT = "export"
     const val MATERIALS = "materials"
+    const val FIELD_BOOK = "fieldbook"
     const val PAYWALL = "paywall"
     const val HELP = "help"
 }
@@ -143,6 +144,10 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onSaveTechnician = { viewModel.updateTechnician(it) },
                             onRemoveRoute = { routeId -> viewModel.removeRoute(routeId) },
                             onMaterials = { navController.navigate(Routes.MATERIALS) },
+                            onFieldBook = { navController.navigate(Routes.FIELD_BOOK) },
+                            onSaveCustomer = { name, address, phone ->
+                                viewModel.updateCustomer(name, address, phone)
+                            },
                             photo = state.photo,
                             onPhoto = { uri -> viewModel.attachPhoto(uri) },
                             onDelete = {
@@ -202,6 +207,27 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             wasteOverride = state.wasteOverride,
                             onWasteChange = { viewModel.setWasteOverride(it) },
                             onBack = { navController.popBackStack() },
+                        )
+                    } else {
+                        Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())
+                    }
+                }
+
+                composable(Routes.FIELD_BOOK) {
+                    val project = state.openProject
+                    if (project != null) {
+                        FieldBookScreen(
+                            project = project,
+                            onBack = { navController.popBackStack() },
+                            onStartWork = { viewModel.startWorkSession() },
+                            onStopWork = { viewModel.stopWorkSession() },
+                            onAddDiary = { text -> viewModel.addDiaryEntry(text) },
+                            onDeleteDiary = { id -> viewModel.deleteDiaryEntry(id) },
+                            onAddDefect = { title, location, severity ->
+                                viewModel.addDefect(title, location, severity)
+                            },
+                            onToggleDefect = { id -> viewModel.toggleDefect(id) },
+                            onDeleteDefect = { id -> viewModel.deleteDefect(id) },
                         )
                     } else {
                         Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())

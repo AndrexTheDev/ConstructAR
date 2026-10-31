@@ -85,8 +85,17 @@ fun HomeScreen(
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }
     val canCreate = entitlements.allowsAnotherProject(projects.size)
     val mostRecent = projects.firstOrNull()
+    // Searching pays for itself from a handful of rooms on; with two it is just another field
+    // between the operator and the thing they tapped the app for.
+    val needle = query.trim()
+    val filtered = if (needle.isEmpty()) {
+        projects
+    } else {
+        projects.filter { it.name.contains(needle, ignoreCase = true) || it.siteName.contains(needle, ignoreCase = true) }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Header(
@@ -119,8 +128,30 @@ fun HomeScreen(
                         modifier = Modifier.padding(top = 8.dp, start = 4.dp),
                     )
                 }
-                items(projects, key = { it.id }) { project ->
-                    ProjectRow(project = project, onClick = { onOpen(project.id) })
+                if (projects.size >= 5) {
+                    item {
+                        OutlinedTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            placeholder = { Text(stringResource(R.string.home_search_hint)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+                if (filtered.isEmpty()) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.home_search_empty, needle),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                        )
+                    }
+                } else {
+                    items(filtered, key = { it.id }) { project ->
+                        ProjectRow(project = project, onClick = { onOpen(project.id) })
+                    }
                 }
             } else {
                 item {
