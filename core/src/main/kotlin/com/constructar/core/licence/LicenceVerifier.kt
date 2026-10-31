@@ -29,8 +29,8 @@ class LicenceVerifier(private val publicKeyBase64: String) {
         val segments = LicenceFormat.split(raw) ?: return LicenceCheck.Malformed
         val licence = LicenceFormat.decode(segments.payloadJson) ?: return LicenceCheck.Malformed
         val plan = Plan.parse(licence.plan) ?: return LicenceCheck.Malformed
-        if (!plan.isPaid) {
-            // A "FREE" licence is a configuration error, not a purchase.
+        if (!plan.isPurchasable) {
+            // "FREE" and "TRIAL" are never minted: they are states the app derives itself.
             return LicenceCheck.Malformed
         }
         if (!signatureIsValid(segments)) return LicenceCheck.BadSignature

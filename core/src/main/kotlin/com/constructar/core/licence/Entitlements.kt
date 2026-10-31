@@ -32,6 +32,16 @@ enum class Plan(val isPaid: Boolean) {
     LIFETIME(true),
     ;
 
+    /**
+     * Whether this plan can be *sold* — i.e. whether a signed licence may carry it.
+     *
+     * [TRIAL] deliberately cannot: it is local state the app starts itself, so a licence that
+     * claims to be one is a configuration error rather than a purchase, and treating it as valid
+     * would let a single minted key masquerade as a permanent Pro licence.
+     */
+    val isPurchasable: Boolean
+        get() = this == MONTHLY || this == YEARLY || this == LIFETIME
+
     companion object {
         /** Tolerant parser for the `plan` field of a licence payload. */
         fun parse(raw: String?): Plan? = entries.firstOrNull { it.name.equals(raw?.trim(), ignoreCase = true) }
