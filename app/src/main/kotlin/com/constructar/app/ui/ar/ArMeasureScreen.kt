@@ -298,6 +298,20 @@ fun ArMeasureScreen(
                             color = Color.White.copy(alpha = 0.85f),
                         )
                     }
+                    // Offline badge: the operator must be able to see at a glance that
+                    // nothing on this screen talks to a network.
+                    Surface(
+                        color = Color.White.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(50),
+                        modifier = Modifier.padding(end = 4.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.ar_offline_badge),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.75f),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
+                    }
                     IconButton(onClick = onOpenExport, modifier = Modifier.size(56.dp)) {
                         Icon(
                             Icons.Default.Share,

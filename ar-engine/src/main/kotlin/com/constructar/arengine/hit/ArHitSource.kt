@@ -161,7 +161,7 @@ class ArHitSource(
                 id = plane.hashCode().toString(),
                 polygon = vertices,
                 normal = normal,
-                center = centerPose.position(),
+                center = centerPose.positionVec(),
                 isTracking = true,
             ) ?: continue
             out += candidate.copy(subsumedBy = plane.subsumedBy?.hashCode()?.toString())

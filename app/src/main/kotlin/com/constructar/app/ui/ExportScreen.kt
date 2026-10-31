@@ -194,10 +194,26 @@ fun ExportScreen(
             }
         }
 
-        FormatRow(stringResource(R.string.export_pdf_desc), includePdf) { includePdf = it }
-        FormatRow(stringResource(R.string.export_csv_desc), includeCsv) { includeCsv = it }
-        FormatRow(stringResource(R.string.export_glb_desc), includeGlb) { includeGlb = it }
-        FormatRow(stringResource(R.string.export_ply_desc), includePly) { includePly = it }
+        FormatRow(
+            label = stringResource(R.string.export_pdf),
+            description = stringResource(R.string.export_pdf_desc),
+            checked = includePdf,
+        ) { includePdf = it }
+        FormatRow(
+            label = stringResource(R.string.export_csv),
+            description = stringResource(R.string.export_csv_desc),
+            checked = includeCsv,
+        ) { includeCsv = it }
+        FormatRow(
+            label = stringResource(R.string.export_glb),
+            description = stringResource(R.string.export_glb_desc),
+            checked = includeGlb,
+        ) { includeGlb = it }
+        FormatRow(
+            label = stringResource(R.string.export_ply),
+            description = stringResource(R.string.export_ply_desc),
+            checked = includePly,
+        ) { includePly = it }
 
         GloveButton(
             label = stringResource(if (busy) R.string.export_saving else R.string.export_choose_folder),
@@ -221,7 +237,7 @@ fun ExportScreen(
             stringResource(
                 R.string.export_about,
                 appName,
-                BuildConfig.DEVELOPER_NAME,
+                stringResource(R.string.developer_name),
                 BuildConfig.DEVELOPER_EMAIL,
             ),
             style = MaterialTheme.typography.labelSmall,
@@ -237,12 +253,24 @@ fun ExportScreen(
 }
 
 @Composable
-private fun FormatRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun FormatRow(
+    label: String,
+    description: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Switch(checked = checked, onCheckedChange = onChange)
     }
 }

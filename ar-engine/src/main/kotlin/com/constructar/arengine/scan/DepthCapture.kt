@@ -141,10 +141,11 @@ class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity 
      */
     private fun depthIntrinsics(camera: Camera, width: Int, height: Int): DepthIntrinsics {
         val image = camera.imageIntrinsics // colour-resolution intrinsics
-        // ARCore's CameraIntrinsics reports sizes as an android.util.Size: `imageWidth` /
-        // `imageHeight` do not exist on it.
-        val colorWidth = image.imageDimensions.width
-        val colorHeight = image.imageDimensions.height
+        // `CameraIntrinsics` reports its resolution as a two-element `int[]` (`[width, height]`);
+        // there is no `imageWidth`/`imageHeight`/`Size` accessor on it.
+        val dimensions = image.imageDimensions
+        val colorWidth = dimensions[0]
+        val colorHeight = dimensions[1]
         val sx = width.toFloat() / colorWidth
         val sy = height.toFloat() / colorHeight
         return DepthIntrinsics(

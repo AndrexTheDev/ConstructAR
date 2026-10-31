@@ -72,7 +72,12 @@ fun HomeScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(stringResource(R.string.home_title), style = MaterialTheme.typography.headlineMedium)
                 Text(
                     stringResource(R.string.home_subtitle),
                     style = MaterialTheme.typography.bodyMedium,

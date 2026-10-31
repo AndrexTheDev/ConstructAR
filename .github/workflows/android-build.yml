@@ -19,9 +19,12 @@ name: android-build
 # full gate) and every step turns its log tail into a check-run annotation, so a failure is
 # readable through the API even when raw job logs are not reachable.
 on:
+  # `push` only: a pull request on the same branch would re-run the identical build under
+  # `refs/pull/<n>/merge` (the concurrency group below keys on the ref, so the two runs cannot
+  # collapse), doubling both the CI minutes and the PR failure comments. Commit statuses from
+  # the push run attach to the same SHA the pull request displays.
   push:
     branches: ["**"]
-  pull_request:
   workflow_dispatch:
 
 concurrency:
