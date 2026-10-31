@@ -52,7 +52,7 @@ fun HelpScreen(
     repository: ProjectRepository,
     onBack: () -> Unit,
     onUpgrade: () -> Unit,
-    onImported: () -> Unit,
+    onRestore: (List<String>, List<android.net.Uri>) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -93,7 +93,7 @@ fun HelpScreen(
             Text(stringResource(R.string.help_offline_body), style = MaterialTheme.typography.bodyMedium)
         }
 
-        BackupCard(repository = repository, onImported = onImported)
+        BackupCard(repository = repository, onRestore = onRestore)
 
         Section(title = stringResource(R.string.help_licence_title)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

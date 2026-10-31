@@ -266,14 +266,38 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     fun repository(): ProjectRepository = repository
 
-    /** Restores a backup; every reader of [UiState.projects] follows because [refresh] re-reads. */
-    fun importBackup(texts: List<String>, onDone: (Int) -> Unit = {}) {
+    /**
+     * Restores a backup: projects first, then the photos that belong to them.
+     *
+     * Photos are matched by file name (which is the project id) and only attached when that
+     * project exists on this phone, so a restore never leaves an orphan image or, worse, puts a
+     * photo on the wrong room. The open project is re-read afterwards, so a restored photo shows
+     * up without leaving the screen.
+     */
+    fun importBackup(
+        texts: List<String>,
+        photos: List<Pair<String, Uri>> = emptyList(),
+        onDone: (Int) -> Unit = {},
+    ) {
         viewModelScope.launch {
             var imported = 0
             texts.forEach { text ->
                 if (repository.importProject(text) != null) imported++
             }
+            photos.forEach { (projectId, uri) ->
+                if (repository.hasProject(projectId)) repository.savePhoto(projectId, uri)
+            }
             refresh()
+            mutableState.value.openProject?.let { open ->
+                val reloaded = repository.load(open.id)
+                if (reloaded != null) {
+                    mutableState.value = mutableState.value.copy(
+                        openProject = reloaded,
+                        materialList = buildMaterialList(reloaded),
+                        photo = repository.loadPhoto(reloaded.id),
+                    )
+                }
+            }
             onDone(imported)
         }
     }

@@ -133,6 +133,14 @@ class ProjectRepository(private val context: Context) {
             .orEmpty()
     }
 
+    /** The stored site photos, for the backup. Named `<project id>.jpg`. */
+    suspend fun photoFiles(): List<File> = withContext(Dispatchers.IO) {
+        photoDirectory.listFiles()?.filter { it.isFile && it.length() > 0L }?.sortedBy { it.name }.orEmpty()
+    }
+
+    /** Whether a project with [id] exists — used to re-attach a restored photo to its project. */
+    suspend fun hasProject(id: String): Boolean = withContext(Dispatchers.IO) { fileFor(id).exists() }
+
     /**
      * Imports one project file.
      *

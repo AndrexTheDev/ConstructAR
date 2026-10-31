@@ -7,6 +7,8 @@
 package com.constructar.app.ui
 
 import android.content.Intent
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -44,19 +46,21 @@ import java.util.Locale
 /**
  * Backup and restore, in the operator's own folder.
  *
- * Every measurement lives in one JSON file in app-private storage. That survives updates and
- * crashes (writes are atomic), but it does not survive a broken phone or an "app data" wipe — and
- * for a foreman the measurements *are* the job. So the app can copy every project into a folder
- * the operator picks (that is how the Storage Access Framework works: no cloud is involved unless
- * they choose one), and read projects back from anywhere.
+ * Every measurement lives in one JSON file in app-private storage, and every project can carry one
+ * photo. That survives updates and crashes (writes are atomic), but it does not survive a broken
+ * phone or an "app data" wipe — and for a foreman the measurements *are* the job. So the app can
+ * copy everything into a folder the operator picks (that is how the Storage Access Framework
+ * works: no cloud is involved unless they choose one), and read it back on any phone.
  *
- * Restores never overwrite: a file whose project id is already present is imported under a fresh id,
- * so restoring onto a phone that still has the original leaves both copies in place.
+ * Restores never overwrite: a project whose id is already present is imported under a fresh id, so
+ * both copies survive. Photos are matched back by file name (which *is* the project id), which is
+ * exactly right when restoring onto a new phone and deliberately skips the rare collision case
+ * rather than attaching a photo to the wrong room.
  */
 @Composable
 fun BackupCard(
     repository: ProjectRepository,
-    onImported: () -> Unit,
+    onRestore: (List<String>, List<Pair<String, Uri>>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -91,6 +95,17 @@ fun BackupCard(
                             file?.delete()
                         }
                     }
+                    // Photos are part of the job: copy them next to the project files so a restore
+                    // on a new phone gets the documentation too, not just the metres.
+                    repository.photoFiles().forEach { photo ->
+                        val file = folder.createFile("image/jpeg", photo.name)
+                        val output = file?.uri?.let { context.contentResolver.openOutputStream(it) }
+                        if (output != null) {
+                            output.use { stream -> photo.inputStream().use { it.copyTo(stream) } }
+                        } else {
+                            file?.delete()
+                        }
+                    }
                     BackupOutcome.Saved(written)
                 }.getOrElse { error -> BackupOutcome.Failed(error.message.orEmpty()) }
             }
@@ -102,17 +117,21 @@ fun BackupCard(
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
         busy = true
         scope.launch {
-            val texts = withContext(Dispatchers.IO) {
-                uris.mapNotNull { uri ->
-                    runCatching {
-                        context.contentResolver.openInputStream(uri)?.use { stream ->
-                            stream.reader(Charsets.UTF_8).readText()
-                        }
-                    }.getOrNull()
+            val (texts, photos) = withContext(Dispatchers.IO) {
+                val projectTexts = mutableListOf<String>()
+                val photoAttachments = mutableListOf<Pair<String, Uri>>()
+                uris.forEach { uri ->
+                    val name = displayName(context, uri)
+                    if (name.endsWith(".json", ignoreCase = true) || name.isEmpty()) {
+                        readText(context, uri)?.let { projectTexts += it }
+                    } else if (name.endsWith(".jpg", ignoreCase = true) || name.endsWith(".jpeg", ignoreCase = true)) {
+                        photoAttachments += name.substringBeforeLast('.').trim() to uri
+                    }
                 }
+                projectTexts to photoAttachments
             }
-            onImported()
-            outcome = if (texts.isEmpty()) {
+            onRestore(texts, photos)
+            outcome = if (texts.isEmpty() && photos.isEmpty()) {
                 BackupOutcome.Failed(context.getString(R.string.backup_failed))
             } else {
                 BackupOutcome.Restored(texts.size)
@@ -163,6 +182,22 @@ fun BackupCard(
         }
     }
 }
+
+/** The file name the picker reports, used to tell projects from photos. */
+private fun displayName(context: android.content.Context, uri: Uri): String =
+    runCatching {
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor ->
+                val column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (column >= 0 && cursor.moveToFirst()) cursor.getString(column) else null
+            }
+    }.getOrNull().orEmpty()
+
+private fun readText(context: android.content.Context, uri: Uri): String? = runCatching {
+    context.contentResolver.openInputStream(uri)?.use { stream ->
+        stream.reader(Charsets.UTF_8).readText()
+    }
+}.getOrNull()
 
 /**
  * Broad picker filter, because a `.json` file is reported as `application/json`,
