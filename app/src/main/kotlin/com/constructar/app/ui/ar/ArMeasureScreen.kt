@@ -26,13 +26,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -398,7 +398,7 @@ fun ArMeasureScreen(
             GloveButtonRow {
                 GloveButton(
                     label = stringResource(R.string.ar_undo),
-                    icon = Icons.Default.Undo,
+                    icon = Icons.AutoMirrored.Filled.Undo,
                     onClick = { controller.undo() },
                     tone = ActionTone.SECONDARY,
                     enabled = routeState.nodeCount > 0,

@@ -36,7 +36,7 @@ if(CONSTRUCTAR_BUILD_HOST_TESTS)
       tests/host_tests.cpp
   )
   target_include_directories(constructar_host_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-  target_compile_options(constructar_host_tests PRIVATE -O2 -Wall -Wextra)
+  target_compile_options(constructar_host_tests PRIVATE -O2 -Wall -Wextra -Werror)
   find_package(Threads REQUIRED)
   target_link_libraries(constructar_host_tests PRIVATE Threads::Threads)
   return()
@@ -49,14 +49,20 @@ add_library(constructar_slam SHARED
 
 target_include_directories(constructar_slam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-# -O3 without -ffast-math: geometric accuracy is the product; reassociation is not worth
-# the last 3 % of throughput.
+# -O2 without -ffast-math: geometric accuracy is the product, and reassociation is not worth
+# the last few percent of throughput. `-Werror` is part of the build contract - a warning here
+# fails the build exactly as a Kotlin warning does (`allWarningsAsErrors`).
+#
+# `-Wno-unused-parameter` is the one suppression: JNI entry points must declare `JNIEnv*` and
+# `jobject` even where a particular function does not use them, and the signature is fixed by
+# the ABI rather than by us.
 target_compile_options(constructar_slam PRIVATE
-    -O3
+    -O2
     -fno-exceptions
     -fno-rtti
     -Wall
     -Wextra
+    -Werror
     -Wno-unused-parameter
 )
 

@@ -34,6 +34,7 @@ import com.google.ar.core.Config
 import com.google.ar.core.Frame
 import com.google.ar.core.LightEstimate
 import com.google.ar.core.Session
+import com.google.ar.core.TrackingFailureReason
 import com.google.ar.core.TrackingState
 import io.github.sceneview.loaders.MaterialLoader
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -212,7 +213,13 @@ class ArMeasureController(private val context: Context) {
         val ambientLux = ambientLuxOf(frame.lightEstimate, colorCorrection)
         tracking.onFrame(
             tracking = quality,
-            failureReason = if (quality == TrackingQuality.GOOD) null else camera.trackingFailureReason?.name,
+            // `trackingFailureReason` is non-null (NONE while tracking is fine); it only
+            // becomes interesting once quality has dropped.
+            failureReason = if (quality == TrackingQuality.GOOD) {
+                null
+            } else {
+                camera.trackingFailureReason.takeIf { it != TrackingFailureReason.NONE }?.name
+            },
             depthConfidence = stats.meanConfidence,
             depthSupported = pipeline.state.value.ready,
             ambientLux = ambientLux,

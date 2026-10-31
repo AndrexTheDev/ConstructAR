@@ -168,6 +168,23 @@ jobs:
           code=$?
           bash scripts/ci_annotate.sh /tmp/step.log "JVM tests / Kotlin compile failed" "$code"
 
+      - name: Host C++ tests - TSDF, Surface Nets, pose graph (-Werror)
+        # The native half is testable without the NDK: the same translation units compile with
+        # the host compiler, so a geometry regression fails here in seconds instead of after a
+        # full cross-compile - and with the same `-O2 -Wall -Wextra -Werror` contract the NDK
+        # build enforces.
+        run: |
+          set +e
+          (
+            cd native-slam/src/main/cpp
+            g++ -std=c++20 -O2 -Wall -Wextra -Werror -I. \
+              tsdf/volume.cpp tsdf/surface_nets.cpp slam/pose_graph.cpp slam/rtabmap_bridge.cpp \
+              tests/host_tests.cpp -o /tmp/constructar_host_tests -pthread \
+              && /tmp/constructar_host_tests
+          ) > /tmp/step.log 2>&1
+          code=$?
+          bash scripts/ci_annotate.sh /tmp/step.log "host C++ tests failed" "$code"
+
       - name: NDK library - :native-slam
         run: |
           set +e
