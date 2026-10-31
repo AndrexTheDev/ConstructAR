@@ -24,3 +24,7 @@ native-slam/third_party/rtabmap/
 # Licence signing keys are generated locally and must never be committed
 # (see tools/mint_licence.py and docs/BILLING.md)
 tools/private/
+
+# Python bytecode from the tooling in tools/
+__pycache__/
+*.pyc

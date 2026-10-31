@@ -1,0 +1,5 @@
+# Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+User-agent: *
+Allow: /
+
+Sitemap: https://andrexthedev.github.io/ConstructAR/sitemap.xml

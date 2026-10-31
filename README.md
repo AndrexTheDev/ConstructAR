@@ -9,6 +9,7 @@
 | Repository | <https://github.com/AndrexTheDev/ConstructAR> |
 | Licence | **All Rights Reserved** ([LICENSE](LICENSE)) — the repository is public for CI/CD and review only |
 | Languages | English · Deutsch · Español · Français · Italiano · Polski |
+| Landing page | <https://andrexthedev.github.io/ConstructAR/> (generated, six languages) |
 
 An electrician stands in an unfinished basement. There is no signal, the lights are on a
 temporary circuit, and the customer wants to know today how much 16 mm cable and how many
@@ -158,6 +159,46 @@ format placeholder — so a half-translated release cannot ship. That includes t
 protocol: every heading, column and footnote is a `pdf_*` resource, passed into `:export` as a
 `PdfLabels` value object, so the document a Spanish-speaking electrician hands to a Spanish
 customer is in Spanish while `:export` itself stays a plain JVM library with no resource table.
+
+---
+
+## Landing page
+
+The public page in `docs/` is **generated**, not hand-edited, so the six languages cannot drift
+apart or fall out of sync with the app's wording:
+
+```bash
+python3 tools/build_site.py      # rewrites docs/ — standard library only
+python3 -m http.server -d docs 8080   # look at it
+```
+
+| Path | Contents |
+|------|----------|
+| `docs/index.html` | English (the default page, `x-default` target) |
+| `docs/{de,es,fr,it,pl}/index.html` | the other five languages |
+| `docs/assets/` | logo, favicon, apple-touch icon, Open Graph image (1200×630) |
+| `docs/sitemap.xml`, `docs/robots.txt`, `docs/.nojekyll` | what a static host needs |
+
+`tools/site_translations.py` holds the five translations next to a 95-key English source; the
+generator fails loudly rather than emitting a page with a missing key, and
+`.github/workflows/pages.yml` repeats that check before publishing.
+
+Search-engine work is in the template rather than bolted on: `lang` on `<html>`, per-language
+`<title>`/description, canonical URL, the full `hreflang` matrix plus `x-default`, Open Graph and
+Twitter cards, and JSON-LD `SoftwareApplication` (with the real 0 €/10 €/100 €/999 € offers) and
+`FAQPage` entities. There is no CDN, no web font and no analytics — the page makes the same
+promise as the app: nothing leaves the device, and here nothing is even requested from another
+host.
+
+Publishing (free, GitHub Pages) — after this branch is merged:
+
+* **Settings → Pages → Source: "GitHub Actions"** (recommended; the workflow re-renders on every
+  change to `docs/` or the generator), or
+* **Settings → Pages → Source: "Deploy from a branch" → `main` / `/docs`** (no workflow needed).
+
+The expected URL is <https://andrexthedev.github.io/ConstructAR/>; if the repository is renamed,
+change `BASE_URL` at the top of `tools/build_site.py` and re-run it, because the canonical links
+and the sitemap are absolute.
 
 ---
 
