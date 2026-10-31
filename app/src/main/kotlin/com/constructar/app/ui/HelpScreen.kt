@@ -52,7 +52,7 @@ fun HelpScreen(
     repository: ProjectRepository,
     onBack: () -> Unit,
     onUpgrade: () -> Unit,
-    onRestore: (List<String>, List<android.net.Uri>) -> Unit,
+    onRestore: (List<String>, List<Pair<String, android.net.Uri>>) -> Unit,
 ) {
     Column(
         modifier = Modifier
