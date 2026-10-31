@@ -26,7 +26,7 @@ import com.constructar.core.model.DefectItem
 import com.constructar.core.model.DefectSeverity
 import com.constructar.core.model.DiaryEntry
 import com.constructar.core.model.ProjectRecord
-import com.constructar.core.model.WorkTime
+import com.constructar.core.model.WorkSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -387,7 +387,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun mutate(updated: ProjectRecord, onSaved: (ProjectRecord?) -> Unit) {
+    private fun mutate(updated: ProjectRecord, onSaved: (ProjectRecord?) -> Unit = {}) {
         mutableState.value = mutableState.value.copy(
             openProject = updated,
             materialList = buildMaterialList(updated),
