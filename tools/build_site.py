@@ -598,6 +598,49 @@ def sitemap() -> str:
     )
 
 
+def not_found() -> str:
+    """One page for every 404 GitHub Pages can hand out, in all six languages at once.
+
+    The visitor is lost by definition, so this page does not make them choose: the four words
+    that matter are shown in every language the site speaks, and the way back is a real link.
+    """
+    headings = [
+        ("en", "Page not found", "The link is dead, or the page has moved."),
+        ("de", "Seite nicht gefunden", "Der Link ist tot oder die Seite ist umgezogen."),
+        ("es", "Página no encontrada", "El enlace está roto o la página se ha movido."),
+        ("fr", "Page introuvable", "Le lien est mort ou la page a déménagé."),
+        ("it", "Pagina non trovata", "Il link non funziona o la pagina si è spostata."),
+        ("pl", "Nie znaleziono strony", "Link nie działa albo strona została przeniesiona."),
+    ]
+    rows = "".join(
+        f'<p lang="{code}"><strong>{esc(title)}</strong> — {esc(line)} '
+        f'<a href="{"" if code == "en" else code + "/"}" hreflang="{code}">{LANG_NAMES[code]}</a></p>'
+        for code, title, line in headings
+    )
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>404 — ConstructAR</title>
+<meta name="robots" content="noindex,follow">
+<meta name="theme-color" content="#0A0C07">
+<link rel="icon" href="assets/favicon.png" sizes="64x64" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<style>{CSS}</style>
+</head>
+<body>
+<main class="wrap" style="padding:64px 22px; max-width:760px">
+  <a class="brand" href="{BASE_URL}"><img src="assets/logo.jpg" alt="ConstructAR" width="36" height="36"><span>ConstructAR</span></a>
+  <h1 style="margin-top:32px">404</h1>
+  <div class="langs" style="display:block">{rows}</div>
+  <p style="margin-top:28px"><a class="btn btn-primary" href="{BASE_URL}">ConstructAR</a></p>
+</main>
+</body>
+</html>
+"""
+
+
 def main() -> None:
     DOCS.mkdir(parents=True, exist_ok=True)
     (DOCS / ".nojekyll").write_text("", encoding="utf-8")
@@ -608,6 +651,7 @@ def main() -> None:
         encoding="utf-8",
     )
     (DOCS / "sitemap.xml").write_text(sitemap(), encoding="utf-8")
+    (DOCS / "404.html").write_text(not_found(), encoding="utf-8")
     for lang in LANGS:
         target = DOCS / "index.html" if lang == "en" else DOCS / lang / "index.html"
         target.parent.mkdir(parents=True, exist_ok=True)

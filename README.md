@@ -177,6 +177,7 @@ python3 -m http.server -d docs 8080   # look at it
 | `docs/index.html` | English (the default page, `x-default` target) |
 | `docs/{de,es,fr,it,pl}/index.html` | the other five languages |
 | `docs/assets/` | logo, favicon, apple-touch icon, Open Graph image (1200×630) |
+| `docs/404.html` | one page for every lost visitor, in all six languages |
 | `docs/sitemap.xml`, `docs/robots.txt`, `docs/.nojekyll` | what a static host needs |
 
 `tools/site_translations.py` holds the five translations next to a 95-key English source; the

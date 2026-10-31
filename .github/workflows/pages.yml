@@ -49,6 +49,7 @@ jobs:
           test -f docs/index.html
           test -f docs/.nojekyll
           test -f docs/sitemap.xml
+          test -f docs/404.html
           for lang in de es fr it pl; do
             test -f "docs/$lang/index.html" || { echo "missing docs/$lang/index.html"; exit 1; }
           done
