@@ -156,6 +156,11 @@ Known limitations, deliberately documented rather than hidden:
   structural validation.
 * **Instrumented tests** would need a physical ARCore device; none are included, and nothing in
   this repository claims to have run on one.
+* **CI**: `.github/workflows/native-tests.yml` builds and runs the native suite with both `g++`
+  and `clang++` at `-O1`/`-O2` with `-Werror`, on every push that touches the C++ core.
+
+The pre-release gate (device matrix, measurement verification against a laser, licensing,
+performance) is [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md).
 
 ---
 

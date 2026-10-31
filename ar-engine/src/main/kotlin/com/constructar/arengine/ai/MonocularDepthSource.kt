@@ -44,7 +44,8 @@ class MonocularDepthSource(
     }
     private val busy = AtomicBoolean(false)
     private val latest = AtomicReference<MonocularDepthEstimator?>(null)
-    private val pixels = IntArray(640 * 480)
+    /** Reused ARGB buffer for YUV conversion; grown only if the camera resolution grows. */
+    private var pixels = IntArray(640 * 480)
     @Volatile private var fusedBuffer = ShortArray(640 * 480)
 
     @Volatile private var lastRunMillis = 0L
@@ -123,6 +124,9 @@ class MonocularDepthSource(
         val height = snapshot.height
         if (arcoreMm.size < width * height) return
 
+        if (pixels.size < yuv.width * yuv.height) {
+            pixels = IntArray(yuv.width * yuv.height)
+        }
         val bitmap = yuv.toBitmap(pixels)
         val relative = try {
             estimator.estimate(bitmap)

@@ -31,14 +31,14 @@ object AiDepthFusion {
         /** Depth array that was written (same instance as passed in `out`). */
         val depthMm: ShortArray,
         /** Pixels copied from ARCore (metric, measured). */
-        val measuedPixels: Int,
+        val measuredPixels: Int,
         /** Pixels filled from the network. */
         val filledPixels: Int,
         /** True when the fusion actually contributed (some pixels filled). */
         val usedNetwork: Boolean,
     ) {
         val fillRatio: Float
-            get() = if (measuedPixels + filledPixels == 0) 0f else filledPixels.toFloat() / (measuedPixels + filledPixels)
+            get() = if (measuredPixels + filledPixels == 0) 0f else filledPixels.toFloat() / (measuredPixels + filledPixels)
     }
 
     /**

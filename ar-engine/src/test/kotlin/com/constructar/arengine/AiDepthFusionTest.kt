@@ -48,7 +48,7 @@ class AiDepthFusionTest {
             calibration = usableCalibration(),
             out = out,
         )
-        assertEquals(width * height / 2, result.measuedPixels)
+        assertEquals(width * height / 2, result.measuredPixels)
         assertEquals(width * height / 2, result.filledPixels)
         assertTrue(result.usedNetwork)
         // Measured half untouched.
@@ -75,7 +75,7 @@ class AiDepthFusionTest {
             calibration = usableCalibration(),
             out = out,
         )
-        assertEquals(0, result.measuedPixels)
+        assertEquals(0, result.measuredPixels)
         assertEquals(width * height, result.filledPixels)
     }
 
