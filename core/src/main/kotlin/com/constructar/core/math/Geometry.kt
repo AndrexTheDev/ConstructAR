@@ -26,7 +26,9 @@ data class Ray(val origin: Vec3, val direction: Vec3) {
 data class Plane3(val normal: Vec3, val d: Float) {
 
     /** Signed distance of [p] from the plane: positive on the normal side. */
-    fun signedDistance(p: Vec3): Float = normal dot p - d
+    // NOTE: explicit parentheses. `infix` calls bind *looser* than `-`, so
+    // `normal dot p - d` would parse as `normal dot (p - d)` and not compile.
+    fun signedDistance(p: Vec3): Float = (normal dot p) - d
 
     fun projectPoint(p: Vec3): Vec3 = p - normal * signedDistance(p)
 

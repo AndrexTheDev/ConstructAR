@@ -33,7 +33,8 @@ extract() {
     grep -E '^(e|w): ' "$LOG" | head -n 40
   fi
   if grep -q '^FAILURE:' "$LOG"; then
-    sed -n '/^FAILURE:/,$p' "$LOG" | head -n 30
+    # The summary only: "What went wrong" + "Where", cut off before the Java stack trace.
+    sed -n '/^FAILURE:/,$p' "$LOG" | sed -n '1,/^\* Exception is:/p' | head -n 60
   fi
   if grep -qiE '^.*(error|exception|what went wrong).*$' "$LOG"; then
     grep -iE '(^error|error:|exception|what went wrong)' "$LOG" | head -n 15
