@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -69,6 +70,7 @@ fun ProjectScreen(
     onSaveNotes: (String) -> Unit,
     onSaveTechnician: (String) -> Unit,
     onRemoveRoute: (String) -> Unit,
+    onMaterials: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var renameOpen by remember { mutableStateOf(false) }
@@ -214,6 +216,14 @@ fun ProjectScreen(
             tone = ActionTone.SECONDARY,
             enabled = measured,
             onClick = onExport,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        GloveButton(
+            label = stringResource(R.string.materials_button),
+            icon = Icons.Default.ShoppingCart,
+            tone = ActionTone.SECONDARY,
+            enabled = measured,
+            onClick = onMaterials,
             modifier = Modifier.fillMaxWidth(),
         )
 

@@ -208,4 +208,18 @@
     <string name="run_delete">Strecke löschen</string>
     <string name="technician_title">Monteur vor Ort</string>
     <string name="technician_hint">Name, wie er auf dem Protokoll stehen soll</string>
+    <string name="materials_title">Material und Bestellung</string>
+    <string name="materials_button">Material und Bestellung</string>
+    <string name="materials_intro">Pro Sorte zusammengefasst - so wird es gekauft. Bestellmengen inklusive Reserve.</string>
+    <string name="materials_empty">Noch keine Strecken gemessen - nichts zu bestellen.</string>
+    <string name="materials_net">%1$s netto</string>
+    <string name="materials_waste">plus %1$d %% Reserve</string>
+    <string name="materials_order">%1$s bestellen</string>
+    <string name="materials_total">Insgesamt zu bestellen</string>
+    <string name="materials_low_confidence">%1$d Strecken mit unsicherem Treffer - vor der Bestellung prüfen</string>
+    <string name="signature_title">Unterschrift des Kunden</string>
+    <string name="signature_hint">Mit dem Finger unterschreiben - sie erscheint auf dem Protokoll.</string>
+    <string name="signature_clear">Zurücksetzen</string>
+    <string name="signature_pdf_title">Übergabe</string>
+    <string name="signature_pdf_caption">Unterschrift Kunde / Monteur - vor Ort mit ConstructAR gemessen</string>
 </resources>

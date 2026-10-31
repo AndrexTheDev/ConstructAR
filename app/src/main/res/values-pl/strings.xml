@@ -212,4 +212,18 @@
     <string name="run_delete">Usuń trasę</string>
     <string name="technician_title">Monter na budowie</string>
     <string name="technician_hint">Nazwisko tak, jak ma być w protokole</string>
+    <string name="materials_title">Materiał i zamówienie</string>
+    <string name="materials_button">Materiał i zamówienie</string>
+    <string name="materials_intro">Zgrupowane według rodzaju - tak się to kupuje. Ilości zawierają zapas budowlany.</string>
+    <string name="materials_empty">Nie zmierzono jeszcze tras - nie ma czego zamawiać.</string>
+    <string name="materials_net">%1$s netto</string>
+    <string name="materials_waste">plus %1$d %% zapasu</string>
+    <string name="materials_order">%1$s do zamówienia</string>
+    <string name="materials_total">Łącznie do zamówienia</string>
+    <string name="materials_low_confidence">%1$d tras z niepewnym trafieniem - sprawdź przed zamówieniem</string>
+    <string name="signature_title">Podpis klienta</string>
+    <string name="signature_hint">Podpisz palcem - podpis trafi na protokół.</string>
+    <string name="signature_clear">Wyczyść</string>
+    <string name="signature_pdf_title">Przekazanie</string>
+    <string name="signature_pdf_caption">Podpis klienta / montera - pomiar na miejscu w ConstructAR</string>
 </resources>

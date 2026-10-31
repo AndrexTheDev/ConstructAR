@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -28,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -84,6 +86,10 @@ fun ExportScreen(
     var includePly by remember(entitlements.isPro) { mutableStateOf(false) }
     var status by remember { mutableStateOf<ExportStatus?>(null) }
     var busy by remember { mutableStateOf(false) }
+    val signature = rememberSignaturePadState()
+    // Resolved at composition so the export coroutine never touches a resource lookup.
+    val signatureTitle = stringResource(R.string.signature_pdf_title)
+    val signatureCaption = stringResource(R.string.signature_pdf_caption)
 
     val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -115,6 +121,9 @@ fun ExportScreen(
                             includeGlb = includeGlb,
                             includePly = includePly,
                             watermark = if (entitlements.pdfWatermark) watermark else "",
+                            signature = signature.bitmap(),
+                            signatureTitle = signatureTitle,
+                            signatureCaption = signatureCaption,
                         ),
                     )
                     var written = 0
@@ -239,6 +248,34 @@ fun ExportScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+
+        // ── Handover signature ──────────────────────────────────────────────────────
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.signature_title), style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            stringResource(R.string.signature_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(onClick = { signature.clear() }) {
+                        Text(stringResource(R.string.signature_clear))
+                    }
+                }
+                SignaturePad(
+                    state = signature,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(170.dp),
+                )
+            }
         }
 
         GloveButton(

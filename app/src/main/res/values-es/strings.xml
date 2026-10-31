@@ -208,4 +208,18 @@
     <string name="run_delete">Borrar recorrido</string>
     <string name="technician_title">Montador en obra</string>
     <string name="technician_hint">Nombre tal como debe figurar en el protocolo</string>
+    <string name="materials_title">Material y pedido</string>
+    <string name="materials_button">Material y pedido</string>
+    <string name="materials_intro">Agrupado por tipo: así se compra. Las cantidades incluyen la reserva de obra.</string>
+    <string name="materials_empty">Aún no hay recorridos medidos: nada que pedir.</string>
+    <string name="materials_net">%1$s neto</string>
+    <string name="materials_waste">más %1$d %% de reserva</string>
+    <string name="materials_order">%1$s a pedir</string>
+    <string name="materials_total">Total a pedir</string>
+    <string name="materials_low_confidence">%1$d recorridos con impacto incierto: revísalos antes de pedir</string>
+    <string name="signature_title">Firma del cliente</string>
+    <string name="signature_hint">Firma con el dedo: se imprime en el protocolo.</string>
+    <string name="signature_clear">Borrar</string>
+    <string name="signature_pdf_title">Entrega</string>
+    <string name="signature_pdf_caption">Firma cliente / montador - medido en obra con ConstructAR</string>
 </resources>

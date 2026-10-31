@@ -208,4 +208,18 @@
     <string name="run_delete">Elimina percorso</string>
     <string name="technician_title">Installatore in cantiere</string>
     <string name="technician_hint">Nome come deve comparire sul protocollo</string>
+    <string name="materials_title">Materiale e ordine</string>
+    <string name="materials_button">Materiale e ordine</string>
+    <string name="materials_intro">Raggruppato per tipo: è così che si compra. Le quantità includono la scorta di cantiere.</string>
+    <string name="materials_empty">Nessun percorso misurato: niente da ordinare.</string>
+    <string name="materials_net">%1$s netto</string>
+    <string name="materials_waste">più %1$d %% di scorta</string>
+    <string name="materials_order">%1$s da ordinare</string>
+    <string name="materials_total">Totale da ordinare</string>
+    <string name="materials_low_confidence">%1$d percorsi con aggancio incerto: controllali prima dell\'ordine</string>
+    <string name="signature_title">Firma del cliente</string>
+    <string name="signature_hint">Firma con il dito: compare sul protocollo.</string>
+    <string name="signature_clear">Cancella</string>
+    <string name="signature_pdf_title">Consegna</string>
+    <string name="signature_pdf_caption">Firma cliente / installatore - misurato in cantiere con ConstructAR</string>
 </resources>

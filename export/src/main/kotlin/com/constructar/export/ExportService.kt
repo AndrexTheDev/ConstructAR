@@ -68,6 +68,10 @@ class ExportService(
          * Blank for a licensed build - see [ProtocolPdfWriter.Content.watermark].
          */
         val watermark: String = "",
+        /** Customer signature for the handover page; `null` for an unsigned protocol. */
+        val signature: Bitmap? = null,
+        val signatureTitle: String = "",
+        val signatureCaption: String = "",
     )
 
     /** Human/machine-readable file stem, e.g. `ConstructAR_Bad-Keller_20260314-1015`. */
@@ -101,6 +105,9 @@ class ExportService(
                             appVersion = request.appVersion,
                             operatorName = request.operatorName,
                             watermark = request.watermark,
+                            signature = request.signature,
+                            signatureTitle = request.signatureTitle,
+                            signatureCaption = request.signatureCaption,
                         ),
                         output,
                     )

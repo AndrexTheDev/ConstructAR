@@ -208,4 +208,18 @@
     <string name="run_delete">Delete run</string>
     <string name="technician_title">Fitter on site</string>
     <string name="technician_hint">Name as it should appear on the protocol</string>
+    <string name="materials_title">Materials and order</string>
+    <string name="materials_button">Materials and order</string>
+    <string name="materials_intro">Aggregated per type - that is how it is bought. Order quantities include the site waste factor.</string>
+    <string name="materials_empty">No runs measured yet - nothing to order.</string>
+    <string name="materials_net">%1$s net</string>
+    <string name="materials_waste">plus %1$d %% waste</string>
+    <string name="materials_order">%1$s to order</string>
+    <string name="materials_total">To order in total</string>
+    <string name="materials_low_confidence">%1$d runs with an uncertain hit - check them before ordering</string>
+    <string name="signature_title">Customer signature</string>
+    <string name="signature_hint">Sign with a finger - it is printed on the protocol.</string>
+    <string name="signature_clear">Clear</string>
+    <string name="signature_pdf_title">Handover</string>
+    <string name="signature_pdf_caption">Signature customer / fitter - measured on device with ConstructAR</string>
 </resources>

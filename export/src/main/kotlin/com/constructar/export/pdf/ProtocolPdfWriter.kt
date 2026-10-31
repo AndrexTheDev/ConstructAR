@@ -52,6 +52,19 @@ class ProtocolPdfWriter(
          * export module has no Android string table by design, so it stays testable on the JVM.
          */
         val watermark: String = "",
+        /**
+         * Handover signature, drawn on its own final page.
+         *
+         * A protocol that leaves the site without a signature is a note; one that the customer
+         * signed is the document a dispute is settled with. It gets a dedicated page because
+         * the table pages are already full - a signature squeezed under a material table reads
+         * as an afterthought, and this one is the point of the document.
+         */
+        val signature: Bitmap? = null,
+        /** Heading of the signature page, already localised by the caller. */
+        val signatureTitle: String = "",
+        /** Line under the signature, e.g. who signed and what for. */
+        val signatureCaption: String = "",
     )
 
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -201,10 +214,44 @@ class ProtocolPdfWriter(
 
             drawFooter(page.canvas, pageNumber, content.appVersion, content.watermark)
             document.finishPage(page)
+
+            content.signature?.let { signature ->
+                pageNumber += 1
+                drawSignaturePage(document, pageNumber, signature, content)
+            }
+
             document.writeTo(output)
         } finally {
             document.close()
         }
+    }
+
+    /** Signature, rule and caption on a page of their own. */
+    private fun drawSignaturePage(
+        document: PdfDocument,
+        pageNumber: Int,
+        signature: Bitmap,
+        content: Content,
+    ) {
+        val page = newPage(document, pageNumber)
+        var y = drawSectionTitle(page.canvas, content.signatureTitle, MARGIN)
+        y += 8
+        val width = pageWidth - 2 * MARGIN
+        val height = (width * signature.height / signature.width.coerceAtLeast(1)).coerceIn(120, 420)
+        page.canvas.drawBitmap(
+            signature,
+            null,
+            Rect(MARGIN, y, MARGIN + width, y + height),
+            Paint(Paint.FILTER_BITMAP_FLAG),
+        )
+        y += height + 18
+        page.canvas.drawLine(MARGIN.toFloat(), y.toFloat(), (MARGIN + width).toFloat(), y.toFloat(), rulePaint)
+        y += 16
+        if (content.signatureCaption.isNotBlank()) {
+            page.canvas.drawText(content.signatureCaption, MARGIN.toFloat(), y.toFloat(), subtitlePaint)
+        }
+        drawFooter(page.canvas, pageNumber, content.appVersion, content.watermark)
+        document.finishPage(page)
     }
 
     // ── Drawing primitives ──────────────────────────────────────────────────────────────

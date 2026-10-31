@@ -38,6 +38,7 @@ private object Routes {
     const val PROJECT = "project"
     const val MEASURE = "measure"
     const val EXPORT = "export"
+    const val MATERIALS = "materials"
     const val PAYWALL = "paywall"
     const val HELP = "help"
 }
@@ -141,6 +142,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onSaveNotes = { viewModel.updateNotes(it) },
                             onSaveTechnician = { viewModel.updateTechnician(it) },
                             onRemoveRoute = { routeId -> viewModel.removeRoute(routeId) },
+                            onMaterials = { navController.navigate(Routes.MATERIALS) },
                             onDelete = {
                                 viewModel.deleteProject(project.id) {
                                     navController.popBackStack(Routes.HOME, inclusive = false)
@@ -182,6 +184,19 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             watermark = stringResource(R.string.pdf_watermark),
                             onBack = { navController.popBackStack() },
                             onUpgrade = { navController.navigate(Routes.PAYWALL) },
+                        )
+                    } else {
+                        Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())
+                    }
+                }
+
+                composable(Routes.MATERIALS) {
+                    val project = state.openProject
+                    if (project != null) {
+                        MaterialsScreen(
+                            projectName = project.name,
+                            materialList = state.materialList,
+                            onBack = { navController.popBackStack() },
                         )
                     } else {
                         Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())

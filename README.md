@@ -66,10 +66,16 @@ Four screens, in the order of the job, and no screen that exists only to show of
    Below it, every project; at the bottom, one button that starts a new one.
 3. **Project hub** — the screen the operator returns to after every run. A step trail
    (Scan → Measure → Export) says what is missing, the running metres and the order quantities
-   say what has been got, and one primary button says what to do next. Renaming the room,
-   deleting it and the *note for the office* live here, one tap deeper.
+   say what has been got, and one primary button says what to do next. Every run is listed with
+   its type, size and length and can be deleted; renaming the room, the fitter's name and the
+   *note for the office* live here, one tap deeper. **Material & order** opens the shopping list —
+   per conduit type, net metres plus the metres to order with the site's waste factor, and the
+   clips, couplings and bends the runs actually need. The person who drives to the wholesaler is
+   standing in the room with this phone, not reading the PDF at a desk.
 4. **Measure → Export** — the AR viewfinder with its HUD, then the export screen, where the
-   operator picks a folder once and gets PDF, CSV and (with Pro) GLB/PLY.
+   operator picks a folder once and gets PDF, CSV and (with Pro) GLB/PLY. The customer can sign
+   on the glass with a finger; the signature is rasterised black-on-white and written onto its
+   own final page of the protocol, because a handover document without a signature is a note.
 
 This replaced a two-screen design (list → AR) that was technically sufficient and practically
 wrong: a foreman standing in a basement could not tell whether the scan had worked, whether the

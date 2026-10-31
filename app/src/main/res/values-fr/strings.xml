@@ -208,4 +208,18 @@
     <string name="run_delete">Supprimer le tracé</string>
     <string name="technician_title">Monteur sur site</string>
     <string name="technician_hint">Nom tel qu\'il doit figurer sur le protocole</string>
+    <string name="materials_title">Matériel et commande</string>
+    <string name="materials_button">Matériel et commande</string>
+    <string name="materials_intro">Regroupé par type : c\'est ainsi qu\'on achète. Les quantités incluent la réserve de chantier.</string>
+    <string name="materials_empty">Aucun tracé mesuré : rien à commander.</string>
+    <string name="materials_net">%1$s net</string>
+    <string name="materials_waste">plus %1$d %% de réserve</string>
+    <string name="materials_order">%1$s à commander</string>
+    <string name="materials_total">Total à commander</string>
+    <string name="materials_low_confidence">%1$d tracés au pointage incertain : à vérifier avant commande</string>
+    <string name="signature_title">Signature du client</string>
+    <string name="signature_hint">Signe avec le doigt : la signature apparaît sur le protocole.</string>
+    <string name="signature_clear">Effacer</string>
+    <string name="signature_pdf_title">Remise</string>
+    <string name="signature_pdf_caption">Signature client / monteur - mesuré sur site avec ConstructAR</string>
 </resources>
