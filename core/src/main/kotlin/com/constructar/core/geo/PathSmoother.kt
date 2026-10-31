@@ -209,7 +209,12 @@ object PathSmoother {
         val tangentIn = p + e1 * trim
         val tangentOut = p + e2 * trim
 
-        val axis = (e1 cross e2).normalizedOrZero()
+        // Rotation axis for the sweep: (in-radius × out-radius), i.e. the plane normal
+        // oriented so that rotating `tangentIn - centre` by +sweep lands exactly on
+        // `tangentOut`. Taking `e1 × e2` instead mirrors the arc *away* from the corner
+        // (both radius vectors are perpendicular to the legs' directions, not equal to them),
+        // which is what made a smoothed 90° run measure 2.14 m instead of 1.96 m.
+        val axis = ((tangentIn - center) cross (tangentOut - center)).normalizedOrZero()
         if (axis.isDegenerate()) return null
         val sweep = halfDelta * 2f
 

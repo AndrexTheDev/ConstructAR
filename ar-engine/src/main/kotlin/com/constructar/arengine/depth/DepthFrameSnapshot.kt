@@ -6,6 +6,7 @@
 
 package com.constructar.arengine.depth
 
+import com.constructar.core.geo.DepthIntrinsics
 import com.constructar.core.math.Ray
 import com.constructar.core.math.Vec3
 import kotlin.math.sqrt

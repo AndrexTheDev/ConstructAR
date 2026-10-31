@@ -6,6 +6,7 @@
 
 package com.constructar.nativebridge
 
+import com.constructar.core.geo.DepthIntrinsics
 import com.constructar.core.math.Aabb
 import com.constructar.core.mesh.MeshData
 import com.constructar.core.math.Vec3
@@ -35,16 +36,6 @@ data class TsdfConfig(
 
     /** Integration stride in pixels: 3 keeps 640×480 at ~21 k rays/frame. */
     val defaultPixelStep: Int get() = if (voxelSizeMeters >= 0.03f) 2 else 3
-}
-
-/** Pinhole intrinsics for the *depth* image (already scaled from the colour intrinsics). */
-data class DepthIntrinsics(
-    val fx: Float,
-    val fy: Float,
-    val cx: Float,
-    val cy: Float,
-) {
-    fun isValid(): Boolean = fx > 0f && fy > 0f
 }
 
 /** What one integration call did. */

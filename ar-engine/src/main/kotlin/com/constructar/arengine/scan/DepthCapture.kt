@@ -9,7 +9,7 @@ package com.constructar.arengine.scan
 import android.util.Log
 import com.constructar.arengine.depth.DepthBufferPool
 import com.constructar.arengine.depth.DepthFrameSnapshot
-import com.constructar.arengine.depth.DepthIntrinsics
+import com.constructar.core.geo.DepthIntrinsics
 import com.google.ar.core.Camera
 import com.google.ar.core.Frame
 import com.google.ar.core.exceptions.NotYetAvailableException

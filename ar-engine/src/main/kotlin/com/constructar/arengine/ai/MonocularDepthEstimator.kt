@@ -8,10 +8,12 @@ package com.constructar.arengine.ai
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Rect
 import android.util.Log
+import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.gpu.GpuDelegate
-import org.tensorflow.lite.nnapi.NnApiDelegate
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -19,34 +21,47 @@ import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 
 /**
- * On-device monocular depth: **Depth Anything V2 Small** (Apache-2.0), quantised, executed
- * through LiteRT.
+ * On-device monocular depth: **Depth Anything V2 Small** (Apache-2.0), executed through LiteRT.
  *
  * ## Legal / licensing
  *
  * Only the *Small* variant is used and only the Apache-2.0 checkpoint is converted. The
  * Base/Large weights are CC-BY-NC (non-commercial) and must never be shipped; the build
- * verifies the model file's hash against `constructar.depthModelSha256`.
+ * verifies the model file's hash against `constructar.depthModelSha256` when one is configured.
  *
- * ## Execution
+ * ## Why CPU/XNNPACK and nothing else
  *
- * The interpreter is created with a delegate ladder — **NNAPI** (NPU/DSP) → **GPU (Vulkan)**
- * → **CPU (XNNPACK, 4 threads)** — falling back whenever a delegate fails to initialise.
- * Inference runs on a dedicated single-thread executor so it never blocks the render thread;
- * only the *metric* calibration and the TSDF integration touch the frame.
+ * The delegate ladder this class used to carry (NNAPI → Vulkan GPU → CPU) is gone, on purpose:
+ *
+ *  * **NNAPI is deprecated.** Google stopped shipping it as part of the standalone LiteRT
+ *    runtime (`com.google.ai.edge.litert:litert`); the only current artefacts are the
+ *    Play-services TFLite bindings, which are a network/telemetry dependency and therefore
+ *    banned by ConstructAR's offline policy.
+ *  * **The GPU delegate cannot execute an int8 model.** Its shader path is built around
+ *    float16/float32 weights; quantised convolutions fall back or fail outright, so on the one
+ *    model we are allowed to ship (int8, Apache-2.0) it would spend a Vulkan context and a
+ *    few hundred milliseconds to hand the graph straight back to the CPU.
+ *
+ * XNNPACK with four threads executes Depth Anything V2 Small in tens of milliseconds, off the
+ * render thread, at the 1–2 Hz cadence the fusion pass asks for. Fewer moving parts, no
+ * accelerator-probing at startup, and nothing to go wrong on a device whose driver lies.
+ *
+ * ## Quantisation-awareness
+ *
+ * The graph's own tensors decide how frames are written and read: a float32 input gets
+ * normalised RGB floats, a uint8/int8 input gets quantised channels using the tensor's
+ * `scale`/`zeroPoint`, and the output is dequantised the same way. That makes the estimator
+ * correct for the int8 export *and* for a float32 export of the same checkpoint, instead of
+ * silently producing garbage for whichever one the builder dropped in.
  *
  * ## Threading & allocation
  *
- * The input `ByteBuffer` and the output array are allocated **once**; every frame is written
- * in place. Inference is skipped (and the previous map reused) when a new frame is not yet
- * available, so a slow device degrades in frame-rate, never in memory.
+ * Input and output buffers are direct `ByteBuffer`s allocated **once**; every frame is written
+ * in place. Inference runs on the caller's single-thread executor, never on the render thread.
  */
 class MonocularDepthEstimator private constructor(
     private val interpreter: Interpreter,
-    private val inputSize: Int,
-    private val outputSize: Int,
     private val backend: String,
-    private val closeableDelegates: List<AutoCloseable>,
 ) : AutoCloseable {
 
     data class Config(
@@ -54,16 +69,52 @@ class MonocularDepthEstimator private constructor(
         val assetPath: String = "models/depth_anything_v2_small_int8.tflite",
         /** Alternative: a file already unpacked to app storage. */
         val modelFile: File? = null,
-        /** Square network input (Depth Anything V2 Small: 518, multiple of 14). */
-        val inputSize: Int = 518,
+        /** XNNPACK worker threads. Four saturates a big core pair without starving the UI. */
         val numThreads: Int = 4,
-        /** Try the NNAPI delegate first (NPU/DPU). */
-        val preferNnapi: Boolean = true,
-        /** Then the Vulkan GPU delegate. */
-        val preferGpu: Boolean = true,
         /** Expected SHA-256 of the model file, checked when non-null. */
         val expectedSha256: String? = null,
     )
+
+    // ── Tensor descriptors, read once from the graph ────────────────────────────────────────
+    private val inputTensor = interpreter.getInputTensor(0)
+    private val outputTensor = interpreter.getOutputTensor(0)
+
+    private val inputShape: IntArray = inputTensor.shape()
+    private val outputShape: IntArray = outputTensor.shape()
+
+    /**
+     * Network input edge length (Depth Anything V2: 518, a multiple of 14).
+     *
+     * Taken as the largest non-batch dimension so the estimator works for an NHWC export
+     * (`[1, 518, 518, 3]`) and an NCHW one (`[1, 3, 518, 518]`) alike; the *fill order* below
+     * is NHWC, which is what every Depth Anything export uses.
+     */
+    val inputSize: Int = inputShape.filter { it > 1 }.maxOrNull() ?: DEFAULT_INPUT_SIZE
+
+    /** Output map width, in network pixels. */
+    val outputWidth: Int = outputShape.getOrNull(2)?.takeIf { it > 0 } ?: inputSize
+
+    /** Output map height, in network pixels. */
+    val outputHeight: Int = outputShape.getOrNull(1)?.takeIf { it > 0 } ?: inputSize
+
+    private val inputIsFloat = inputTensor.dataType() == DataType.FLOAT32
+    private val outputIsFloat = outputTensor.dataType() == DataType.FLOAT32
+
+    private val inputQuant = inputTensor.quantizationParams()
+    private val outputQuant = outputTensor.quantizationParams()
+
+    private val inputBuffer: ByteBuffer =
+        ByteBuffer.allocateDirect(bytesOf(inputShape, inputTensor.dataType()))
+            .order(ByteOrder.nativeOrder())
+    private val outputBuffer: ByteBuffer =
+        ByteBuffer.allocateDirect(bytesOf(outputShape, outputTensor.dataType()))
+            .order(ByteOrder.nativeOrder())
+
+    /** Scratch bitmap + pixel array reused for every frame (no per-frame allocation). */
+    private val scratchBitmap: Bitmap =
+        Bitmap.createBitmap(inputSize, inputSize, Bitmap.Config.ARGB_8888)
+    private val pixels = IntArray(inputSize * inputSize)
+    private val resizePaint = Paint().apply { isFilterBitmap = true }
 
     /** Runtime metrics, surfaced on the diagnostics screen. */
     @Volatile
@@ -74,82 +125,121 @@ class MonocularDepthEstimator private constructor(
     var lastBackend: String = backend
         private set
 
-    private val inputBuffer: ByteBuffer =
-        ByteBuffer.allocateDirect(inputSize * inputSize * 3 * 4).order(ByteOrder.nativeOrder())
-    private val outputArray = Array(1) { Array(outputSize) { Array(outputSize) { FloatArray(1) } } }
-
-    /** Scratch bitmap reused for every frame (no per-frame allocation). */
-    private val scratchBitmap: Bitmap = Bitmap.createBitmap(inputSize, inputSize, Bitmap.Config.ARGB_8888)
-    private val pixels = IntArray(inputSize * inputSize)
-
     /**
-     * Runs inference on a camera frame.
+     * Runs inference on one camera frame.
      *
-     * @param source a bitmap of the current camera view (already rotated upright and
-     *               downscaled by the caller's `ImageReader`), or a texture snapshot.
-     * @return the relative (disparity-like) depth map, or null when inference failed.
+     * @param source a bitmap of the current camera view (already rotated upright and downscaled
+     *               by the caller's `ImageReader`), or a texture snapshot.
+     * @return the relative (disparity-like) depth map normalised to [0,1], or null on failure.
      */
     fun estimate(source: Bitmap): RelativeDepthMap? {
+        if (source.isRecycled || source.width <= 0 || source.height <= 0) return null
         return try {
             val started = System.nanoTime()
             fillInput(source)
-            interpreter.run(inputBuffer, outputArray)
-            val values = FloatArray(outputSize * outputSize)
-            var min = Float.MAX_VALUE
-            var max = -Float.MAX_VALUE
-            for (y in 0 until outputSize) {
-                val row = outputArray[0][y]
-                for (x in 0 until outputSize) {
-                    val v = row[x][0]
-                    values[y * outputSize + x] = v
-                    if (v < min) min = v
-                    if (v > max) max = v
-                }
-            }
-            // Normalise to [0,1]: Depth Anything's absolute scale is arbitrary, only the
-            // affine relation to inverse depth is meaningful (see MetricDepthCalibrator).
-            val range = (max - min).takeIf { it > 1e-6f } ?: 1f
-            for (i in values.indices) values[i] = (values[i] - min) / range
+            interpreter.run(inputBuffer, outputBuffer)
+            val map = readOutput()
             lastInferenceMillis = ((System.nanoTime() - started) / 1_000_000L).toInt()
-            RelativeDepthMap(values, outputSize, outputSize, lastInferenceMillis, backend)
+            RelativeDepthMap(map, outputWidth, outputHeight, lastInferenceMillis, backend)
         } catch (error: Throwable) {
-            // A failing delegate or an OOM on a low-end device must never crash the AR view:
-            // the scan simply continues with ARCore depth only.
+            // An OOM on a low-end device must never crash the AR view: the scan simply
+            // continues with ARCore depth only.
             Log.w(TAG, "monocular depth inference failed, falling back to ARCore depth", error)
             null
         }
     }
 
-    /** ARGB bitmap → normalised NCHW-free NHWC float input (0..1 RGB). */
+    /** Bitmap → the graph's input tensor, in place. */
     private fun fillInput(source: Bitmap) {
-        // Nearest-neighbour resize into the scratch bitmap: the network is trained on
-        // resampled crops, and bilinear `createScaledBitmap` allocates a bitmap per frame.
-        val canvas = android.graphics.Canvas(scratchBitmap)
-        canvas.drawBitmap(
+        // Nearest-neighbour-free resize into a fixed scratch bitmap: `createScaledBitmap`
+        // would allocate a bitmap per frame, which is exactly what the hot path must not do.
+        Canvas(scratchBitmap).drawBitmap(
             source,
-            android.graphics.Rect(0, 0, source.width, source.height),
-            android.graphics.Rect(0, 0, inputSize, inputSize),
-            android.graphics.Paint().apply { isFilterBitmap = true },
+            Rect(0, 0, source.width, source.height),
+            Rect(0, 0, inputSize, inputSize),
+            resizePaint,
         )
         scratchBitmap.getPixels(pixels, 0, inputSize, 0, 0, inputSize, inputSize)
         inputBuffer.rewind()
-        val floatBuffer = inputBuffer.asFloatBuffer()
-        for (argb in pixels) {
-            floatBuffer.put(((argb shr 16) and 0xFF) / 255f)
-            floatBuffer.put(((argb shr 8) and 0xFF) / 255f)
-            floatBuffer.put((argb and 0xFF) / 255f)
+
+        if (inputIsFloat) {
+            val floats = inputBuffer.asFloatBuffer()
+            for (argb in pixels) {
+                floats.put(((argb shr 16) and 0xFF) / 255f)
+                floats.put(((argb shr 8) and 0xFF) / 255f)
+                floats.put((argb and 0xFF) / 255f)
+            }
+        } else {
+            // Quantised input: q = round(v / scale) + zeroPoint, with v in [0,1].
+            val scale = inputQuant.scale.takeIf { it > 0f } ?: (1f / 255f)
+            val zeroPoint = inputQuant.zeroPoint
+            val signed = inputTensor.dataType() == DataType.INT8
+            for (argb in pixels) {
+                putQuantised(inputBuffer, scale, zeroPoint, signed, ((argb shr 16) and 0xFF) / 255f)
+                putQuantised(inputBuffer, scale, zeroPoint, signed, ((argb shr 8) and 0xFF) / 255f)
+                putQuantised(inputBuffer, scale, zeroPoint, signed, (argb and 0xFF) / 255f)
+            }
         }
         inputBuffer.rewind()
     }
 
+    /** Writes one quantised channel sample: `round(v / scale) + zeroPoint`, clamped. */
+    private fun putQuantised(
+        buffer: ByteBuffer,
+        scale: Float,
+        zeroPoint: Int,
+        signed: Boolean,
+        value: Float,
+    ) {
+        val q = (value / scale).toInt() + zeroPoint
+        val clamped = if (signed) q.coerceIn(-128, 127) else q.coerceIn(0, 255)
+        buffer.put(clamped.toByte())
+    }
+
+    /** Copy of the network output as a [0,1] row-major map (owns a fresh array per call). */
+    private fun readOutput(): FloatArray {
+        outputBuffer.rewind()
+        val out = FloatArray(outputWidth * outputHeight)
+        var min = Float.MAX_VALUE
+        var max = -Float.MAX_VALUE
+        if (outputIsFloat) {
+            val floats = outputBuffer.asFloatBuffer()
+            for (i in out.indices) {
+                val v = floats.get(i)
+                out[i] = v
+                if (v < min) min = v
+                if (v > max) max = v
+            }
+        } else {
+            val scale = outputQuant.scale.takeIf { it > 0f } ?: (1f / 255f)
+            val zeroPoint = outputQuant.zeroPoint
+            val signed = outputTensor.dataType() == DataType.INT8
+            for (i in out.indices) {
+                val raw = outputBuffer.get(i).toInt() and 0xFF
+                val q = if (signed && raw > 127) raw - 256 else raw
+                val v = (q - zeroPoint) * scale
+                out[i] = v
+                if (v < min) min = v
+                if (v > max) max = v
+            }
+        }
+        // Depth Anything's absolute scale is arbitrary; only the affine relation to inverse
+        // depth is meaningful (see [MetricDepthCalibrator]), so the map is normalised here.
+        val range = (max - min).takeIf { it > 1e-6f } ?: 1f
+        for (i in out.indices) out[i] = (out[i] - min) / range
+        return out
+    }
+
     override fun close() {
         runCatching { interpreter.close() }
-        closeableDelegates.forEach { runCatching { it.close() } }
         if (!scratchBitmap.isRecycled) scratchBitmap.recycle()
     }
 
     companion object {
         private const val TAG = "MonocularDepth"
+
+        /** Depth Anything V2 Small's native input edge (518 = 37 × 14). */
+        private const val DEFAULT_INPUT_SIZE = 518
 
         /** True when a model is bundled; the feature is optional at runtime. */
         fun isModelPresent(context: Context, config: Config = Config()): Boolean =
@@ -158,84 +248,35 @@ class MonocularDepthEstimator private constructor(
             }.isSuccess
 
         /**
-         * Creates an estimator or returns null when the model is absent/unusable. Callers
+         * Creates an estimator, or returns null when the model is absent/unusable. Callers
          * treat null as "AI depth disabled" — the app is fully functional without it.
-         *
-         * Delegate ladder: NNAPI → GPU (Vulkan) → CPU. Each attempt maps the model afresh:
-         * an `Interpreter` takes ownership of its `MappedByteBuffer`, and a delegate may only
-         * belong to one interpreter, so reusing either across attempts is undefined.
          */
         fun create(context: Context, config: Config = Config()): MonocularDepthEstimator? {
             val modelFile = resolveModelFile(context, config) ?: return null
-
-            if (config.preferNnapi) {
-                val delegate = try {
-                    NnApiDelegate(NnApiDelegate.Options().apply { setUseNnapiCpu(false) })
-                } catch (error: Throwable) {
-                    Log.w(TAG, "NNAPI delegate unavailable: ${error.message}")
-                    null
-                }
-                if (delegate != null) {
-                    try {
-                        val interpreter = Interpreter(mapModel(modelFile), baseOptions(config).apply { addDelegate(delegate) })
-                        Log.i(TAG, "Depth Anything V2 running on NNAPI")
-                        return MonocularDepthEstimator(
-                            interpreter, config.inputSize, outputSizeOf(interpreter, config.inputSize),
-                            "nnapi", listOf(delegate),
-                        )
-                    } catch (error: Throwable) {
-                        Log.w(TAG, "NNAPI interpreter creation failed: ${error.message}")
-                        runCatching { delegate.close() }
-                    }
-                }
+            val options = Interpreter.Options().apply {
+                setNumThreads(config.numThreads)
+                setUseXNNPACK(true)
             }
-
-            if (config.preferGpu) {
-                val delegate = try {
-                    GpuDelegate(GpuDelegate.Options().apply { setPrecisionLossAllowed(true) })
-                } catch (error: Throwable) {
-                    Log.w(TAG, "GPU delegate unavailable: ${error.message}")
-                    null
-                }
-                if (delegate != null) {
-                    try {
-                        val interpreter = Interpreter(mapModel(modelFile), baseOptions(config).apply { addDelegate(delegate) })
-                        Log.i(TAG, "Depth Anything V2 running on the Vulkan GPU delegate")
-                        return MonocularDepthEstimator(
-                            interpreter, config.inputSize, outputSizeOf(interpreter, config.inputSize),
-                            "gpu/vulkan", listOf(delegate),
-                        )
-                    } catch (error: Throwable) {
-                        Log.w(TAG, "GPU interpreter creation failed: ${error.message}")
-                        runCatching { delegate.close() }
-                    }
-                }
-            }
-
             return try {
-                val interpreter = Interpreter(mapModel(modelFile), baseOptions(config))
-                Log.i(TAG, "Depth Anything V2 running on CPU (XNNPACK, ${config.numThreads} threads)")
-                MonocularDepthEstimator(
-                    interpreter, config.inputSize, outputSizeOf(interpreter, config.inputSize), "cpu/xnnpack",
-                    emptyList(),
-                )
+                val interpreter = Interpreter(mapModel(modelFile), options)
+                Log.i(TAG, "Depth Anything V2 Small running on CPU/XNNPACK (${config.numThreads} threads)")
+                MonocularDepthEstimator(interpreter, "cpu/xnnpack")
             } catch (error: Throwable) {
-                Log.e(TAG, "could not create interpreter", error)
+                Log.e(TAG, "could not create the LiteRT interpreter", error)
                 null
             }
         }
 
-        private fun baseOptions(config: Config): Interpreter.Options =
-            Interpreter.Options().apply {
-                setNumThreads(config.numThreads)
-                setUseXNNPACK(true)
+        /** Element count × element size, for a tensor described by [shape] and [dataType]. */
+        private fun bytesOf(shape: IntArray, dataType: DataType): Int {
+            var elements = 1
+            for (dimension in shape) if (dimension > 0) elements *= dimension
+            val elementSize = when (dataType) {
+                DataType.FLOAT32, DataType.INT32 -> 4
+                DataType.FLOAT16 -> 2
+                else -> 1
             }
-
-        /** Reads the output tensor shape, defaulting to [fallback]. */
-        private fun outputSizeOf(interpreter: Interpreter, fallback: Int): Int {
-            val shape = runCatching { interpreter.getOutputTensor(0).shape() }.getOrNull() ?: return fallback
-            // [1, H, W, 1] or [1, 1, H, W]
-            return shape.getOrNull(1)?.takeIf { it > 1 } ?: shape.getOrNull(2) ?: fallback
+            return elements * elementSize
         }
 
         /** Resolves the model file and verifies its checksum when one is configured. */
@@ -270,12 +311,12 @@ class MonocularDepthEstimator private constructor(
                     digest.update(buffer, 0, read)
                 }
             }
-            digest.digest().joinToString("") { "%02x".format(it) }
+            digest.digest().joinToString("") { byte -> "%02x".format(byte) }
         }.getOrDefault("")
 
         /**
-         * LiteRT requires a `MappedByteBuffer`; the model must therefore live in a file, not
-         * in the APK's compressed asset stream. This unpacks it once into `filesDir`.
+         * LiteRT requires a `MappedByteBuffer`; the model must therefore live in a file, not in
+         * the APK's compressed asset stream. This unpacks it once into `filesDir`.
          */
         private fun unpackAsset(context: Context, assetPath: String): File? {
             val target = File(context.filesDir, assetPath.substringAfterLast('/'))

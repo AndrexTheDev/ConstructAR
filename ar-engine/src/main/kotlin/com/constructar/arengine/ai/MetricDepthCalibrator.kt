@@ -120,8 +120,10 @@ class MetricDepthCalibrator(private val config: Config = Config()) {
         if (count < config.minSamples) return Calibration.IDENTITY
 
         // 2. Weighted affine fit inv ≈ s·rel + t, then IRLS with Huber weights.
-        var fit = weightedAffine(rel, inv, weights, count)
-        if (fit == null) return Calibration.IDENTITY
+        // Non-nullable from here on: `fit` is reassigned inside the `repeat` lambda below, and a
+        // smart cast on a captured nullable local does not survive that.
+        var fit: Pair<Float, Float> = weightedAffine(rel, inv, weights, count)
+            ?: return Calibration.IDENTITY
 
         val robust = FloatArray(count)
         System.arraycopy(weights, 0, robust, 0, count)

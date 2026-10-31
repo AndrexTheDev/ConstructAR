@@ -208,8 +208,9 @@ jobs:
               tr -d '\r' < "$LOG" > /tmp/log.txt
               echo "#### Compiler diagnostics"
               echo ""
+              echo "errors: $(grep -c '^e: ' /tmp/log.txt || true) (showing up to 120)"
               echo '```'
-              grep -E '^(e|w): ' /tmp/log.txt | head -n 40 || true
+              grep -E '^(e|w): ' /tmp/log.txt | head -n 120 || true
               echo '```'
               echo ""
               echo "#### Failed tasks, tests and messages"
@@ -217,7 +218,7 @@ jobs:
               echo '```'
               # A "FAILED" line is followed by the assertion/exception that caused it; keep a
               # short tail after each one so a unit-test failure is readable without the log.
-              awk '/FAILED/{print; n=5; next} n>0 && NF{print; n--}' /tmp/log.txt | head -n 90
+              awk '/FAILED/{print; n=5; next} n>0 && NF{print; n--}' /tmp/log.txt | head -n 140
               echo '```'
               echo ""
               echo "#### What went wrong"
