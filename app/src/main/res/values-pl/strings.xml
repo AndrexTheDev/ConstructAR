@@ -195,7 +195,6 @@
     <string name="paywall_active_until">Ważne do %1$s</string>
     <string name="paywall_active_forever">Ważne bezterminowo</string>
     <string name="paywall_back">Wstecz</string>
-    <string name="export_pro_locked">Funkcja Pro</string>
     <string name="export_pro_locked_body">GLB i PLY są częścią Pro.</string>
     <string name="export_unlock">Odblokuj</string>
     <string name="export_watermark_note">Darmowy PDF ma dyskretny znak wodny.</string>

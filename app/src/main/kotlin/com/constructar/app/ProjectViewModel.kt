@@ -88,8 +88,16 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     val entitlementsStore: EntitlementStore get() = entitlements
 
     init {
-        refreshEntitlements()
+        // [EntitlementStore] verifies the stored licence in its own constructor; calling
+        // `refreshEntitlements()` here as well would run the same ECDSA verification a second
+        // time on every cold start for the same answer. The state is seeded from what that
+        // constructor already computed, and `refresh()` (the project list) goes to IO.
         mutableState.value = mutableState.value.copy(
+            entitlements = entitlements.entitlements.value,
+            deviceTag = entitlements.deviceTag,
+            trialUsed = entitlements.trialUsed(),
+            trialDaysLeft = entitlements.trialDaysLeft(),
+            demoSigningKey = LicencePublicKey.isDemoKey,
             onboardingDone = preferences.onboardingDone(),
             wasteOverride = settings.wasteFactorOverride(),
         )

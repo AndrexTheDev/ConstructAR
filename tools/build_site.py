@@ -171,6 +171,23 @@ footer a{color:var(--chalk)}
 .p-row span:last-child{color:var(--gold); font-weight:700}
 @media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto} }
 :focus-visible{outline:3px solid var(--lime); outline-offset:3px}
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px}
+.stat{background:var(--ink-elevated); border:1px solid var(--wire); border-radius:16px; padding:16px 18px}
+.stat b{display:block; font-size:1.55rem; color:var(--lime); line-height:1.15; font-weight:800}
+.stat span{font-size:.85rem; color:var(--ash)}
+.cmp td.us{color:var(--lime); font-weight:700}
+.cmp td.them{color:var(--ash)}
+.cmp td:first-child{color:var(--chalk); font-weight:600}
+.anchor{background:var(--surface-high); border:1px solid var(--lime-dim); border-radius:16px;
+  padding:18px 20px; margin:22px 0 0; color:var(--chalk); font-size:1.02rem}
+.anchor strong{color:var(--gold)}
+.sticky-cta{position:fixed; left:0; right:0; bottom:0; z-index:40; display:none; gap:10px;
+  align-items:center; background:rgba(10,12,7,.95); border-top:1px solid var(--wire);
+  padding:10px 16px; backdrop-filter:blur(12px)}
+.sticky-cta > div{flex:1}
+.sticky-cta .btn{display:flex; justify-content:center; width:100%; padding:14px 16px; font-size:.95rem}
+.sticky-cta small{display:block; color:var(--ash); font-size:.72rem; margin-top:2px}
+@media (max-width:700px){ .sticky-cta{display:block} body{padding-bottom:86px} }
 """
 
 CONTENT: dict[str, dict[str, str]] = {
@@ -302,10 +319,12 @@ CONTENT: dict[str, dict[str, str]] = {
 
 # The remaining four languages are complete translations of the same key set; they live in their
 # own module to keep this file readable.
-from site_translations import ADDENDUM, EXTRA  # noqa: E402  (tools/ is on the path when run from there)
+from site_translations import ADDENDUM, EXTRA, MARKETING  # noqa: E402  (tools/ is on the path when run from there)
 
 CONTENT.update(EXTRA)
 for _lang, _extra in ADDENDUM.items():
+    CONTENT[_lang].update(_extra)
+for _lang, _extra in MARKETING.items():
     CONTENT[_lang].update(_extra)
 
 
@@ -360,7 +379,7 @@ def json_ld(lang: str, c: dict[str, str]) -> str:
                         "name": c[f"q{i}"],
                         "acceptedAnswer": {"@type": "Answer", "text": c[f"a{i}"]},
                     }
-                    for i in range(1, 7)
+                    for i in range(1, 9)
                 ],
             },
         ],
@@ -394,7 +413,7 @@ def page(lang: str) -> str:
     )
     faq = "".join(
         f'<details><summary>{esc(c[f"q{i}"])}</summary><p>{esc(c[f"a{i}"])}</p></details>'
-        for i in range(1, 7)
+        for i in range(1, 9)
     )
     lang_links = "".join(
         f'<a href="{"" if other == "en" else "../" + other + "/"}" hreflang="{other}">'
@@ -464,6 +483,7 @@ def page(lang: str) -> str:
       </div>
       <p class="note">{esc(c["hero_note"])}</p>
       <p class="trust"><span>{esc(c["trust1"])}</span><span>{esc(c["trust2"])}</span><span>{esc(c["trust3"])}</span></p>
+      <p class="trust"><span>{esc(c["trust4"])}</span><span>{esc(c["trust5"])}</span><span>{esc(c["trust6"])}</span></p>
     </div>
     <div class="phone" aria-hidden="true">
       <div class="bar"><img src="{root}assets/logo.jpg" alt="" width="26" height="26"><b>{esc(c["mock_room"])}</b></div>
@@ -483,6 +503,28 @@ def page(lang: str) -> str:
     </div>
   </section>
 
+  <section class="section" id="numbers" style="border-top:0; padding-top:8px">
+    <div class="wrap">
+      <div class="stats">
+        <div class="stat"><b>{esc(c["stat1v"])}</b><span>{esc(c["stat1l"])}</span></div>
+        <div class="stat"><b>{esc(c["stat2v"])}</b><span>{esc(c["stat2l"])}</span></div>
+        <div class="stat"><b>{esc(c["stat3v"])}</b><span>{esc(c["stat3l"])}</span></div>
+        <div class="stat"><b>{esc(c["stat4v"])}</b><span>{esc(c["stat4l"])}</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="today">
+    <div class="wrap">
+      <div class="section-head"><h2>{esc(c["pain_title"])}</h2><p>{esc(c["pain_sub"])}</p></div>
+      <div class="grid">
+        <article class="card"><h3>{esc(c["pain1t"])}</h3><p>{esc(c["pain1b"])}</p></article>
+        <article class="card"><h3>{esc(c["pain2t"])}</h3><p>{esc(c["pain2b"])}</p></article>
+        <article class="card"><h3>{esc(c["pain3t"])}</h3><p>{esc(c["pain3b"])}</p></article>
+      </div>
+    </div>
+  </section>
+
   <section class="section" id="features">
     <div class="wrap">
       <div class="section-head"><h2>{esc(c["feat_title"])}</h2><p>{esc(c["feat_sub"])}</p></div>
@@ -494,6 +536,24 @@ def page(lang: str) -> str:
     <div class="wrap">
       <div class="section-head"><h2>{esc(c["how_title"])}</h2><p>{esc(c["how_sub"])}</p></div>
       <div class="steps">{steps}</div>
+    </div>
+  </section>
+
+  <section class="section" id="compare">
+    <div class="wrap">
+      <div class="section-head"><h2>{esc(c["cmp_title"])}</h2><p>{esc(c["cmp_sub"])}</p></div>
+      <table class="acc cmp">
+        <thead><tr><th>{esc(c["cmp_criterion"])}</th><th>{esc(c["cmp_col_us"])}</th><th>{esc(c["cmp_col_them"])}</th></tr></thead>
+        <tbody>
+          <tr><td>{esc(c["cmp1"])}</td><td class="us">{esc(c["cmp1us"])}</td><td class="them">{esc(c["cmp1them"])}</td></tr>
+          <tr><td>{esc(c["cmp2"])}</td><td class="us">{esc(c["cmp2us"])}</td><td class="them">{esc(c["cmp2them"])}</td></tr>
+          <tr><td>{esc(c["cmp3"])}</td><td class="us">{esc(c["cmp3us"])}</td><td class="them">{esc(c["cmp3them"])}</td></tr>
+          <tr><td>{esc(c["cmp4"])}</td><td class="us">{esc(c["cmp4us"])}</td><td class="them">{esc(c["cmp4them"])}</td></tr>
+          <tr><td>{esc(c["cmp5"])}</td><td class="us">{esc(c["cmp5us"])}</td><td class="them">{esc(c["cmp5them"])}</td></tr>
+        </tbody>
+      </table>
+      <h3 style="margin-top:34px">{esc(c["trades_title"])}</h3>
+      <div class="langs"><span>{esc(c["trades_list"])}</span></div>
     </div>
   </section>
 
@@ -522,9 +582,17 @@ def page(lang: str) -> str:
         <div class="plan"><h3>{esc(c["plan_l"])}</h3><div class="price">{esc(c["plan_l_p"])}</div><p>{esc(c["plan_l_b"])}</p></div>
       </div>
       <p class="note" style="margin-top:20px; max-width:52em">{esc(c["price_note"])}</p>
+      <p class="anchor">{esc(c["anchor_line"])}</p>
       <div class="crypto">
         <h3>{esc(c["crypto_title"])}</h3>
         <ul>{price_row(lang, c)}</ul>
+      </div>
+
+      <h2 style="margin-top:44px">{esc(c["buy_title"])}</h2>
+      <div class="steps" style="margin-top:22px">
+        <div class="step"><h3>{esc(c["buy1t"])}</h3><p>{esc(c["buy1b"])}</p></div>
+        <div class="step"><h3>{esc(c["buy2t"])}</h3><p>{esc(c["buy2b"])}</p></div>
+        <div class="step"><h3>{esc(c["buy3t"])}</h3><p>{esc(c["buy3b"])}</p></div>
       </div>
     </div>
   </section>
@@ -571,6 +639,13 @@ def page(lang: str) -> str:
     </div>
   </div>
 </footer>
+
+<div class="sticky-cta" role="complementary">
+  <div>
+    <a class="btn btn-primary" href="{REPO_URL}" rel="noopener">{esc(c["sticky_cta"])}</a>
+    <small>{esc(c["sticky_price"])}</small>
+  </div>
+</div>
 </body>
 </html>
 """

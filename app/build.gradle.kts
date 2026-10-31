@@ -34,6 +34,18 @@ android {
         buildConfigField("String", "PROJECT_URL", "\"https://github.com/AndrexTheDev/ConstructAR\"")
     }
 
+    /**
+     * Ship six languages, not the eighty that Material3 and Compose carry.
+     *
+     * The app's own strings exist in exactly these six locales (enforced by
+     * `scripts/verify_sources.py`); every other translation in the dependency tree is dead
+     * weight in the APK. Filtering here removes them before packaging, which resource
+     * shrinking cannot do on its own, because locale folders of *used* resources are kept.
+     */
+    androidResources {
+        localeFilters += listOf("en", "de", "es", "fr", "it", "pl")
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -60,6 +72,15 @@ android {
             "META-INF/AL2.0",
             "META-INF/LGPL2.1",
             "META-INF/*.kotlin_module",
+            // Licence and index files of the dependency jars: required while linking, useless
+            // in an APK that carries no jar.
+            "META-INF/LICENSE",
+            "META-INF/LICENSE.txt",
+            "META-INF/NOTICE",
+            "META-INF/NOTICE.txt",
+            "META-INF/DEPENDENCIES",
+            "META-INF/INDEX.LIST",
+            "META-INF/*.version",
         )
     }
 }
@@ -95,11 +116,13 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
-    implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
+    // Tooling never reaches a release APK: the preview artifact carries the @Preview
+    // annotations and the inspector wires up a debug-only view of the composition.
     debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.tooling.preview)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test.junit)

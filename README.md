@@ -219,6 +219,11 @@ python3 -m http.server -d docs 8080   # look at it
 generator fails loudly rather than emitting a page with a missing key, and
 `.github/workflows/pages.yml` repeats that check before publishing.
 
+The page is also the shop: a problem section ("the hours on the delivery note"), a comparison
+table against cloud site apps, the four numbers that sell it (±2 cm, 0 bytes, 6 languages, 3
+files), a price anchor in journeyman wages, the three steps to a licence and a sticky mobile
+call-to-action — all in the language the reader came with.
+
 Search-engine work is in the template rather than bolted on: `lang` on `<html>`, per-language
 `<title>`/description, canonical URL, the full `hreflang` matrix plus `x-default`, Open Graph and
 Twitter cards, and JSON-LD `SoftwareApplication` (with the real 0 €/10 €/100 €/999 € offers) and
@@ -260,8 +265,15 @@ artifacts (pinned in `gradle/libs.versions.toml`).
 git clone https://github.com/AndrexTheDev/ConstructAR.git && cd ConstructAR
 gradle assembleDebug testDebugUnitTest   # the full gate: every module, warnings are errors
 gradle :app:assembleDebug                # APK in app/build/outputs/apk/debug/
+gradle :app:assembleRelease              # the shipping artifact: R8 + resource shrink
 python3 scripts/verify_sources.py        # header / reflection / i18n gates, no SDK needed
 ```
+
+**Size is a feature.** The release build runs R8 with resource shrinking, ships six locales
+instead of the eighty a dependency tree carries, and keeps the preview/tooling artifacts out of
+the package entirely; `app/build.gradle.kts` documents each lever and CI prints the debug and
+release APK sizes on every push. Cold start verifies the licence once, keeps the device tag lazy
+and puts every file operation on IO. Details and the numbers: **[docs/PERFORMANCE.md](docs/PERFORMANCE.md) §4**.
 
 The CI workflow downloads Gradle 9.6.0 and puts it on `PATH`; the wrapper scripts and JAR are
 deliberately not committed, so `gradle` (not `./gradlew`) is the documented entry point here.

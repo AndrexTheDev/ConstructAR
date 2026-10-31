@@ -36,7 +36,7 @@
 <meta name="twitter:title" content="ConstructAR — offline AR measuring for electricians and plumbers">
 <meta name="twitter:description" content="Scan the room with your phone, draw the cable or pipe run, get the metres, the material list and a signed PDF protocol. 100 % offline, six languages, PDF/CSV/GLB.">
 <meta name="twitter:image" content="https://andrexthedev.github.io/ConstructAR/assets/og-image.png">
-<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "SoftwareApplication", "name": "ConstructAR", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Android", "softwareVersion": "1.0", "inLanguage": ["en", "de", "es", "fr", "it", "pl"], "url": "https://andrexthedev.github.io/ConstructAR/", "image": "https://andrexthedev.github.io/ConstructAR/assets/logo.jpg", "description": "Scan the room with your phone, draw the cable or pipe run, get the metres, the material list and a signed PDF protocol. 100 % offline, six languages, PDF/CSV/GLB.", "featureList": ["Scan the room", "Draw flush to the surface", "Metres and material list", "A protocol the customer signs", "Works without signal", "Six languages", "The site file is inside"], "author": {"@type": "Person", "name": "AndrexTheDev", "email": "hippie.highho@gmail.com"}, "offers": [{"@type": "Offer", "name": "Free", "price": "0", "priceCurrency": "EUR"}, {"@type": "Offer", "name": "Pro monthly", "price": "10", "priceCurrency": "EUR"}, {"@type": "Offer", "name": "Pro yearly", "price": "100", "priceCurrency": "EUR"}, {"@type": "Offer", "name": "Lifetime", "price": "999", "priceCurrency": "EUR"}]}, {"@type": "FAQPage", "inLanguage": "en", "mainEntity": [{"@type": "Question", "name": "Does it work without internet?", "acceptedAnswer": {"@type": "Answer", "text": "Yes — the app has no INTERNET permission at all. Nothing is uploaded, nothing is downloaded, and tracking, depth and rendering run on the phone."}}, {"@type": "Question", "name": "Which phones are supported?", "acceptedAnswer": {"@type": "Answer", "text": "Android phones with ARCore and Android 7.0 or newer. A depth sensor (ToF) improves the numbers but is not required."}}, {"@type": "Question", "name": "Is it a laser replacement?", "acceptedAnswer": {"@type": "Answer", "text": "For runs on flat walls, yes, to within a couple of centimetres. For anything technical or hidden behind a panel, check with a tape measure before cutting — the protocol states the expected error too."}}, {"@type": "Question", "name": "Where do my measurements live?", "acceptedAnswer": {"@type": "Answer", "text": "In one JSON file per room, in the app's private storage. You can copy every project and its photo into a folder of your choice and restore them on another phone."}}, {"@type": "Question", "name": "Do I need an account?", "acceptedAnswer": {"@type": "Answer", "text": "No. No sign-in, no cloud, no subscription tracking — a licence is a short signed key that the app verifies offline."}}, {"@type": "Question", "name": "How do I pay?", "acceptedAnswer": {"@type": "Answer", "text": "In SOL, BTC or ETH to the address shown in the app. Send the transaction id and your device code, and you get a licence key back."}}]}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "SoftwareApplication", "name": "ConstructAR", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Android", "softwareVersion": "1.0", "inLanguage": ["en", "de", "es", "fr", "it", "pl"], "url": "https://andrexthedev.github.io/ConstructAR/", "image": "https://andrexthedev.github.io/ConstructAR/assets/logo.jpg", "description": "Scan the room with your phone, draw the cable or pipe run, get the metres, the material list and a signed PDF protocol. 100 % offline, six languages, PDF/CSV/GLB.", "featureList": ["Scan the room", "Draw flush to the surface", "Metres and material list", "A protocol the customer signs", "Works without signal", "Six languages", "The site file is inside"], "author": {"@type": "Person", "name": "AndrexTheDev", "email": "hippie.highho@gmail.com"}, "offers": [{"@type": "Offer", "name": "Free", "price": "0", "priceCurrency": "EUR"}, {"@type": "Offer", "name": "Pro monthly", "price": "10", "priceCurrency": "EUR"}, {"@type": "Offer", "name": "Pro yearly", "price": "100", "priceCurrency": "EUR"}, {"@type": "Offer", "name": "Lifetime", "price": "999", "priceCurrency": "EUR"}]}, {"@type": "FAQPage", "inLanguage": "en", "mainEntity": [{"@type": "Question", "name": "Does it work without internet?", "acceptedAnswer": {"@type": "Answer", "text": "Yes — the app has no INTERNET permission at all. Nothing is uploaded, nothing is downloaded, and tracking, depth and rendering run on the phone."}}, {"@type": "Question", "name": "Which phones are supported?", "acceptedAnswer": {"@type": "Answer", "text": "Android phones with ARCore and Android 7.0 or newer. A depth sensor (ToF) improves the numbers but is not required."}}, {"@type": "Question", "name": "Is it a laser replacement?", "acceptedAnswer": {"@type": "Answer", "text": "For runs on flat walls, yes, to within a couple of centimetres. For anything technical or hidden behind a panel, check with a tape measure before cutting — the protocol states the expected error too."}}, {"@type": "Question", "name": "Where do my measurements live?", "acceptedAnswer": {"@type": "Answer", "text": "In one JSON file per room, in the app's private storage. You can copy every project and its photo into a folder of your choice and restore them on another phone."}}, {"@type": "Question", "name": "Do I need an account?", "acceptedAnswer": {"@type": "Answer", "text": "No. No sign-in, no cloud, no subscription tracking — a licence is a short signed key that the app verifies offline."}}, {"@type": "Question", "name": "How do I pay?", "acceptedAnswer": {"@type": "Answer", "text": "In SOL, BTC or ETH to the address shown in the app. Send the transaction id and your device code, and you get a licence key back."}}, {"@type": "Question", "name": "What if the phone breaks?", "acceptedAnswer": {"@type": "Answer", "text": "Every project can be copied into a folder of your choice — a USB stick, an SD card, your own drive. Restoring on a new phone brings the photos along."}}, {"@type": "Question", "name": "Do I have to take out a subscription?", "acceptedAnswer": {"@type": "Answer", "text": "No. Month, year or once — and when a subscription ends nothing is taken away: every room stays readable and exportable."}}]}]}</script>
 <style>
 :root{
   --ink:#0A0C07; --ink-elevated:#14180E; --surface-high:#1E2314;
@@ -163,6 +163,23 @@ footer a{color:var(--chalk)}
 .p-row span:last-child{color:var(--gold); font-weight:700}
 @media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto} }
 :focus-visible{outline:3px solid var(--lime); outline-offset:3px}
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px}
+.stat{background:var(--ink-elevated); border:1px solid var(--wire); border-radius:16px; padding:16px 18px}
+.stat b{display:block; font-size:1.55rem; color:var(--lime); line-height:1.15; font-weight:800}
+.stat span{font-size:.85rem; color:var(--ash)}
+.cmp td.us{color:var(--lime); font-weight:700}
+.cmp td.them{color:var(--ash)}
+.cmp td:first-child{color:var(--chalk); font-weight:600}
+.anchor{background:var(--surface-high); border:1px solid var(--lime-dim); border-radius:16px;
+  padding:18px 20px; margin:22px 0 0; color:var(--chalk); font-size:1.02rem}
+.anchor strong{color:var(--gold)}
+.sticky-cta{position:fixed; left:0; right:0; bottom:0; z-index:40; display:none; gap:10px;
+  align-items:center; background:rgba(10,12,7,.95); border-top:1px solid var(--wire);
+  padding:10px 16px; backdrop-filter:blur(12px)}
+.sticky-cta > div{flex:1}
+.sticky-cta .btn{display:flex; justify-content:center; width:100%; padding:14px 16px; font-size:.95rem}
+.sticky-cta small{display:block; color:var(--ash); font-size:.72rem; margin-top:2px}
+@media (max-width:700px){ .sticky-cta{display:block} body{padding-bottom:86px} }
 </style>
 </head>
 <body>
@@ -194,6 +211,7 @@ footer a{color:var(--chalk)}
       </div>
       <p class="note">Android · needs ARCore · free to start</p>
       <p class="trust"><span>No account</span><span>No cloud</span><span>No internet permission</span></p>
+      <p class="trust"><span>7 days free</span><span>No subscription trap</span><span>Licence checked offline</span></p>
     </div>
     <div class="phone" aria-hidden="true">
       <div class="bar"><img src="assets/logo.jpg" alt="" width="26" height="26"><b>Basement north</b></div>
@@ -213,6 +231,28 @@ footer a{color:var(--chalk)}
     </div>
   </section>
 
+  <section class="section" id="numbers" style="border-top:0; padding-top:8px">
+    <div class="wrap">
+      <div class="stats">
+        <div class="stat"><b>±2 cm</b><span>on a detected wall, 1–4 m</span></div>
+        <div class="stat"><b>0 bytes</b><span>leave the phone</span></div>
+        <div class="stat"><b>6</b><span>languages, app and PDF</span></div>
+        <div class="stat"><b>3 files</b><span>PDF · CSV · GLB/PLY</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="today">
+    <div class="wrap">
+      <div class="section-head"><h2>The day still ends the way it always did</h2><p>Except that the hours, the notes and the defects are already typed, timestamped and in the protocol.</p></div>
+      <div class="grid">
+        <article class="card"><h3>Hours on the back of a delivery note</h3><p>One big button starts the clock, one stops it. The total is in the PDF — no evening spent reconstructing the day.</p></article>
+        <article class="card"><h3>A diary that goes soggy</h3><p>Every line carries a timestamp. Nobody argues later about when the wall was opened.</p></article>
+        <article class="card"><h3>A punch list nobody can read</h3><p>Defects with location, severity and status — printed in the same document the customer signs.</p></article>
+      </div>
+    </div>
+  </section>
+
   <section class="section" id="features">
     <div class="wrap">
       <div class="section-head"><h2>Everything the job needs</h2><p>Built for gloves, sunlight and a basement without signal.</p></div>
@@ -224,6 +264,24 @@ footer a{color:var(--chalk)}
     <div class="wrap">
       <div class="section-head"><h2>Three steps, one screen each</h2><p>If a foreman cannot work it out in ten seconds, it is the wrong app.</p></div>
       <div class="steps"><div class="step"><h3>Scan</h3><p>Walk the room once, phone at chest height. The mesh appears on the walls.</p></div><div class="step"><h3>Measure</h3><p>Tap the start, the corners and the end. The length updates live, in metres.</p></div><div class="step"><h3>Check</h3><p>The project screen shows the runs, the order quantity and anything still missing.</p></div><div class="step"><h3>Export</h3><p>Pick a folder once; PDF, CSV and (Pro) GLB/PLY are written there.</p></div></div>
+    </div>
+  </section>
+
+  <section class="section" id="compare">
+    <div class="wrap">
+      <div class="section-head"><h2>Why not just another cloud site app?</h2><p>Because there is no cloud in a basement — and because your measurements are your work.</p></div>
+      <table class="acc cmp">
+        <thead><tr><th>Criterion</th><th>ConstructAR</th><th>Typical cloud site app</th></tr></thead>
+        <tbody>
+          <tr><td>Works with no signal at all</td><td class="us">Always</td><td class="them">Only what was synced</td></tr>
+          <tr><td>Account needed</td><td class="us">None</td><td class="them">Per user, per month</td></tr>
+          <tr><td>Where the data lives</td><td class="us">On your phone</td><td class="them">On their servers</td></tr>
+          <tr><td>Monthly price</td><td class="us">10 €</td><td class="them">16–24 € per user</td></tr>
+          <tr><td>Pay once, keep it</td><td class="us">999 €</td><td class="them">Not offered</td></tr>
+        </tbody>
+      </table>
+      <h3 style="margin-top:34px">Built for the trades that measure in metres</h3>
+      <div class="langs"><span>Electrical · Plumbing &amp; heating · Ventilation · Drywall · Painting · Tiling · Building services</span></div>
     </div>
   </section>
 
@@ -252,9 +310,17 @@ footer a{color:var(--chalk)}
         <div class="plan"><h3>Lifetime</h3><div class="price">999 € once</div><p>Pay once, use it forever.</p></div>
       </div>
       <p class="note" style="margin-top:20px; max-width:52em">Seven days of Pro are free — no card, no questions. Payment is SOL, BTC or ETH; you receive a licence key that the app verifies offline. Nothing is ever taken away when a subscription ends.</p>
+      <p class="anchor">Ten euros a month is less than a quarter of an hour of a journeyman&#x27;s wage — and it replaces the evening you spend typing up three rooms.</p>
       <div class="crypto">
         <h3>Payment addresses</h3>
         <ul><li><span class="sym">SOL</span><code>79KsqtJJdhKFJ9woxnYgtf3nq7HxQveafWBCtC3mxWi8</code></li><li><span class="sym">BTC</span><code>bc1qeqzrlfg3edrydk4s0hecakc82gp26n5p7hkc7f</code></li><li><span class="sym">ETH</span><code>0xBC3fab34f69bc9f6661608C3FB36dDdC313C42F7</code></li></ul>
+      </div>
+
+      <h2 style="margin-top:44px">How you buy — without a store, without a card</h2>
+      <div class="steps" style="margin-top:22px">
+        <div class="step"><h3>Try it for seven days</h3><p>Pro unlocked, no card, no account: one tap on the paywall.</p></div>
+        <div class="step"><h3>Pay in crypto</h3><p>SOL, BTC or ETH — 10 € a month, 100 € a year or 999 € once. The address is in the app.</p></div>
+        <div class="step"><h3>Get your key</h3><p>Send the transaction id and your device code; the licence is verified offline, for good.</p></div>
       </div>
     </div>
   </section>
@@ -269,7 +335,7 @@ footer a{color:var(--chalk)}
   <section class="section faq" id="faq">
     <div class="wrap">
       <div class="section-head"><h2>Questions from the site</h2></div>
-      <details><summary>Does it work without internet?</summary><p>Yes — the app has no INTERNET permission at all. Nothing is uploaded, nothing is downloaded, and tracking, depth and rendering run on the phone.</p></details><details><summary>Which phones are supported?</summary><p>Android phones with ARCore and Android 7.0 or newer. A depth sensor (ToF) improves the numbers but is not required.</p></details><details><summary>Is it a laser replacement?</summary><p>For runs on flat walls, yes, to within a couple of centimetres. For anything technical or hidden behind a panel, check with a tape measure before cutting — the protocol states the expected error too.</p></details><details><summary>Where do my measurements live?</summary><p>In one JSON file per room, in the app&#x27;s private storage. You can copy every project and its photo into a folder of your choice and restore them on another phone.</p></details><details><summary>Do I need an account?</summary><p>No. No sign-in, no cloud, no subscription tracking — a licence is a short signed key that the app verifies offline.</p></details><details><summary>How do I pay?</summary><p>In SOL, BTC or ETH to the address shown in the app. Send the transaction id and your device code, and you get a licence key back.</p></details>
+      <details><summary>Does it work without internet?</summary><p>Yes — the app has no INTERNET permission at all. Nothing is uploaded, nothing is downloaded, and tracking, depth and rendering run on the phone.</p></details><details><summary>Which phones are supported?</summary><p>Android phones with ARCore and Android 7.0 or newer. A depth sensor (ToF) improves the numbers but is not required.</p></details><details><summary>Is it a laser replacement?</summary><p>For runs on flat walls, yes, to within a couple of centimetres. For anything technical or hidden behind a panel, check with a tape measure before cutting — the protocol states the expected error too.</p></details><details><summary>Where do my measurements live?</summary><p>In one JSON file per room, in the app&#x27;s private storage. You can copy every project and its photo into a folder of your choice and restore them on another phone.</p></details><details><summary>Do I need an account?</summary><p>No. No sign-in, no cloud, no subscription tracking — a licence is a short signed key that the app verifies offline.</p></details><details><summary>How do I pay?</summary><p>In SOL, BTC or ETH to the address shown in the app. Send the transaction id and your device code, and you get a licence key back.</p></details><details><summary>What if the phone breaks?</summary><p>Every project can be copied into a folder of your choice — a USB stick, an SD card, your own drive. Restoring on a new phone brings the photos along.</p></details><details><summary>Do I have to take out a subscription?</summary><p>No. Month, year or once — and when a subscription ends nothing is taken away: every room stays readable and exportable.</p></details>
     </div>
   </section>
 
@@ -301,5 +367,12 @@ footer a{color:var(--chalk)}
     </div>
   </div>
 </footer>
+
+<div class="sticky-cta" role="complementary">
+  <div>
+    <a class="btn btn-primary" href="https://github.com/AndrexTheDev/ConstructAR" rel="noopener">Start free</a>
+    <small>10 €/month · 7 days Pro free</small>
+  </div>
+</div>
 </body>
 </html>

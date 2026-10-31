@@ -191,7 +191,6 @@
     <string name="paywall_active_until">Valable jusqu\'au %1$s</string>
     <string name="paywall_active_forever">Valable sans limite</string>
     <string name="paywall_back">Retour</string>
-    <string name="export_pro_locked">Fonction Pro</string>
     <string name="export_pro_locked_body">GLB et PLY font partie de Pro.</string>
     <string name="export_unlock">Activer</string>
     <string name="export_watermark_note">Le PDF gratuit porte un filigrane discret.</string>

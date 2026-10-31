@@ -46,8 +46,15 @@ class EntitlementStore(
     private val mutableLicenceText = MutableStateFlow("")
     val licenceText: StateFlow<String> = mutableLicenceText.asStateFlow()
 
-    /** The code the operator sends along with the transaction id when paying. */
-    val deviceTag: String = LicenceVerifier.deviceTag(installationId())
+    /**
+     * The code the operator sends along with the transaction id when paying.
+     *
+     * Lazy on purpose: deriving it reads (or writes, on first start) the installation id in
+     * `SharedPreferences`, and the result is a pure function of that id. Computing it on first
+     * use keeps the licence constructor's ordering irrelevant, and every later caller - the
+     * paywall, activation, verification - reads the same cached value.
+     */
+    val deviceTag: String by lazy { LicenceVerifier.deviceTag(installationId()) }
 
     init {
         refresh()

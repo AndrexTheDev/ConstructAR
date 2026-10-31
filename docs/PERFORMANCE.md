@@ -90,7 +90,43 @@ Consequences that are enforced in code:
 
 ---
 
-## 4. What to re-measure on hardware
+## 4. Size and cold start
+
+The app is a measuring tool used in a basement, often on a two-year-old mid-range phone with a
+cracked screen. Two budgets follow from that: how long the APK takes to install, and how long
+it takes before the project list is on screen.
+
+### What is in the APK, and what is not
+
+| Lever | Where | Effect |
+|---|---|---|
+| R8 (`isMinifyEnabled`) + `isShrinkResources` | `app/build.gradle.kts` | Removes unused classes and resources, including the unused icons of `material-icons-extended` and the Compose preview code |
+| `androidResources.localeFilters` = en/de/es/fr/it/pl | `app/build.gradle.kts` | Drops the ~80 library translations (Material3, Compose) the app can never display; resource shrinking keeps locale folders of *used* resources, so it cannot do this alone |
+| `compose.ui.tooling.preview` moved to `debugImplementation` | `app/build.gradle.kts` | Annotation/preview artifact no longer packaged at all |
+| `packaging.resources.excludes` | `app/build.gradle.kts` | `META-INF` licences, index and `.version` files of dependency jars |
+| Six locales only, assets excluded from VCS | `res/values-*`, `.gitignore` | The 25 MB depth model is imported by the operator, not shipped |
+
+CI builds `assembleRelease` on every push and prints the size of both APKs in the job summary
+(`Measure the APKs`), so these claims are measured rather than asserted. If the number grows,
+the build log names the largest entries in the package.
+
+### Cold start
+
+* **One licence verification.** `EntitlementStore` verifies the stored licence in its
+  constructor; `ProjectViewModel.init` used to call `refreshEntitlements()` as well, running the
+  same ECDSA verification twice before the first frame. It now seeds its state from what the
+  store already computed.
+* **The device tag is lazy.** Deriving it reads (or writes) the installation id in
+  `SharedPreferences`; it is computed on first use and cached for the paywall, activation and
+  verification paths.
+* **No I/O on the main thread.** Project listing, photo decode, backup, export and every save run
+  on `Dispatchers.IO`; the UI reads a `StateFlow`.
+* **Nothing on a timer that is not needed.** The site file's clock only ticks (every 30 s) while
+  a session is running; there is no background service, no job scheduler and no alarm.
+
+---
+
+## 5. What to re-measure on hardware
 
 1. Integration time per frame on the target SoC with `depthMode = RAW_DEPTH_ONLY`
    (`ScanState.lastIntegrationMillis` is already in the HUD state).

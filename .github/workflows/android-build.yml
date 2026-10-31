@@ -205,6 +205,36 @@ jobs:
           code=$?
           bash scripts/ci_annotate.sh /tmp/step.log "full gate failed" "$code"
 
+      - name: Release build - R8, resource shrink, six locales
+        # The shipping artifact is the release APK and until this step existed nothing built it,
+        # so a shrinking configuration that nothing runs is a configuration that rots. R8 is
+        # where the size actually goes: unused Material icons, unused Compose preview code,
+        # library translations outside the six shipped locales.
+        run: |
+          set +e
+          gradle --no-daemon --stacktrace --continue assembleRelease > /tmp/step.log 2>&1
+          code=$?
+          bash scripts/ci_annotate.sh /tmp/step.log "release build failed" "$code"
+
+      - name: Measure the APKs
+        if: success()
+        run: |
+          set -euo pipefail
+          debug_apk=$(find app/build/outputs/apk/debug -name '*.apk' | head -n 1)
+          release_apk=$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)
+          {
+            echo "### APK size"
+            echo ""
+            echo "| Artifact | Size |"
+            echo "|---|---|"
+            printf '| debug | %s |\n' "$(du -h "$debug_apk" | cut -f1)"
+            printf '| release (R8 + resource shrink) | %s |\n' "$(du -h "$release_apk" | cut -f1)"
+          } | tee /tmp/sizes.md
+          cat /tmp/sizes.md >> "$GITHUB_STEP_SUMMARY"
+          echo ""
+          echo "Largest entries in the release APK:"
+          unzip -l "$release_apk" | sort -k1 -n -r | head -12
+
       - name: Verify the native library shipped for arm64
         run: |
           set -euo pipefail
@@ -279,4 +309,12 @@ jobs:
         with:
           name: constructar-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload release APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: constructar-release-apk
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
