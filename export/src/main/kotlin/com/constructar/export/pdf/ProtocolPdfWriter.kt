@@ -45,6 +45,13 @@ class ProtocolPdfWriter(
         val generatedAtLabel: String = "",
         val appVersion: String = "1.0",
         val operatorName: String = "",
+        /**
+         * Text stamped diagonally across every page, or blank for a licensed build.
+         *
+         * Localised by the caller (the app owns the resources), never by this writer: the
+         * export module has no Android string table by design, so it stays testable on the JVM.
+         */
+        val watermark: String = "",
     )
 
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -138,7 +145,7 @@ class ProtocolPdfWriter(
                 y = drawTableHeader(page.canvas, header, columns, y)
                 for (route in content.project.routes) {
                     if (y > pageHeight - FOOTER_HEIGHT - 40) {
-                        drawFooter(page.canvas, pageNumber, content.appVersion)
+                        drawFooter(page.canvas, pageNumber, content.appVersion, content.watermark)
                         document.finishPage(page)
                         pageNumber++
                         page = newPage(document, pageNumber)
@@ -152,7 +159,7 @@ class ProtocolPdfWriter(
             // ── Procurement table ───────────────────────────────────────────────────────
             if (!content.materialList.isEmpty) {
                 if (y > pageHeight - FOOTER_HEIGHT - 120) {
-                    drawFooter(page.canvas, pageNumber, content.appVersion)
+                    drawFooter(page.canvas, pageNumber, content.appVersion, content.watermark)
                     document.finishPage(page)
                     pageNumber++
                     page = newPage(document, pageNumber)
@@ -163,7 +170,7 @@ class ProtocolPdfWriter(
                 y = drawTableHeader(page.canvas, listOf("Material", "Type", "Net (m)", "Waste", "Order (m)"), columns, y)
                 for (line in content.materialList.lines) {
                     if (y > pageHeight - FOOTER_HEIGHT - 30) {
-                        drawFooter(page.canvas, pageNumber, content.appVersion)
+                        drawFooter(page.canvas, pageNumber, content.appVersion, content.watermark)
                         document.finishPage(page)
                         pageNumber++
                         page = newPage(document, pageNumber)
@@ -192,7 +199,7 @@ class ProtocolPdfWriter(
                 )
             }
 
-            drawFooter(page.canvas, pageNumber, content.appVersion)
+            drawFooter(page.canvas, pageNumber, content.appVersion, content.watermark)
             document.finishPage(page)
             document.writeTo(output)
         } finally {
@@ -256,7 +263,28 @@ class ProtocolPdfWriter(
         }
     }
 
-    private fun drawFooter(canvas: Canvas, pageNumber: Int, appVersion: String) {
+    /**
+     * The free-build stamp: one line of grey text rotated across the middle of the page.
+     *
+     * Drawn as part of the footer so it lands on *every* page including ones created by a
+     * table overflow - a watermark that misses page 4 is worse than none.
+     */
+    private fun drawWatermark(canvas: Canvas, text: String) {
+        if (text.isBlank()) return
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(56, 0, 0, 0)
+            textSize = 30f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.save()
+        canvas.rotate(-32f, pageWidth / 2f, pageHeight / 2f)
+        canvas.drawText(text, pageWidth / 2f, pageHeight / 2f, paint)
+        canvas.restore()
+    }
+
+    private fun drawFooter(canvas: Canvas, pageNumber: Int, appVersion: String, watermark: String = "") {
+        drawWatermark(canvas, watermark)
         val y = pageHeight - FOOTER_HEIGHT
         canvas.drawLine(MARGIN.toFloat(), y.toFloat(), (pageWidth - MARGIN).toFloat(), y.toFloat(), rulePaint)
         val footer = Paint(textPaint).apply { textSize = 8f; color = Color.GRAY }

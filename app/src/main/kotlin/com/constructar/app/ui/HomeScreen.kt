@@ -6,6 +6,7 @@
 
 package com.constructar.app.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,9 +22,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Cable
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -42,93 +46,142 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.constructar.app.R
 import com.constructar.app.data.ProjectRepository
+import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
+import com.constructar.core.licence.Entitlements
 import com.constructar.core.units.LengthFormatter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Project list. One tap opens a room; the whole screen is one-handed reachable. */
+/**
+ * The home screen: one job — get the operator back to work in one tap.
+ *
+ * The order of the screen is the order of the day: *what I was doing* first (the newest room,
+ * with a single "continue" button), then everything else, then the one action that starts
+ * something new. A crew that has just walked into a basement should not have to read a menu.
+ */
 @Composable
 fun HomeScreen(
     projects: List<ProjectRepository.ProjectSummary>,
     loading: Boolean,
+    entitlements: Entitlements,
+    trialDaysLeft: Long,
     onOpen: (String) -> Unit,
     onExport: (String) -> Unit,
     onCreate: (String) -> Unit,
+    onUpgrade: () -> Unit,
+    onHelp: () -> Unit,
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
+    val canCreate = entitlements.allowsAnotherProject(projects.size)
+    val mostRecent = projects.firstOrNull()
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(stringResource(R.string.home_title), style = MaterialTheme.typography.headlineMedium)
-                Text(
-                    stringResource(R.string.home_subtitle),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Icon(Icons.Default.Cable, contentDescription = null, tint = SiteColors.cable)
-        }
-
-        if (loading) {
-            Spacer(Modifier.height(24.dp))
-        } else if (projects.isEmpty()) {
-            Text(
-                text = stringResource(R.string.home_empty),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
-        }
+        Header(
+            entitlements = entitlements,
+            trialDaysLeft = trialDaysLeft,
+            onUpgrade = onUpgrade,
+            onHelp = onHelp,
+        )
 
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(projects, key = { it.id }) { project ->
-                ProjectCard(
-                    project = project,
-                    onClick = { onOpen(project.id) },
-                    onExport = { onExport(project.id) },
-                )
+            if (loading) {
+                item { Spacer(Modifier.height(24.dp)) }
+            } else if (mostRecent != null) {
+                item {
+                    ContinueCard(
+                        project = mostRecent,
+                        onContinue = { onOpen(mostRecent.id) },
+                        onExport = { onExport(mostRecent.id) },
+                    )
+                }
+                item {
+                    Text(
+                        text = stringResource(R.string.home_all_projects),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp, start = 4.dp),
+                    )
+                }
+                items(projects, key = { it.id }) { project ->
+                    ProjectRow(project = project, onClick = { onOpen(project.id) })
+                }
+            } else {
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(stringResource(R.string.home_empty), style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                stringResource(R.string.home_subtitle),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (!canCreate) {
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Jamaica.SurfaceHigh),
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onUpgrade),
+                    ) {
+                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Star, contentDescription = null, tint = SiteColors.gold)
+                                Text(
+                                    stringResource(R.string.home_limit_title),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.padding(start = 8.dp),
+                                )
+                            }
+                            Text(
+                                stringResource(R.string.home_limit_body),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
             }
         }
 
         GloveButton(
-            label = stringResource(R.string.home_new_project),
-            icon = Icons.Default.Add,
-            onClick = { showCreateDialog = true },
+            label = stringResource(if (canCreate) R.string.home_new_project else R.string.home_upgrade),
+            icon = if (canCreate) Icons.Default.Add else Icons.Default.Star,
+            onClick = { if (canCreate) showCreateDialog = true else onUpgrade() },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
         )
 
         Text(
             text = stringResource(R.string.home_offline_note),
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 20.dp),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                .padding(bottom = 14.dp),
+            textAlign = TextAlign.Center,
         )
     }
 
@@ -162,70 +215,166 @@ fun HomeScreen(
 }
 
 @Composable
-private fun ProjectCard(
-    project: ProjectRepository.ProjectSummary,
-    onClick: () -> Unit,
-    onExport: () -> Unit,
+private fun Header(
+    entitlements: Entitlements,
+    trialDaysLeft: Long,
+    onUpgrade: () -> Unit,
+    onHelp: () -> Unit,
 ) {
-    val formatter = remember {
-        SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
-    }
-    // Resolved at composition: `pluralStringResource` is @Composable and must not be called
-    // from inside `buildString`.
-    val runsText = pluralStringResource(R.plurals.home_runs, project.routeCount, project.routeCount)
-    Card(
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .padding(start = 20.dp, end = 8.dp, top = 14.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.home_title), style = MaterialTheme.typography.headlineMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PlanChip(entitlements = entitlements, trialDaysLeft = trialDaysLeft, onClick = onUpgrade)
                 Text(
-                    text = project.name,
-                    style = MaterialTheme.typography.titleLarge,
+                    text = stringResource(R.string.home_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 8.dp),
                 )
-                Text(
-                    text = buildString {
-                        append(runsText)
-                        append(" · ")
-                        append(LengthFormatter.format(project.totalLengthMeters))
-                        append(" · ")
-                        append(formatter.format(Date(project.updatedAtEpochMs)))
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (project.siteName.isNotBlank()) {
-                    Text(
-                        text = project.siteName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
             }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = LengthFormatter.format(project.totalLengthMeters),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = SiteColors.cable,
+        }
+        IconButton(onClick = onHelp, modifier = Modifier.size(56.dp)) {
+            Icon(
+                Icons.Default.HelpOutline,
+                contentDescription = stringResource(R.string.home_help),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** The plan, as a chip the operator can tap to see what Pro would add. */
+@Composable
+fun PlanChip(entitlements: Entitlements, trialDaysLeft: Long, onClick: () -> Unit) {
+    val (label, tint) = when {
+        entitlements.isTrial -> stringResource(R.string.plan_trial_days, trialDaysLeft) to SiteColors.accent
+        entitlements.isPro -> stringResource(R.string.plan_pro) to SiteColors.accent
+        else -> stringResource(R.string.plan_free) to MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        if (entitlements.isPro) {
+            Icon(
+                Icons.Default.Star,
+                contentDescription = null,
+                tint = SiteColors.gold,
+                modifier = Modifier.size(14.dp),
+            )
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = tint,
+            modifier = Modifier.padding(start = if (entitlements.isPro) 4.dp else 0.dp),
+        )
+    }
+}
+
+@Composable
+private fun ContinueCard(
+    project: ProjectRepository.ProjectSummary,
+    onContinue: () -> Unit,
+    onExport: () -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Jamaica.SurfaceHigh),
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                stringResource(R.string.home_continue),
+                style = MaterialTheme.typography.labelMedium,
+                color = SiteColors.accent,
+            )
+            Text(
+                project.name,
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            ProjectMetaLine(project)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                GloveButton(
+                    label = stringResource(R.string.project_measure),
+                    icon = Icons.Default.PlayArrow,
+                    onClick = onContinue,
+                    modifier = Modifier.weight(1f),
                 )
-                IconButton(onClick = onExport, modifier = Modifier.size(48.dp)) {
+                IconButton(onClick = onExport, modifier = Modifier.size(72.dp)) {
                     Icon(
                         Icons.Default.Share,
                         contentDescription = stringResource(R.string.home_export),
-                        tint = SiteColors.cable,
+                        tint = SiteColors.accent,
                     )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun ProjectRow(project: ProjectRepository.ProjectSummary, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Default.Cable, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+            Text(
+                project.name,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            ProjectMetaLine(project)
+        }
+        Text(
+            LengthFormatter.format(project.totalLengthMeters),
+            style = MaterialTheme.typography.titleMedium,
+            color = SiteColors.gold,
+        )
+    }
+}
+
+@Composable
+private fun ProjectMetaLine(project: ProjectRepository.ProjectSummary) {
+    val formatter = remember { SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()) }
+    // Resolved at composition: `pluralStringResource` is @Composable and must not be called
+    // from inside `buildString`.
+    val runsText = pluralStringResource(R.plurals.home_runs, project.routeCount, project.routeCount)
+    Text(
+        text = buildString {
+            append(runsText)
+            append(" · ")
+            append(LengthFormatter.format(project.totalLengthMeters))
+            append(" · ")
+            append(formatter.format(Date(project.updatedAtEpochMs)))
+            if (project.siteName.isNotBlank()) {
+                append(" · ")
+                append(project.siteName)
+            }
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }

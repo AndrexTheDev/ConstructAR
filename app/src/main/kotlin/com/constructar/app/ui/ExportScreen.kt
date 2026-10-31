@@ -9,6 +9,7 @@ package com.constructar.app.ui
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -41,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.constructar.app.BuildConfig
 import com.constructar.app.R
+import com.constructar.app.ui.theme.SiteColors
+import com.constructar.core.licence.Entitlements
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.units.LengthFormatter
@@ -63,7 +67,10 @@ fun ExportScreen(
     materialList: MaterialList?,
     appVersion: String,
     operatorName: String,
+    entitlements: Entitlements,
+    watermark: String,
     onBack: () -> Unit,
+    onUpgrade: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -71,8 +78,10 @@ fun ExportScreen(
 
     var includePdf by remember { mutableStateOf(true) }
     var includeCsv by remember { mutableStateOf(true) }
-    var includeGlb by remember { mutableStateOf(true) }
-    var includePly by remember { mutableStateOf(false) }
+    // A free build cannot write the BIM formats, so the switches start off rather than promise
+    // a file that the licence check would refuse to produce.
+    var includeGlb by remember(entitlements.isPro) { mutableStateOf(entitlements.canExportMesh) }
+    var includePly by remember(entitlements.isPro) { mutableStateOf(false) }
     var status by remember { mutableStateOf<ExportStatus?>(null) }
     var busy by remember { mutableStateOf(false) }
 
@@ -105,6 +114,7 @@ fun ExportScreen(
                             includeCsv = includeCsv,
                             includeGlb = includeGlb,
                             includePly = includePly,
+                            watermark = if (entitlements.pdfWatermark) watermark else "",
                         ),
                     )
                     var written = 0
@@ -204,16 +214,32 @@ fun ExportScreen(
             description = stringResource(R.string.export_csv_desc),
             checked = includeCsv,
         ) { includeCsv = it }
-        FormatRow(
-            label = stringResource(R.string.export_glb),
-            description = stringResource(R.string.export_glb_desc),
-            checked = includeGlb,
-        ) { includeGlb = it }
-        FormatRow(
-            label = stringResource(R.string.export_ply),
-            description = stringResource(R.string.export_ply_desc),
-            checked = includePly,
-        ) { includePly = it }
+        if (entitlements.canExportMesh) {
+            FormatRow(
+                label = stringResource(R.string.export_glb),
+                description = stringResource(R.string.export_glb_desc),
+                checked = includeGlb,
+            ) { includeGlb = it }
+            FormatRow(
+                label = stringResource(R.string.export_ply),
+                description = stringResource(R.string.export_ply_desc),
+                checked = includePly,
+            ) { includePly = it }
+        } else {
+            LockedRow(
+                label = stringResource(R.string.export_glb),
+                description = stringResource(R.string.export_pro_locked_body),
+                onUpgrade = onUpgrade,
+            )
+        }
+
+        if (entitlements.pdfWatermark) {
+            Text(
+                stringResource(R.string.export_watermark_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         GloveButton(
             label = stringResource(if (busy) R.string.export_saving else R.string.export_choose_folder),
@@ -248,6 +274,38 @@ fun ExportScreen(
             stringResource(R.string.export_offline_note),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * A paid feature, shown rather than hidden.
+ *
+ * Hiding the BIM formats would leave the operator wondering whether the app can do it at all;
+ * showing them locked answers both questions at once and turns the limitation into one tap.
+ */
+@Composable
+private fun LockedRow(label: String, description: String, onUpgrade: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onUpgrade)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Default.Lock, contentDescription = null, tint = SiteColors.gold)
+        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(
+            stringResource(R.string.export_unlock),
+            style = MaterialTheme.typography.labelMedium,
+            color = SiteColors.accent,
         )
     }
 }

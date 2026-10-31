@@ -63,6 +63,11 @@ class ExportService(
         val includePly: Boolean = true,
         /** Include the raw scan mesh (not just the runs) in the 3D exports. */
         val includeScanGeometry: Boolean = true,
+        /**
+         * Text to stamp across every page of the protocol, already localised by the caller.
+         * Blank for a licensed build - see [ProtocolPdfWriter.Content.watermark].
+         */
+        val watermark: String = "",
     )
 
     /** Human/machine-readable file stem, e.g. `ConstructAR_Bad-Keller_20260314-1015`. */
@@ -95,6 +100,7 @@ class ExportService(
                             generatedAtLabel = timestampLabel,
                             appVersion = request.appVersion,
                             operatorName = request.operatorName,
+                            watermark = request.watermark,
                         ),
                         output,
                     )

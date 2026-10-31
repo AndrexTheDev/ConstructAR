@@ -9,9 +9,14 @@ package com.constructar.app
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.constructar.app.billing.EntitlementStore
+import com.constructar.app.billing.LicencePublicKey
 import com.constructar.app.data.ProjectRepository
+import com.constructar.app.data.UiPreferences
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.bom.MaterialListBuilder
+import com.constructar.core.licence.Entitlements
+import com.constructar.core.licence.LicenceCheck
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ProjectRecord
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,11 +25,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Application-level state: which project is open, and everything derived from it.
+ * Application-level state: which project is open, what is licensed, and everything derived
+ * from the two.
  *
  * Deliberately kept free of ARCore: the AR screen owns a controller with its own lifecycle,
  * and this view model only persists what the operator decides to keep. That separation is
- * what allows the export screen (and the project list) to work with the camera closed.
+ * what allows the project screen (and the export screen) to work with the camera closed.
  */
 /**
  * A failure the operator must see, as a *code*.
@@ -32,11 +38,19 @@ import kotlinx.coroutines.launch
  * The view model holds no Context and produces no sentences: [AppRoot] turns these into
  * `stringResource` lookups, so the snackbar is localised like the rest of the UI.
  */
-enum class UiMessage { PROJECT_OPEN_FAILED, PROJECT_SAVE_FAILED }
+enum class UiMessage {
+    PROJECT_OPEN_FAILED,
+    PROJECT_SAVE_FAILED,
+
+    /** The free plan's single room is taken. The UI answers with the paywall, never a crash. */
+    PROJECT_LIMIT_REACHED,
+}
 
 class ProjectViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = ProjectRepository(application)
+    private val entitlements = EntitlementStore(application)
+    private val preferences = UiPreferences(application)
 
     data class UiState(
         val loading: Boolean = true,
@@ -44,12 +58,24 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val openProject: ProjectRecord? = null,
         val materialList: MaterialList? = null,
         val lastError: UiMessage? = null,
+        val entitlements: Entitlements = Entitlements.FREE,
+        val deviceTag: String = "",
+        val trialUsed: Boolean = false,
+        val trialDaysLeft: Long = 0L,
+        /** True while the bundled licence key is the demo key — surfaced in a debug build only. */
+        val demoSigningKey: Boolean = false,
+        val onboardingDone: Boolean = false,
     )
 
     private val mutableState = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = mutableState.asStateFlow()
 
+    /** Exposed for the export screen, which builds its own request. */
+    val entitlementsStore: EntitlementStore get() = entitlements
+
     init {
+        refreshEntitlements()
+        mutableState.value = mutableState.value.copy(onboardingDone = preferences.onboardingDone())
         refresh()
     }
 
@@ -60,8 +86,47 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /** Re-derives licence, trial and device state. Called on resume: that is how expiry works. */
+    fun refreshEntitlements() {
+        entitlements.refresh()
+        mutableState.value = mutableState.value.copy(
+            entitlements = entitlements.entitlements.value,
+            deviceTag = entitlements.deviceTag,
+            trialUsed = entitlements.trialUsed(),
+            trialDaysLeft = entitlements.trialDaysLeft(),
+            demoSigningKey = LicencePublicKey.isDemoKey,
+        )
+    }
+
+    fun activateLicence(text: String): LicenceCheck {
+        val check = entitlements.activate(text)
+        refreshEntitlements()
+        return check
+    }
+
+    fun startTrial() {
+        entitlements.startTrial()
+        refreshEntitlements()
+    }
+
+    fun completeOnboarding() {
+        preferences.setOnboardingDone()
+        mutableState.value = mutableState.value.copy(onboardingDone = true)
+    }
+
+    /**
+     * Creates a project unless the free plan's slot is taken.
+     *
+     * The gate lives here rather than in the button so that no future entry point (a deep link,
+     * a share intent) can create a second room without the operator seeing the paywall.
+     */
     fun createProject(name: String, siteName: String = "", onCreated: (ProjectRecord) -> Unit) {
         viewModelScope.launch {
+            val current = mutableState.value
+            if (!current.entitlements.allowsAnotherProject(current.projects.size)) {
+                mutableState.value = current.copy(lastError = UiMessage.PROJECT_LIMIT_REACHED)
+                return@launch
+            }
             // A blank name becomes the operator's own language's word for "room", not English.
             val fallback = getApplication<Application>().getString(R.string.home_default_room_name)
             val project = repository.create(name, siteName, fallbackName = fallback)
@@ -98,6 +163,31 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun removeRoute(routeId: String, onSaved: (ProjectRecord?) -> Unit = {}) {
         val project = mutableState.value.openProject ?: return
         mutate(project.removeRoute(routeId), onSaved)
+    }
+
+    /** Renames the open project (or any project by id) without leaving the screen. */
+    fun renameProject(name: String, onSaved: (ProjectRecord?) -> Unit = {}) {
+        val project = mutableState.value.openProject ?: return
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        mutate(project.copy(name = trimmed), onSaved)
+    }
+
+    /** The note the operator leaves for the office — it travels in the JSON and the PDF. */
+    fun updateNotes(notes: String, onSaved: (ProjectRecord?) -> Unit = {}) {
+        val project = mutableState.value.openProject ?: return
+        mutate(project.copy(notes = notes.trim()), onSaved)
+    }
+
+    fun deleteProject(id: String, onDeleted: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.delete(id)
+            if (mutableState.value.openProject?.id == id) {
+                mutableState.value = mutableState.value.copy(openProject = null, materialList = null)
+            }
+            refresh()
+            onDeleted()
+        }
     }
 
     /**
