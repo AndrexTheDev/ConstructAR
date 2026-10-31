@@ -231,6 +231,9 @@ jobs:
             printf '| release (R8 + resource shrink) | %s |\n' "$(du -h "$release_apk" | cut -f1)"
           } | tee /tmp/sizes.md
           cat /tmp/sizes.md >> "$GITHUB_STEP_SUMMARY"
+          # Also as a check-run annotation: the step summary is only visible with a browser,
+          # the annotation is reachable through the API (and therefore from a script).
+          echo "::notice title=APK size::debug $(du -h "$debug_apk" | cut -f1) · release $(du -h "$release_apk" | cut -f1)"
           echo ""
           echo "Largest entries in the release APK:"
           unzip -l "$release_apk" | sort -k1 -n -r | head -12
