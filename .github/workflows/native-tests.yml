@@ -1,0 +1,43 @@
+# Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+# All rights reserved. Proprietary and confidential - see LICENSE.
+# SPDX-License-Identifier: LicenseRef-Proprietary
+
+
+name: native-tests
+
+# The C++ core (TSDF, Surface Nets, pose graph) has no Android dependency, so it is built and
+# tested with a plain compiler on every push. That keeps the geometry honest even when the
+# Gradle/NDK toolchain is unavailable in an environment.
+on:
+  push:
+    paths:
+      - "native-slam/src/main/cpp/**"
+      - ".github/workflows/native-tests.yml"
+  pull_request:
+    paths:
+      - "native-slam/src/main/cpp/**"
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [g++, clang++]
+        optimisation: [-O1, -O2]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the host test binary (${{ matrix.compiler }} ${{ matrix.optimisation }})
+        run: |
+          ${{ matrix.compiler }} -std=c++20 ${{ matrix.optimisation }} -pthread -Wall -Wextra -Werror \
+            -I native-slam/src/main/cpp \
+            native-slam/src/main/cpp/tsdf/volume.cpp \
+            native-slam/src/main/cpp/tsdf/surface_nets.cpp \
+            native-slam/src/main/cpp/slam/pose_graph.cpp \
+            native-slam/src/main/cpp/slam/rtabmap_bridge.cpp \
+            native-slam/src/main/cpp/tests/host_tests.cpp \
+            -o host_tests
+
+      - name: Run
+        run: ./host_tests

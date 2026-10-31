@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>404 — ConstructAR</title>
+<meta name="robots" content="noindex,follow">
+<meta name="theme-color" content="#0A0C07">
+<link rel="icon" href="assets/favicon.png" sizes="64x64" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<style>
+:root{
+  --ink:#0A0C07; --ink-elevated:#14180E; --surface-high:#1E2314;
+  --lime:#C8F04A; --lime-dim:#8FB22C; --gold:#FFD34D; --green:#00A651; --green-dim:#0A6B38;
+  --chalk:#F3F6EA; --ash:#B4BE9F; --wire:#3A4430; --danger:#FF6B6B;
+  --max:1080px; --radius:20px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--ink); color:var(--chalk);
+  font-family:"Inter","Segoe UI",Roboto,system-ui,-apple-system,sans-serif;
+  font-size:17px; line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+img{max-width:100%; display:block}
+a{color:var(--lime); text-decoration:none}
+a:hover{text-decoration:underline}
+h1,h2,h3{line-height:1.15; margin:0 0 .5em; letter-spacing:-.02em}
+h1{font-size:clamp(2.2rem,5.2vw,3.6rem); font-weight:800}
+h2{font-size:clamp(1.6rem,3.2vw,2.4rem); font-weight:750}
+h3{font-size:1.15rem; font-weight:700}
+p{margin:0 0 1em}
+.wrap{max-width:var(--max); margin:0 auto; padding:0 22px}
+.skip{position:absolute; left:-999px; top:0; background:var(--lime); color:#10140A; padding:12px 18px; z-index:99}
+.skip:focus{left:8px; top:8px}
+.site-header{
+  position:sticky; top:0; z-index:20; backdrop-filter:blur(14px);
+  background:rgba(10,12,7,.86); border-bottom:1px solid var(--wire);
+}
+.nav{display:flex; align-items:center; gap:18px; padding:12px 0}
+.brand{display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:-.02em; color:var(--chalk)}
+.brand img{width:36px; height:36px; border-radius:50%}
+.brand span{font-size:1.05rem}
+.nav-links{display:flex; gap:18px; margin-left:auto; font-size:.95rem}
+.nav-links a{color:var(--ash)}
+.nav-links a:hover{color:var(--chalk); text-decoration:none}
+.lang{display:flex; gap:6px; flex-wrap:wrap; font-size:.8rem; letter-spacing:.06em; text-transform:uppercase}
+.lang a{padding:4px 7px; border-radius:8px; color:var(--ash); border:1px solid transparent}
+.lang a[aria-current="true"]{color:var(--lime); border-color:var(--wire); background:var(--surface-high)}
+@media (max-width:860px){ .nav-links{display:none} }
+.hero{padding:64px 0 48px; display:grid; grid-template-columns:1.05fr .95fr; gap:48px; align-items:center}
+@media (max-width:860px){ .hero{grid-template-columns:1fr; padding:40px 0 28px} }
+.eyebrow{display:inline-flex; align-items:center; gap:8px; font-size:.78rem; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--lime); border:1px solid var(--wire); border-radius:999px;
+  padding:6px 12px; background:var(--ink-elevated); margin-bottom:20px}
+.lede{font-size:1.2rem; color:var(--ash); max-width:34em}
+.cta{display:flex; flex-wrap:wrap; gap:12px; margin:26px 0 16px}
+.btn{display:inline-flex; align-items:center; gap:10px; border-radius:16px; padding:15px 24px;
+  font-weight:700; font-size:1rem; border:1px solid transparent}
+.btn-primary{background:var(--lime); color:#10140A}
+.btn-primary:hover{background:#d5f768; text-decoration:none}
+.btn-ghost{border-color:var(--wire); color:var(--chalk)}
+.btn-ghost:hover{background:var(--surface-high); text-decoration:none}
+.note{color:var(--ash); font-size:.9rem}
+.trust{display:flex; gap:20px; flex-wrap:wrap; margin-top:24px; font-size:.9rem; color:var(--ash)}
+.trust span::before{content:"●"; color:var(--green); margin-right:7px; font-size:.7rem; vertical-align:middle}
+.section{padding:72px 0; border-top:1px solid var(--wire)}
+.section-head{max-width:44em; margin-bottom:36px}
+.section-head p{color:var(--ash)}
+.grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:18px}
+.card{background:var(--ink-elevated); border:1px solid var(--wire); border-radius:var(--radius); padding:24px}
+.card h3{color:var(--chalk)}
+.card p{color:var(--ash); margin:0; font-size:.98rem}
+.card .mark{display:inline-flex; width:38px; height:38px; border-radius:12px; background:var(--surface-high);
+  color:var(--lime); align-items:center; justify-content:center; font-weight:800; margin-bottom:14px}
+.steps{counter-reset:step; display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:18px}
+.step{position:relative; background:var(--ink-elevated); border:1px solid var(--wire);
+  border-radius:var(--radius); padding:24px 22px}
+.step::before{counter-increment:step; content:counter(step); position:absolute; top:-16px; left:22px;
+  width:34px; height:34px; border-radius:50%; background:var(--lime); color:#10140A;
+  display:flex; align-items:center; justify-content:center; font-weight:800}
+.step h3{margin-top:12px}
+.step p{color:var(--ash); margin:0; font-size:.96rem}
+table.acc{width:100%; border-collapse:collapse; background:var(--ink-elevated);
+  border:1px solid var(--wire); border-radius:var(--radius); overflow:hidden}
+table.acc th, table.acc td{padding:15px 18px; text-align:left; border-bottom:1px solid var(--wire)}
+table.acc tr:last-child td{border-bottom:0}
+table.acc th{font-size:.8rem; letter-spacing:.1em; text-transform:uppercase; color:var(--ash); font-weight:600}
+table.acc td:last-child{color:var(--lime); font-weight:700; white-space:nowrap}
+.plans{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:18px}
+.plan{background:var(--ink-elevated); border:1px solid var(--wire); border-radius:var(--radius); padding:24px}
+.plan.best{background:var(--surface-high); border-color:var(--lime-dim)}
+.plan .price{font-size:1.7rem; font-weight:800; color:var(--chalk); margin:6px 0 10px}
+.plan.best .price{color:var(--lime)}
+.plan p{color:var(--ash); margin:0; font-size:.94rem}
+.plan .tag{font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; color:var(--gold)}
+.crypto{margin-top:22px; background:var(--ink-elevated); border:1px solid var(--wire);
+  border-radius:var(--radius); padding:22px}
+.crypto h3{color:var(--gold); font-size:.98rem}
+.crypto ul{list-style:none; padding:0; margin:0; display:grid; gap:10px}
+.crypto li{display:flex; gap:12px; align-items:baseline; flex-wrap:wrap}
+.crypto .sym{min-width:44px; color:var(--gold); font-weight:700; font-size:.85rem; letter-spacing:.08em}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.85rem; color:var(--ash);
+  overflow-wrap:anywhere}
+.faq details{background:var(--ink-elevated); border:1px solid var(--wire); border-radius:16px;
+  padding:16px 20px; margin-bottom:12px}
+.faq summary{cursor:pointer; font-weight:650; color:var(--chalk)}
+.faq summary::marker{color:var(--lime)}
+.faq details p{color:var(--ash); margin:12px 0 0}
+.langs{display:flex; flex-wrap:wrap; gap:10px; margin-top:14px}
+.langs span{border:1px solid var(--wire); border-radius:999px; padding:7px 14px; font-size:.9rem; color:var(--ash)}
+footer{border-top:1px solid var(--wire); padding:38px 0 54px; color:var(--ash); font-size:.9rem}
+footer a{color:var(--chalk)}
+.foot-grid{display:flex; flex-wrap:wrap; gap:24px; justify-content:space-between; align-items:flex-start}
+.foot-brand{display:flex; gap:12px; align-items:center}
+.foot-brand img{width:46px; height:46px; border-radius:50%}
+.phone{width:100%; max-width:320px; margin:0 auto; background:var(--ink); border:1px solid var(--wire);
+  border-radius:32px; padding:16px 14px; box-shadow:0 30px 70px rgba(0,0,0,.55)}
+.phone .bar{display:flex; align-items:center; gap:8px; margin-bottom:12px}
+.phone .bar img{width:26px; height:26px; border-radius:50%}
+.phone .bar b{font-size:1rem}
+.p-card{background:var(--ink-elevated); border-radius:16px; padding:14px; margin-bottom:10px}
+.p-card.high{background:var(--surface-high)}
+.p-label{font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; color:var(--lime)}
+.p-total{font-size:2rem; font-weight:800; color:var(--lime); line-height:1.1}
+.p-muted{font-size:.78rem; color:var(--ash)}
+.p-steps{display:flex; gap:6px; margin-bottom:10px}
+.p-step{flex:1; text-align:center; font-size:.66rem; padding:7px 4px; border-radius:10px;
+  background:var(--surface-high); color:var(--ash)}
+.p-step.done{background:rgba(10,107,56,.45); color:var(--lime)}
+.p-btn{background:var(--lime); color:#10140A; border-radius:14px; padding:12px; text-align:center;
+  font-weight:750; font-size:.85rem; margin-top:4px}
+.p-row{display:flex; justify-content:space-between; font-size:.8rem; padding:5px 0}
+.p-row span:last-child{color:var(--gold); font-weight:700}
+@media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto} }
+:focus-visible{outline:3px solid var(--lime); outline-offset:3px}
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px}
+.stat{background:var(--ink-elevated); border:1px solid var(--wire); border-radius:16px; padding:16px 18px}
+.stat b{display:block; font-size:1.55rem; color:var(--lime); line-height:1.15; font-weight:800}
+.stat span{font-size:.85rem; color:var(--ash)}
+.cmp td.us{color:var(--lime); font-weight:700}
+.cmp td.them{color:var(--ash)}
+.cmp td:first-child{color:var(--chalk); font-weight:600}
+.anchor{background:var(--surface-high); border:1px solid var(--lime-dim); border-radius:16px;
+  padding:18px 20px; margin:22px 0 0; color:var(--chalk); font-size:1.02rem}
+.anchor strong{color:var(--gold)}
+.sticky-cta{position:fixed; left:0; right:0; bottom:0; z-index:40; display:none; gap:10px;
+  align-items:center; background:rgba(10,12,7,.95); border-top:1px solid var(--wire);
+  padding:10px 16px; backdrop-filter:blur(12px)}
+.sticky-cta > div{flex:1}
+.sticky-cta .btn{display:flex; justify-content:center; width:100%; padding:14px 16px; font-size:.95rem}
+.sticky-cta small{display:block; color:var(--ash); font-size:.72rem; margin-top:2px}
+@media (max-width:700px){ .sticky-cta{display:block} body{padding-bottom:86px} }
+</style>
+</head>
+<body>
+<main class="wrap" style="padding:64px 22px; max-width:760px">
+  <a class="brand" href="https://andrexthedev.github.io/ConstructAR/"><img src="assets/logo.jpg" alt="ConstructAR" width="36" height="36"><span>ConstructAR</span></a>
+  <h1 style="margin-top:32px">404</h1>
+  <div class="langs" style="display:block"><p lang="en"><strong>Page not found</strong> — The link is dead, or the page has moved. <a href="" hreflang="en">English</a></p><p lang="de"><strong>Seite nicht gefunden</strong> — Der Link ist tot oder die Seite ist umgezogen. <a href="de/" hreflang="de">Deutsch</a></p><p lang="es"><strong>Página no encontrada</strong> — El enlace está roto o la página se ha movido. <a href="es/" hreflang="es">Español</a></p><p lang="fr"><strong>Page introuvable</strong> — Le lien est mort ou la page a déménagé. <a href="fr/" hreflang="fr">Français</a></p><p lang="it"><strong>Pagina non trovata</strong> — Il link non funziona o la pagina si è spostata. <a href="it/" hreflang="it">Italiano</a></p><p lang="pl"><strong>Nie znaleziono strony</strong> — Link nie działa albo strona została przeniesiona. <a href="pl/" hreflang="pl">Polski</a></p></div>
+  <p style="margin-top:28px"><a class="btn btn-primary" href="https://andrexthedev.github.io/ConstructAR/">ConstructAR</a></p>
+</main>
+</body>
+</html>

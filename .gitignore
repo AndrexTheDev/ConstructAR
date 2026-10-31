@@ -1,0 +1,30 @@
+*.iml
+.gradle/
+local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.keystore
+!debug.keystore
+.secure/
+*.so
+!src/main/jniLibs/**/*.so
+# Exported measurement artefacts never belong in VCS
+exports/
+# Bundled model binaries (license + size — see docs/SETUP.md §4)
+app/src/main/assets/models/*.tflite
+app/src/main/assets/models/*.onnx
+# RTAB-Map vendored sources are fetched, not committed
+native-slam/third_party/rtabmap/
+# Licence signing keys are generated locally and must never be committed
+# (see tools/mint_licence.py and docs/BILLING.md)
+tools/private/
+
+# Python bytecode from the tooling in tools/
+__pycache__/
+*.pyc

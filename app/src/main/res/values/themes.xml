@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+  All rights reserved. Proprietary and confidential - see LICENSE.
+  SPDX-License-Identifier: LicenseRef-Proprietary
+-->
+<resources>
+    <!-- A dark, high-contrast base: a construction site in daylight and a basement at night
+         both need the maximum contrast the screen can give. Compose still owns every colour
+         that is actually drawn (see Theme.kt); this style only sets the window background and
+         the system bars so there is no white flash before the first frame. The colour is the
+         theme's ink (#0A0C07) rather than pure black, so the first Compose frame does not look
+         like a seam - and the navigation bar stays black to match OLED edges. -->
+    <style name="Theme.ConstructAR" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/theme_ink</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

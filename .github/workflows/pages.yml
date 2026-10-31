@@ -1,0 +1,84 @@
+# Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+# All rights reserved. Proprietary and confidential - see LICENSE.
+# SPDX-License-Identifier: LicenseRef-Proprietary
+
+name: pages
+
+# The landing page in `docs/` is generated, not hand-edited: `tools/build_site.py` renders all six
+# languages from one template, so the site cannot drift from the app's wording. This workflow
+# re-renders it on every change to the generator or the translations and publishes the result to
+# GitHub Pages - the free host the page is meant for.
+#
+# One-time setup, once this branch is merged into the default branch:
+#   Settings -> Pages -> Build and deployment -> Source: "GitHub Actions"
+# (or `gh api -X POST repos/AndrexTheDev/ConstructAR/pages -F build_type=workflow`).
+# Serving from a `docs/` folder on `main` works as well; the generator writes exactly the same
+# files either way, and the build step below proves they exist before anything is published.
+#
+# Deliberately no third-party action beyond the official Pages ones, and no dependency install:
+# the generator is pure standard library.
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "docs/**"
+      - "tools/build_site.py"
+      - "tools/site_translations.py"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: Render the six-language site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render docs/ from the generator
+        run: |
+          python3 tools/build_site.py
+          test -f docs/index.html
+          test -f docs/.nojekyll
+          test -f docs/sitemap.xml
+          test -f docs/404.html
+          for lang in de es fr it pl; do
+            test -f "docs/$lang/index.html" || { echo "missing docs/$lang/index.html"; exit 1; }
+          done
+          # Every language must carry the same key set - a half-translated page is a bug.
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, "tools")
+          import build_site
+          base = set(build_site.CONTENT["en"])
+          bad = {l: base - set(c) for l, c in build_site.CONTENT.items() if base - set(c)}
+          if bad:
+              print("languages with missing keys:", bad)
+              sys.exit(1)
+          print(f"{len(build_site.CONTENT)} languages, {len(base)} keys each")
+          PY
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

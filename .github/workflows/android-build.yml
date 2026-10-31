@@ -1,0 +1,323 @@
+# Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+# All rights reserved. Proprietary and confidential - see LICENSE.
+# SPDX-License-Identifier: LicenseRef-Proprietary
+
+name: android-build
+
+# The gate the specification asks for: `assembleDebug testDebugUnitTest` across every module,
+# with the NDK targets that make `libconstructar_slam.so` real.
+#
+# This workflow exists because the app cannot be built in every environment (no JVM, no Android
+# SDK, no NDK). GitHub Actions is where the "zero errors, zero warnings" claim is actually
+# proven, so the build lives here and the numbers are reproducible by anyone with the token.
+#
+# Deliberately NO `android-actions/setup-android` and no Gradle wrapper: GitHub-hosted runners
+# already ship the SDK, and the repository does not commit wrapper scripts. Both are installed
+# explicitly so a failure happens in a step that names itself.
+#
+# The build is split into one step per module (configuration -> JVM modules -> Kotlin -> NDK ->
+# full gate) and every step turns its log tail into a check-run annotation, so a failure is
+# readable through the API even when raw job logs are not reachable.
+on:
+  # `push` only: a pull request on the same branch would re-run the identical build under
+  # `refs/pull/<n>/merge` (the concurrency group below keys on the ref, so the two runs cannot
+  # collapse), doubling both the CI minutes and the PR failure comments. Commit statuses from
+  # the push run attach to the same SHA the pull request displays.
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
+# `pull-requests: write` is used for one thing only: when the build fails, the tail of the
+# Gradle log is posted as a PR comment so the error is readable without raw job-log access.
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  GRADLE_VERSION: "9.6.0"
+  JAVA_VERSION: "21"
+  NDK_VERSION: "27.2.12479018"
+  CMAKE_VERSION: "3.22.1"
+  GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
+
+jobs:
+  static-gates:
+    name: Static gates (headers, reflection ban, i18n)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: verify_sources.py
+        run: python3 scripts/verify_sources.py --verbose
+
+  android:
+    name: assembleDebug + testDebugUnitTest
+    runs-on: ubuntu-latest
+    needs: static-gates
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Android SDK inventory (before)
+        run: |
+          set -uo pipefail
+          echo "ANDROID_HOME=${ANDROID_HOME:-<unset>}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-<unset>}"
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "SDK dir: $SDK"; ls "$SDK" || true
+          SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SM" ] || SM="$(command -v sdkmanager || true)"
+          echo "sdkmanager: ${SM:-<not found>}"
+          [ -n "${SM:-}" ] && "$SM" --version || true
+
+      - name: Install NDK, CMake and platform licenses
+        run: |
+          set -uo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SM" ] || SM="$(command -v sdkmanager)"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+
+          yes | "$SM" --licenses > /dev/null 2>&1 || true
+
+          install() {
+            echo "--- installing $1"
+            "$SM" --install "$1" || echo "WARN: could not install $1"
+          }
+          install "platform-tools"
+          install "cmake;${CMAKE_VERSION}"
+          install "ndk;${NDK_VERSION}"
+
+          # Fall back to the newest installed 27.x NDK when the exact pin is not on the runner
+          # image. The build script is patched in CI only; the repository keeps its pin.
+          if [ ! -d "$SDK/ndk/${NDK_VERSION}" ]; then
+            ALT=$(ls "$SDK/ndk" 2>/dev/null | sort -V | tail -n 1 || true)
+            echo "WARN: NDK ${NDK_VERSION} missing; newest installed is '${ALT:-none}'"
+            if [ -n "${ALT:-}" ]; then
+              sed -i "s/ndkVersion = \"[^\"]*\"/ndkVersion = \"$ALT\"/" native-slam/build.gradle.kts
+              grep -n "ndkVersion" native-slam/build.gradle.kts
+              echo "ANDROID_NDK_HOME=$SDK/ndk/$ALT" >> "$GITHUB_ENV"
+            fi
+          else
+            echo "ANDROID_NDK_HOME=$SDK/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          fi
+
+          echo "--- installed packages"; "$SM" --list_installed || true
+
+      - name: Install Gradle ${{ env.GRADLE_VERSION }}
+        run: |
+          set -euo pipefail
+          base=https://services.gradle.org/distributions
+          ok=""
+          for name in "gradle-${GRADLE_VERSION}-bin.zip" "gradle-${GRADLE_VERSION}.0-bin.zip" "gradle-8.14-bin.zip"; do
+            code=$(curl -sSL -o /tmp/gradle.zip -w '%{http_code}' "$base/$name" || true)
+            if [ "$code" = "200" ]; then echo "downloaded $base/$name"; ok="$name"; break; fi
+            echo "unavailable ($code): $base/$name"
+          done
+          if [ -z "$ok" ]; then
+            latest=$(curl -sSL https://services.gradle.org/versions/current \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')
+            echo "falling back to current Gradle $latest"
+            curl -sSL -o /tmp/gradle.zip "$base/gradle-${latest}-bin.zip"
+          fi
+          rm -rf /opt/gradle && mkdir -p /opt/gradle
+          unzip -q /tmp/gradle.zip -d /opt/gradle
+          GRADLE_BIN=$(dirname "$(find /opt/gradle -maxdepth 3 -name gradle -type f | head -n 1)")
+          echo "$GRADLE_BIN" >> "$GITHUB_PATH"
+          "$GRADLE_BIN/gradle" --version
+
+      - name: Cache Gradle downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/jdks
+          key: gradle-${{ env.GRADLE_VERSION }}-${{ hashFiles('gradle/libs.versions.toml', '**/build.gradle.kts') }}
+          restore-keys: gradle-${{ env.GRADLE_VERSION }}-
+
+      - name: Configure the build (settings, version catalog, plugins)
+        run: |
+          set +e
+          gradle --no-daemon --stacktrace help > /tmp/step.log 2>&1
+          code=$?
+          bash scripts/ci_annotate.sh /tmp/step.log "configure failed" "$code"
+
+      - name: JVM tests + Kotlin compile - :core, :export, :ar-engine, :app
+        # One invocation so that `--continue` walks past a broken module: the Kotlin
+        # compiler reports one diagnostic per task (the build-tools-API worker throws), so
+        # batching every JVM module into a single `--continue` run is what keeps a compile
+        # error in :app from costing another full CI cycle.
+        run: |
+          set +e
+          gradle --no-daemon --stacktrace --continue \
+            :core:test :export:test \
+            :ar-engine:compileDebugKotlin :ar-engine:compileDebugUnitTestKotlin \
+            :app:compileDebugKotlin :app:compileDebugUnitTestKotlin \
+            :native-slam:compileDebugKotlin :native-slam:compileDebugUnitTestKotlin \
+            > /tmp/step.log 2>&1
+          code=$?
+          bash scripts/ci_annotate.sh /tmp/step.log "JVM tests / Kotlin compile failed" "$code"
+
+      - name: Host C++ tests - TSDF, Surface Nets, pose graph (-Werror)
+        # The native half is testable without the NDK: the same translation units compile with
+        # the host compiler, so a geometry regression fails here in seconds instead of after a
+        # full cross-compile - and with the same `-O2 -Wall -Wextra -Werror` contract the NDK
+        # build enforces.
+        run: |
+          set +e
+          (
+            cd native-slam/src/main/cpp
+            g++ -std=c++20 -O2 -Wall -Wextra -Werror -I. \
+              tsdf/volume.cpp tsdf/surface_nets.cpp slam/pose_graph.cpp slam/rtabmap_bridge.cpp \
+              tests/host_tests.cpp -o /tmp/constructar_host_tests -pthread \
+              && /tmp/constructar_host_tests
+          ) > /tmp/step.log 2>&1
+          code=$?
+          bash scripts/ci_annotate.sh /tmp/step.log "host C++ tests failed" "$code"
+
+      - name: NDK library - :native-slam
+        run: |
+          set +e
+          gradle --no-daemon --stacktrace --continue :native-slam:assembleDebug > /tmp/step.log 2>&1
+          code=$?
+          bash scripts/ci_annotate.sh /tmp/step.log "NDK build failed" "$code"
+
+      - name: Full gate - assembleDebug + testDebugUnitTest (warnings are failures)
+        # `allWarningsAsErrors` is set in every module's build.gradle.kts and `-Werror` in
+        # CMakeLists.txt; `--warning-mode all` surfaces Gradle deprecations too, so a green run
+        # here means "no warnings", not "warnings we chose to ignore".
+        run: |
+          set +e
+          gradle --no-daemon --stacktrace --continue --warning-mode all assembleDebug testDebugUnitTest > /tmp/step.log 2>&1
+          code=$?
+          bash scripts/ci_annotate.sh /tmp/step.log "full gate failed" "$code"
+
+      - name: Release build - R8, resource shrink, six locales
+        # The shipping artifact is the release APK and until this step existed nothing built it,
+        # so a shrinking configuration that nothing runs is a configuration that rots. R8 is
+        # where the size actually goes: unused Material icons, unused Compose preview code,
+        # library translations outside the six shipped locales.
+        run: |
+          set +e
+          gradle --no-daemon --stacktrace --continue assembleRelease > /tmp/step.log 2>&1
+          code=$?
+          bash scripts/ci_annotate.sh /tmp/step.log "release build failed" "$code"
+
+      - name: Measure the APKs
+        if: success()
+        run: |
+          set -euo pipefail
+          debug_apk=$(find app/build/outputs/apk/debug -name '*.apk' | head -n 1)
+          release_apk=$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)
+          {
+            echo "### APK size"
+            echo ""
+            echo "| Artifact | Size |"
+            echo "|---|---|"
+            printf '| debug | %s |\n' "$(du -h "$debug_apk" | cut -f1)"
+            printf '| release (R8 + resource shrink) | %s |\n' "$(du -h "$release_apk" | cut -f1)"
+          } | tee /tmp/sizes.md
+          cat /tmp/sizes.md >> "$GITHUB_STEP_SUMMARY"
+          # Also as a check-run annotation: the step summary is only visible with a browser,
+          # the annotation is reachable through the API (and therefore from a script).
+          echo "::notice title=APK size::debug $(du -h "$debug_apk" | cut -f1) · release $(du -h "$release_apk" | cut -f1)"
+          echo ""
+          echo "Largest entries in the release APK:"
+          unzip -l "$release_apk" | sort -k1 -n -r | head -12
+
+      - name: Verify the native library shipped for arm64
+        run: |
+          set -euo pipefail
+          apk=$(find app/build/outputs/apk/debug -name '*.apk' | head -n 1)
+          echo "APK: $apk"
+          unzip -l "$apk" | grep -q "lib/arm64-v8a/libconstructar_slam.so" \
+            || { echo "libconstructar_slam.so missing from the arm64 ABI"; unzip -l "$apk" | head -40; exit 1; }
+
+      - name: Report the failure on the pull request
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          pr=$(gh pr list --head "$GITHUB_REF_NAME" --json number -q '.[0].number' 2>/dev/null || true)
+          if [ -z "${pr:-}" ]; then echo "no open PR for $GITHUB_REF_NAME"; exit 0; fi
+          LOG=/tmp/step.log
+          {
+            echo "### android-build failed"
+            echo ""
+            echo "commit \`$GITHUB_SHA\` on \`$GITHUB_REF_NAME\`"
+            echo ""
+            if [ -f "$LOG" ]; then
+              tr -d '\r' < "$LOG" > /tmp/log.txt
+              echo "#### Compiler diagnostics"
+              echo ""
+              echo "errors: $(grep -c '^e: ' /tmp/log.txt || true) (showing up to 120)"
+              echo '```'
+              grep -E '^(e|w): ' /tmp/log.txt | head -n 120 || true
+              echo '```'
+              echo ""
+              echo "#### Failed tasks, tests and messages"
+              echo ""
+              echo '```'
+              # A "FAILED" line is followed by the assertion/exception that caused it; keep a
+              # short tail after each one so a unit-test failure is readable without the log.
+              awk '/FAILED/{print; n=5; next} n>0 && NF{print; n--}' /tmp/log.txt | head -n 140
+              echo '```'
+              echo ""
+              echo "#### What went wrong"
+              echo ""
+              echo '```'
+              # Up to three failed tasks, each with its full "What went wrong" block: the
+              # 60-line cap used to hide every failure after the first.
+              awk '/^\* What went wrong:/{f=1} f{print} /^\* Try:/{f=0}' /tmp/log.txt | head -n 160
+              echo '```'
+              echo ""
+              echo "<details><summary>first 60 lines of the log</summary>"
+              echo ""
+              echo '```'
+              head -n 60 /tmp/log.txt
+              echo '```'
+              echo ""
+              echo "</details>"
+            else
+              echo "no step log captured"
+            fi
+          } > /tmp/comment.md
+          gh pr comment "$pr" --body-file /tmp/comment.md
+
+      - name: Upload unit-test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: "**/build/reports/tests/**"
+          if-no-files-found: ignore
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: constructar-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload release APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: constructar-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error

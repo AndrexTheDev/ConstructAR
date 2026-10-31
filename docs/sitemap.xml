@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com> -->
+<!-- All rights reserved. Proprietary and confidential - see LICENSE. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://andrexthedev.github.io/ConstructAR/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://andrexthedev.github.io/ConstructAR/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://andrexthedev.github.io/ConstructAR/de/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://andrexthedev.github.io/ConstructAR/es/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://andrexthedev.github.io/ConstructAR/fr/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://andrexthedev.github.io/ConstructAR/it/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://andrexthedev.github.io/ConstructAR/pl/"/>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://andrexthedev.github.io/ConstructAR/de/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://andrexthedev.github.io/ConstructAR/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://andrexthedev.github.io/ConstructAR/de/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://andrexthedev.github.io/ConstructAR/es/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://andrexthedev.github.io/ConstructAR/fr/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://andrexthedev.github.io/ConstructAR/it/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://andrexthedev.github.io/ConstructAR/pl/"/>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://andrexthedev.github.io/ConstructAR/es/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://andrexthedev.github.io/ConstructAR/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://andrexthedev.github.io/ConstructAR/de/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://andrexthedev.github.io/ConstructAR/es/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://andrexthedev.github.io/ConstructAR/fr/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://andrexthedev.github.io/ConstructAR/it/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://andrexthedev.github.io/ConstructAR/pl/"/>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://andrexthedev.github.io/ConstructAR/fr/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://andrexthedev.github.io/ConstructAR/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://andrexthedev.github.io/ConstructAR/de/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://andrexthedev.github.io/ConstructAR/es/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://andrexthedev.github.io/ConstructAR/fr/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://andrexthedev.github.io/ConstructAR/it/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://andrexthedev.github.io/ConstructAR/pl/"/>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://andrexthedev.github.io/ConstructAR/it/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://andrexthedev.github.io/ConstructAR/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://andrexthedev.github.io/ConstructAR/de/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://andrexthedev.github.io/ConstructAR/es/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://andrexthedev.github.io/ConstructAR/fr/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://andrexthedev.github.io/ConstructAR/it/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://andrexthedev.github.io/ConstructAR/pl/"/>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://andrexthedev.github.io/ConstructAR/pl/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://andrexthedev.github.io/ConstructAR/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://andrexthedev.github.io/ConstructAR/de/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://andrexthedev.github.io/ConstructAR/es/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://andrexthedev.github.io/ConstructAR/fr/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://andrexthedev.github.io/ConstructAR/it/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://andrexthedev.github.io/ConstructAR/pl/"/>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

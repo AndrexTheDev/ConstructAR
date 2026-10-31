@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ConstructAR — AR-Aufmaß offline für Elektriker und Installateure</title>
+<meta name="description" content="Raum mit dem Handy scannen, Leitungsweg zeichnen, Meter, Materialliste und unterschriebenes PDF-Protokoll erhalten. 100 % offline, sechs Sprachen, PDF/CSV/GLB.">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="author" content="AndrexTheDev">
+<meta name="theme-color" content="#0A0C07">
+<link rel="canonical" href="https://andrexthedev.github.io/ConstructAR/de/">
+<link rel="alternate" hreflang="en" href="https://andrexthedev.github.io/ConstructAR/">
+<link rel="alternate" hreflang="de" href="https://andrexthedev.github.io/ConstructAR/de/">
+<link rel="alternate" hreflang="es" href="https://andrexthedev.github.io/ConstructAR/es/">
+<link rel="alternate" hreflang="fr" href="https://andrexthedev.github.io/ConstructAR/fr/">
+<link rel="alternate" hreflang="it" href="https://andrexthedev.github.io/ConstructAR/it/">
+<link rel="alternate" hreflang="pl" href="https://andrexthedev.github.io/ConstructAR/pl/">
+<link rel="alternate" hreflang="x-default" href="https://andrexthedev.github.io/ConstructAR/">
+<link rel="icon" href="../assets/favicon.png" sizes="64x64" type="image/png">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ConstructAR">
+<meta property="og:title" content="ConstructAR — AR-Aufmaß offline für Elektriker und Installateure">
+<meta property="og:description" content="Raum mit dem Handy scannen, Leitungsweg zeichnen, Meter, Materialliste und unterschriebenes PDF-Protokoll erhalten. 100 % offline, sechs Sprachen, PDF/CSV/GLB.">
+<meta property="og:url" content="https://andrexthedev.github.io/ConstructAR/de/">
+<meta property="og:image" content="https://andrexthedev.github.io/ConstructAR/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="de_DE">
+<meta property="og:locale:alternate" content="en_GB">
+<meta property="og:locale:alternate" content="es_ES">
+<meta property="og:locale:alternate" content="fr_FR">
+<meta property="og:locale:alternate" content="it_IT">
+<meta property="og:locale:alternate" content="pl_PL">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="ConstructAR — AR-Aufmaß offline für Elektriker und Installateure">
+<meta name="twitter:description" content="Raum mit dem Handy scannen, Leitungsweg zeichnen, Meter, Materialliste und unterschriebenes PDF-Protokoll erhalten. 100 % offline, sechs Sprachen, PDF/CSV/GLB.">
+<meta name="twitter:image" content="https://andrexthedev.github.io/ConstructAR/assets/og-image.png">
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "SoftwareApplication", "name": "ConstructAR", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Android", "softwareVersion": "1.0", "inLanguage": ["en", "de", "es", "fr", "it", "pl"], "url": "https://andrexthedev.github.io/ConstructAR/de/", "image": "https://andrexthedev.github.io/ConstructAR/assets/logo.jpg", "description": "Raum mit dem Handy scannen, Leitungsweg zeichnen, Meter, Materialliste und unterschriebenes PDF-Protokoll erhalten. 100 % offline, sechs Sprachen, PDF/CSV/GLB.", "featureList": ["Raum scannen", "Wandbündig zeichnen", "Meter und Materialliste", "Ein Protokoll zum Unterschreiben", "Funktioniert ohne Netz", "Sechs Sprachen", "Die Baustellenmappe ist dabei"], "author": {"@type": "Person", "name": "AndrexTheDev", "email": "hippie.highho@gmail.com"}, "offers": [{"@type": "Offer", "name": "Kostenlos", "price": "0", "priceCurrency": "EUR"}, {"@type": "Offer", "name": "Pro monatlich", "price": "10", "priceCurrency": "EUR"}, {"@type": "Offer", "name": "Pro jährlich", "price": "100", "priceCurrency": "EUR"}, {"@type": "Offer", "name": "Lifetime", "price": "999", "priceCurrency": "EUR"}]}, {"@type": "FAQPage", "inLanguage": "de", "mainEntity": [{"@type": "Question", "name": "Funktioniert es ohne Internet?", "acceptedAnswer": {"@type": "Answer", "text": "Ja — die App hat überhaupt keine Internet-Berechtigung. Nichts wird hoch- oder heruntergeladen; Tracking, Tiefe und Rendering laufen auf dem Telefon."}}, {"@type": "Question", "name": "Welche Handys werden unterstützt?", "acceptedAnswer": {"@type": "Answer", "text": "Android-Geräte mit ARCore ab Android 7.0. Ein Tiefensensor (ToF) verbessert die Werte, ist aber nicht nötig."}}, {"@type": "Question", "name": "Ersetzt es den Laser?", "acceptedAnswer": {"@type": "Answer", "text": "Für Strecken auf ebenen Wänden ja, auf wenige Zentimeter genau. Bei kritischen Maßen oder hinter einer Verkleidung vor dem Zuschnitt mit dem Maßband prüfen — die erwartete Abweichung steht auch im Protokoll."}}, {"@type": "Question", "name": "Wo liegen meine Aufmaße?", "acceptedAnswer": {"@type": "Answer", "text": "In einer JSON-Datei pro Raum im privaten Speicher der App. Du kannst jedes Projekt samt Foto in einen Ordner deiner Wahl kopieren und auf einem anderen Telefon wiederherstellen."}}, {"@type": "Question", "name": "Brauche ich ein Konto?", "acceptedAnswer": {"@type": "Answer", "text": "Nein. Keine Anmeldung, keine Cloud, keine Abo-Überwachung — eine Lizenz ist ein kurzer signierter Schlüssel, den die App offline prüft."}}, {"@type": "Question", "name": "Wie bezahle ich?", "acceptedAnswer": {"@type": "Answer", "text": "In SOL, BTC oder ETH an die in der App angezeigte Adresse. Transaktions-ID und Gerätecode schicken, Lizenzschlüssel zurückbekommen."}}, {"@type": "Question", "name": "Was, wenn das Handy kaputtgeht?", "acceptedAnswer": {"@type": "Answer", "text": "Jedes Projekt lässt sich in einen Ordner deiner Wahl kopieren — USB-Stick, SD-Karte, eigene Festplatte. Beim Wiederherstellen auf einem neuen Telefon kommen die Fotos mit."}}, {"@type": "Question", "name": "Muss ich ein Abo abschließen?", "acceptedAnswer": {"@type": "Answer", "text": "Nein. Monat, Jahr oder einmalig — und wenn ein Abo endet, wird nichts entzogen: jeder Raum bleibt lesbar und exportierbar."}}]}]}</script>
+<style>
+:root{
+  --ink:#0A0C07; --ink-elevated:#14180E; --surface-high:#1E2314;
+  --lime:#C8F04A; --lime-dim:#8FB22C; --gold:#FFD34D; --green:#00A651; --green-dim:#0A6B38;
+  --chalk:#F3F6EA; --ash:#B4BE9F; --wire:#3A4430; --danger:#FF6B6B;
+  --max:1080px; --radius:20px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--ink); color:var(--chalk);
+  font-family:"Inter","Segoe UI",Roboto,system-ui,-apple-system,sans-serif;
+  font-size:17px; line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+img{max-width:100%; display:block}
+a{color:var(--lime); text-decoration:none}
+a:hover{text-decoration:underline}
+h1,h2,h3{line-height:1.15; margin:0 0 .5em; letter-spacing:-.02em}
+h1{font-size:clamp(2.2rem,5.2vw,3.6rem); font-weight:800}
+h2{font-size:clamp(1.6rem,3.2vw,2.4rem); font-weight:750}
+h3{font-size:1.15rem; font-weight:700}
+p{margin:0 0 1em}
+.wrap{max-width:var(--max); margin:0 auto; padding:0 22px}
+.skip{position:absolute; left:-999px; top:0; background:var(--lime); color:#10140A; padding:12px 18px; z-index:99}
+.skip:focus{left:8px; top:8px}
+.site-header{
+  position:sticky; top:0; z-index:20; backdrop-filter:blur(14px);
+  background:rgba(10,12,7,.86); border-bottom:1px solid var(--wire);
+}
+.nav{display:flex; align-items:center; gap:18px; padding:12px 0}
+.brand{display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:-.02em; color:var(--chalk)}
+.brand img{width:36px; height:36px; border-radius:50%}
+.brand span{font-size:1.05rem}
+.nav-links{display:flex; gap:18px; margin-left:auto; font-size:.95rem}
+.nav-links a{color:var(--ash)}
+.nav-links a:hover{color:var(--chalk); text-decoration:none}
+.lang{display:flex; gap:6px; flex-wrap:wrap; font-size:.8rem; letter-spacing:.06em; text-transform:uppercase}
+.lang a{padding:4px 7px; border-radius:8px; color:var(--ash); border:1px solid transparent}
+.lang a[aria-current="true"]{color:var(--lime); border-color:var(--wire); background:var(--surface-high)}
+@media (max-width:860px){ .nav-links{display:none} }
+.hero{padding:64px 0 48px; display:grid; grid-template-columns:1.05fr .95fr; gap:48px; align-items:center}
+@media (max-width:860px){ .hero{grid-template-columns:1fr; padding:40px 0 28px} }
+.eyebrow{display:inline-flex; align-items:center; gap:8px; font-size:.78rem; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--lime); border:1px solid var(--wire); border-radius:999px;
+  padding:6px 12px; background:var(--ink-elevated); margin-bottom:20px}
+.lede{font-size:1.2rem; color:var(--ash); max-width:34em}
+.cta{display:flex; flex-wrap:wrap; gap:12px; margin:26px 0 16px}
+.btn{display:inline-flex; align-items:center; gap:10px; border-radius:16px; padding:15px 24px;
+  font-weight:700; font-size:1rem; border:1px solid transparent}
+.btn-primary{background:var(--lime); color:#10140A}
+.btn-primary:hover{background:#d5f768; text-decoration:none}
+.btn-ghost{border-color:var(--wire); color:var(--chalk)}
+.btn-ghost:hover{background:var(--surface-high); text-decoration:none}
+.note{color:var(--ash); font-size:.9rem}
+.trust{display:flex; gap:20px; flex-wrap:wrap; margin-top:24px; font-size:.9rem; color:var(--ash)}
+.trust span::before{content:"●"; color:var(--green); margin-right:7px; font-size:.7rem; vertical-align:middle}
+.section{padding:72px 0; border-top:1px solid var(--wire)}
+.section-head{max-width:44em; margin-bottom:36px}
+.section-head p{color:var(--ash)}
+.grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:18px}
+.card{background:var(--ink-elevated); border:1px solid var(--wire); border-radius:var(--radius); padding:24px}
+.card h3{color:var(--chalk)}
+.card p{color:var(--ash); margin:0; font-size:.98rem}
+.card .mark{display:inline-flex; width:38px; height:38px; border-radius:12px; background:var(--surface-high);
+  color:var(--lime); align-items:center; justify-content:center; font-weight:800; margin-bottom:14px}
+.steps{counter-reset:step; display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:18px}
+.step{position:relative; background:var(--ink-elevated); border:1px solid var(--wire);
+  border-radius:var(--radius); padding:24px 22px}
+.step::before{counter-increment:step; content:counter(step); position:absolute; top:-16px; left:22px;
+  width:34px; height:34px; border-radius:50%; background:var(--lime); color:#10140A;
+  display:flex; align-items:center; justify-content:center; font-weight:800}
+.step h3{margin-top:12px}
+.step p{color:var(--ash); margin:0; font-size:.96rem}
+table.acc{width:100%; border-collapse:collapse; background:var(--ink-elevated);
+  border:1px solid var(--wire); border-radius:var(--radius); overflow:hidden}
+table.acc th, table.acc td{padding:15px 18px; text-align:left; border-bottom:1px solid var(--wire)}
+table.acc tr:last-child td{border-bottom:0}
+table.acc th{font-size:.8rem; letter-spacing:.1em; text-transform:uppercase; color:var(--ash); font-weight:600}
+table.acc td:last-child{color:var(--lime); font-weight:700; white-space:nowrap}
+.plans{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:18px}
+.plan{background:var(--ink-elevated); border:1px solid var(--wire); border-radius:var(--radius); padding:24px}
+.plan.best{background:var(--surface-high); border-color:var(--lime-dim)}
+.plan .price{font-size:1.7rem; font-weight:800; color:var(--chalk); margin:6px 0 10px}
+.plan.best .price{color:var(--lime)}
+.plan p{color:var(--ash); margin:0; font-size:.94rem}
+.plan .tag{font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; color:var(--gold)}
+.crypto{margin-top:22px; background:var(--ink-elevated); border:1px solid var(--wire);
+  border-radius:var(--radius); padding:22px}
+.crypto h3{color:var(--gold); font-size:.98rem}
+.crypto ul{list-style:none; padding:0; margin:0; display:grid; gap:10px}
+.crypto li{display:flex; gap:12px; align-items:baseline; flex-wrap:wrap}
+.crypto .sym{min-width:44px; color:var(--gold); font-weight:700; font-size:.85rem; letter-spacing:.08em}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.85rem; color:var(--ash);
+  overflow-wrap:anywhere}
+.faq details{background:var(--ink-elevated); border:1px solid var(--wire); border-radius:16px;
+  padding:16px 20px; margin-bottom:12px}
+.faq summary{cursor:pointer; font-weight:650; color:var(--chalk)}
+.faq summary::marker{color:var(--lime)}
+.faq details p{color:var(--ash); margin:12px 0 0}
+.langs{display:flex; flex-wrap:wrap; gap:10px; margin-top:14px}
+.langs span{border:1px solid var(--wire); border-radius:999px; padding:7px 14px; font-size:.9rem; color:var(--ash)}
+footer{border-top:1px solid var(--wire); padding:38px 0 54px; color:var(--ash); font-size:.9rem}
+footer a{color:var(--chalk)}
+.foot-grid{display:flex; flex-wrap:wrap; gap:24px; justify-content:space-between; align-items:flex-start}
+.foot-brand{display:flex; gap:12px; align-items:center}
+.foot-brand img{width:46px; height:46px; border-radius:50%}
+.phone{width:100%; max-width:320px; margin:0 auto; background:var(--ink); border:1px solid var(--wire);
+  border-radius:32px; padding:16px 14px; box-shadow:0 30px 70px rgba(0,0,0,.55)}
+.phone .bar{display:flex; align-items:center; gap:8px; margin-bottom:12px}
+.phone .bar img{width:26px; height:26px; border-radius:50%}
+.phone .bar b{font-size:1rem}
+.p-card{background:var(--ink-elevated); border-radius:16px; padding:14px; margin-bottom:10px}
+.p-card.high{background:var(--surface-high)}
+.p-label{font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; color:var(--lime)}
+.p-total{font-size:2rem; font-weight:800; color:var(--lime); line-height:1.1}
+.p-muted{font-size:.78rem; color:var(--ash)}
+.p-steps{display:flex; gap:6px; margin-bottom:10px}
+.p-step{flex:1; text-align:center; font-size:.66rem; padding:7px 4px; border-radius:10px;
+  background:var(--surface-high); color:var(--ash)}
+.p-step.done{background:rgba(10,107,56,.45); color:var(--lime)}
+.p-btn{background:var(--lime); color:#10140A; border-radius:14px; padding:12px; text-align:center;
+  font-weight:750; font-size:.85rem; margin-top:4px}
+.p-row{display:flex; justify-content:space-between; font-size:.8rem; padding:5px 0}
+.p-row span:last-child{color:var(--gold); font-weight:700}
+@media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto} }
+:focus-visible{outline:3px solid var(--lime); outline-offset:3px}
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px}
+.stat{background:var(--ink-elevated); border:1px solid var(--wire); border-radius:16px; padding:16px 18px}
+.stat b{display:block; font-size:1.55rem; color:var(--lime); line-height:1.15; font-weight:800}
+.stat span{font-size:.85rem; color:var(--ash)}
+.cmp td.us{color:var(--lime); font-weight:700}
+.cmp td.them{color:var(--ash)}
+.cmp td:first-child{color:var(--chalk); font-weight:600}
+.anchor{background:var(--surface-high); border:1px solid var(--lime-dim); border-radius:16px;
+  padding:18px 20px; margin:22px 0 0; color:var(--chalk); font-size:1.02rem}
+.anchor strong{color:var(--gold)}
+.sticky-cta{position:fixed; left:0; right:0; bottom:0; z-index:40; display:none; gap:10px;
+  align-items:center; background:rgba(10,12,7,.95); border-top:1px solid var(--wire);
+  padding:10px 16px; backdrop-filter:blur(12px)}
+.sticky-cta > div{flex:1}
+.sticky-cta .btn{display:flex; justify-content:center; width:100%; padding:14px 16px; font-size:.95rem}
+.sticky-cta small{display:block; color:var(--ash); font-size:.72rem; margin-top:2px}
+@media (max-width:700px){ .sticky-cta{display:block} body{padding-bottom:86px} }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Zum Inhalt springen</a>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a class="brand" href="https://andrexthedev.github.io/ConstructAR/de/"><img src="../assets/logo.jpg" alt="ConstructAR" width="36" height="36"><span>ConstructAR</span></a>
+    <nav class="nav-links" aria-label="ConstructAR">
+      <a href="#features">Funktionen</a>
+      <a href="#how">So funktioniert es</a>
+      <a href="#pricing">Preise</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://github.com/AndrexTheDev/ConstructAR" rel="noopener">GitHub</a>
+    </nav>
+    <nav class="lang" aria-label="Sprachen"><a href="" hreflang="en">en</a><a href="../de/" hreflang="de" aria-current="true">de</a><a href="../es/" hreflang="es">es</a><a href="../fr/" hreflang="fr">fr</a><a href="../it/" hreflang="it">it</a><a href="../pl/" hreflang="pl">pl</a></nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="wrap hero">
+    <div>
+      <p class="eyebrow">100 % offline · kein Konto</p>
+      <h1>Miss die Wand mit dem Handy.</h1>
+      <p class="lede">ConstructAR macht aus dem Telefon ein AR-Maßband für Kabel, Kanal, Rohr und Luftleitung: Raum scannen, Strecke antippen, Meter, Schellen und ein Protokoll bekommen, das der Kunde unterschreiben kann.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/AndrexTheDev/ConstructAR" rel="noopener">ConstructAR holen</a>
+        <a class="btn btn-ghost" href="#how">So funktioniert es</a>
+      </div>
+      <p class="note">Android · benötigt ARCore · kostenlos starten</p>
+      <p class="trust"><span>Kein Konto</span><span>Keine Cloud</span><span>Keine Internet-Berechtigung</span></p>
+      <p class="trust"><span>7 Tage gratis</span><span>Keine Abo-Falle</span><span>Lizenz offline geprüft</span></p>
+    </div>
+    <div class="phone" aria-hidden="true">
+      <div class="bar"><img src="../assets/logo.jpg" alt="" width="26" height="26"><b>Keller Nord</b></div>
+      <div class="p-steps"><div class="p-step done">✓ 1</div><div class="p-step done">✓ 2</div><div class="p-step">3</div></div>
+      <div class="p-card high">
+        <div class="p-label">Messen</div>
+        <div class="p-total">14,82 m</div>
+        <div class="p-muted">3 × LSZH 3×2,5 · 16 mm</div>
+      </div>
+      <div class="p-card">
+        <div class="p-row"><span>6,40 m</span><span>Kabel</span></div>
+        <div class="p-row"><span>5,12 m</span><span>Kabel</span></div>
+        <div class="p-row"><span>3,30 m</span><span>Kanal</span></div>
+        <div class="p-btn">Exportieren</div>
+      </div>
+      <div class="p-card"><div class="p-muted">16,30 m · 12 × Schelle · 4 × Kupplung</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="numbers" style="border-top:0; padding-top:8px">
+    <div class="wrap">
+      <div class="stats">
+        <div class="stat"><b>±2 cm</b><span>auf erkannter Wand, 1–4 m</span></div>
+        <div class="stat"><b>0 Bytes</b><span>verlassen das Telefon</span></div>
+        <div class="stat"><b>6</b><span>Sprachen, App und PDF</span></div>
+        <div class="stat"><b>3 Dateien</b><span>PDF · CSV · GLB/PLY</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="today">
+    <div class="wrap">
+      <div class="section-head"><h2>Der Feierabend bleibt, wie er war</h2><p>Nur dass Stunden, Notizen und Mängel schon getippt, mit Zeitstempel versehen und im Protokoll sind.</p></div>
+      <div class="grid">
+        <article class="card"><h3>Stunden auf dem Lieferschein</h3><p>Ein großer Knopf startet die Uhr, einer stoppt sie. Die Summe steht im PDF — kein Abend mehr mit Rekonstruieren.</p></article>
+        <article class="card"><h3>Ein Tagebuch, das nass wird</h3><p>Jede Zeile trägt einen Zeitstempel. Darüber streitet später niemand.</p></article>
+        <article class="card"><h3>Eine Mängelliste, die keiner lesen kann</h3><p>Mängel mit Ort, Schwere und Status — gedruckt in dem Dokument, das der Kunde unterschreibt.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="features">
+    <div class="wrap">
+      <div class="section-head"><h2>Alles, was die Baustelle braucht</h2><p>Gebaut für Handschuhe, Sonnenlicht und einen Keller ohne Netz.</p></div>
+      <div class="grid"><article class="card"><span class="mark">1</span><h3>Raum scannen</h3><p>Das Telefon baut beim Gehen ein 3D-Modell der Wände. Was es gesehen hat, wird gemessen.</p></article><article class="card"><span class="mark">2</span><h3>Wandbündig zeichnen</h3><p>Punkt für Punkt antippen; die Geometrie richtet sich an der Wandnormalen aus, mit Bögen an den Knicken.</p></article><article class="card"><span class="mark">3</span><h3>Meter und Materialliste</h3><p>Jeder Meter wird auf ankergebundenen Oberflächenpunkten gemessen; Schellen, Kupplungen und Bögen stammen aus derselben Strecke.</p></article><article class="card"><span class="mark">4</span><h3>Ein Protokoll zum Unterschreiben</h3><p>PDF mit Raumscan, Strecken, Bestellmengen, Baustellenfoto und Unterschriftenseite. Dazu CSV und GLB/PLY für BIM.</p></article><article class="card"><span class="mark">5</span><h3>Funktioniert ohne Netz</h3><p>Keine Cloud, kein Konto, keine Analytics. Alles rechnet auf dem Telefon — im Keller genau wie im Büro.</p></article><article class="card"><span class="mark">6</span><h3>Sechs Sprachen</h3><p>Deutsch, Englisch, Spanisch, Französisch, Italienisch und Polnisch — App und exportiertes Protokoll.</p></article><article class="card"><span class="mark">7</span><h3>Die Baustellenmappe ist dabei</h3><p>Zeiten, ein Bautagebuch mit Zeitstempel und eine Mängelliste liegen im selben Projekt — und auf demselben unterschriebenen PDF. Keine zweite App, kein Abgleich.</p></article></div>
+    </div>
+  </section>
+
+  <section class="section" id="how">
+    <div class="wrap">
+      <div class="section-head"><h2>Drei Schritte, je ein Bildschirm</h2><p>Wenn ein Vorarbeiter es nicht in zehn Sekunden versteht, ist es die falsche App.</p></div>
+      <div class="steps"><div class="step"><h3>Scannen</h3><p>Einmal durch den Raum gehen, Telefon auf Brusthöhe. Das Modell erscheint auf den Wänden.</p></div><div class="step"><h3>Messen</h3><p>Start, Ecken und Ende antippen. Die Länge läuft live mit, in Metern.</p></div><div class="step"><h3>Prüfen</h3><p>Der Projektbildschirm zeigt Strecken, Bestellmenge und was noch fehlt.</p></div><div class="step"><h3>Exportieren</h3><p>Ordner einmal wählen; PDF, CSV und (Pro) GLB/PLY landen dort.</p></div></div>
+    </div>
+  </section>
+
+  <section class="section" id="compare">
+    <div class="wrap">
+      <div class="section-head"><h2>Warum nicht einfach noch eine Cloud-App?</h2><p>Weil im Keller keine Cloud ist — und weil dein Aufmaß deine Arbeit ist.</p></div>
+      <table class="acc cmp">
+        <thead><tr><th>Kriterium</th><th>ConstructAR</th><th>Übliche Cloud-Baustellen-App</th></tr></thead>
+        <tbody>
+          <tr><td>Funktioniert ganz ohne Netz</td><td class="us">Immer</td><td class="them">Nur was synchronisiert war</td></tr>
+          <tr><td>Konto nötig</td><td class="us">Keins</td><td class="them">Pro Nutzer, pro Monat</td></tr>
+          <tr><td>Wo die Daten liegen</td><td class="us">Auf deinem Telefon</td><td class="them">Auf deren Servern</td></tr>
+          <tr><td>Monatspreis</td><td class="us">10 €</td><td class="them">16–24 € pro Nutzer</td></tr>
+          <tr><td>Einmal zahlen, behalten</td><td class="us">999 €</td><td class="them">Nicht im Angebot</td></tr>
+        </tbody>
+      </table>
+      <h3 style="margin-top:34px">Gebaut für Gewerke, die in Metern messen</h3>
+      <div class="langs"><span>Elektro · SHK · Lüftung · Trockenbau · Maler · Fliesen · TGA</span></div>
+    </div>
+  </section>
+
+  <section class="section" id="accuracy">
+    <div class="wrap">
+      <div class="section-head"><h2>Wie genau ist es?</h2><p>Klar gesagt, denn du rechnest damit ab.</p></div>
+      <table class="acc">
+        <thead><tr><th>Situation</th><th>Erwartete Abweichung</th></tr></thead>
+        <tbody>
+          <tr><td>Ebene Wand, 1–4 m, erkannte Fläche</td><td>±2 cm</td></tr>
+          <tr><td>Bereiche nur mit Tiefe</td><td>±6 cm</td></tr>
+          <tr><td>Winkel und Diagonalen</td><td>±1 %</td></tr>
+        </tbody>
+      </table>
+      <p class="note" style="margin-top:18px; max-width:52em">Strecken werden zwischen anker-verfeinerten Oberflächenpunkten gemessen, nie auf der versetzten Mittellinie. Kritische Maße trotzdem vor dem Zuschnitt mit dem Maßband prüfen — das steht auch im Protokoll.</p>
+    </div>
+  </section>
+
+  <section class="section" id="pricing">
+    <div class="wrap">
+      <div class="section-head"><h2>Kostenlos testen, ehrlich kaufen</h2><p>Nur Krypto — keine Karte, keine Store-Gebühr, kein Konto.</p></div>
+      <div class="plans">
+        <div class="plan"><h3>Kostenlos</h3><div class="price">0 €</div><p>Ein Raum, unbegrenzte Strecken, CSV und PDF mit Wasserzeichen.</p></div>
+        <div class="plan"><h3>Pro monatlich</h3><div class="price">10 € / Monat</div><p>Unbegrenzte Räume, sauberes PDF, GLB + PLY.</p></div>
+        <div class="plan best"><div class="tag">Bester Preis</div><h3>Pro jährlich</h3><div class="price">100 € / Jahr</div><p>Wie monatlich, zwei Monate gratis.</p></div>
+        <div class="plan"><h3>Lifetime</h3><div class="price">999 € einmalig</div><p>Einmal zahlen, dauerhaft nutzen.</p></div>
+      </div>
+      <p class="note" style="margin-top:20px; max-width:52em">Sieben Tage Pro sind gratis — ohne Karte, ohne Fragen. Bezahlt wird in SOL, BTC oder ETH; du bekommst einen Lizenzschlüssel, den die App offline prüft. Wenn ein Abo endet, wird nichts entzogen.</p>
+      <p class="anchor">Zehn Euro im Monat sind weniger als eine Viertelstunde Gesellenlohn — und ersetzen den Abend, an dem du drei Räume abtippst.</p>
+      <div class="crypto">
+        <h3>Zahlungsadressen</h3>
+        <ul><li><span class="sym">SOL</span><code>79KsqtJJdhKFJ9woxnYgtf3nq7HxQveafWBCtC3mxWi8</code></li><li><span class="sym">BTC</span><code>bc1qeqzrlfg3edrydk4s0hecakc82gp26n5p7hkc7f</code></li><li><span class="sym">ETH</span><code>0xBC3fab34f69bc9f6661608C3FB36dDdC313C42F7</code></li></ul>
+      </div>
+
+      <h2 style="margin-top:44px">So kaufst du — ohne Store, ohne Karte</h2>
+      <div class="steps" style="margin-top:22px">
+        <div class="step"><h3>Sieben Tage testen</h3><p>Pro freigeschaltet, ohne Karte, ohne Konto: ein Tipp auf der Paywall.</p></div>
+        <div class="step"><h3>In Krypto zahlen</h3><p>SOL, BTC oder ETH — 10 € im Monat, 100 € im Jahr oder 999 € einmalig. Die Adresse steht in der App.</p></div>
+        <div class="step"><h3>Schlüssel erhalten</h3><p>Transaktions-ID und Gerätecode schicken; die Lizenz wird offline geprüft, dauerhaft.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="languages">
+    <div class="wrap">
+      <div class="section-head"><h2>Sechs Sprachen, ein Build</h2><p>Jeder Bildschirm und das exportierte Protokoll sind übersetzt — und der Build verweigert einen Release, in dem einer Sprache ein Schlüssel fehlt.</p></div>
+      <div class="langs"><a href="" hreflang="en">English</a><a href="../de/" hreflang="de">Deutsch</a><a href="../es/" hreflang="es">Español</a><a href="../fr/" hreflang="fr">Français</a><a href="../it/" hreflang="it">Italiano</a><a href="../pl/" hreflang="pl">Polski</a></div>
+    </div>
+  </section>
+
+  <section class="section faq" id="faq">
+    <div class="wrap">
+      <div class="section-head"><h2>Fragen von der Baustelle</h2></div>
+      <details><summary>Funktioniert es ohne Internet?</summary><p>Ja — die App hat überhaupt keine Internet-Berechtigung. Nichts wird hoch- oder heruntergeladen; Tracking, Tiefe und Rendering laufen auf dem Telefon.</p></details><details><summary>Welche Handys werden unterstützt?</summary><p>Android-Geräte mit ARCore ab Android 7.0. Ein Tiefensensor (ToF) verbessert die Werte, ist aber nicht nötig.</p></details><details><summary>Ersetzt es den Laser?</summary><p>Für Strecken auf ebenen Wänden ja, auf wenige Zentimeter genau. Bei kritischen Maßen oder hinter einer Verkleidung vor dem Zuschnitt mit dem Maßband prüfen — die erwartete Abweichung steht auch im Protokoll.</p></details><details><summary>Wo liegen meine Aufmaße?</summary><p>In einer JSON-Datei pro Raum im privaten Speicher der App. Du kannst jedes Projekt samt Foto in einen Ordner deiner Wahl kopieren und auf einem anderen Telefon wiederherstellen.</p></details><details><summary>Brauche ich ein Konto?</summary><p>Nein. Keine Anmeldung, keine Cloud, keine Abo-Überwachung — eine Lizenz ist ein kurzer signierter Schlüssel, den die App offline prüft.</p></details><details><summary>Wie bezahle ich?</summary><p>In SOL, BTC oder ETH an die in der App angezeigte Adresse. Transaktions-ID und Gerätecode schicken, Lizenzschlüssel zurückbekommen.</p></details><details><summary>Was, wenn das Handy kaputtgeht?</summary><p>Jedes Projekt lässt sich in einen Ordner deiner Wahl kopieren — USB-Stick, SD-Karte, eigene Festplatte. Beim Wiederherstellen auf einem neuen Telefon kommen die Fotos mit.</p></details><details><summary>Muss ich ein Abo abschließen?</summary><p>Nein. Monat, Jahr oder einmalig — und wenn ein Abo endet, wird nichts entzogen: jeder Raum bleibt lesbar und exportierbar.</p></details>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap" style="text-align:center">
+      <h2>Bereit für den nächsten Raum?</h2>
+      <p class="lede" style="margin:0 auto 22px">Installieren, eine Wand messen, danach entscheiden.</p>
+      <a class="btn btn-primary" href="https://github.com/AndrexTheDev/ConstructAR" rel="noopener">ConstructAR holen</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot-grid">
+    <div class="foot-brand">
+      <img src="../assets/logo.jpg" alt="ConstructAR" width="46" height="46">
+      <div>
+        <strong>ConstructAR von AndrexTheDev</strong><br>
+        <a href="mailto:hippie.highho@gmail.com">hippie.highho@gmail.com</a>
+      </div>
+    </div>
+    <div>
+      <a href="https://github.com/AndrexTheDev/ConstructAR" rel="noopener">Quellcode auf GitHub</a><br>
+      <span>Alle Rechte vorbehalten. Öffentlich für CI und Review — keine Open-Source-Lizenz.</span>
+    </div>
+    <div style="max-width:22em">
+      <strong>Sprachen</strong><br>
+      English, Deutsch, Español, Français, Italiano, Polski
+    </div>
+  </div>
+</footer>
+
+<div class="sticky-cta" role="complementary">
+  <div>
+    <a class="btn btn-primary" href="https://github.com/AndrexTheDev/ConstructAR" rel="noopener">Kostenlos starten</a>
+    <small>10 €/Monat · 7 Tage Pro gratis</small>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+  All rights reserved. Proprietary and confidential - see LICENSE.
+  SPDX-License-Identifier: LicenseRef-Proprietary
+-->
+<!--
+  The only thing ConstructAR ever hands to another app is a photo it is about to take. The
+  camera app writes into our cache directory through this provider, so no storage permission is
+  needed and no file of the operator's is exposed.
+-->
+<paths>
+    <cache-path name="capture" path="capture/" />
+    <files-path name="photos" path="photos/" />
+</paths>
