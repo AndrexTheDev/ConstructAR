@@ -56,6 +56,20 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+
+            /**
+             * arm64 only — and that is most of the 65 MB this APK used to be.
+             *
+             * The package was carrying native libraries (Filament, ARCore, LiteRT, our own
+             * `libconstructar_slam.so`) for two ABIs, because the emulator needs x86_64 to run
+             * at all. Every device that can do ARCore is 64-bit ARM, and nobody installs a
+             * measuring tool in an emulator: the second ABI is a development dependency, not a
+             * shipping one. Debug builds keep every ABI, so the emulator and the CI check that
+             * looks for `lib/arm64-v8a/libconstructar_slam.so` are unaffected.
+             */
+            ndk {
+                abiFilters += listOf("arm64-v8a")
+            }
         }
         debug {
             applicationIdSuffix = ".debug"

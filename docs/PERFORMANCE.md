@@ -104,6 +104,7 @@ it takes before the project list is on screen.
 | `androidResources.localeFilters` = en/de/es/fr/it/pl | `app/build.gradle.kts` | Drops the ~80 library translations (Material3, Compose) the app can never display; resource shrinking keeps locale folders of *used* resources, so it cannot do this alone |
 | `compose.ui.tooling.preview` moved to `debugImplementation` | `app/build.gradle.kts` | Annotation/preview artifact no longer packaged at all |
 | `packaging.resources.excludes` | `app/build.gradle.kts` | `META-INF` licences, index and `.version` files of dependency jars |
+| `release { ndk.abiFilters = arm64-v8a }` | `app/build.gradle.kts` | The native libraries (Filament, ARCore, LiteRT, `libconstructar_slam.so`) were packaged for two ABIs because the emulator needs x86_64; every ARCore phone is 64-bit ARM. Debug keeps all ABIs |
 | Six locales only, assets excluded from VCS | `res/values-*`, `.gitignore` | The 25 MB depth model is imported by the operator, not shipped |
 
 CI builds `assembleRelease` on every push and prints the size of both APKs in the job summary
