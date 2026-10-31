@@ -71,10 +71,19 @@ class ProjectRepository(private val context: Context) {
     }
 
     /** Creates a project and returns it; the name is used verbatim (it is user content). */
-    suspend fun create(name: String, siteName: String = ""): ProjectRecord = withContext(Dispatchers.IO) {
+    /**
+     * @param fallbackName name to use when [name] is blank. The caller passes the *localised*
+     *   default (`home_default_room_name`); the hard-coded "Room" is only the last resort for a
+     *   caller with no resources, and exists so a project can never be stored nameless.
+     */
+    suspend fun create(
+        name: String,
+        siteName: String = "",
+        fallbackName: String = "Room",
+    ): ProjectRecord = withContext(Dispatchers.IO) {
         val project = ProjectRecord.empty(
             id = UUID.randomUUID().toString(),
-            name = name.trim().ifBlank { "Room" },
+            name = name.trim().ifBlank { fallbackName.ifBlank { "Room" } },
         ).copy(siteName = siteName.trim())
         save(project)
         project

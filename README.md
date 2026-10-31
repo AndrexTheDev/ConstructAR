@@ -181,6 +181,11 @@ Known limitations, deliberately documented rather than hidden:
 * **Reflective and transparent surfaces** (windows, mirrors, polished steel) break both depth
   and tracking. The tracking monitor catches the *symptom* (depth confidence collapse) and
   coaches the operator; it cannot fix the physics.
+* **The PDF protocol's table headers are English.** Every screen, coaching line and unit label
+  is translated into all six languages; the fixed column headings and the footer of the exported
+  PDF are not, because a document an electrician signs off should be translated by a technical
+  translator rather than guessed at. The seam for it exists (`ProtocolPdfWriter.Content` already
+  carries the operator's name and the generation timestamp from the UI).
 * **Drift.** With no loop closure, ARCore drift is ~1 % of travelled distance; the pose graph
   redistributes a closure over the whole trajectory, so a 1.4 m closure error becomes ~0.1 m of
   per-edge residual rather than a kink in the mesh.

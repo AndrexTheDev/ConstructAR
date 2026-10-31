@@ -62,7 +62,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     fun createProject(name: String, siteName: String = "", onCreated: (ProjectRecord) -> Unit) {
         viewModelScope.launch {
-            val project = repository.create(name, siteName)
+            // A blank name becomes the operator's own language's word for "room", not English.
+            val fallback = getApplication<Application>().getString(R.string.home_default_room_name)
+            val project = repository.create(name, siteName, fallbackName = fallback)
             mutableState.value = mutableState.value.copy(openProject = project, lastError = null)
             refresh()
             onCreated(project)
