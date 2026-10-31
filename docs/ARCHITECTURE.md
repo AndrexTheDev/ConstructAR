@@ -99,11 +99,17 @@ appearance-verified.
 
 **Monocular depth fusion.** Optional and strictly additive:
 `YuvFrame` copies the camera planes on the render thread (~0.2 ms), the inference worker runs
-Depth Anything V2 Small through LiteRT (NNAPI → GPU → CPU), `MetricDepthCalibrator` fits
+Depth Anything V2 Small through LiteRT on XNNPACK, `MetricDepthCalibrator` fits
 `1/z = s·d + t` to ARCore's metric samples on the *same* frame, and `AiDepthFusion` writes a
 densified millimetre frame in which confident ARCore pixels are copied verbatim and only holes
 are filled. `TsdfScanPipeline.submitFusedDepth` accepts it with an 800 ms TTL and integrates it
 with no separate confidence gate (the fusion already applied one).
+
+XNNPACK is the *only* backend, deliberately: ARCore's standalone LiteRT runtime no longer ships
+the NNAPI delegate, and the Vulkan GPU delegate cannot execute the int8 graph that the licence
+allows us to ship (Apache-2.0 Small). The estimator reads the graph's own tensor dtypes and
+quantises/dequantises accordingly, so an int8 or a float32 export both work without code
+changes.
 
 **RTAB-Map bridge.** Optional; compiled only with `-DCONSTRUCTAR_WITH_RTABMAP=ON`. Without it
 the built-in proximity proposer suggests closures (same room visited twice → graph distance

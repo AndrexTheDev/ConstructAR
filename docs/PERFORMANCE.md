@@ -63,7 +63,7 @@ consume 8–14 ms on a mid-range device.
 | Mesh extraction | worker | — | ≤ 3.3 Hz (300 ms), 10–25 ms each |
 | Mesh upload to Filament | main/worker | — | only on change, ~2 ms per 30 k triangles |
 | Measurement + HUD string | main | 0.1 ms | `PolylineMetrics.measure` on ≤ 50 nodes |
-| Monocular depth (optional) | own worker | — | 2 Hz, all copies taken on the render thread (~0.25 ms); inference time is device-dependent and **must be measured on target hardware** (expect 25–60 ms INT8 on NNAPI, 60–150 ms on CPU) |
+| Monocular depth (optional) | own worker | — | 2 Hz, all copies taken on the render thread (~0.25 ms); inference time is device-dependent and **must be measured on target hardware** (expect 40–90 ms for the int8 graph on XNNPACK with four threads) |
 
 Consequences that are enforced in code:
 

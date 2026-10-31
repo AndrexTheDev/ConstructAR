@@ -33,8 +33,13 @@
 #include <algorithm>
 
 #include <android/log.h>
+// AHardwareBuffer is API 26+. `:app` supports API 24, so the zero-copy path is compiled only
+// where the API exists and the entry point degrades to `nullptr` (the Kotlin caller falls back
+// to the direct-ByteBuffer path) below it.
+#if __ANDROID_API__ >= 26
 #include <android/hardware_buffer.h>
 #include <android/hardware_buffer_jni.h>
+#endif
 
 #include <cstring>
 #include <memory>
@@ -257,6 +262,12 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeIntegrateDepthHardwareB
   EngineContext* context = contextFrom(handle);
   if (context == nullptr || hardwareBuffer == nullptr) return nullptr;
 
+#if __ANDROID_API__ < 26
+  // Built against an API level without AHardwareBuffer: the caller retries with the
+  // direct-ByteBuffer path, which is always available.
+  LOGW("AHardwareBuffer ingestion needs API 26+ — falling back to the ByteBuffer path");
+  return nullptr;
+#else
   AHardwareBuffer* buffer = AHardwareBuffer_fromHardwareBuffer(env, hardwareBuffer);
   if (buffer == nullptr) return nullptr;
 
@@ -289,6 +300,7 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeIntegrateDepthHardwareB
 
   AHardwareBuffer_unlock(buffer, nullptr);
   return result;
+#endif  // __ANDROID_API__ >= 26
 }
 
 JNIEXPORT jobjectArray JNICALL

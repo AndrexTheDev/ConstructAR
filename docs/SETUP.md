@@ -126,7 +126,11 @@ sha256sum app/src/main/assets/models/depth_anything_v2_small_int8.tflite
 
 ### 4.3 What happens at runtime
 
-1. `MonocularDepthEstimator.create()` tries **NNAPI** → **GPU (Vulkan)** → **CPU (XNNPACK)**.
+1. `MonocularDepthEstimator.create()` builds one **CPU/XNNPACK** interpreter (4 threads). NNAPI
+   and the Vulkan GPU delegate are gone on purpose: LiteRT's standalone runtime does not ship
+   NNAPI, and the GPU delegate cannot run an int8 graph. The estimator is quantisation-aware —
+   it reads the model's input/output dtypes, so an int8 export *and* a float32 export both
+   work.
 2. Inference runs at ~2 Hz on a separate job; the camera frame is downscaled into a reusable
    bitmap (no per-frame allocation).
 3. `MetricDepthCalibrator` fits `1/z ≈ s·disparity + t` against ARCore's metric depth with IRLS
@@ -136,7 +140,7 @@ sha256sum app/src/main/assets/models/depth_anything_v2_small_int8.tflite
    filled from the calibrated network output, clamped to 0.25–8 m. The fused frame is handed to
    the TSDF pipeline (`submitFusedDepth`) and expires after 800 ms.
 
-Diagnostics: `MonocularDepthSource.backend` ("nnapi" / "gpu/vulkan" / "cpu/xnnpack"),
+Diagnostics: `MonocularDepthSource.backend` (`"cpu/xnnpack"`),
 `.lastCalibration.inlierRatio` and `.lastFillRatio` are exposed for a debug screen and for
 field reports.
 

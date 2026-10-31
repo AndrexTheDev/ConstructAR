@@ -68,12 +68,12 @@ target_compile_options(constructar_slam PRIVATE
 
 find_library(ANDROID_LIB android)
 find_library(LOG_LIB log)
-find_library(HARDWARE_BUFFER_LIB hardwarebuffer)
 
+# AHardwareBuffer lives in libandroid (there is no `libhardwarebuffer.so` in the NDK
+# sysroot), and its use is compile-time guarded to API 26+ in jni/slam_jni.cpp.
 target_link_libraries(constructar_slam
     ${LOG_LIB}
     ${ANDROID_LIB}
-    ${HARDWARE_BUFFER_LIB}
     jnigraphics
 )
 
