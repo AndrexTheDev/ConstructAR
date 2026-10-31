@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 package com.constructar.app.ui
 
 import android.content.Intent
@@ -12,7 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -30,8 +36,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
+import com.constructar.app.BuildConfig
+import com.constructar.app.R
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.units.LengthFormatter
@@ -64,7 +73,7 @@ fun ExportScreen(
     var includeCsv by remember { mutableStateOf(true) }
     var includeGlb by remember { mutableStateOf(true) }
     var includePly by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf<String?>(null) }
+    var status by remember { mutableStateOf<ExportStatus?>(null) }
     var busy by remember { mutableStateOf(false) }
 
     val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -78,11 +87,11 @@ fun ExportScreen(
                         Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
                     )
                     val root = DocumentFile.fromTreeUri(context, uri)
-                        ?: error("Folder is not accessible")
+                        ?: error(context.getString(R.string.export_folder_inaccessible))
                     val stem = exportService.fileStem(project)
                     val target = root.findFile(stem)?.takeIf { it.isDirectory }
                         ?: root.createDirectory(stem)
-                        ?: error("Cannot create the export folder")
+                        ?: error(context.getString(R.string.export_folder_inaccessible))
 
                     val artifacts = exportService.build(
                         ExportService.Request(
@@ -114,8 +123,8 @@ fun ExportScreen(
             }
             busy = false
             status = outcome.fold(
-                onSuccess = { (count, stem) -> "Saved $count files to “$stem”." },
-                onFailure = { "Export failed: ${it.message ?: it.javaClass.simpleName}" },
+                onSuccess = { (count, stem) -> ExportStatus.Saved(count = count, folder = stem) },
+                onFailure = { error -> ExportStatus.Failed(error.message ?: error.javaClass.simpleName) },
             )
         }
     }
@@ -129,10 +138,10 @@ fun ExportScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack, modifier = Modifier.padding(end = 8.dp)) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.export_back))
             }
             Column(Modifier.weight(1f)) {
-                Text("Export", style = MaterialTheme.typography.headlineSmall)
+                Text(stringResource(R.string.export_title), style = MaterialTheme.typography.headlineSmall)
                 Text(
                     project.name,
                     style = MaterialTheme.typography.bodyMedium,
@@ -146,25 +155,37 @@ fun ExportScreen(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Measurement", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.export_measurement), style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "${project.routes.size} runs · ${LengthFormatter.format(project.totalLengthMeters)} total",
+                    stringResource(
+                        R.string.export_runs_total,
+                        project.routes.size,
+                        LengthFormatter.format(project.totalLengthMeters),
+                    ),
                     style = MaterialTheme.typography.bodyLarge,
                 )
                 materialList?.let { list ->
                     Text(
-                        "Order length incl. waste: ${LengthFormatter.format(list.totalWithWasteMeters)}",
+                        stringResource(
+                            R.string.export_order_length,
+                            LengthFormatter.format(list.totalWithWasteMeters),
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
-                        "Clips ${list.totalClips} · couplings ${list.totalCouplings} · bends ${list.totalElbows}",
+                        stringResource(
+                            R.string.export_fittings,
+                            list.totalClips,
+                            list.totalCouplings,
+                            list.totalElbows,
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
                 project.scan?.let { scan ->
                     if (scan.meshTriangleCount > 0) {
                         Text(
-                            "Room scan: ${scan.meshTriangleCount / 1000} k triangles",
+                            stringResource(R.string.export_room_scan, scan.meshTriangleCount / 1000),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -173,26 +194,42 @@ fun ExportScreen(
             }
         }
 
-        FormatRow("PDF protocol (screenshot, lengths, bill of materials)", includePdf) { includePdf = it }
-        FormatRow("CSV material list (Excel-ready, semicolon separated)", includeCsv) { includeCsv = it }
-        FormatRow("GLB model for BIM (Revit / Navisworks / Blender)", includeGlb) { includeGlb = it }
-        FormatRow("PLY point cloud / mesh (CloudCompare, MeshLab)", includePly) { includePly = it }
+        FormatRow(stringResource(R.string.export_pdf_desc), includePdf) { includePdf = it }
+        FormatRow(stringResource(R.string.export_csv_desc), includeCsv) { includeCsv = it }
+        FormatRow(stringResource(R.string.export_glb_desc), includeGlb) { includeGlb = it }
+        FormatRow(stringResource(R.string.export_ply_desc), includePly) { includePly = it }
 
         GloveButton(
-            label = if (busy) "Saving…" else "Save to folder…",
+            label = stringResource(if (busy) R.string.export_saving else R.string.export_choose_folder),
             icon = Icons.Default.CreateNewFolder,
             onClick = { folderLauncher.launch(null) },
             enabled = !busy,
             modifier = Modifier.fillMaxWidth(),
         )
 
-        status?.let {
-            Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+        status?.let { current ->
+            val text = when (current) {
+                is ExportStatus.Saved -> stringResource(R.string.export_success, current.count, current.folder)
+                is ExportStatus.Failed -> stringResource(R.string.export_failed, current.detail)
+            }
+            Text(text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
         }
 
+        // Ownership line: the operator always sees whose build this is.
+        val appName = stringResource(R.string.app_name)
         Text(
-            "Files are written to the folder you pick. Nothing is uploaded; export works in " +
-                "airplane mode and in a basement.",
+            stringResource(
+                R.string.export_about,
+                appName,
+                BuildConfig.DEVELOPER_NAME,
+                BuildConfig.DEVELOPER_EMAIL,
+            ),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Text(
+            stringResource(R.string.export_offline_note),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -208,6 +245,15 @@ private fun FormatRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
         Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = onChange)
     }
+}
+
+/**
+ * Outcome of one export, kept as data so the sentence is rendered by Compose (and therefore
+ * localised) instead of being formatted inside the IO coroutine.
+ */
+private sealed interface ExportStatus {
+    data class Saved(val count: Int, val folder: String) : ExportStatus
+    data class Failed(val detail: String) : ExportStatus
 }
 
 /** Fallback when the view model has no cached list (e.g. deep link straight into Export). */

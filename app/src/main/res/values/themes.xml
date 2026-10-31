@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+  All rights reserved. Proprietary and confidential - see LICENSE.
+  SPDX-License-Identifier: LicenseRef-Proprietary
+-->
 <resources>
     <!-- A dark, high-contrast base: a construction site in daylight and a basement at night
          both need the maximum contrast the screen can give. Compose still owns every colour

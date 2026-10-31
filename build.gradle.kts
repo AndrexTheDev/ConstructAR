@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 // Root build file. Plugins are declared `apply false` here and applied per module.
 plugins {
     alias(libs.plugins.android.application) apply false
@@ -18,6 +24,24 @@ val OFFLINE_FORBIDDEN_GROUPS = setOf(
     "com.google.android.gms.measurement",
     "com.microsoft.appcenter",
 )
+
+allprojects {
+    // Ownership metadata for every module (also the `project.group` that a published AAR
+    // would carry). All rights reserved - see LICENSE.
+    group = "com.constructar"
+    version = "1.0.0"
+}
+
+/**
+ * Static gates that need no Android SDK: copyright headers, the reflection ban, hardcoded UI
+ * text, string-resource references, six-locale parity, XML well-formedness and Kotlin
+ * bracket balance. `android-build.yml` runs the same script before Gradle starts.
+ */
+tasks.register<Exec>("verifySources") {
+    group = "verification"
+    description = "Runs scripts/verify_sources.py (headers, reflection ban, i18n parity)."
+    commandLine("python3", "scripts/verify_sources.py", "--verbose")
+}
 
 subprojects {
     tasks.withType(Test::class.java).configureEach {

@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 #include "volume.hpp"
 
 #include <algorithm>

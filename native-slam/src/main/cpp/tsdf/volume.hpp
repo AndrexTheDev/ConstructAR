@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 // Sparse-block Truncated Signed Distance Field (TSDF) volume.
 //
 // Design notes (why it looks the way it does):

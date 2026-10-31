@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 package com.constructar.app
 
 import android.app.Application
@@ -20,6 +26,14 @@ import kotlinx.coroutines.launch
  * and this view model only persists what the operator decides to keep. That separation is
  * what allows the export screen (and the project list) to work with the camera closed.
  */
+/**
+ * A failure the operator must see, as a *code*.
+ *
+ * The view model holds no Context and produces no sentences: [AppRoot] turns these into
+ * `stringResource` lookups, so the snackbar is localised like the rest of the UI.
+ */
+enum class UiMessage { PROJECT_OPEN_FAILED, PROJECT_SAVE_FAILED }
+
 class ProjectViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = ProjectRepository(application)
@@ -29,7 +43,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val projects: List<ProjectRepository.ProjectSummary> = emptyList(),
         val openProject: ProjectRecord? = null,
         val materialList: MaterialList? = null,
-        val lastError: String? = null,
+        val lastError: UiMessage? = null,
     )
 
     private val mutableState = MutableStateFlow(UiState())
@@ -59,7 +73,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             val project = repository.load(id)
             if (project == null) {
-                mutableState.value = mutableState.value.copy(lastError = "Project could not be opened")
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_OPEN_FAILED)
                 onOpened(null)
                 return@launch
             }
@@ -117,7 +131,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             val saved = repository.save(updated)
             if (!saved) {
-                mutableState.value = mutableState.value.copy(lastError = "Could not save the project")
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_SAVE_FAILED)
             }
             refresh()
             onSaved(if (saved) updated else null)

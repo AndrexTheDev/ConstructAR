@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 package com.constructar.arengine.route
 
 import com.constructar.arengine.hit.HitResolution
@@ -11,7 +17,6 @@ import com.constructar.core.mesh.RouteGeometryResult
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.RouteNodeRecord
-import com.constructar.core.units.LengthFormatter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,6 +47,29 @@ interface AnchorFactory {
 }
 
 /**
+ * Non-fatal advice for the operator, as a *code*.
+ *
+ * Like [com.constructar.arengine.tracking.Guidance], the routing engine never produces
+ * user-facing sentences: the app maps these to string resources, so every warning exists in
+ * all six shipped languages.
+ */
+enum class RouteWarning {
+    NONE,
+
+    /** The new point is closer than the minimum node spacing. */
+    TOO_CLOSE,
+
+    /** The surface hit was rejected because tracking is weak. */
+    UNPINNED,
+
+    /** The swept conduit would bend tighter than the profile allows. */
+    BEND_RADIUS_TOO_TIGHT,
+    ;
+
+    val isPresent: Boolean get() = this != NONE
+}
+
+/**
  * The live routing session for one conduit run.
  *
  * Responsibilities, in order of importance:
@@ -65,17 +93,15 @@ class RouteSession(
         val spec: ConduitSpec,
         val nodes: List<RouteNodeRecord> = emptyList(),
         val closedLoop: Boolean = false,
-        /** Live Euclidean length of the committed chain, metres. */
+        /** Live Euclidean length of the committed chain, metres. Formatted by the UI. */
         val lengthMeters: Float = 0f,
-        /** `"Length: 14.82 m"` — the floating HUD string. */
-        val lengthLabel: String = "Length: 0.00 m",
         val metrics: RouteMetrics? = null,
         /** Smoothed preview geometry (null until there are ≥ 2 points). */
         val preview: RouteGeometryResult? = null,
         /** Last hit resolution, including the per-tier diagnostic trail. */
         val lastHit: HitResolution? = null,
         /** Non-fatal advice for the operator ("bend radius too tight"). */
-        val warning: String? = null,
+        val warning: RouteWarning = RouteWarning.NONE,
         val nodeCount: Int = 0,
         val canFinish: Boolean = false,
         val anchorCount: Int = 0,
@@ -120,18 +146,18 @@ class RouteSession(
         val current = mutableState.value
         val previous = current.nodes.lastOrNull()
         if (previous != null && previous.position.distanceTo(hit.point) < MIN_NODE_SPACING_METERS) {
-            mutableState.value = current.copy(warning = "Too close to the previous point — move at least 2 cm.")
+            mutableState.value = current.copy(warning = RouteWarning.TOO_CLOSE)
             return false
         }
         val anchor = anchorFactory.create(hit.point, hit.normal)
         if (anchor == null) {
-            mutableState.value = current.copy(warning = "Could not pin that point — tracking is weak. Hold still and retry.")
+            mutableState.value = current.copy(warning = RouteWarning.UNPINNED)
             return false
         }
         anchors[anchor.id] = anchor
         val node = hit.toRouteNode(id = "node-${UUID.randomUUID()}", anchorId = anchor.id)
         previewDirty = true
-        mutableState.value = recompute(current.copy(nodes = current.nodes + node, lastHit = null, warning = null))
+        mutableState.value = recompute(current.copy(nodes = current.nodes + node, lastHit = null, warning = RouteWarning.NONE))
         return true
     }
 
@@ -141,7 +167,7 @@ class RouteSession(
         val removed = current.nodes.lastOrNull() ?: return null
         removed.anchorId?.let { anchors.remove(it)?.detach() }
         previewDirty = true
-        mutableState.value = recompute(current.copy(nodes = current.nodes.dropLast(1), warning = null))
+        mutableState.value = recompute(current.copy(nodes = current.nodes.dropLast(1), warning = RouteWarning.NONE))
         return removed
     }
 
@@ -156,7 +182,7 @@ class RouteSession(
     fun startNewRun() {
         livePoint = null
         previewDirty = true
-        mutableState.value = recompute(mutableState.value.copy(nodes = emptyList(), closedLoop = false, warning = null))
+        mutableState.value = recompute(mutableState.value.copy(nodes = emptyList(), closedLoop = false, warning = RouteWarning.NONE))
     }
 
     @Synchronized
@@ -255,16 +281,14 @@ class RouteSession(
         }
 
         val warning = when {
-            state.warning != null -> state.warning
-            preview != null && !preview.bendRadiusCompliant ->
-                "Bend radius is tighter than ${state.spec.label} allows — add a corner point or use a fitting."
-            else -> null
+            state.warning.isPresent -> state.warning
+            preview != null && !preview.bendRadiusCompliant -> RouteWarning.BEND_RADIUS_TOO_TIGHT
+            else -> RouteWarning.NONE
         }
 
         return state.copy(
             nodes = state.nodes,
             lengthMeters = lengthMeters,
-            lengthLabel = LengthFormatter.formatLabel(lengthMeters),
             metrics = metrics,
             preview = preview,
             warning = warning,

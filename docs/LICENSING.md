@@ -7,7 +7,7 @@ what is used, under which licence, and the obligations that follow.
 
 | Component | Version | Licence | Obligation |
 |-----------|---------|---------|------------|
-| SceneView for Android | 4.60.0 | Apache-2.0 | Attribution in the about screen (to be added before release); no copyleft |
+| SceneView for Android | 4.63.0 | Apache-2.0 | Attribution in the about screen (to be added before release); no copyleft |
 | Filament | 1.72.1 | Apache-2.0 | Same |
 | ARCore (`com.google.ar:core`) | 1.57.0 | Google ARCore SDK licence (free, closed) | Distributed through Google Play Services for AR; no fee, no attribution requirement, but it **is** proprietary — acceptable because it ships with the platform |
 | Kotlin / AndroidX / Compose | catalog | Apache-2.0 | Attribution |
@@ -36,12 +36,52 @@ but they are not redistributed here — only the derived weights are, under the 
 If your legal team requires the dataset provenance, see the model card upstream; nothing in
 this repository redistributes dataset content.
 
-## Source licence
+## Source licence — All Rights Reserved
 
-Unless your organisation specifies otherwise, the intended licence for this repository's own
-source is **Apache-2.0** — no `LICENSE` file is committed yet because that is the owner's
-decision, not the tool's. Before a public release add:
+ConstructAR's **own** source code is **proprietary**. The repository is public for exactly one
+reason: GitHub Actions must be able to build it, and reviewers must be able to read it. Being
+visible is not a licence.
 
-1. `LICENSE` with the Apache-2.0 text (if that is the chosen licence);
-2. `NOTICE` with the attributions for SceneView, Filament and Depth Anything V2;
-3. an in-app "Licences" screen listing the components in the table above.
+`LICENSE` (repository root) is the authoritative text. In summary, and without replacing it:
+
+* no use, copying, modification, publication, distribution, sublicensing, sale, deployment,
+  hosting, or derivative work — commercial or otherwise — is permitted;
+* reverse engineering, decompiling, or extracting the source from a build is prohibited;
+* copyright headers in every source file and the ownership metadata in build outputs must not
+  be removed.
+
+The third-party components in the table above stay under **their** licences. Nothing in the
+proprietary terms above narrows an Apache-2.0 or BSD-3-Clause right that a third-party
+component grants you for that component.
+
+## Ownership and attribution
+
+| Field | Value |
+|-------|-------|
+| Copyright holder | AndrexTheDev |
+| Contact | <hippie.highho@gmail.com> |
+| Repository | <https://github.com/AndrexTheDev/ConstructAR> |
+| SPDX identifier used in headers | `LicenseRef-Proprietary` |
+| Purpose of the public repository | CI/CD and review only |
+
+Every Kotlin, C++, CMake, Gradle and XML source file carries:
+
+```
+Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+All rights reserved. Proprietary and confidential - see LICENSE.
+SPDX-License-Identifier: LicenseRef-Proprietary
+```
+
+`scripts/verify_sources.py` fails the build when a source file is missing it.
+
+## Before any public release
+
+1. Keep `LICENSE` in sync with the owner's intent (it is the only authoritative statement).
+2. Keep the in-app attribution for SceneView, Filament, ARCore and Depth Anything V2 Small —
+   Apache-2.0 requires it, regardless of this project's own licence.
+3. Do not ship Depth Anything V2 Base/Large weights; the checksum gate in
+   `MonocularDepthEstimator` refuses anything but the Small INT8 model.
+
+---
+
+© 2026 **AndrexTheDev** <hippie.highho@gmail.com> — All rights reserved. See [LICENSE](../LICENSE).

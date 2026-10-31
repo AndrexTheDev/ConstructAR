@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 package com.constructar.arengine.tracking
 
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,10 +24,45 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 enum class TrackingQuality { GOOD, LIMITED, POOR, NOT_TRACKING }
 
+/**
+ * What the operator should be told, as a *code* rather than a sentence.
+ *
+ * The engine never produces user-facing text: the app maps this enum to a string resource, so
+ * every coaching line exists in all six shipped languages (`values`, `values-de`,
+ * `values-es`, `values-fr`, `values-it`, `values-pl`). It also keeps this hot path
+ * allocation-free — an enum constant is a constant.
+ */
+enum class Guidance {
+    /** Nothing to say: tracking is good and the scene is bright enough. */
+    NONE,
+
+    /** No features yet — the operator has just lifted the phone. */
+    SEARCHING,
+
+    /** Tracking has been lost long enough to need a relocalisation. */
+    LOST,
+
+    /** ARCore degraded tracking without losing it. */
+    LIMITED,
+
+    /** ARCore reported a specific tracking failure reason (see [TrackingStatus.failureDetail]). */
+    FAILURE_REASON,
+
+    /** Device is thermally throttled; mesh updates back off, measurements do not. */
+    THERMAL,
+
+    /** Depth is too noisy here (glass, mirror, dark surface). */
+    WEAK_DEPTH,
+
+    /** Too dark to measure reliably and the torch is not on. */
+    DARK,
+}
+
 /** Everything the UI needs to coach the operator. */
 data class TrackingStatus(
     val quality: TrackingQuality = TrackingQuality.NOT_TRACKING,
-    val trackingFailureReason: String? = null,
+    /** ARCore's own failure reason name, for the log and the diagnostics sheet. */
+    val failureDetail: String? = null,
     /** Mean ARCore depth confidence in the centre third of the frame, 0..255. */
     val depthConfidence: Int = 0,
     val depthSupported: Boolean = false,
@@ -32,8 +73,8 @@ data class TrackingStatus(
     val thermallyThrottled: Boolean = false,
     /** 0..1 — share of the frame with usable depth; drives the "scan quality" gauge. */
     val scanCoverage: Float = 0f,
-    /** Human-readable, localisable coaching line. */
-    val guidance: String = "",
+    /** Localisable coaching code. */
+    val guidance: Guidance = Guidance.NONE,
     /** True when a measurement may be taken right now. */
     val canMeasure: Boolean get() = quality == TrackingQuality.GOOD || quality == TrackingQuality.LIMITED,
 ) {
@@ -49,6 +90,10 @@ data class TrackingStatus(
  *  * mean depth confidence < 40 ⇒ the sensor is looking at glass, a mirror or a dark surface;
  *  * fewer than ~40 % usable depth pixels ⇒ not enough geometry to trust a depth hit;
  *  * < 15 lux ⇒ tracking will drift within seconds and the torch is needed.
+ *
+ * Allocation: the steady state (nothing changed) allocates nothing — the incoming numbers are
+ * compared field by field against the published status and the frame returns early. Only a
+ * genuine change builds a new [TrackingStatus], and that happens a handful of times per scan.
  */
 class TrackingMonitor {
 
@@ -56,7 +101,6 @@ class TrackingMonitor {
     val status: StateFlow<TrackingStatus> = mutableStatus.asStateFlow()
 
     private var consecutiveLosses = 0
-    private var lastGuidance = ""
 
     /** Called once per frame from the AR loop (render thread; cheap and allocation-free). */
     fun onFrame(
@@ -80,9 +124,23 @@ class TrackingMonitor {
         if (quality == TrackingQuality.NOT_TRACKING) consecutiveLosses++ else consecutiveLosses = 0
 
         val guidance = guidanceFor(quality, failureReason, depthConfidence, depthSupported, ambientLux, torchOn, thermallyThrottled)
-        val next = TrackingStatus(
+        val previous = mutableStatus.value
+        // Compare first, allocate second: this runs at camera frame rate.
+        if (previous.quality == quality &&
+            previous.guidance == guidance &&
+            previous.failureDetail == failureReason &&
+            previous.depthConfidence == depthConfidence &&
+            previous.depthSupported == depthSupported &&
+            previous.ambientLux == ambientLux &&
+            previous.torchOn == torchOn &&
+            previous.thermallyThrottled == thermallyThrottled &&
+            previous.scanCoverage == scanCoverage
+        ) {
+            return
+        }
+        mutableStatus.value = TrackingStatus(
             quality = quality,
-            trackingFailureReason = failureReason,
+            failureDetail = failureReason,
             depthConfidence = depthConfidence,
             depthSupported = depthSupported,
             ambientLux = ambientLux,
@@ -91,12 +149,6 @@ class TrackingMonitor {
             scanCoverage = scanCoverage,
             guidance = guidance,
         )
-        // Only emit when something the UI shows actually changed (avoids recompositions at 30 Hz).
-        val previous = mutableStatus.value
-        if (previous != next || guidance != lastGuidance) {
-            lastGuidance = guidance
-            mutableStatus.value = next
-        }
     }
 
     /** True when tracking has been lost long enough to require a full relocalisation. */
@@ -115,22 +167,15 @@ class TrackingMonitor {
         ambientLux: Float,
         torchOn: Boolean,
         thermallyThrottled: Boolean,
-    ): String = when {
-        quality == TrackingQuality.NOT_TRACKING && consecutiveLosses > LOST_FRAMES ->
-            "Tracking lost — point the camera at a textured wall or the floor and move slowly."
-        quality == TrackingQuality.NOT_TRACKING ->
-            "Looking for features… move the phone slowly across the surface."
-        failureReason != null ->
-            "Tracking limited: $failureReason"
-        thermallyThrottled ->
-            "Device warm — mesh updates slowed to protect the battery. Measurements are unaffected."
-        depthSupported && depthConfidence in 1..CRITICAL_CONFIDENCE ->
-            "Depth signal weak here (glass, mirror or dark surface). Move closer or re-aim."
-        ambientLux > 0f && ambientLux < DARK_LUX && !torchOn ->
-            "Too dark to measure reliably — turn on the torch."
-        quality == TrackingQuality.LIMITED ->
-            "Move slower — tracking is limited."
-        else -> ""
+    ): Guidance = when {
+        quality == TrackingQuality.NOT_TRACKING && consecutiveLosses > LOST_FRAMES -> Guidance.LOST
+        quality == TrackingQuality.NOT_TRACKING -> Guidance.SEARCHING
+        failureReason != null -> Guidance.FAILURE_REASON
+        thermallyThrottled -> Guidance.THERMAL
+        depthSupported && depthConfidence in 1..CRITICAL_CONFIDENCE -> Guidance.WEAK_DEPTH
+        ambientLux > 0f && ambientLux < DARK_LUX && !torchOn -> Guidance.DARK
+        quality == TrackingQuality.LIMITED -> Guidance.LIMITED
+        else -> Guidance.NONE
     }
 
     companion object {

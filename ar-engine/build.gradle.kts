@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
@@ -29,8 +35,14 @@ android {
 
 kotlin {
     compilerOptions {
+        // Zero warnings is a product requirement: a deprecation today is a build break
+        // tomorrow, and this project cannot afford either. The escape hatch exists only for a
+        // toolchain regression (`-Pconstructar.lenientWarnings=true`) and must never be used
+        // for a release build - see docs/RELEASE_CHECKLIST.md.
+        allWarningsAsErrors.set(
+            !providers.gradleProperty("constructar.lenientWarnings").isPresent,
+        )
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-        freeCompilerArgs.addAll("-opt-in=kotlin.RequiresOptIn")
     }
 }
 

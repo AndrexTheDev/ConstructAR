@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+  All rights reserved. Proprietary and confidential - see LICENSE.
+
+  Localisation: Espanol (es).
+  Every user-facing string in ConstructAR lives here; no Compose UI text is hardcoded.
+-->
+<resources>
+
+    <!-- Identity -->
+    <string name="app_name">ConstructAR</string>
+    <string name="developer_name">AndrexTheDev</string>
+
+    <!-- Project list -->
+    <string name="home_title">Obras</string>
+    <string name="home_subtitle">Medición AR sin conexión para electricidad, fontanería y ventilación</string>
+    <string name="home_new_project">Nueva estancia</string>
+    <string name="home_room_name">Nombre de la estancia o zona</string>
+    <string name="home_create">Crear</string>
+    <string name="home_cancel">Cancelar</string>
+    <string name="home_empty">Aún no hay estancias. Cree una para empezar a medir.</string>
+    <string name="home_offline_note">Funciona totalmente sin conexión. Nada sale de este teléfono.</string>
+    <string name="home_export">Exportar</string>
+
+    <!-- AR measuring screen -->
+    <string name="scan_instruction">Mueva el teléfono despacio por paredes y suelo para escanear la estancia.</string>
+    <string name="tracking_loss">Seguimiento perdido. Apunte a una pared con textura o al suelo y muévase despacio.</string>
+    <string name="tracking_searching">Buscando referencias. Mueva el teléfono despacio sobre la superficie.</string>
+    <string name="tracking_limited">Seguimiento limitado. Muévase más despacio.</string>
+    <string name="tracking_failure_reason">Seguimiento limitado: %1$s</string>
+    <string name="tracking_thermal">Dispositivo caliente. La malla se actualiza más despacio para proteger la batería; las mediciones no se ven afectadas.</string>
+    <string name="depth_weak">Señal de profundidad débil aquí (cristal, espejo o superficie oscura). Acérquese o vuelva a apuntar.</string>
+    <string name="low_light_warning">Hay poca luz para medir con fiabilidad. Encienda la linterna.</string>
+    <string name="surface_wall">Pared</string>
+    <string name="surface_floor">Suelo</string>
+    <string name="surface_ceiling">Techo</string>
+    <string name="surface_unknown">Superficie</string>
+    <string name="routing_cable">Cable</string>
+    <string name="routing_pipe">Tubería</string>
+    <string name="routing_duct">Canal</string>
+    <string name="hud_length">%1$.2f m</string>
+    <string name="tier_plane">Plano</string>
+    <string name="tier_depth_point">Punto de profundidad</string>
+    <string name="tier_direct_depth">Rayo de profundidad</string>
+    <string name="tier_feature_point">Punto característico</string>
+    <string name="ar_add_point">Añadir punto en el centro</string>
+    <string name="ar_undo">Deshacer</string>
+    <string name="ar_close_loop">Cerrar</string>
+    <string name="ar_finish">Terminar trazado</string>
+    <string name="ar_torch">Linterna</string>
+    <string name="ar_scan">Escanear estancia</string>
+    <string name="ar_stop_scan">Detener escaneo</string>
+    <string name="ar_closed_loop">cerrado</string>
+    <string name="ar_no_surface">No se ha encontrado superficie. Apunte a una pared o al suelo.</string>
+    <string name="ar_scan_progress">Estancia %1$d %% · %2$d k triángulos</string>
+    <string name="ar_scan_unavailable">Escaneo de malla no disponible. La medición sigue funcionando.</string>
+    <string name="ar_session_failed">Fallo de la sesión AR: %1$s</string>
+    <string name="ar_camera_permission">Se necesita acceso a la cámara para medir. Solo se usa en este dispositivo.</string>
+    <string name="ar_grant_permission">Permitir cámara</string>
+    <string name="ar_unavailable_unsupported">Este dispositivo no admite ARCore. Use un teléfono o tableta compatible.</string>
+    <string name="ar_unavailable_needs_install">ARCore necesita una actualización. Instálela desde Play Store y vuelva a abrir ConstructAR.</string>
+    <string name="ar_unavailable_declined">Se rechazó la instalación de ARCore. Es necesaria para medir con la cámara.</string>
+    <string name="ar_unavailable_failure">AR no pudo iniciarse en este dispositivo. Reinicie la aplicación e inténtelo de nuevo.</string>
+    <string name="ar_offline_badge">Sin conexión</string>
+
+    <!-- Export -->
+    <string name="export_title">Exportar</string>
+    <string name="export_back">Atrás</string>
+    <string name="export_pdf">Acta PDF</string>
+    <string name="export_csv">Lista de materiales CSV</string>
+    <string name="export_glb">GLB (BIM)</string>
+    <string name="export_ply">PLY (nube de puntos)</string>
+    <string name="export_pdf_desc">Acta PDF (captura, longitudes, lista de materiales)</string>
+    <string name="export_csv_desc">Lista de materiales CSV (lista para Excel, punto y coma)</string>
+    <string name="export_glb_desc">Modelo GLB para BIM (Revit / Navisworks / Blender)</string>
+    <string name="export_ply_desc">Nube de puntos o malla PLY (CloudCompare, MeshLab)</string>
+    <string name="export_choose_folder">Guardar en carpeta…</string>
+    <string name="export_saving">Guardando…</string>
+    <string name="export_success">Se han guardado %1$d archivos en %2$s.</string>
+    <string name="export_failed">Error al exportar: %1$s</string>
+    <string name="export_measurement">Medición</string>
+    <string name="export_runs_total">%1$d trazados · %2$s en total</string>
+    <string name="export_order_length">Longitud de pedido con merma: %1$s</string>
+    <string name="export_fittings">Abrazaderas %1$d · manguitos %2$d · curvas %3$d</string>
+    <string name="export_room_scan">Escaneo de la estancia: %1$d k triángulos</string>
+    <string name="export_offline_note">Los archivos se escriben en la carpeta elegida. No se sube nada; la exportación funciona en modo avión y en un sótano.</string>
+    <string name="export_about">%1$s %2$s · %3$s</string>
+    <string name="project_none">No hay ninguna obra abierta</string>
+    <string name="home_default_room_name">Estancia</string>
+    <string name="error_project_open">No se pudo abrir la obra.</string>
+    <string name="error_project_save">No se pudo guardar la obra.</string>
+    <string name="ar_close">Cerrar</string>
+    <string name="export_folder_inaccessible">No se puede escribir en la carpeta elegida. Elija otra carpeta.</string>
+    <string name="tier_manual">Manual</string>
+    <string name="route_warning_too_close">Demasiado cerca del punto anterior. Avance al menos 2 cm.</string>
+    <string name="route_warning_unpinned">No se pudo fijar ese punto. Mantenga el pulso y reintente.</string>
+    <string name="route_warning_bend_radius">El radio de curvatura es más cerrado de lo que permite este perfil. Añada una esquina o use un accesorio.</string>
+
+    <!-- Counts -->
+    <plurals name="home_runs">
+        <item quantity="one">%1$d trazado</item>
+        <item quantity="other">%1$d trazados</item>
+    </plurals>
+    <plurals name="ar_points">
+        <item quantity="one">%1$d punto</item>
+        <item quantity="other">%1$d puntos</item>
+    </plurals>
+</resources>

@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+  All rights reserved. Proprietary and confidential - see LICENSE.
+  SPDX-License-Identifier: LicenseRef-Proprietary
+-->
 <!-- Launcher icon drawn as vectors (no binary assets in the repo):
      site-signal orange background, a white "cable run with a corner" glyph.
      Replace with a designed adaptive icon before a store release. -->

@@ -100,3 +100,7 @@ Consequences that are enforced in code:
 4. Thermal behaviour over a 15-minute scan: if `THERMAL_STATUS_SEVERE` arrives before
    ~10 minutes, drop the extraction rate first, then the integration stride.
 5. Battery: expect 8–12 %/hour with depth + torch off, 15–20 %/hour with the torch on.
+
+---
+
+© 2026 **AndrexTheDev** <hippie.highho@gmail.com> — All rights reserved. See [LICENSE](../LICENSE).

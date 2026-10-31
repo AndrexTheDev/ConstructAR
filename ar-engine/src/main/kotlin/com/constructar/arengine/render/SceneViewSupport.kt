@@ -1,89 +1,107 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 package com.constructar.arengine.render
 
 import android.util.Log
+import com.constructar.core.model.ConduitPresets
 import com.google.android.filament.MaterialInstance
+import io.github.sceneview.loaders.MaterialLoader
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Version-adaptive material creation for SceneView.
+ * Material factory for custom geometry, built on SceneView's **typed** `MaterialLoader` API.
  *
- * SceneView's `MaterialLoader` is the only supported way to obtain a `.filamat`-backed
- * [MaterialInstance] for custom geometry, but its factory-method names varied across the 2.x,
- * 3.x and 4.x lines (`createColorInstance`, `createUnlitColorInstance`, and overloads taking
- * an `io.github.sceneview.math.Color` or a packed ARGB `Int`).
+ * SceneView 4.63.0 exposes the colour factories directly:
  *
- * Rather than pinning the whole renderer to one of those signatures — which would break the
- * build on a patch bump — the lookup is done reflectively **once per colour** and cached. The
- * moment a material cannot be created, the renderer skips that mesh and the app keeps working
- * (measuring never depends on rendering). Pin a SceneView version and replace this file with
- * direct calls if you prefer the compile-time check.
+ * ```kotlin
+ * materialLoader.createColorInstance(color: Int, metallic, roughness, reflectance): MaterialInstance
+ * materialLoader.createUnlitColorInstance(color: Int): MaterialInstance
+ * ```
+ *
+ * ConstructAR calls exactly those. There is no reflective lookup, no `Class.forName`, and no
+ * `Method.invoke` anywhere in the render path: the compiler checks every colour the app can
+ * show, and a SceneView bump that changes a signature fails the build instead of silently
+ * dropping geometry.
+ *
+ * ## Lit vs unlit
+ *
+ * Routes are **lit** so a pipe picks up ARCore's ambient light estimate and reads as lying *on*
+ * a wall. The TSDF room scan is **unlit** and translucent: it is a diagnostic overlay, not a
+ * service, and it must never be mistaken for installed hardware.
+ *
+ * ## Threading / allocation
+ *
+ * `MaterialLoader.createColorInstance` is `@MainThread`, so instances are created eagerly for
+ * the whole palette (see [palette]) and then cached. Creating a material during a frame would
+ * both violate the loader's thread contract and allocate in the hot path; a cache hit is a
+ * `ConcurrentHashMap` read and nothing else.
  */
-class SceneViewMaterialProvider(private val materialLoader: Any) : ColorMaterialProvider {
+class SceneViewMaterialProvider(
+    private val materialLoader: MaterialLoader,
+) : ColorMaterialProvider {
 
-    private val cache = ConcurrentHashMap<Int, MaterialInstance?>(16)
+    private val lit = ConcurrentHashMap<Int, MaterialInstance>(8)
+    private val unlit = ConcurrentHashMap<Int, MaterialInstance>(4)
 
-    override fun create(argb: Int): MaterialInstance? = cache.getOrPut(argb) {
-        createUncached(argb)
+    init {
+        // Pre-warm on the constructing (main) thread: every colour the app can render exists
+        // before the first frame, so `create`/`createUnlit` never build a material mid-frame.
+        palette.forEach { create(it) }
+        createUnlit(SCAN_OVERLAY_ARGB)
     }
 
-    private fun createUncached(argb: Int): MaterialInstance? {
-        // Order matters: a lit material reads correctly under ARCore's light estimation,
-        // which is what makes a pipe look like it is lying on a wall rather than pasted on.
-        val attempts = listOf(
-            "createColorInstance" to listOf(intArrayOf(argb)),
-            "createColorInstance" to listOf(arrayOf(argbColor(argb))),
-            "createUnlitColorInstance" to listOf(intArrayOf(argb)),
-            "createUnlitColorInstance" to listOf(arrayOf(argbColor(argb))),
-        )
-        for ((name, args) in attempts) {
-            val instance = invoke(name, args) ?: continue
-            return instance
+    override fun create(argb: Int): MaterialInstance? {
+        lit[argb]?.let { return it }
+        return try {
+            materialLoader.createColorInstance(
+                color = argb,
+                metallic = METALLIC,
+                roughness = ROUGHNESS,
+                reflectance = REFLECTANCE,
+            ).also { lit[argb] = it }
+        } catch (error: Throwable) {
+            // A missing material must never take the measurement down: the mesh is simply not
+            // drawn and the operator keeps recording nodes.
+            Log.w(TAG, "lit material for #${Integer.toHexString(argb)} unavailable", error)
+            null
         }
-        Log.w(TAG, "MaterialLoader exposes no colour factory — custom meshes will be invisible")
-        return null
     }
 
-    private fun invoke(name: String, args: List<Any>): MaterialInstance? {
-        val method = materialLoader.javaClass.methods.firstOrNull { candidate ->
-            candidate.name == name &&
-                candidate.parameterCount == args.size &&
-                candidate.parameterTypes.indices.all { index ->
-                    val type = candidate.parameterTypes[index]
-                    when (val argument = args[index]) {
-                        is Int -> type == Int::class.javaPrimitiveType || type == Int::class.java
-                        is Array<*> -> type.isAssignableFrom(argument[0]?.javaClass ?: Any::class.java)
-                        else -> type.isAssignableFrom(argument.javaClass)
-                    }
-                }
-        } ?: return null
-        return runCatching { method.invoke(materialLoader, *args.toTypedArray()) as? MaterialInstance }
-            .onFailure { Log.w(TAG, "material factory $name failed: ${it.message}") }
-            .getOrNull()
-    }
-
-    private fun argbColor(argb: Int): Any {
-        // SceneView's Color is a data class over (r, g, b, a) floats. Built reflectively for
-        // the same version-tolerance reason as above.
-        val colorClass = runCatching { Class.forName("io.github.sceneview.math.Color") }.getOrNull()
-            ?: return argb
-        val floats = floatArrayOf(
-            ((argb shr 16) and 0xFF) / 255f,
-            ((argb shr 8) and 0xFF) / 255f,
-            (argb and 0xFF) / 255f,
-            ((argb ushr 24) and 0xFF) / 255f,
-        )
-        val ctor = colorClass.constructors.firstOrNull { it.parameterCount == 4 }
-            ?: return argb
-        return runCatching { ctor.newInstance(floats[0], floats[1], floats[2], floats[3]) }
-            .getOrElse { argb }
+    override fun createUnlit(argb: Int): MaterialInstance? {
+        unlit[argb]?.let { return it }
+        return try {
+            materialLoader.createUnlitColorInstance(color = argb).also { unlit[argb] = it }
+        } catch (error: Throwable) {
+            Log.w(TAG, "unlit material for #${Integer.toHexString(argb)} unavailable", error)
+            null
+        }
     }
 
     companion object {
         private const val TAG = "SceneViewMaterials"
+
+        /** Matte, near-dielectric: gypsum and concrete, not chrome. */
+        private const val METALLIC = 0.0f
+        private const val ROUGHNESS = 0.6f
+        private const val REFLECTANCE = 0.35f
+
+        /**
+         * The scan overlay: cool grey at ~40 % alpha, so a routed service stays visible through
+         * the reconstructed surface. Unlit, so a dark site does not hide the room.
+         */
+        const val SCAN_OVERLAY_ARGB: Int = 0x668A8F98
+
+        /** Every colour the app can ask for, so nothing is created during a frame. */
+        val palette: List<Int> = ConduitPresets.all.map { it.colorArgb }.distinct()
     }
 }
 
 /** A material provider that never returns anything (headless/unit-test builds). */
 object NoOpMaterialProvider : ColorMaterialProvider {
     override fun create(argb: Int): MaterialInstance? = null
+    override fun createUnlit(argb: Int): MaterialInstance? = null
 }

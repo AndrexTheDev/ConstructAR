@@ -155,8 +155,29 @@ distance, needs no `.filamat` and no texture upload per update, and is readable 
 The trade-off is that it is screen-space, so it cannot be occluded by geometry — accepted
 deliberately.
 
-**Reflection for materials.** `SceneViewMaterialProvider` resolves Filament material factories
-reflectively because SceneView's `MaterialLoader` signature changed three times across majors.
-A build error there would block every upgrade; a runtime miss only means meshes are not drawn,
-and the measuring path keeps working. Pin the version and replace it with direct calls when you
-freeze dependencies.
+**No reflection, typed SceneView.** `SceneViewMaterialProvider` calls SceneView 4.63.0's typed
+`MaterialLoader.createColorInstance(color: Int, …)` and `createUnlitColorInstance(color: Int)`
+directly. An earlier revision looked the factories up reflectively; that is gone, because a
+silent runtime miss (geometry simply not drawn) is a worse failure than a build error, and
+because reflection is unverifiable by the compiler, by R8 and by review. The version is pinned
+exactly (`gradle/libs.versions.toml`, `sceneview = "4.63.0"`) and
+`scripts/verify_sources.py` fails the build on any `Class.forName`, `getDeclaredMethod`,
+`getMethod`, or `javaClass.methods` in `:core`, `:ar-engine`, `:app`, `:export` or
+`:native-slam`.
+
+**Material lifetime.** Both factories are `@MainThread` on `MaterialLoader`, so
+`SceneViewMaterialProvider` pre-warms the whole palette (the six preset colours plus the
+translucent scan overlay) in its constructor — which runs from `onSceneReady`, on the main
+thread. A frame then only reads a `ConcurrentHashMap`: no material is created, and no object is
+allocated, in the render loop.
+
+**Localisation seam.** The engine modules contain no user-facing strings. `TrackingMonitor`
+publishes a `Guidance` code, `RouteSession` a `RouteWarning` code, the hit cascade a
+`SurfaceKind`/`HitSource`, `ArSessionController` an `ArReadiness` branch. `:app` maps each to
+`stringResource` in `ui/Labels.kt`, and every length is formatted by `LengthFormatter` or the
+`hud_length` resource. That is what makes six locales complete without the engines carrying a
+Context — and it keeps the engines unit-testable on the JVM.
+
+---
+
+© 2026 **AndrexTheDev** <hippie.highho@gmail.com> — All rights reserved. See [LICENSE](../LICENSE).

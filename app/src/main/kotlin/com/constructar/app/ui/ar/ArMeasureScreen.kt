@@ -1,6 +1,15 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 package com.constructar.app.ui.ar
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,6 +34,7 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,28 +55,46 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.constructar.app.R
 import com.constructar.app.ui.ActionTone
 import com.constructar.app.ui.GloveButton
 import com.constructar.app.ui.GloveButtonRow
+import com.constructar.app.ui.label
+import com.constructar.app.ui.message
+import com.constructar.app.ui.routingLabel
 import com.constructar.app.ui.theme.SiteColors
+import com.constructar.app.ui.tierLabel
 import com.constructar.arengine.render.ArScene
+import com.constructar.arengine.session.ArReadiness
 import com.constructar.arengine.tracking.TrackingQuality
+import com.google.ar.core.Config
 import com.constructar.core.model.ConduitPresets
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.ProjectRecord
-import com.constructar.core.units.LengthFormatter
-import com.google.ar.core.Config
 
 /**
  * The AR measuring screen.
  *
  * Layout mirrors how the tool is actually held: the camera fills the screen, the *length* and
  * the *status* sit in a bar at the top (readable without moving the phone), and the action bar
- * with three glove-sized buttons is pinned to the bottom edge. Everything else (spec chips,
+ * with glove-sized buttons is pinned to the bottom edge. Everything else (spec chips, hit
  * diagnostics) is deliberately secondary.
+ *
+ * ## Language
+ *
+ * Not one user-visible character is hardcoded here. Lengths come from
+ * [com.constructar.core.units.LengthFormatter] or from the `hud_length` format resource, and
+ * every state the engines can report arrives as a *code* ([com.constructar.arengine.tracking.Guidance],
+ * [com.constructar.arengine.route.RouteWarning], `SurfaceKind`, `HitSource`) that
+ * [com.constructar.app.ui.labels] maps to `stringResource`. That is what makes the six shipped
+ * languages complete rather than aspirational.
  */
 @Composable
 fun ArMeasureScreen(
@@ -80,6 +108,7 @@ fun ArMeasureScreen(
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val controller = remember { ArMeasureController(context) }
+    val activity = remember(context) { context.findActivity() }
 
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -92,6 +121,14 @@ fun ArMeasureScreen(
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
     }
+
+    // ARCore readiness (installed / supported / up to date) — checked before the surface is
+    // composed so a device without AR gets a sentence instead of a black screen.
+    var readiness by remember { mutableStateOf<ArReadiness?>(null) }
+    LaunchedEffect(hasCameraPermission) {
+        readiness = if (hasCameraPermission) controller.checkReadiness(activity, true) else null
+    }
+    var sessionError by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(Unit) {
         onDispose { controller.release() }
@@ -106,7 +143,7 @@ fun ArMeasureScreen(
 
     var spec by remember { mutableStateOf(ConduitPresets.all.first()) }
     var showScanner by remember { mutableStateOf(true) }
-    var viewSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    var viewSize by remember { mutableStateOf(IntSize.Zero) }
 
     // Tap results are produced on the render thread; they are applied here, on the main
     // thread, where anchor creation belongs.
@@ -125,57 +162,100 @@ fun ArMeasureScreen(
         controller.syncCommittedRoutes(project.routes)
     }
 
+    val lengthText = stringResource(R.string.hud_length, routeState.lengthMeters)
+    val guidanceText = tracking.guidance.message(tracking)
+    val warningText = routeState.warning.message()
+    val readinessIssue = readiness
+    val readinessText = if (readinessIssue != null && !readinessIssue.canStartSession) {
+        readinessIssue.message()
+    } else {
+        null
+    }
+    // Every string is resolved here, at composition, never inside `buildString`.
+    val routingText = spec.kind.routingLabel()
+    val sizeText = spec.sizeLabel
+    val pointsText = pluralStringResource(R.plurals.ar_points, routeState.nodeCount, routeState.nodeCount)
+    val closedLoopText = if (routeState.closedLoop) stringResource(R.string.ar_closed_loop) else null
+    val scanProgressText = stringResource(
+        R.string.ar_scan_progress,
+        (scanState.coverage * 100).toInt(),
+        scanState.triangleCount / 1000,
+    )
+    val scanInstructionText = stringResource(R.string.scan_instruction)
+    val scanUnavailableText = stringResource(R.string.ar_scan_unavailable)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .onSizeChanged { viewSize = it },
     ) {
-        if (hasCameraPermission) {
-            ArScene(
-                modifier = Modifier.fillMaxSize(),
-                depthEnabled = true,
-                flashMode = if (torchOn) Config.FlashMode.TORCH else Config.FlashMode.OFF,
-                onSessionCreated = { controller.onSessionCreated(it) },
-                onFrame = { session, frame, width, height ->
-                    controller.onFrame(session, frame, width, height)
-                },
-                onSceneReady = { scene, engine, materialLoader ->
-                    controller.onSceneReady(scene, engine, materialLoader)
-                    controller.syncScanMesh(showScanner)
-                },
-                onSceneReleased = { controller.onSceneReleased() },
+        when {
+            !hasCameraPermission -> GateMessage(
+                text = stringResource(R.string.ar_camera_permission),
+                action = stringResource(R.string.ar_grant_permission),
+                onAction = { permissionLauncher.launch(Manifest.permission.CAMERA) },
             )
-        }
 
-        // Full-surface tap target. Sits above the AR view so SceneView's own gesture handling
-        // cannot swallow a tap, and below the controls.
-        if (hasCameraPermission) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectTapGestures { offset ->
-                            controller.requestTap(offset.x, offset.y, size.width, size.height)
-                        }
-                    },
+            readinessText != null -> GateMessage(
+                text = readinessText,
+                action = stringResource(R.string.export_back),
+                onAction = onBack,
             )
+
+            else -> {
+                ArScene(
+                    modifier = Modifier.fillMaxSize(),
+                    depthEnabled = true,
+                    flashMode = if (torchOn) Config.FlashMode.TORCH else Config.FlashMode.OFF,
+                    // ConstructAR's offline policy is applied by SceneView immediately before
+                    // Session.configure() — the only safe moment for it.
+                    sessionConfiguration = { session, config -> controller.applySessionPolicy(session, config) },
+                    onSessionCreated = { controller.onSessionCreated(it) },
+                    onFrame = { session, frame, width, height ->
+                        controller.onFrame(session, frame, width, height)
+                    },
+                    onSessionFailed = { error ->
+                        sessionError = error.message ?: error.javaClass.simpleName
+                    },
+                    onSceneReady = { scene, engine, materialLoader ->
+                        controller.onSceneReady(scene, engine, materialLoader)
+                        controller.syncScanMesh(showScanner)
+                    },
+                    onSceneReleased = { controller.onSceneReleased() },
+                )
+
+                // Full-surface tap target. Sits above the AR view so SceneView's own gesture
+                // handling cannot swallow a tap, and below the controls.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTapGestures { offset ->
+                                controller.requestTap(offset.x, offset.y, size.width, size.height)
+                            }
+                        },
+                )
+            }
         }
 
         // ── Floating length label anchored to the last measured point ───────────────────
         hudPosition?.let { (x, y) ->
             if (routeState.nodeCount > 0 && viewSize.width > 0) {
+                val labelWidthPx = with(density) { 190.dp.toPx() }
                 Surface(
                     color = Color.Black.copy(alpha = 0.7f),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.offset {
-                        androidx.compose.ui.unit.IntOffset(
-                            (x - with(density) { 90.dp.toPx() }).toInt().coerceIn(0, (viewSize.width - with(density) { 180.dp.toPx() }.toInt()).coerceAtLeast(0)),
-                            (y + with(density) { 24.dp.toPx() }).toInt().coerceIn(0, (viewSize.height - 40).coerceAtLeast(0)),
+                        IntOffset(
+                            (x - with(density) { 95.dp.toPx() }).toInt()
+                                .coerceIn(0, (viewSize.width - labelWidthPx.toInt()).coerceAtLeast(0)),
+                            (y + with(density) { 24.dp.toPx() }).toInt()
+                                .coerceIn(0, (viewSize.height - 40).coerceAtLeast(0)),
                         )
                     },
                 ) {
                     Text(
-                        text = routeState.lengthLabel,
+                        text = lengthText,
                         style = MaterialTheme.typography.titleMedium,
                         color = SiteColors.cable,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -198,59 +278,83 @@ fun ArMeasureScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            text = routeState.lengthLabel,
+                            text = lengthText,
                             style = MaterialTheme.typography.displaySmall,
                             color = SiteColors.cable,
                         )
                         Text(
                             text = buildString {
-                                append(spec.label)
+                                append(routingText)
+                                append(' ')
+                                append(sizeText)
                                 append(" · ")
-                                append(routeState.nodeCount)
-                                append(if (routeState.nodeCount == 1) " point" else " points")
-                                if (routeState.closedLoop) append(" · closed")
+                                append(pointsText)
+                                if (closedLoopText != null) {
+                                    append(" · ")
+                                    append(closedLoopText)
+                                }
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.White.copy(alpha = 0.85f),
                         )
                     }
                     IconButton(onClick = onOpenExport, modifier = Modifier.size(56.dp)) {
-                        Icon(Icons.Default.Share, contentDescription = "Export", tint = Color.White)
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = stringResource(R.string.home_export),
+                            tint = Color.White,
+                        )
                     }
                     IconButton(onClick = onBack, modifier = Modifier.size(56.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = stringResource(R.string.ar_close),
+                            tint = Color.White,
+                        )
                     }
                 }
 
-                val statusLine = tracking.guidance.ifBlank {
-                    if (scanState.ready) {
-                        "Scan ${(scanState.coverage * 100).toInt()} % · ${scanState.triangleCount / 1000} k tris"
-                    } else {
-                        "Mesh scanning unavailable — measuring still works"
-                    }
+                // Coaching: tracking verdict first, then the scan state.
+                val statusLine = guidanceText ?: when {
+                    !showScanner -> null
+                    !scanState.ready -> scanUnavailableText
+                    scanState.meshVersion == 0 -> scanInstructionText
+                    else -> scanProgressText
                 }
-                if (statusLine.isNotBlank()) {
+                statusLine?.let { line ->
                     Text(
-                        text = statusLine,
+                        text = line,
                         style = MaterialTheme.typography.bodyMedium,
                         color = when {
-                            routeState.warning != null -> SiteColors.warning
+                            warningText != null -> SiteColors.warning
                             tracking.quality == TrackingQuality.NOT_TRACKING -> SiteColors.danger
                             else -> Color.White.copy(alpha = 0.75f)
                         },
                     )
                 }
-                routeState.warning?.let {
+                warningText?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
                 }
+                sessionError?.let {
+                    Text(
+                        text = stringResource(R.string.ar_session_failed, it),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SiteColors.danger,
+                    )
+                }
+                // Hit diagnostics, in the operator's language: which surface and which cascade
+                // tier produced the last node.
                 lastHit?.let { resolution ->
-                    if (!resolution.accepted) {
-                        Text(
-                            text = "No surface found — aim at a wall or floor.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = SiteColors.danger,
-                        )
-                    }
+                    val hit = resolution.hit
+                    Text(
+                        text = if (hit != null) {
+                            hit.surfaceKind.label() + " · " + hit.source.tierLabel()
+                        } else {
+                            stringResource(R.string.ar_no_surface)
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (hit != null) Color.White.copy(alpha = 0.6f) else SiteColors.danger,
+                    )
                 }
             }
         }
@@ -279,7 +383,7 @@ fun ArMeasureScreen(
 
             GloveButtonRow {
                 GloveButton(
-                    label = "Undo",
+                    label = stringResource(R.string.ar_undo),
                     icon = Icons.Default.Undo,
                     onClick = { controller.undo() },
                     tone = ActionTone.SECONDARY,
@@ -287,7 +391,7 @@ fun ArMeasureScreen(
                     modifier = Modifier.weight(1f),
                 )
                 GloveButton(
-                    label = "Torch",
+                    label = stringResource(R.string.ar_torch),
                     icon = Icons.Default.FlashlightOn,
                     onClick = { controller.toggleTorch() },
                     tone = ActionTone.SECONDARY,
@@ -295,7 +399,7 @@ fun ArMeasureScreen(
                     modifier = Modifier.weight(1f),
                 )
                 GloveButton(
-                    label = if (showScanner) "Mask" else "Scan",
+                    label = stringResource(if (showScanner) R.string.ar_stop_scan else R.string.ar_scan),
                     icon = Icons.Default.Add,
                     onClick = { showScanner = !showScanner },
                     tone = ActionTone.SECONDARY,
@@ -306,7 +410,7 @@ fun ArMeasureScreen(
 
             GloveButtonRow {
                 GloveButton(
-                    label = "Close loop",
+                    label = stringResource(R.string.ar_close_loop),
                     icon = Icons.Default.Loop,
                     onClick = { controller.routeSession.closeLoop() },
                     tone = ActionTone.SECONDARY,
@@ -314,10 +418,13 @@ fun ArMeasureScreen(
                     modifier = Modifier.weight(1f),
                 )
                 GloveButton(
-                    label = "Finish",
+                    label = stringResource(R.string.ar_finish),
                     icon = Icons.Default.Save,
                     onClick = {
-                        controller.finish(label = "${spec.label} run ${project.routes.size + 1}")?.let { route ->
+                        // Persisted label: locale-independent and stable across devices, so a
+                        // run reads the same in the CSV, the PDF and the project file.
+                        val runLabel = "${spec.kind.name} ${spec.sizeLabel} #${project.routes.size + 1}"
+                        controller.finish(label = runLabel)?.let { route ->
                             onRouteFinished(route)
                             // Snapshot the scan statistics with the first finished run: the
                             // protocol header must describe the room as it was measured.
@@ -331,7 +438,7 @@ fun ArMeasureScreen(
             }
 
             GloveButton(
-                label = "Add point at centre",
+                label = stringResource(R.string.ar_add_point),
                 icon = Icons.Default.Add,
                 onClick = {
                     // Convenience for gloved hands: a big button that adds the reticle point
@@ -349,6 +456,33 @@ fun ArMeasureScreen(
     }
 }
 
+/** Blocking message with one action: missing permission, unsupported device, failed session. */
+@Composable
+private fun GateMessage(text: String, action: String, onAction: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleMedium,
+            color = Color.White,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        GloveButton(
+            label = action,
+            icon = Icons.Default.Add,
+            onClick = onAction,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 24.dp),
+        )
+    }
+}
+
 @Composable
 private fun SpecChip(
     spec: ConduitSpec,
@@ -360,7 +494,7 @@ private fun SpecChip(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
         modifier = modifier.padding(vertical = 2.dp),
-        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+        colors = ButtonDefaults.buttonColors(
             containerColor = if (selected) Color(spec.colorArgb).copy(alpha = 0.9f) else Color.Black.copy(alpha = 0.5f),
             contentColor = Color.White,
         ),
@@ -371,4 +505,14 @@ private fun SpecChip(
             maxLines = 1,
         )
     }
+}
+
+/** Unwraps the hosting [Activity] from a (possibly themed) Compose context. */
+private fun Context.findActivity(): Activity? {
+    var current: Context? = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
 }

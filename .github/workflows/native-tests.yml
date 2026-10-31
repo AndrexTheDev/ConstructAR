@@ -1,3 +1,8 @@
+# Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+# All rights reserved. Proprietary and confidential - see LICENSE.
+# SPDX-License-Identifier: LicenseRef-Proprietary
+
+
 name: native-tests
 
 # The C++ core (TSDF, Surface Nets, pose graph) has no Android dependency, so it is built and

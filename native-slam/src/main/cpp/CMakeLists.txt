@@ -1,3 +1,8 @@
+# Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+# All rights reserved. Proprietary and confidential - see LICENSE.
+# SPDX-License-Identifier: LicenseRef-Proprietary
+
+
 # ConstructAR — :native-slam NDK build.
 #
 # Produces libconstructar_slam.so: sparse TSDF + Surface Nets meshing, SE(3) pose-graph

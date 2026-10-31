@@ -4,8 +4,15 @@ Everything here is a gate before an APK reaches a site, in the order it should b
 
 ## 1. Build and signing
 
-- [ ] `./gradlew clean :app:assembleRelease` passes from a clean checkout
-- [ ] `./gradlew lint` has no `Error` severity issues
+- [ ] `gradle clean assembleDebug testDebugUnitTest` passes from a clean checkout
+      (`allWarningsAsErrors` is on for every module — a warning is a build failure)
+- [ ] `gradle lint` has no `Error` severity issues
+- [ ] No `-Pconstructar.lenientWarnings=true` in any release invocation (that flag exists only
+      to unblock a toolchain regression, never a release)
+- [ ] `python3 scripts/verify_sources.py --verbose` reports `OK` (headers, reflection ban,
+      string-resource references, six-locale parity)
+- [ ] `.github/workflows/android-build.yml` is green, including the check that
+      `libconstructar_slam.so` ships inside the arm64 APK
 - [ ] Release keystore configured outside VCS (`~/.gradle/gradle.properties`), never committed
 - [ ] `versionCode` bumped, `versionName` matches the protocol PDF footer
 - [ ] R8: verify `NativeSlamEngine` natives, `com.google.ar.core.**`, `io.github.sceneview.**`
@@ -14,7 +21,9 @@ Everything here is a gate before an APK reaches a site, in the order it should b
 
 ## 2. Licensing
 
-- [ ] `LICENSE` + `NOTICE` committed (owner's decision — see `docs/LICENSING.md`)
+- [ ] `LICENSE` present and unmodified (All Rights Reserved — see `docs/LICENSING.md`)
+- [ ] Third-party attributions (`NOTICE` or the in-app licences screen) cover SceneView,
+      Filament, ARCore and Depth Anything V2 Small, as Apache-2.0 requires
 - [ ] Depth model is **Small / Apache-2.0**, SHA-256 pinned in `MonocularDepthEstimator.Config`
 - [ ] RTAB-Map (if used) built with `OPENCV_ENABLE_NONFREE=OFF`; no SURF anywhere in `ldd`
 - [ ] In-app "Licences" screen lists SceneView, Filament, ARCore, LiteRT, RTAB-Map, DA V2
@@ -63,3 +72,7 @@ Everything here is a gate before an APK reaches a site, in the order it should b
 - [ ] `README.md` accuracy table matches what §4 measured
 - [ ] `docs/SETUP.md` §6 SceneView integration points re-verified against the pinned version
 - [ ] `docs/PERFORMANCE.md` numbers replaced with the real device figures
+
+---
+
+© 2026 **AndrexTheDev** <hippie.highho@gmail.com> — All rights reserved. See [LICENSE](../LICENSE).

@@ -1,0 +1,106 @@
+# Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+# All rights reserved. Proprietary and confidential - see LICENSE.
+# SPDX-License-Identifier: LicenseRef-Proprietary
+
+name: android-build
+
+# The gate the specification asks for: `./gradlew assembleDebug testDebugUnitTest` across every
+# module, with the NDK targets that make `libconstructar_slam.so` real.
+#
+# This workflow exists because the app cannot be built in every environment (no JVM, no Android
+# SDK, no NDK). GitHub Actions is where the "zero errors, zero warnings" claim is actually
+# proven, so the build lives here and the numbers are reproducible by anyone with the token.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GRADLE_VERSION: "9.1"
+  JAVA_VERSION: "21"
+  NDK_VERSION: "27.2.12479018"
+  CMAKE_VERSION: "3.22.1"
+  # Kotlin compiler flags the Gradle build cannot set from the command line.
+  GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
+
+jobs:
+  static-gates:
+    name: Static gates (headers, reflection ban, i18n)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: verify_sources.py
+        run: python3 scripts/verify_sources.py --verbose
+
+  android:
+    name: assembleDebug + testDebugUnitTest
+    runs-on: ubuntu-latest
+    needs: static-gates
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install platform, build tools, NDK and CMake
+        run: |
+          sdkmanager --install \
+            "platforms;android-37" \
+            "build-tools;37.0.0" \
+            "ndk;${NDK_VERSION}" \
+            "cmake;${CMAKE_VERSION}"
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Set up Gradle ${{ env.GRADLE_VERSION }}
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+
+      - name: Assemble debug + unit tests (warnings are failures)
+        # `-Werror` for Kotlin is set in build.gradle.kts (`allWarningsAsErrors`); the C++ side
+        # sets it in CMakeLists.txt. `--warning-mode all` surfaces Gradle deprecations too, so a
+        # green run here means "no warnings", not "warnings we chose to ignore".
+        run: |
+          gradle --no-daemon --stacktrace --warning-mode all \
+            assembleDebug testDebugUnitTest
+
+      - name: Verify the native library shipped for arm64
+        run: |
+          set -euo pipefail
+          apk=$(find app/build/outputs/apk/debug -name '*.apk' | head -n 1)
+          echo "APK: $apk"
+          unzip -l "$apk" | grep -q "lib/arm64-v8a/libconstructar_slam.so" \
+            || { echo "libconstructar_slam.so missing from the arm64 ABI"; exit 1; }
+          unzip -l "$apk" | grep -q "lib/arm64-v8a/" \
+            || { echo "no arm64 native payload at all"; exit 1; }
+
+      - name: Upload unit-test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: "**/build/reports/tests/**"
+          if-no-files-found: ignore
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: constructar-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

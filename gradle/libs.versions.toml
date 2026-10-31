@@ -1,3 +1,8 @@
+# Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+# All rights reserved. Proprietary and confidential - see LICENSE.
+# SPDX-License-Identifier: LicenseRef-Proprietary
+
+
 # Version catalog — pinned to the versions the project is developed against.
 # Everything here is license-fee free: Apache-2.0, MIT or BSD-3-Clause only.
 [versions]
@@ -23,7 +28,12 @@ arCore = "1.57.0"
 # SceneView for Android: `sceneview` (Filament 3D) + `arsceneview` (ARCore layer).
 # NOTE: `sceneview-compose` is the *multiplatform* artifact; the native Android
 # app uses `arsceneview`, which carries the Compose DSL for AR on Android.
-sceneview = "4.60.0"
+# 4.63.0 is pinned exactly: ConstructAR calls the typed Compose factories
+# (`rememberEngine`, `rememberModelLoader`, `rememberMaterialLoader`,
+# `rememberEnvironmentLoader`, `rememberScene`, `rememberARCameraNode`) and the
+# typed `MaterialLoader` colour factories directly — no reflection, so a minor
+# bump must be a deliberate, compiled change, not a silent one.
+sceneview = "4.63.0"
 filament = "1.72.1"
 kotlinMath = "1.8.0"
 

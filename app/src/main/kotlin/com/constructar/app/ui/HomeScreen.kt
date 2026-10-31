@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 package com.constructar.app.ui
 
 import androidx.compose.foundation.clickable
@@ -34,8 +40,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.constructar.app.R
 import com.constructar.app.data.ProjectRepository
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.units.LengthFormatter
@@ -63,9 +72,9 @@ fun HomeScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text("ConstructAR", style = MaterialTheme.typography.headlineMedium)
+                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
                 Text(
-                    "Offline AR measuring for electrical, plumbing and ventilation",
+                    stringResource(R.string.home_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -77,7 +86,7 @@ fun HomeScreen(
             Spacer(Modifier.height(24.dp))
         } else if (projects.isEmpty()) {
             Text(
-                text = "No rooms yet. Create one to start measuring.",
+                text = stringResource(R.string.home_empty),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 20.dp),
@@ -99,7 +108,7 @@ fun HomeScreen(
         }
 
         GloveButton(
-            label = "New room",
+            label = stringResource(R.string.home_new_project),
             icon = Icons.Default.Add,
             onClick = { showCreateDialog = true },
             modifier = Modifier
@@ -108,7 +117,7 @@ fun HomeScreen(
         )
 
         Text(
-            text = "Works fully offline. Nothing leaves this phone.",
+            text = stringResource(R.string.home_offline_note),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
@@ -121,12 +130,12 @@ fun HomeScreen(
     if (showCreateDialog) {
         AlertDialog(
             onDismissRequest = { showCreateDialog = false },
-            title = { Text("New room") },
+            title = { Text(stringResource(R.string.home_new_project)) },
             text = {
                 OutlinedTextField(
                     value = newName,
                     onValueChange = { newName = it },
-                    label = { Text("Room / zone name") },
+                    label = { Text(stringResource(R.string.home_room_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -138,10 +147,10 @@ fun HomeScreen(
                         onCreate(newName)
                         newName = ""
                     },
-                ) { Text("Create") }
+                ) { Text(stringResource(R.string.home_create)) }
             },
             dismissButton = {
-                TextButton(onClick = { showCreateDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showCreateDialog = false }) { Text(stringResource(R.string.home_cancel)) }
             },
         )
     }
@@ -156,6 +165,9 @@ private fun ProjectCard(
     val formatter = remember {
         SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
     }
+    // Resolved at composition: `pluralStringResource` is @Composable and must not be called
+    // from inside `buildString`.
+    val runsText = pluralStringResource(R.plurals.home_runs, project.routeCount, project.routeCount)
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -176,8 +188,7 @@ private fun ProjectCard(
                 )
                 Text(
                     text = buildString {
-                        append(project.routeCount)
-                        append(if (project.routeCount == 1) " run" else " runs")
+                        append(runsText)
                         append(" · ")
                         append(LengthFormatter.format(project.totalLengthMeters))
                         append(" · ")
@@ -203,7 +214,11 @@ private fun ProjectCard(
                     color = SiteColors.cable,
                 )
                 IconButton(onClick = onExport, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Default.Share, contentDescription = "Export", tint = SiteColors.cable)
+                    Icon(
+                        Icons.Default.Share,
+                        contentDescription = stringResource(R.string.home_export),
+                        tint = SiteColors.cable,
+                    )
                 }
             }
         }

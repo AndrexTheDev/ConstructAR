@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 // JNI surface of :native-slam.
 //
 // Contract with com.constructar.nativebridge.NativeSlamEngine (keep the two in sync):

@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 package com.constructar.arengine.render
 
 import android.util.Log
@@ -11,7 +17,6 @@ import com.constructar.core.mesh.RouteGeometryOptions
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.RouteNodeRecord
-import com.constructar.core.units.LengthFormatter
 
 /**
  * Bridges the pure routing state to the GPU.
@@ -27,7 +32,13 @@ import com.constructar.core.units.LengthFormatter
  * recording fake, and so the same code could render to a video exporter later.
  */
 interface MeshSink {
-    fun upload(key: String, mesh: MeshData, argb: Int): Boolean
+    /**
+     * Uploads [mesh] as [key].
+     *
+     * @param unlit render with the unlit shading model (scan overlay, diagnostics) instead of
+     *   the lit one (routes, which must pick up ARCore's light estimate).
+     */
+    fun upload(key: String, mesh: MeshData, argb: Int, unlit: Boolean = false): Boolean
     fun setPose(key: String, position: Vec3, rotation: Quat, scale: Float = 1f)
     fun setVisible(key: String, visible: Boolean)
     fun contains(key: String): Boolean
@@ -36,7 +47,7 @@ interface MeshSink {
 
 /** Renders nothing; used when the native/GL stack is unavailable (e.g. unit tests). */
 object NoOpMeshSink : MeshSink {
-    override fun upload(key: String, mesh: MeshData, argb: Int) = false
+    override fun upload(key: String, mesh: MeshData, argb: Int, unlit: Boolean) = false
     override fun setPose(key: String, position: Vec3, rotation: Quat, scale: Float) = Unit
     override fun setVisible(key: String, visible: Boolean) = Unit
     override fun contains(key: String) = false
@@ -126,8 +137,5 @@ class RouteSceneController(
 
         const val LIVE_KEY = "route:live"
 
-        /** Builds the floating label text for a run — the exact string shown in AR. */
-        fun labelFor(route: ConduitRoute): String =
-            LengthFormatter.formatLabel(route.polylineLengthMeters, prefix = "Length")
     }
 }

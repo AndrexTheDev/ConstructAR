@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 // RTAB-Map bridge (BSD-3-Clause, no OpenCV non-free modules).
 //
 // RTAB-Map is the production loop-closure / global-graph back-end. It is *optional at build

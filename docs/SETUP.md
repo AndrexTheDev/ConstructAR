@@ -12,7 +12,7 @@ was chosen to work on Linux/macOS/Windows with no cloud services involved.
 |------|---------|------------------|
 | JDK | **21** | AGP 9.x requires 17+; 21 is the current LTS and what the version catalog targets |
 | Android Studio | Ladybug or newer | Compose tooling + native debugger |
-| Android SDK Platform | **37** | `compileSdk = 37` (SceneView 4.60 is compiled against it) |
+| Android SDK Platform | **37** | `compileSdk = 37` (SceneView 4.63.0 is compiled against it) |
 | Android SDK Build-Tools | 35.x | Ships with AGP 9 |
 | NDK | **27.2.12479018** | Pinned in `native-slam/build.gradle.kts`; needed for the 16 KB page-size requirement |
 | CMake | **3.22.1** | Installed through the SDK Manager so Gradle finds it without a PATH tweak |
@@ -33,11 +33,12 @@ sdk.dir=/home/you/Android/Sdk
 ## 2. Build
 
 ```bash
-./gradlew :app:assembleDebug
-./gradlew :core:test :export:test :ar-engine:test    # JVM tests only, no device needed
+gradle assembleDebug testDebugUnitTest   # the gate: all modules, warnings are errors
+gradle :core:test :export:test :ar-engine:test       # JVM tests only, no device needed
+python3 scripts/verify_sources.py                    # headers / reflection ban / i18n, no SDK
 ```
 
-`./gradlew :app:installDebug` deploys to a connected device. The first native build takes
+`gradle :app:installDebug` deploys to a connected device. The first native build takes
 2–4 minutes per ABI; subsequent builds are incremental.
 
 ### What is in the repo and what you must supply
@@ -194,19 +195,33 @@ depends on RTAB-Map being present.
 
 ## 6. SceneView integration points (read before upgrading SceneView)
 
-SceneView's API moves between minors. The renderer deliberately talks to **Filament** directly
-for everything that has geometry (`SceneMeshRenderer`), and only three things are SceneView's:
+Pinned to **SceneView 4.63.0**, used through its **typed** Compose API. Nothing is looked up by
+name, so an API change is a compile error rather than a device-only surprise.
 
-1. `ARSceneView(...)` parameters in `ar-engine/.../render/ArScene.kt` — engine, loaders,
-   `planeFindingMode`, `depthMode`, `flashMode`, `planeRenderer`, `onSessionUpdated` and the
-   content lambda.
-2. The **content scope** exposing the Filament `Scene` and `Engine` used by
-   `onSceneReady(scene, engine, materialLoader)`.
-3. `MaterialLoader`, used through `SceneViewMaterialProvider` **reflectively** — so a renamed
-   factory method degrades to "meshes are not drawn" instead of a build error.
+| What | Typed factory / parameter | Where |
+|------|---------------------------|-------|
+| `Engine` | `rememberEngine()` | `ar-engine/.../render/ArScene.kt` |
+| `ModelLoader` | `rememberModelLoader(engine)` | same |
+| `MaterialLoader` | `rememberMaterialLoader(engine)` | same |
+| `EnvironmentLoader` | `rememberEnvironmentLoader(engine)` | same |
+| `Scene` (Filament) | `rememberScene(engine)` → handed to `onSceneReady(scene, engine, materialLoader)` | same |
+| AR surface | `ARSceneView(scene = …, planeRenderer = false, planeFindingMode, depthMode, flashMode, cloudAnchorMode = DISABLED, instantPlacementMode = DISABLED, geospatialMode = DISABLED, sessionConfiguration, onSessionUpdated, onTrackingFailureChanged, onSessionFailed)` | same |
+| Materials | `MaterialLoader.createColorInstance(color: Int, …)`, `createUnlitColorInstance(color: Int)` | `ar-engine/.../render/SceneViewSupport.kt` |
 
-If (1) or (2) changed in your SceneView version, `ArScene.kt` is the only file to adjust. Pin
-the version in `gradle/libs.versions.toml` and check the release notes for `ARSceneView`.
+Two consequences that are easy to miss:
+
+1. **`sessionConfiguration` is the only safe hook for ARCore policy.** SceneView calls it
+   immediately before `Session.configure()`; configuring a resumed session throws. ConstructAR's
+   offline policy (raw depth, ambient light estimation, no cloud anchors/instant placement/
+   geospatial/streetscape) is applied there by `ArSessionController.applyPolicy`.
+2. **SceneView owns the session lifecycle.** `ArSessionController` no longer creates, resumes,
+   pauses or closes a session — doing so raced SceneView's own `configure()` and closed a
+   session the renderer still held. It is now policy + readiness only.
+
+If a SceneView upgrade touches any of the rows above, `ArScene.kt`, `SceneViewSupport.kt` and
+`ArSessionController.applyPolicy` are the only files to adjust. Keep `sceneview` pinned exactly
+in `gradle/libs.versions.toml`; the CI build in `.github/workflows/android-build.yml` is what
+proves the pin compiles.
 
 ---
 
@@ -219,5 +234,9 @@ the version in `gradle/libs.versions.toml` and check the release notes for `ARSc
 | Scan looks holey at silhouettes | Free-space carving is off by default (it triples integration cost) | Enable `TsdfConfig.carveFreeSpace` for a final clean-up pass, or rescan from a second angle |
 | Mesh is shifted after a relocalisation | Anchors were recreated from the persisted node positions | Expected: run the loop closure (or finish and re-measure that run); the protocol flags low-confidence runs |
 | Depth hits land behind the surface | Stale depth frame used for the raycast | Must not happen: `TsdfScanPipeline` only recycles a snapshot when a newer one replaces it |
-| Torch does nothing | Device reports `FlashMode.TORCH` unsupported or front camera | `ArSessionController.setTorch` returns false; the UI greys the button |
+| Torch does nothing | Device reports `FlashMode.TORCH` unsupported, or the front camera is in use | SceneView silently downgrades the typed `flashMode`; `TorchController` keeps the button state honest |
 | `FAIL_ON_PROJECT_REPOS` failure | A dependency pulled in `jcenter`/a second repo | Keep everything on `google()` + `mavenCentral()`; see `settings.gradle.kts` |
+
+---
+
+© 2026 **AndrexTheDev** <hippie.highho@gmail.com> — All rights reserved. See [LICENSE](../LICENSE).

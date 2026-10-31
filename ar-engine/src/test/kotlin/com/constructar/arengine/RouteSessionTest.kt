@@ -1,9 +1,16 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 package com.constructar.arengine
 
 import com.constructar.arengine.hit.SurfaceHit
 import com.constructar.arengine.route.AnchorFactory
 import com.constructar.arengine.route.AnchorHandle
 import com.constructar.arengine.route.RouteSession
+import com.constructar.arengine.route.RouteWarning
 import com.constructar.core.math.Quat
 import com.constructar.core.math.Vec3
 import com.constructar.core.model.HitSource
@@ -68,7 +75,7 @@ class RouteSessionTest {
 
         session.addNode(hit(1f, 0f, 1f))
         assertEquals(2f, session.state.value.lengthMeters, 1e-5f)
-        assertEquals("Length: 2.00 m", session.state.value.lengthLabel)
+        assertEquals("2.00 m", com.constructar.core.units.LengthFormatter.format(session.state.value.lengthMeters))
     }
 
     @Test
@@ -94,7 +101,7 @@ class RouteSessionTest {
         assertFalse(accepted)
         assertEquals(1, session.state.value.nodes.size)
         assertEquals(1, factory.anchors.size)
-        assertNotNull(session.state.value.warning)
+        assertEquals(RouteWarning.TOO_CLOSE, session.state.value.warning)
     }
 
     @Test

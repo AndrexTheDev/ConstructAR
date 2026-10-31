@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -20,6 +26,12 @@ android {
         // drops it into app/src/main/assets/models/. Kept out of VCS (see .gitignore) because
         // it is a 25 MB binary that must be hash-verified, not silently substituted.
         buildConfigField("String", "DEPTH_MODEL_ASSET", "\"models/depth_anything_v2_small_int8.tflite\"")
+
+        // Ownership metadata, compiled into the app so the About line and any crash report name
+        // the copyright holder. All rights reserved - see LICENSE.
+        buildConfigField("String", "DEVELOPER_NAME", "\"AndrexTheDev\"")
+        buildConfigField("String", "DEVELOPER_EMAIL", "\"hippie.highho@gmail.com\"")
+        buildConfigField("String", "PROJECT_URL", "\"https://github.com/AndrexTheDev/ConstructAR\"")
     }
 
     buildFeatures {
@@ -54,8 +66,14 @@ android {
 
 kotlin {
     compilerOptions {
+        // Zero warnings is a product requirement: a deprecation today is a build break
+        // tomorrow, and this project cannot afford either. The escape hatch exists only for a
+        // toolchain regression (`-Pconstructar.lenientWarnings=true`) and must never be used
+        // for a release build - see docs/RELEASE_CHECKLIST.md.
+        allWarningsAsErrors.set(
+            !providers.gradleProperty("constructar.lenientWarnings").isPresent,
+        )
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-        freeCompilerArgs.addAll("-opt-in=kotlin.RequiresOptIn")
     }
 }
 

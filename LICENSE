@@ -1,0 +1,57 @@
+Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+
+ALL RIGHTS RESERVED
+
+This software and its source code ("the Software") are the exclusive property of
+AndrexTheDev and are made available publicly for one purpose only: to let the
+owner's continuous-integration pipelines and reviewers inspect the build.
+
+No licence, express or implied, is granted to use, copy, modify, merge, publish,
+distribute, sublicense, sell, deploy, host, or create derivative works from the
+Software, in whole or in part, for any purpose. This includes, without
+limitation:
+
+  1. commercial use of any kind;
+  2. copying or re-hosting the source code, in whole or in part, in another
+     repository, product, service, application store listing, training corpus,
+     or dataset;
+  3. reverse engineering, decompiling, disassembling, extracting, or attempting
+     to derive the source code of any compiled artifact;
+  4. removing, obscuring, or altering this notice, the copyright headers in the
+     source files, or any ownership metadata in the build outputs.
+
+No patent licence is granted, by implication, estoppel, or otherwise.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+---
+
+THIRD-PARTY COMPONENTS
+
+The Software depends on third-party libraries that carry their own licences and
+that remain under those licences (not under the terms above):
+
+  * SceneView for Android 4.63.0 — Apache-2.0
+  * Google Filament 1.72.1 — Apache-2.0
+  * Google ARCore (`com.google.ar:core`) — Google ARCore SDK terms, distributed
+    through Google Play Services for AR
+  * Kotlin, KotlinX, AndroidX, Jetpack Compose — Apache-2.0
+  * LiteRT (formerly TensorFlow Lite) 2.3.0 — Apache-2.0
+  * Depth Anything V2 *Small* weights — Apache-2.0 (Base and Large are
+    CC-BY-NC-4.0 and are not part of this project)
+  * RTAB-Map, where enabled — BSD-3-Clause, built with
+    `OPENCV_ENABLE_NONFREE=OFF`
+
+See `docs/LICENSING.md` for the full inventory and the obligations that follow
+from it. Where those third-party licences conflict with the terms above, the
+third-party licence governs the third-party component only.
+
+---
+
+Contact for licensing enquiries: AndrexTheDev <hippie.highho@gmail.com>
+Repository: https://github.com/AndrexTheDev/ConstructAR

@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 package com.constructar.app.ui
 
 import androidx.compose.foundation.layout.Box
@@ -14,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -21,6 +28,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.constructar.app.BuildConfig
 import com.constructar.app.ProjectViewModel
+import com.constructar.app.R
+import com.constructar.app.UiMessage
 import com.constructar.app.ui.ar.ArMeasureScreen
 import com.constructar.app.ui.theme.SiteColors
 
@@ -41,11 +50,17 @@ private object Routes {
 @Composable
 fun AppRoot(viewModel: ProjectViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val defaultRoomName = stringResource(R.string.home_default_room_name)
     val navController: NavHostController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    val errorText = when (state.lastError) {
+        UiMessage.PROJECT_OPEN_FAILED -> stringResource(R.string.error_project_open)
+        UiMessage.PROJECT_SAVE_FAILED -> stringResource(R.string.error_project_save)
+        null -> null
+    }
     LaunchedEffect(state.lastError) {
-        state.lastError?.let {
+        errorText?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearError()
         }
@@ -72,7 +87,10 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             }
                         },
                         onCreate = { name ->
-                            viewModel.createProject(name) { navController.navigate(Routes.MEASURE) }
+                            // Blank names fall back to a localised room name rather than the
+                            // repository's English default.
+                            val safeName = name.ifBlank { defaultRoomName }
+                            viewModel.createProject(safeName) { navController.navigate(Routes.MEASURE) }
                         },
                     )
                 }
@@ -81,7 +99,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                     val project = state.openProject
                     if (project == null) {
                         Text(
-                            "No project open",
+                            stringResource(R.string.project_none),
                             modifier = Modifier.fillMaxSize(),
                             color = SiteColors.danger,
                         )
@@ -111,7 +129,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onBack = { navController.popBackStack() },
                         )
                     } else {
-                        Text("No project open", modifier = Modifier.fillMaxSize())
+                        Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())
                     }
                 }
             }

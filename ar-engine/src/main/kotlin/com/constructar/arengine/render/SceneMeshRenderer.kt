@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 package com.constructar.arengine.render
 
 import android.util.Log
@@ -65,10 +71,11 @@ class SceneMeshRenderer(
     /**
      * Uploads (or replaces) the mesh stored under [key].
      *
-     * @param argb colour of the material; the provider decides lit vs unlit.
+     * @param argb colour of the material.
+     * @param unlit true for overlay geometry (the room scan), false for lit route geometry.
      * @return true when the mesh was uploaded.
      */
-    override fun upload(key: String, mesh: MeshData, argb: Int): Boolean {
+    override fun upload(key: String, mesh: MeshData, argb: Int, unlit: Boolean): Boolean {
         if (mesh.isEmpty) return false
         val bounds = mesh.bounds() ?: return false
         remove(key)
@@ -109,7 +116,7 @@ class SceneMeshRenderer(
             .build(engine)
         indexBuffer.setBuffer(engine, intView)
 
-        val materialInstance = materials.create(argb)
+        val materialInstance = if (unlit) materials.createUnlit(argb) else materials.create(argb)
         if (materialInstance == null) {
             Log.w(TAG, "no material for #${Integer.toHexString(argb)} — mesh $key not rendered")
             engine.destroyVertexBuffer(vertexBuffer)
@@ -256,7 +263,16 @@ class SceneMeshRenderer(
  * Implemented in :ar-engine over SceneView's `MaterialLoader` ([SceneViewMaterialProvider]),
  * and additionally as a fake in unit tests. Returning null means "this colour cannot be
  * rendered" — the renderer then skips the mesh instead of crashing.
+ *
+ * The two shading models are separate calls because they are separate materials in
+ * SceneView's loader: lit for routes (they must catch ARCore's light estimate so a pipe reads
+ * as lying *on* a wall), unlit for the scan overlay (a diagnostic wash that must not be
+ * confused with a routed service).
  */
-fun interface ColorMaterialProvider {
+interface ColorMaterialProvider {
+    /** Physically-based (lit) instance for [argb]. */
     fun create(argb: Int): MaterialInstance?
+
+    /** Flat, light-independent instance for [argb]. Defaults to the lit one. */
+    fun createUnlit(argb: Int): MaterialInstance? = create(argb)
 }

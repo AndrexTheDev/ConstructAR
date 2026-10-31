@@ -1,32 +1,109 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">ConstructAR</string>
+<!--
+  Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+  All rights reserved. Proprietary and confidential - see LICENSE.
 
-    <!-- Home -->
+  Localisation: English (default).
+  Every user-facing string in ConstructAR lives here; no Compose UI text is hardcoded.
+-->
+<resources>
+
+    <!-- Identity -->
+    <string name="app_name">ConstructAR</string>
+    <string name="developer_name">AndrexTheDev</string>
+
+    <!-- Project list -->
     <string name="home_title">Projects</string>
+    <string name="home_subtitle">Offline AR measuring for electrical, plumbing and ventilation</string>
     <string name="home_new_project">New room</string>
+    <string name="home_room_name">Room / zone name</string>
+    <string name="home_create">Create</string>
+    <string name="home_cancel">Cancel</string>
     <string name="home_empty">No rooms yet. Create one to start measuring.</string>
     <string name="home_offline_note">Works fully offline. Nothing leaves this phone.</string>
+    <string name="home_export">Export</string>
 
-    <!-- AR screen -->
-    <string name="ar_add_point">Add point</string>
+    <!-- AR measuring screen -->
+    <string name="scan_instruction">Move the phone slowly across the walls and floor to scan the room.</string>
+    <string name="tracking_loss">Tracking lost. Aim at a textured wall or the floor and move slowly.</string>
+    <string name="tracking_searching">Looking for features. Move the phone slowly across the surface.</string>
+    <string name="tracking_limited">Tracking is limited. Move slower.</string>
+    <string name="tracking_failure_reason">Tracking limited: %1$s</string>
+    <string name="tracking_thermal">Device warm. Mesh updates slowed to protect the battery; measurements are unaffected.</string>
+    <string name="depth_weak">Depth signal weak here (glass, mirror or dark surface). Move closer or re-aim.</string>
+    <string name="low_light_warning">Too dark to measure reliably. Turn on the torch.</string>
+    <string name="surface_wall">Wall</string>
+    <string name="surface_floor">Floor</string>
+    <string name="surface_ceiling">Ceiling</string>
+    <string name="surface_unknown">Surface</string>
+    <string name="routing_cable">Cable</string>
+    <string name="routing_pipe">Pipe</string>
+    <string name="routing_duct">Duct</string>
+    <string name="hud_length">%1$.2f m</string>
+    <string name="tier_plane">Plane</string>
+    <string name="tier_depth_point">Depth point</string>
+    <string name="tier_direct_depth">Depth ray</string>
+    <string name="tier_feature_point">Feature point</string>
+    <string name="ar_add_point">Add point at centre</string>
     <string name="ar_undo">Undo</string>
     <string name="ar_close_loop">Close loop</string>
     <string name="ar_finish">Finish run</string>
     <string name="ar_torch">Torch</string>
     <string name="ar_scan">Scan room</string>
     <string name="ar_stop_scan">Stop scan</string>
+    <string name="ar_closed_loop">closed loop</string>
+    <string name="ar_no_surface">No surface found. Aim at a wall or the floor.</string>
+    <string name="ar_scan_progress">Room %1$d %% · %2$d k triangles</string>
+    <string name="ar_scan_unavailable">Mesh scanning unavailable. Measuring still works.</string>
+    <string name="ar_session_failed">AR session failed: %1$s</string>
     <string name="ar_camera_permission">Camera access is required to measure. It is used only on this device.</string>
     <string name="ar_grant_permission">Grant camera access</string>
-    <string name="ar_ar_unavailable">AR is not available on this device. You can still enter lengths manually.</string>
+    <string name="ar_unavailable_unsupported">This device does not support ARCore. Switch to a supported phone or tablet.</string>
+    <string name="ar_unavailable_needs_install">ARCore needs an update. Install it from the Play Store, then reopen ConstructAR.</string>
+    <string name="ar_unavailable_declined">The ARCore install was declined. It is required to measure with the camera.</string>
+    <string name="ar_unavailable_failure">AR could not start on this device. Restart the app and try again.</string>
+    <string name="ar_offline_badge">Offline</string>
 
     <!-- Export -->
     <string name="export_title">Export</string>
+    <string name="export_back">Back</string>
     <string name="export_pdf">PDF protocol</string>
     <string name="export_csv">CSV material list</string>
     <string name="export_glb">GLB (BIM)</string>
     <string name="export_ply">PLY (point cloud)</string>
+    <string name="export_pdf_desc">PDF protocol (screenshot, lengths, bill of materials)</string>
+    <string name="export_csv_desc">CSV material list (Excel-ready, semicolon separated)</string>
+    <string name="export_glb_desc">GLB model for BIM (Revit / Navisworks / Blender)</string>
+    <string name="export_ply_desc">PLY point cloud or mesh (CloudCompare, MeshLab)</string>
     <string name="export_choose_folder">Save to folder…</string>
-    <string name="export_done">Saved %1$d files</string>
+    <string name="export_saving">Saving…</string>
+    <string name="export_success">Saved %1$d files to %2$s.</string>
     <string name="export_failed">Export failed: %1$s</string>
+    <string name="export_measurement">Measurement</string>
+    <string name="export_runs_total">%1$d runs · %2$s total</string>
+    <string name="export_order_length">Order length incl. waste: %1$s</string>
+    <string name="export_fittings">Clips %1$d · couplings %2$d · bends %3$d</string>
+    <string name="export_room_scan">Room scan: %1$d k triangles</string>
+    <string name="export_offline_note">Files are written to the folder you pick. Nothing is uploaded; export works in airplane mode and in a basement.</string>
+    <string name="export_about">%1$s %2$s · %3$s</string>
+    <string name="project_none">No project open</string>
+    <string name="home_default_room_name">Room</string>
+    <string name="error_project_open">The project could not be opened.</string>
+    <string name="error_project_save">The project could not be saved.</string>
+    <string name="ar_close">Close</string>
+    <string name="export_folder_inaccessible">The selected folder cannot be written to. Pick another folder.</string>
+    <string name="tier_manual">Manual</string>
+    <string name="route_warning_too_close">Too close to the previous point. Move at least 2 cm.</string>
+    <string name="route_warning_unpinned">That point could not be pinned. Hold still and try again.</string>
+    <string name="route_warning_bend_radius">Bend radius is tighter than this profile allows. Add a corner point or use a fitting.</string>
+
+    <!-- Counts -->
+    <plurals name="home_runs">
+        <item quantity="one">%1$d run</item>
+        <item quantity="other">%1$d runs</item>
+    </plurals>
+    <plurals name="ar_points">
+        <item quantity="one">%1$d point</item>
+        <item quantity="other">%1$d points</item>
+    </plurals>
 </resources>

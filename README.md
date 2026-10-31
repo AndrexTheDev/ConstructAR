@@ -2,6 +2,14 @@
 
 **Offline AR measuring and routing for electrical, plumbing and ventilation work.**
 
+| | |
+|---|---|
+| Developer | **AndrexTheDev** |
+| Contact | <hippie.highho@gmail.com> |
+| Repository | <https://github.com/AndrexTheDev/ConstructAR> |
+| Licence | **All Rights Reserved** ([LICENSE](LICENSE)) — the repository is public for CI/CD and review only |
+| Languages | English · Deutsch · Español · Français · Italiano · Polski |
+
 An electrician stands in an unfinished basement. There is no signal, the lights are on a
 temporary circuit, and the customer wants to know today how much 16 mm cable and how many
 clips the run needs. ConstructAR lets them *draw the conduit on the wall* with the phone,
@@ -33,7 +41,7 @@ a 3D model for BIM — **without a single byte leaving the device**.
 | **A** | Live room scan → TSDF volume → Surface Nets mesh, drawn as a translucent overlay | `native-slam/src/main/cpp/tsdf`, `ar-engine/.../scan` | 2 cm voxels, 8 cm truncation, extraction throttled to **300 ms** |
 | **B** | Strict hit-test cascade: **plane polygon → `DepthPoint` → direct depth raycast → feature point** | `ar-engine/.../hit` | Each tier is strictly less trustworthy; a node inherits the reliability of its tier and the export flags soft ones |
 | **C** | Surface-normal aligned procedural geometry: tubes for cables/pipes, channels for ducts, Bézier/fillet smoothing at bends | `core/.../mesh`, `core/.../geo` | Normals come from the hit tier, then are blended along the run so a tube hugs a wall without twisting |
-| **D** | Polyline length `L = Σ‖Pᵢ − Pᵢ₊₁‖`, every node bound to an ARCore `Anchor`, live HUD label ("Length: 14.82 m") | `ar-engine/.../route`, `core/.../geo/PolylineMetrics.kt` | Measured on the **surface** points, never the offset centreline |
+| **D** | Polyline length `L = Σ‖Pᵢ − Pᵢ₊₁‖`, every node bound to an ARCore `Anchor`, live HUD label from the `hud_length` format (`%1$.2f m`, localised) | `ar-engine/.../route`, `core/.../geo/PolylineMetrics.kt`, `app/src/main/res/values*/strings.xml` | Measured on the **surface** points, never the offset centreline |
 | **E** | Local export: PDF protocol, CSV material list, `.glb` (glTF 2.0 binary) and `.ply` | `export/` | Written through the Storage Access Framework; no media storage permission, no share-to-cloud |
 
 Plus: auto-torch with hysteresis, monocular depth (Depth Anything V2 Small) fused into the
@@ -61,11 +69,40 @@ only when extraction produced a new one (≤ 3.3 Hz). ARCore frame handling stay
 thread; depth filtering, TSDF integration, surface extraction and pose-graph optimisation run on
 native worker threads.
 
+**Zero reflection.** `:ar-engine` and `:app` contain no `Class.forName`, no reflective method
+lookup and no indirect `invoke`. SceneView **4.63.0** is used through its typed Compose API —
+`rememberEngine()`, `rememberModelLoader(engine)`, `rememberMaterialLoader(engine)`,
+`rememberEnvironmentLoader(engine)`, `rememberScene(engine)`, the typed `ARSceneView(...)`
+parameters (including `sessionConfiguration`, `flashMode`, `depthMode`) and the typed
+`MaterialLoader.createColorInstance` / `createUnlitColorInstance` factories. A SceneView upgrade
+therefore fails the *build* if an API moved, instead of failing silently on a device.
+`scripts/verify_sources.py` enforces the ban.
+
 **License-fee free, verified at build time.** SceneView (Apache-2.0) + Filament (Apache-2.0),
 ARCore (proprietary but free, ships in Google Play Services for AR), RTAB-Map compiled
 **without** OpenCV non-free / SURF (BSD-3-Clause, SIFT/ORB only), Depth Anything V2 **Small
 only** (Apache-2.0; Base/Large are CC-BY-NC and are refused by a checksum in
 `MonocularDepthEstimator`). See [docs/LICENSING.md](docs/LICENSING.md).
+
+---
+
+## Languages
+
+Six locales ship as resources, and **no user-facing text is hardcoded**: the engines report
+*states* (`TrackingMonitor.Guidance`, `RouteSession.RouteWarning`, `SurfaceKind`, `HitSource`,
+`ArReadiness`) and the app maps them to `stringResource`.
+
+| Directory | Locale | Keys |
+|-----------|--------|------|
+| `app/src/main/res/values/` | English (default) | 81 strings + 2 plurals |
+| `values-de/` | Deutsch | parity enforced |
+| `values-es/` | Español | parity enforced |
+| `values-fr/` | Français | parity enforced |
+| `values-it/` | Italiano | parity enforced |
+| `values-pl/` | Polski | includes `few`/`many` plural forms |
+
+`scripts/verify_sources.py` fails on a missing key, an untranslated extra key, or a mismatched
+format placeholder — so a half-translated release cannot ship.
 
 ---
 
@@ -83,14 +120,20 @@ only** (Apache-2.0; Base/Large are CC-BY-NC and are refused by a checksum in
 
 ## Build
 
-Requirements: **JDK 21**, Android SDK **37**, NDK **27.2.12479018**, CMake **3.22.1**, and the
-SceneView 4.60.0 / ARCore 1.57 artifacts (already pinned in `gradle/libs.versions.toml`).
+Requirements: **JDK 21**, Gradle **9.1**, Android SDK **37**, NDK **27.2.12479018**,
+CMake **3.22.1**, and the SceneView **4.63.0** / ARCore **1.57.0** / Filament **1.72.1**
+artifacts (pinned in `gradle/libs.versions.toml`).
 
 ```bash
-git clone <this repo> && cd ConstructAR
-./gradlew :app:assembleDebug          # APK in app/build/outputs/apk/debug/
-./gradlew :core:test :export:test     # JVM unit tests
+git clone https://github.com/AndrexTheDev/ConstructAR.git && cd ConstructAR
+gradle assembleDebug testDebugUnitTest   # the full gate: every module, warnings are errors
+gradle :app:assembleDebug                # APK in app/build/outputs/apk/debug/
+python3 scripts/verify_sources.py        # header / reflection / i18n gates, no SDK needed
 ```
+
+`gradle/actions/setup-gradle` supplies Gradle 9.1 in CI; the wrapper scripts and JAR are
+deliberately not committed, so `gradle` (not `./gradlew`) is the documented entry point here.
+`allWarningsAsErrors` is on for every module, so a deprecation is a build failure.
 
 The native volume mesher can be exercised without Gradle or a phone:
 
@@ -158,6 +201,13 @@ Known limitations, deliberately documented rather than hidden:
   this repository claims to have run on one.
 * **CI**: `.github/workflows/native-tests.yml` builds and runs the native suite with both `g++`
   and `clang++` at `-O1`/`-O2` with `-Werror`, on every push that touches the C++ core.
+* **CI**: `.github/workflows/android-build.yml` runs `gradle assembleDebug testDebugUnitTest`
+  (warnings are errors), asserts `libconstructar_slam.so` is inside the arm64 APK, and uploads
+  the test reports. That workflow — not a local machine — is where the "it compiles" claim is
+  proven.
+* **Static gates**: `scripts/verify_sources.py` checks copyright headers, the reflection ban,
+  hardcoded UI text, string-resource references, locale parity and XML well-formedness without
+  needing a JDK.
 
 The pre-release gate (device matrix, measurement verification against a laser, licensing,
 performance) is [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md).
@@ -182,5 +232,17 @@ plane-only device, re-check the SceneView integration points listed in
 
 ## Licence
 
-Source: Apache-2.0. Third-party components and their obligations:
-[docs/LICENSING.md](docs/LICENSING.md).
+**All Rights Reserved** — see [LICENSE](LICENSE). Copyright (c) 2026
+**AndrexTheDev** <hippie.highho@gmail.com>.
+
+The repository is public **only** so that GitHub Actions can build it and reviewers can read it.
+Being visible is not a licence: use, copying, modification, distribution, commercial use and
+reverse engineering are prohibited. Every source file carries the corresponding header
+(`SPDX-License-Identifier: LicenseRef-Proprietary`).
+
+Third-party components remain under their own licences (Apache-2.0 / BSD-3-Clause / ARCore SDK
+terms); see [docs/LICENSING.md](docs/LICENSING.md) for the inventory and obligations.
+
+---
+
+© 2026 **AndrexTheDev** <hippie.highho@gmail.com> — All rights reserved. See [LICENSE](LICENSE).

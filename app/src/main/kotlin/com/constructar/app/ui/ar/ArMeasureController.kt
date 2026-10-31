@@ -1,9 +1,14 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
 package com.constructar.app.ui.ar
 
 import android.content.Context
 import android.os.PowerManager
 import android.os.SystemClock
-import android.util.Log
 import com.constructar.arengine.hit.ArInteraction
 import com.constructar.arengine.hit.HitResolution
 import com.constructar.arengine.render.RouteSceneController
@@ -14,6 +19,8 @@ import com.constructar.arengine.route.AnchorHandle
 import com.constructar.arengine.route.ArCoreAnchorFactory
 import com.constructar.arengine.route.RouteSession
 import com.constructar.arengine.scan.TsdfScanPipeline
+import com.constructar.arengine.session.ArReadiness
+import com.constructar.arengine.session.ArSessionController
 import com.constructar.arengine.session.TorchController
 import com.constructar.arengine.tracking.TrackingMonitor
 import com.constructar.arengine.tracking.TrackingQuality
@@ -27,6 +34,7 @@ import com.google.ar.core.Config
 import com.google.ar.core.Frame
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
+import io.github.sceneview.loaders.MaterialLoader
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -53,7 +61,7 @@ class ArMeasureController(private val context: Context) {
     private val tsdfConfig = com.constructar.nativebridge.TsdfConfig()
     val pipeline = TsdfScanPipeline(config = tsdfConfig)
     val tracking = TrackingMonitor()
-    private val sessionController = com.constructar.arengine.session.ArSessionController(context)
+    private val sessionController = ArSessionController(context)
     private val anchors = DelegatingAnchorFactory()
     val routeSession = RouteSession(anchors)
 
@@ -84,13 +92,32 @@ class ArMeasureController(private val context: Context) {
     @Volatile
     private var session: Session? = null
 
-    /** Called once when ARCore has a live session (also after a relocalisation). */
+    /**
+     * ARCore policy hook handed to SceneView's typed `sessionConfiguration`.
+     *
+     * SceneView applies it immediately before `Session.configure()`, which is the only moment
+     * ARCore accepts new settings. This must stay free of Compose and of any `configure()` call.
+     */
+    fun applySessionPolicy(session: Session, config: Config) = sessionController.applyPolicy(session, config)
+
+    /** True when the live session has depth (drives the "plane only" warning). */
+    val depthAvailable: Boolean get() = sessionController.depthAvailable
+
+    /** ARCore readiness check, surfaced as a localised blocking message when it is not [ArReadiness.Ready]. */
+    suspend fun checkReadiness(activity: android.app.Activity?, hasCameraPermission: Boolean): ArReadiness =
+        sessionController.checkReadiness(activity, hasCameraPermission)
+
+    /**
+     * Called once when ARCore has a live session (also after a relocalisation).
+     *
+     * Synchronised because SceneView reports a new session both from its typed
+     * `onSessionCreated` (main thread) and, defensively, from `onSessionUpdated` (render
+     * thread): the guard inside must not be able to run twice concurrently.
+     */
+    @Synchronized
     fun onSessionCreated(session: Session) {
         if (this.session === session && interaction != null) return
         this.session = session
-        // SceneView creates the session; ConstructAR owns the policy applied to it (raw depth,
-        // ambient light estimation, cloud features off, torch off to start).
-        sessionController.applyConfig(session)
         anchors.delegate = ArCoreAnchorFactory(session)
         interaction = ArInteraction(session).also {
             it.previousNode = routeSession.state.value.nodes.lastOrNull()
@@ -106,11 +133,24 @@ class ArMeasureController(private val context: Context) {
                 onFused = { depth, width, height, _ -> pipeline.submitFusedDepth(depth, width, height) },
             ).also { it.warmUp() }
         }
-        torchController = TorchController(switch = { enabled -> applyTorch(session, enabled) })
+        // The torch is applied by SceneView through the typed `flashMode` parameter; this
+        // controller only decides *when* it should be on (hysteresis, battery, manual override).
+        torchController = TorchController(
+            switch = { enabled ->
+                torchOn.value = enabled
+                true
+            },
+        )
     }
 
-    /** Called by SceneView once the Filament scene exists. */
-    fun onSceneReady(scene: Scene, engine: Engine, materialLoader: Any) {
+    /**
+     * Called from [com.constructar.arengine.render.ArScene] once the Filament scene exists.
+     *
+     * Runs on the main thread, which is a hard requirement: `MaterialLoader`'s colour
+     * factories are `@MainThread`, and the provider pre-warms the whole palette here so a
+     * frame never allocates a material.
+     */
+    fun onSceneReady(scene: Scene, engine: Engine, materialLoader: MaterialLoader) {
         val meshRenderer = SceneMeshRenderer(engine, scene, SceneViewMaterialProvider(materialLoader))
         renderer = meshRenderer
         sceneController = RouteSceneController(meshRenderer)
@@ -204,7 +244,9 @@ class ArMeasureController(private val context: Context) {
             return
         }
         val scan = pipeline.mesh.value ?: return
-        meshRenderer.upload(SCAN_MESH_KEY, scan.mesh, SCAN_MESH_COLOR)
+        // Unlit + translucent: the reconstruction must never be mistaken for installed hardware
+        // and must not hide the routed services behind it.
+        meshRenderer.upload(SCAN_MESH_KEY, scan.mesh, SceneViewMaterialProvider.SCAN_OVERLAY_ARGB, unlit = true)
         meshRenderer.setVisible(SCAN_MESH_KEY, true)
     }
 
@@ -247,7 +289,8 @@ class ArMeasureController(private val context: Context) {
         monocularDepth?.close()
         monocularDepth = null
         pipeline.stop()
-        sessionController.close()
+        // The ARCore session belongs to SceneView: it is paused and closed by ARSceneView's own
+        // disposal. Closing it here would pull the camera out from under the renderer.
         renderer?.release()
         renderer = null
         sceneController = null
@@ -308,18 +351,6 @@ class ArMeasureController(private val context: Context) {
     private val viewMatrix = FloatArray(16)
     private val projectionMatrix = FloatArray(16)
 
-    private fun applyTorch(session: Session, enabled: Boolean): Boolean = try {
-        val config = Config(session).apply {
-            flashMode = if (enabled) Config.FlashMode.TORCH else Config.FlashMode.OFF
-        }
-        session.configure(config)
-        torchOn.value = enabled
-        true
-    } catch (error: Throwable) {
-        Log.w(TAG, "torch switch failed", error)
-        false
-    }
-
     private fun batteryPercent(): Int = runCatching {
         val manager = context.getSystemService(android.os.BatteryManager::class.java)
         manager.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
@@ -330,9 +361,6 @@ class ArMeasureController(private val context: Context) {
 
         /** Renderer key of the room-scan overlay (separate from the runs). */
         const val SCAN_MESH_KEY = "scan:room"
-
-        /** Neutral grey so the coloured runs stay readable on top of the scan. */
-        const val SCAN_MESH_COLOR = 0xFF8A8F98.toInt()
 
         /** HUD label refresh period (render thread → Compose state). */
         private const val HUD_INTERVAL_MS = 50L
