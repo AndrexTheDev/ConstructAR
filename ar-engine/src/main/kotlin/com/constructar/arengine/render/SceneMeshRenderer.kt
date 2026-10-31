@@ -185,6 +185,10 @@ class SceneMeshRenderer(
         val renderableManager = engine.renderableManager
         renderableManager.setLayerMask(
             renderableManager.getInstance(entry.entity),
+            // (entity, select, value): `select` picks which layer bits to overwrite, `value`
+            // is what they become. Showing a mesh re-enables every layer, hiding it clears
+            // them all, which is what `visible` means for our own entities.
+            0xFF,
             if (visible) 0xFF else 0x00,
         )
         recomputeTriangleCount()

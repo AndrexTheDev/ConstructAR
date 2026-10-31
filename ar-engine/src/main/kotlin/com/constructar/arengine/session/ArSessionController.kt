@@ -106,8 +106,17 @@ class ArSessionController(private val context: Context) {
         // would silently disable the torch on every reconfiguration.
 
         depthAvailable = config.depthMode != Config.DepthMode.DISABLED
-        torchSupported = runCatching { session.isFlashModeSupported(Config.FlashMode.TORCH) }
-            .getOrDefault(false)
+        // ARCore ships no `Session.isFlashModeSupported(FlashMode)` getter (unlike
+        // `isDepthModeSupported`): the supported way to probe is `Session.isSupported(config)`
+        // with the candidate mode set. The previous mode is restored immediately, because
+        // SceneView applied the caller's `flashMode` before this callback ran.
+        torchSupported = runCatching {
+            val previous = config.flashMode
+            config.flashMode = Config.FlashMode.TORCH
+            val supported = session.isSupported(config)
+            config.flashMode = previous
+            supported
+        }.getOrDefault(false)
     }
 
     /**

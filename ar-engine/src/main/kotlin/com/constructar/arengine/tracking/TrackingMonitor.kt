@@ -75,9 +75,17 @@ data class TrackingStatus(
     val scanCoverage: Float = 0f,
     /** Localisable coaching code. */
     val guidance: Guidance = Guidance.NONE,
-    /** True when a measurement may be taken right now. */
-    val canMeasure: Boolean get() = quality == TrackingQuality.GOOD || quality == TrackingQuality.LIMITED,
 ) {
+    /**
+     * True when a measurement may be taken right now.
+     *
+     * Deliberately a body property: a `get()` accessor is not allowed on a primary-constructor
+     * parameter, and keeping it derived (rather than a stored field) means `copy()` cannot
+     * produce a status whose `canMeasure` contradicts its `quality`.
+     */
+    val canMeasure: Boolean
+        get() = quality == TrackingQuality.GOOD || quality == TrackingQuality.LIMITED
+
     companion object {
         val INITIAL = TrackingStatus()
     }

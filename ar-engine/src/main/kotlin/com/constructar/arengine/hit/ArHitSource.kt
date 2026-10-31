@@ -10,14 +10,18 @@ import android.opengl.Matrix
 import android.util.Log
 import com.constructar.arengine.depth.DepthFrameSnapshot
 import com.constructar.arengine.depth.DepthImageMath
+import com.constructar.arengine.route.positionVec
+import com.constructar.arengine.route.toCoreQuat
 import com.constructar.core.math.Ray
 import com.constructar.core.math.Vec3
 import com.constructar.core.model.HitSource
 import com.constructar.core.model.RouteNodeRecord
 import com.constructar.core.model.SurfaceKind
+import com.google.ar.core.DepthPoint
 import com.google.ar.core.Frame
 import com.google.ar.core.HitResult
 import com.google.ar.core.Plane
+import com.google.ar.core.Point
 import com.google.ar.core.Pose
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
@@ -73,8 +77,11 @@ class ArHitSource(
             emptyList()
         }
 
-        val depthPoint = hits.firstOrNull { it.type == HitResult.Type.DEPTH_POINT }?.toSurfaceHit(frame, snapshot)
-        val featurePoint = hits.firstOrNull { it.type == HitResult.Type.POINT }?.toSurfaceHit(frame, snapshot)
+        // ARCore's `HitResult` carries no type discriminator: the *trackable* it hit is the
+        // type (Plane / Point / DepthPoint / InstantPlacementPoint). `getType()` does not exist
+        // on the ARCore API - SceneView's own hit helpers switch on `hitResult.trackable` too.
+        val depthPoint = hits.firstOrNull { it.trackable is DepthPoint }?.toSurfaceHit(frame, snapshot)
+        val featurePoint = hits.firstOrNull { it.trackable is Point }?.toSurfaceHit(frame, snapshot)
 
         // Tier 3 needs a metric depth frame; the TSDF pipeline keeps the latest one alive.
         val directDepth = if (snapshot != null) {
@@ -101,7 +108,7 @@ class ArHitSource(
 
         return HitRequest(
             ray = ray ?: Ray(Vec3.ZERO, Vec3(0f, 0f, -1f)),
-            viewerPosition = frame.camera.pose.position(),
+            viewerPosition = frame.camera.pose.positionVec(),
             planes = planes,
             depthPoint = depthPoint,
             directDepthHit = directDepth,
@@ -149,7 +156,7 @@ class ArHitSource(
             }
             val centerPose = plane.centerPose
             // ARCore's plane normal is the pose's +Y axis.
-            val normal = centerPose.rotationQuaternion().rotate(Vec3.Y_AXIS)
+            val normal = centerPose.toCoreQuat().rotate(Vec3.Y_AXIS)
             val candidate = PlaneCandidate.fromPolygon(
                 id = plane.hashCode().toString(),
                 polygon = vertices,
@@ -187,7 +194,7 @@ class ArHitSource(
         val far = unproject(inverse, ndcX, ndcY, 1f) ?: return null
         val direction = (far - near).normalizedOrZero()
         if (direction.isDegenerate()) return null
-        val origin = frame.camera.pose.position()
+        val origin = frame.camera.pose.positionVec()
         return Ray(origin, direction)
     }
 
@@ -242,7 +249,7 @@ class ArHitSource(
     // ── HitResult conversion ────────────────────────────────────────────────────────────
 
     private fun HitResult.toSurfaceHit(frame: Frame, snapshot: DepthFrameSnapshot?): SurfaceHit {
-        val point = hitPose.position()
+        val point = hitPose.positionVec()
         // Depth/point hits carry no reliable orientation: derive the normal from the depth
         // neighbourhood when we have a metric frame, otherwise face the camera.
         val normal = runCatching {
@@ -252,15 +259,15 @@ class ArHitSource(
             } else {
                 null
             }
-        }.getOrNull() ?: SurfaceHitResolver.flipTowards(point, Vec3(0f, 0f, 1f), frame.camera.pose.position())
+        }.getOrNull() ?: SurfaceHitResolver.flipTowards(point, Vec3(0f, 0f, 1f), frame.camera.pose.positionVec())
 
-        val source = if (type == HitResult.Type.DEPTH_POINT) HitSource.AR_DEPTH_POINT else HitSource.FEATURE_POINT
+        val source = if (trackable is DepthPoint) HitSource.AR_DEPTH_POINT else HitSource.FEATURE_POINT
         return SurfaceHit(
             point = point,
             normal = normal,
             source = source,
             confidence = source.reliability,
-            distanceMeters = frame.camera.pose.position().distanceTo(point),
+            distanceMeters = frame.camera.pose.positionVec().distanceTo(point),
             surfaceKind = SurfaceKind.fromNormal(normal),
             label = if (source == HitSource.AR_DEPTH_POINT) "Depth point" else "Feature point",
         )
@@ -285,14 +292,3 @@ class ArHitSource(
     }
 }
 
-/**
- * ARCore `Pose` → :core `Quat` (w, x, y, z).
- *
- * ARCore stores a `[x, y, z, w]` quaternion; :core uses `Quat(w, x, y, z)` — the reorder is
- * done in exactly this one place so it cannot be forgotten elsewhere.
- */
-private fun Pose.rotationQuaternion(): com.constructar.core.math.Quat {
-    val q = FloatArray(4)
-    getRotationQuaternion(q, 0)
-    return com.constructar.core.math.Quat(q[3], q[0], q[1], q[2])
-}

@@ -74,15 +74,19 @@ class ArCoreAnchorFactory(session: Session) : AnchorFactory {
         override val id: String = anchor.hashCode().toString()
 
         override val position: Vec3
-            get() = anchor.pose.position()
+            get() = anchor.pose.positionVec()
 
         override val rotation: Quat
-            get() = anchor.pose.rotationQuaternion().let { Quat(it[3], it[0], it[1], it[2]) }
+            get() = anchor.pose.toCoreQuat()
 
         override val tracking: Boolean
             get() = anchor.trackingState == TrackingState.TRACKING
 
-        override fun detach() = runCatching { anchor.detach() }.getOrNull()
+        override fun detach() {
+            // Swallow: an anchor that ARCore already dropped (tracking loss, session update)
+            // must not take the routing screen down with it.
+            runCatching { anchor.detach() }
+        }
     }
 
     companion object {
@@ -90,15 +94,3 @@ class ArCoreAnchorFactory(session: Session) : AnchorFactory {
     }
 }
 
-/** ARCore `Pose.position()` → :core [Vec3]. */
-private fun Pose.position(): Vec3 {
-    val t = translation
-    return Vec3(t[0], t[1], t[2])
-}
-
-/** ARCore `Pose` quaternion `[x, y, z, w]`. */
-private fun Pose.rotationQuaternion(): FloatArray {
-    val q = FloatArray(4)
-    getRotationQuaternion(q, 0)
-    return q
-}

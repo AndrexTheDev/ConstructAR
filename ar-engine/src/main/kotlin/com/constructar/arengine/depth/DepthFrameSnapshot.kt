@@ -222,7 +222,7 @@ object DepthImageMath {
         cameraToWorld: FloatArray,
         x: Int,
         y: Int,
-        half = 2,
+        half: Int = 2,
     ): Vec3 {
         val points = ArrayList<Vec3>((2 * half + 1) * (2 * half + 1))
         for (dy in -half..half) {

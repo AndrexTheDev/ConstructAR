@@ -271,9 +271,11 @@ class MonocularDepthEstimator private constructor(
         private fun bytesOf(shape: IntArray, dataType: DataType): Int {
             var elements = 1
             for (dimension in shape) if (dimension > 0) elements *= dimension
+            // `org.tensorflow.lite.DataType` is the narrow enum (FLOAT32, INT32, UINT8, INT8,
+            // INT16, INT64, BOOL, STRING) — there is no FLOAT16 entry to switch on.
             val elementSize = when (dataType) {
                 DataType.FLOAT32, DataType.INT32 -> 4
-                DataType.FLOAT16 -> 2
+                DataType.INT16 -> 2
                 else -> 1
             }
             return elements * elementSize

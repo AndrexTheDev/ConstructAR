@@ -87,7 +87,7 @@ class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity 
             var confidenceHeight = 0
             var confidenceRowStride = 0
             try {
-                frame.acquireDepthConfidenceImage().use { image ->
+                frame.acquireRawDepthConfidenceImage().use { image ->
                     val confPlane = image.planes[0]
                     confidenceWidth = image.width
                     confidenceHeight = image.height
@@ -141,8 +141,12 @@ class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity 
      */
     private fun depthIntrinsics(camera: Camera, width: Int, height: Int): DepthIntrinsics {
         val image = camera.imageIntrinsics // colour-resolution intrinsics
-        val sx = width.toFloat() / image.imageWidth
-        val sy = height.toFloat() / image.imageHeight
+        // ARCore's CameraIntrinsics reports sizes as an android.util.Size: `imageWidth` /
+        // `imageHeight` do not exist on it.
+        val colorWidth = image.imageDimensions.width
+        val colorHeight = image.imageDimensions.height
+        val sx = width.toFloat() / colorWidth
+        val sy = height.toFloat() / colorHeight
         return DepthIntrinsics(
             fx = image.focalLength[0] * sx,
             fy = image.focalLength[1] * sy,
@@ -194,7 +198,7 @@ class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity 
                 confidenceCount++
                 if (conf < minConfidence) continue
                 valid++
-                if (mm < nearest) nearest = mm
+                if (mm < nearest) nearest = mm.toFloat()
             }
         }
         val sampled = ((width + step - 1) / step) * ((height + step - 1) / step)
