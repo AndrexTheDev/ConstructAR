@@ -60,6 +60,7 @@
     <string name="ar_scan_progress">Locale %1$d %% · %2$d k triangoli</string>
     <string name="ar_scan_unavailable">Scansione della mesh non disponibile. La misura funziona comunque.</string>
     <string name="ar_session_failed">Sessione AR non riuscita: %1$s</string>
+    <string name="ar_session_retry">Riprova</string>
     <string name="ar_camera_permission">Per misurare serve l’accesso alla fotocamera. Viene usata solo su questo dispositivo.</string>
     <string name="ar_grant_permission">Consenti fotocamera</string>
     <string name="ar_unavailable_unsupported">Questo dispositivo non supporta ARCore. Usa uno smartphone o un tablet compatibile.</string>

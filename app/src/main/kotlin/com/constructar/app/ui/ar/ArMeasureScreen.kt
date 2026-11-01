@@ -176,6 +176,9 @@ fun ArMeasureScreen(
     BackHandler(enabled = LeaveGuard.needsConfirmation(routeState.nodeCount)) {
         confirmLeave = !confirmLeave
     }
+    // Drops the failed session and composes the surface again: ARScene, its engine and its
+    // ARCore session are all torn down by the gate, so a fresh one starts from nothing.
+    val retrySession: () -> Unit = { sessionError = null }
 
     // Tap results are produced on the render thread; they are applied here, on the main
     // thread, where anchor creation belongs.
@@ -228,20 +231,42 @@ fun ArMeasureScreen(
             .fillMaxSize()
             .onSizeChanged { viewSize = it },
     ) {
-        when {
-            !hasCameraPermission -> GateMessage(
+        when (arGate(hasCameraPermission, readinessText != null, sessionError != null)) {
+            ArGate.PERMISSION -> GateMessage(
                 text = stringResource(R.string.ar_camera_permission),
                 action = stringResource(R.string.ar_grant_permission),
                 onAction = { permissionLauncher.launch(Manifest.permission.CAMERA) },
             )
 
-            readinessText != null -> GateMessage(
-                text = readinessText,
+            ArGate.READINESS -> GateMessage(
+                text = readinessText.orEmpty(),
                 action = stringResource(R.string.export_back),
                 onAction = onBack,
             )
 
-            else -> {
+            // A session that failed is not a note in the corner: no frame arrives, so no point
+            // can be placed and every control is inert. Take the surface away and say so.
+            ArGate.SESSION_FAILED -> {
+                val retry = canRetrySession(routeState.nodeCount)
+                GateMessage(
+                    text = stringResource(R.string.ar_session_failed, sessionError.orEmpty()),
+                    action = if (retry) {
+                        stringResource(R.string.ar_session_retry)
+                    } else {
+                        stringResource(R.string.ar_leave_save)
+                    },
+                    onAction = if (retry) {
+                        retrySession
+                    } else {
+                        {
+                            commitRun()
+                            onBack()
+                        }
+                    },
+                )
+            }
+
+            ArGate.NONE -> {
                 ArScene(
                     modifier = Modifier.fillMaxSize(),
                     depthEnabled = true,
@@ -396,13 +421,6 @@ fun ArMeasureScreen(
                 }
                 warningText?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
-                }
-                sessionError?.let {
-                    Text(
-                        text = stringResource(R.string.ar_session_failed, it),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = SiteColors.danger,
-                    )
                 }
                 // Whether the point under the crosshair has settled. Until it has, a tap would
                 // commit one noisy frame; the stabiliser says when it is worth tapping.

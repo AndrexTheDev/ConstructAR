@@ -60,6 +60,7 @@
     <string name="ar_scan_progress">Estancia %1$d %% · %2$d k triángulos</string>
     <string name="ar_scan_unavailable">Escaneo de malla no disponible. La medición sigue funcionando.</string>
     <string name="ar_session_failed">Fallo de la sesión AR: %1$s</string>
+    <string name="ar_session_retry">Reintentar</string>
     <string name="ar_camera_permission">Se necesita acceso a la cámara para medir. Solo se usa en este dispositivo.</string>
     <string name="ar_grant_permission">Permitir cámara</string>
     <string name="ar_unavailable_unsupported">Este dispositivo no admite ARCore. Usa un teléfono o tableta compatible.</string>

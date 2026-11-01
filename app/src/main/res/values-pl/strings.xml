@@ -60,6 +60,7 @@
     <string name="ar_scan_progress">Pomieszczenie %1$d %% · %2$d tys. trójkątów</string>
     <string name="ar_scan_unavailable">Skanowanie siatki niedostępne. Pomiar nadal działa.</string>
     <string name="ar_session_failed">Sesja AR nie powiodła się: %1$s</string>
+    <string name="ar_session_retry">Spróbuj ponownie</string>
     <string name="ar_camera_permission">Do pomiaru potrzebny jest dostęp do aparatu. Jest używany tylko na tym urządzeniu.</string>
     <string name="ar_grant_permission">Zezwól na aparat</string>
     <string name="ar_unavailable_unsupported">To urządzenie nie obsługuje ARCore. Użyj zgodnego telefonu lub tabletu.</string>

@@ -48,6 +48,8 @@ Everything here is a gate before an APK reaches a site, in the order it should b
 
 - [ ] Camera permission denied → rationale → settings round trip works
 - [ ] ARCore not installed → install flow → back to the app
+- [ ] ARCore session failure (occupy the camera from another app) → full-screen message, no
+      live controls behind it; *try again* recovers, *save* keeps a run in progress
 - [ ] Airplane mode: scan, measure, export all work
 - [ ] Torch: supported device turns it on below 40 lux, off above 120 lux, no flicker
 - [ ] Tracking loss (cover the camera) → coaching text, recovery without losing the run

@@ -60,6 +60,7 @@
     <string name="ar_scan_progress">Raum %1$d %% · %2$d k Dreiecke</string>
     <string name="ar_scan_unavailable">Netz-Scan nicht verfügbar. Messen funktioniert weiterhin.</string>
     <string name="ar_session_failed">AR-Sitzung fehlgeschlagen: %1$s</string>
+    <string name="ar_session_retry">Erneut versuchen</string>
     <string name="ar_camera_permission">Zum Messen ist Kamerazugriff nötig. Die Kamera wird nur auf diesem Gerät genutzt.</string>
     <string name="ar_grant_permission">Kamerazugriff erlauben</string>
     <string name="ar_unavailable_unsupported">Dieses Gerät unterstützt ARCore nicht. Nutze ein unterstütztes Telefon oder Tablet.</string>
