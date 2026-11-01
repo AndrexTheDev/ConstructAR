@@ -557,22 +557,16 @@ class ProtocolPdfWriter(
         paint.measureText(text)
     }
 
-    private fun wrap(text: String, maxWidth: Int, paint: Paint): List<String> {
-        val words = text.split(' ')
-        val lines = ArrayList<String>()
-        var current = StringBuilder()
-        for (word in words) {
-            val candidate = if (current.isEmpty()) word else "$current $word"
-            if (paint.measureText(candidate) <= maxWidth) {
-                current = StringBuilder(candidate)
-            } else {
-                if (current.isNotEmpty()) lines += current.toString()
-                current = StringBuilder(word)
-            }
-        }
-        if (current.isNotEmpty()) lines += current.toString()
-        return lines
-    }
+    /**
+     * Paragraph text as drawable lines.
+     *
+     * Delegated to [PdfText] because a diary entry is typed into a *multi-line* field: the old
+     * version split on spaces only, so the `\n` stayed inside a word and printed as a missing
+     * glyph in the middle of a site note. [PdfText.wrap] keeps the author's line breaks and
+     * ellipsises a single word that is wider than the column.
+     */
+    private fun wrap(text: String, maxWidth: Int, paint: Paint): List<String> =
+        PdfText.wrap(text, maxWidth.toFloat()) { value -> paint.measureText(value) }
 
     private fun format(meters: Float): String = String.format(Locale.ROOT, "%.2f", meters)
 

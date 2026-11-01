@@ -71,4 +71,36 @@ class PdfTextTest {
         assertTrue("still has a line break: $clamped", !clamped.contains('\n'))
         assertTrue("did not fit: $clamped", measureTenPerCharacter(clamped) <= 100f)
     }
+
+    @Test
+    fun `paragraphs wrap at the column width`() {
+        val lines = PdfText.wrap("Bad OG hinter der Heizung", 100f, measureTenPerCharacter)
+
+        assertEquals(listOf("Bad OG", "hinter der", "Heizung"), lines)
+        for (line in lines) assertTrue("$line did not fit", measureTenPerCharacter(line) <= 100f)
+    }
+
+    @Test
+    fun `a diary entry keeps its own line breaks`() {
+        // The field is multi-line: what the operator typed as two lines must not become one line
+        // with a missing-glyph box where the break was.
+        val lines = PdfText.wrap("Kabel verlegt\nMaterial fehlt", 200f, measureTenPerCharacter)
+
+        assertEquals(listOf("Kabel verlegt", "Material fehlt"), lines)
+        assertTrue(lines.none { it.contains('\n') })
+    }
+
+    @Test
+    fun `a word wider than the column is ellipsised instead of overflowing`() {
+        val lines = PdfText.wrap("Donaudampfschifffahrtsgesellschaft", 100f, measureTenPerCharacter)
+
+        assertEquals(1, lines.size)
+        assertTrue("did not fit: ${lines[0]}", measureTenPerCharacter(lines[0]) <= 100f)
+        assertTrue("no ellipsis: ${lines[0]}", lines[0].endsWith("…"))
+    }
+
+    @Test
+    fun `an empty paragraph still produces one drawable line`() {
+        assertEquals(listOf(""), PdfText.wrap("   ", 100f, measureTenPerCharacter))
+    }
 }

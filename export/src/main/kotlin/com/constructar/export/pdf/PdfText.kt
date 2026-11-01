@@ -42,4 +42,40 @@ object PdfText {
      */
     fun singleLine(value: String): String =
         value.replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').trim()
+
+    /**
+     * [value] as lines no wider than [maxWidth], keeping the author's own line breaks.
+     *
+     * A diary entry is typed into a multi-line field, so its text arrives with `\n` in it. The
+     * paragraph path used to split on spaces only, which left the line break inside a "word" and
+     * printed it as the font's missing glyph - a box in the middle of a site note. A word that is
+     * wider than the column on its own (a long URL, a pasted part number) is ellipsised instead
+     * of running past the margin.
+     */
+    fun wrap(value: String, maxWidth: Float, measure: (String) -> Float): List<String> {
+        val lines = ArrayList<String>()
+        for (logical in singleLines(value)) {
+            var current = StringBuilder()
+            for (word in logical.split(WHITESPACE)) {
+                if (word.isEmpty()) continue
+                val candidate = if (current.isEmpty()) word else "$current $word"
+                if (measure(candidate) <= maxWidth) {
+                    current = StringBuilder(candidate)
+                } else {
+                    if (current.isNotEmpty()) lines += current.toString()
+                    current = StringBuilder(
+                        if (measure(word) <= maxWidth) word else ellipsize(word, maxWidth, measure),
+                    )
+                }
+            }
+            if (current.isNotEmpty()) lines += current.toString()
+        }
+        return lines.ifEmpty { listOf("") }
+    }
+
+    /** [value] split on line breaks and tabs, trimmed, with empty lines dropped. */
+    fun singleLines(value: String): List<String> =
+        value.split('\n', '\r', '\t').map { it.trim() }.filter { it.isNotEmpty() }
+
+    private val WHITESPACE = Regex("\\s+")
 }
