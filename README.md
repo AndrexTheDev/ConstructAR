@@ -391,6 +391,11 @@ Known limitations, deliberately documented rather than hidden:
   Twitter cards with a real image size, JSON-LD whose offers match the four real prices, every
   internal link and fragment resolving, sitemap `<lastmod>`, robots.txt, the manifest icons
   (declared size checked against the file), and a 404 that is `noindex` with absolute URLs only.
+* **Agreement gates**: `tools/i18n_audit.py` fails when a translated locale still carries the
+  English string (with a reviewed allowlist for words that are genuinely the same — "Export" is
+  German, "Surface" is French), and `tools/consistency_audit.py` fails when the landing page and
+  the app disagree on the three wallet addresses, the four prices, the six languages or the
+  version.
 * **The temporary screenshot matrix** (`.github/workflows/screenshots.yml`) renders every screen
   in all six languages on the JVM and every landing page in real Chromium at three viewports. It
   lives in build output, is not part of the release gate, and is meant to be deleted after the

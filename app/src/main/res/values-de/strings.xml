@@ -160,7 +160,7 @@
     <string name="paywall_pro_4">Alle künftigen Funktionen</string>
     <string name="paywall_month_title">Monatlich</string>
     <string name="paywall_year_title">Jährlich</string>
-    <string name="paywall_lifetime_title">Lifetime</string>
+    <string name="paywall_lifetime_title">Lebenslang</string>
     <string name="paywall_price_month">%1$s pro Monat</string>
     <string name="paywall_price_year">%1$s pro Jahr</string>
     <string name="paywall_price_lifetime">%1$s einmalig</string>

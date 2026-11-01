@@ -303,7 +303,7 @@ CONTENT: dict[str, dict[str, str]] = {
         "plan_free": "Kostenlos", "plan_free_p": "0 €", "plan_free_b": "Ein Raum, unbegrenzte Strecken, CSV und PDF mit Wasserzeichen.",
         "plan_m": "Pro monatlich", "plan_m_p": "10 € / Monat", "plan_m_b": "Unbegrenzte Räume, sauberes PDF, GLB + PLY.",
         "plan_y": "Pro jährlich", "plan_y_p": "100 € / Jahr", "plan_y_b": "Wie monatlich, zwei Monate gratis.", "plan_y_tag": "Bester Preis",
-        "plan_l": "Lifetime", "plan_l_p": "999 € einmalig", "plan_l_b": "Einmal zahlen, dauerhaft nutzen.",
+        "plan_l": "Lebenslang", "plan_l_p": "999 € einmalig", "plan_l_b": "Einmal zahlen, dauerhaft nutzen.",
         "price_note": "Sieben Tage Pro sind gratis — ohne Karte, ohne Fragen. Bezahlt wird in SOL, BTC oder ETH; du bekommst einen Lizenzschlüssel, den die App offline prüft. Wenn ein Abo endet, wird nichts entzogen.",
         "crypto_title": "Zahlungsadressen",
         "lang_title": "Sechs Sprachen, ein Build",

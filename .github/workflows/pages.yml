@@ -91,6 +91,11 @@ jobs:
           print(f"{len(build_site.CONTENT)} languages, {len(base)} keys each")
           PY
 
+      - name: Translation and price agreement
+        run: |
+          python3 tools/i18n_audit.py
+          python3 tools/consistency_audit.py
+
       - name: SEO and structured-data audit
         # The gate the page has to pass before it is published: canonical and hreflang sets,
         # Open Graph and Twitter cards, JSON-LD that matches the real price list, every internal
