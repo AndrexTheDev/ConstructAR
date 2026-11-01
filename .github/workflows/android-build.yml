@@ -219,6 +219,7 @@ jobs:
           set +e
           gradle --no-daemon --console=plain --stacktrace --continue --warning-mode all assembleDebug testDebugUnitTest > /tmp/step.log 2>&1
           code=$?
+          python3 scripts/ci_test_report.py || true
           bash scripts/ci_annotate.sh /tmp/step.log "full gate failed" "$code"
 
       - name: Release build - R8, resource shrink, six locales
