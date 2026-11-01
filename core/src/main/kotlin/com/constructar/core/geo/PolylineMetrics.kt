@@ -66,24 +66,21 @@ data class RouteMetrics(
     val clipCount: Int,
     val couplingCount: Int,
     val minimumConfidence: Float,
-) {
-    val segmentCount: Int get() = segments.size
-
     /**
      * Nodes that must be reviewed before the customer pays for them.
      *
      * Two ways to be soft: the hit came from a source that is a guess by design (a feature point
      * or a manual placement), or the surface confidence the tracker reported is below
-     * [HitConfidence.TRUSTED]. The second case used to be ignored
-     * here while the AR screen warned about it, so a run measured on a badly tracked plane
-     * reached the order list unflagged.
+     * [HitConfidence.RUN_TRUSTED] - the same bar the HUD questions a run at.
+     *
+     * Counted over the **nodes**, once each. Counting segments was wrong twice over: it used the
+     * lower bar of 0.5, so a raycast point (0.7) reached the order list unflagged, and a weak point
+     * between two segments was counted as two, because a segment carries its start node's source
+     * and the smaller of its two confidences (finding 47).
      */
-    val lowConfidenceNodes: Int
-        get() = segments.count {
-            it.hitSource == HitSource.FEATURE_POINT ||
-                it.hitSource == HitSource.MANUAL ||
-                it.confidence < HitConfidence.RUN_TRUSTED
-        }
+    val lowConfidenceNodes: Int,
+) {
+    val segmentCount: Int get() = segments.size
 }
 
 /**
@@ -202,6 +199,11 @@ object PolylineMetrics {
             clipCount = clips,
             couplingCount = couplings,
             minimumConfidence = nodes.minOfOrNull { it.confidence } ?: 1f,
+            lowConfidenceNodes = nodes.count { node ->
+                node.hitSource == HitSource.FEATURE_POINT ||
+                    node.hitSource == HitSource.MANUAL ||
+                    node.confidence < HitConfidence.RUN_TRUSTED
+            },
         )
     }
 
