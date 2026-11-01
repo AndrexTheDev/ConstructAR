@@ -93,6 +93,9 @@ again. Each line names what was read, not what was assumed.
   unreadable (finding 55) is still in the backup rather than silently dropped.
 * **A licence key pasted out of an e-mail.** `LicenceFormat.split` removes spaces, line breaks and
   carriage returns before parsing, so a key that wrapped over three lines still verifies.
+* **Buying during the trial.** `EntitlementRules.decide` returns a live licence before it looks at
+  the trial at all, and reports `trialAvailable = false` from then on, so activating a key mid-trial
+  cannot be undone by the trial expiring and a second trial cannot be started on top of a paid one.
 * **The appendix can always reach its eight photos.** `buildPhotoAppendix` takes the first eight
   of the same order the field book uses, and the screen budget it reads from is twelve - larger, and
   filled in that order - so a photo the page wants is never one the phone did not decode. Marking a
