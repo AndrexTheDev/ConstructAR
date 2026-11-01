@@ -89,6 +89,7 @@ import com.google.ar.core.Config
 import com.constructar.core.model.ConduitPresets
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.units.LengthFormatter
 import com.constructar.core.model.RouteDraft
 import com.constructar.core.model.RouteLabels
 
@@ -303,6 +304,23 @@ fun ArMeasureScreen(
     val sizeText = spec.sizeLabel
     val pointsText = pluralStringResource(R.plurals.ar_points, routeState.nodeCount, routeState.nodeCount)
     val closedLoopText = if (routeState.closedLoop) stringResource(R.string.ar_closed_loop) else null
+    // The room, not just the run: the operator's real question on site. It reuses the export
+    // screen's own "N runs · X total" line, so the number on the phone and on the protocol come
+    // from one sentence and one formatter.
+    val roomTotals = RunSummary.of(
+        committedMeters = project.routes.map { it.polylineLengthMeters },
+        liveNodes = routeState.nodeCount,
+        liveMeters = routeState.lengthMeters,
+    )
+    val roomTotalText = if (roomTotals.runs > 0) {
+        stringResource(
+            R.string.export_runs_total,
+            roomTotals.runs,
+            LengthFormatter.format(roomTotals.meters),
+        )
+    } else {
+        null
+    }
     val scanProgressText = stringResource(
         R.string.ar_scan_progress,
         (scanState.coverage * 100).toInt(),
@@ -524,6 +542,9 @@ fun ArMeasureScreen(
                 // whole length a guess, and this is the only moment it can still be re-tapped.
                 weakPointText?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
+                }
+                roomTotalText?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.accent)
                 }
                 // Whether the point under the crosshair has settled. Until it has, a tap would
                 // commit one noisy frame; the stabiliser says when it is worth tapping.

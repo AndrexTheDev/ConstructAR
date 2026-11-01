@@ -224,6 +224,7 @@
     <string name="runs_title">Strecken</string>
     <string name="run_detail">%1$s · %2$s</string>
     <string name="run_delete">Strecke löschen</string>
+    <string name="run_recovered">Nach einem Abbruch geborgen - Längen und Fittings stimmen, die 3D-Position nicht</string>
     <string name="technician_title">Monteur vor Ort</string>
     <string name="technician_hint">Name, wie er auf dem Protokoll stehen soll</string>
     <string name="materials_title">Material und Bestellung</string>

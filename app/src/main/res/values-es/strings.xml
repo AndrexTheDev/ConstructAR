@@ -224,6 +224,7 @@
     <string name="runs_title">Recorridos</string>
     <string name="run_detail">%1$s · %2$s</string>
     <string name="run_delete">Borrar recorrido</string>
+    <string name="run_recovered">Recuperado tras una interrupción: longitudes y accesorios son exactos, la posición 3D no</string>
     <string name="technician_title">Montador en obra</string>
     <string name="technician_hint">Nombre tal como debe figurar en el protocolo</string>
     <string name="materials_title">Material y pedido</string>

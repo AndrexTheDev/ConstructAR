@@ -344,6 +344,10 @@ fun ProjectScreen(
                             route.spec.sizeLabel,
                         ),
                         length = LengthFormatter.format(route.polylineLengthMeters),
+                        // A run recovered after an interruption counts in every length and every
+                        // fitting, but its 3D geometry is not in the model. Saying so is the
+                        // difference between a documented limitation and a surprise in a viewer.
+                        badge = if (route.recovered) stringResource(R.string.run_recovered) else null,
                         onDelete = { onRemoveRoute(route.id) },
                     )
                 }
@@ -613,7 +617,13 @@ private fun PriceLine(label: String, value: String, emphasis: Boolean = false) {
 }
 
 @Composable
-private fun RouteRow(kind: String, detail: String, length: String, onDelete: () -> Unit) {
+private fun RouteRow(
+    kind: String,
+    detail: String,
+    length: String,
+    badge: String? = null,
+    onDelete: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -630,6 +640,13 @@ private fun RouteRow(kind: String, detail: String, length: String, onDelete: () 
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            badge?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = SiteColors.warning,
+                )
+            }
         }
         Text(length, style = MaterialTheme.typography.titleSmall, color = SiteColors.gold)
         IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {

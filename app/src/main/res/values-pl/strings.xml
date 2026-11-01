@@ -228,6 +228,7 @@
     <string name="runs_title">Trasy</string>
     <string name="run_detail">%1$s · %2$s</string>
     <string name="run_delete">Usuń trasę</string>
+    <string name="run_recovered">Odzyskana po przerwaniu - długości i kształtki są dokładne, pozycja 3D nie</string>
     <string name="technician_title">Monter na budowie</string>
     <string name="technician_hint">Nazwisko tak, jak ma być w protokole</string>
     <string name="materials_title">Materiał i zamówienie</string>
