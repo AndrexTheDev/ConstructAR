@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
@@ -67,12 +69,16 @@ fun OnboardingScreen(onDone: () -> Unit) {
     )
     val icons = listOf(Icons.Default.ViewInAr, Icons.Default.PlayArrow, Icons.Default.Share)
 
+    // Scrollable, and deliberately no longer centred: the logo, three dots, a headline, a body
+    // and two buttons add up to more than a 640 dp phone shows at a 200 % font scale, and a
+    // `fillMaxSize` column without a scroll clips what does not fit - which here is *next* and
+    // *skip*, i.e. the only two ways out of a screen the app shows before anything else works.
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
     ) {
         Image(
             painter = painterResource(R.drawable.constructar_logo),

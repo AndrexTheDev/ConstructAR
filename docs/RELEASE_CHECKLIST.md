@@ -57,6 +57,9 @@ Everything here is a gate before an APK reaches a site, in the order it should b
 - [ ] Back gesture and close button after ≥ 2 points → dialog offers save / discard / cancel;
       back with the dialog open closes the dialog, not the screen
 - [ ] Thermal: 15-minute continuous scan without ANR, throttle mode visible in the HUD
+- [ ] Font scale set to 200 % (Settings → Display → Font size, largest) on a 640 dp-tall
+      phone: onboarding shows *next* and *skip*, and every screen can be scrolled to its
+      last button. Onboarding did not scroll until finding 66
 - [ ] Process death during a scan → project list intact, no half-written JSON
 - [ ] Kill the app mid-run (Developer options → *Don't keep activities*, or swipe it away
       after 3+ points) → re-entering the AR screen offers the run back; *save* restores the
