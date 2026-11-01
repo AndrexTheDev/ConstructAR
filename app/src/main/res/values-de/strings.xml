@@ -60,6 +60,7 @@
     <string name="ar_scan">Raum scannen</string>
     <string name="ar_stop_scan">Scan stoppen</string>
     <string name="ar_closed_loop">geschlossen</string>
+    <string name="ar_confidence_weak">Schwächster Punkt %1$d %% - tippe ihn erneut an, um die Messung zu verbessern</string>
     <string name="ar_no_surface">Keine Fläche gefunden. Ziele auf Wand oder Boden.</string>
     <string name="ar_scan_progress">Raum %1$d %% · %2$d k Dreiecke</string>
     <string name="ar_scan_unavailable">Netz-Scan nicht verfügbar. Messen funktioniert weiterhin.</string>

@@ -60,6 +60,7 @@
     <string name="ar_scan">Scan room</string>
     <string name="ar_stop_scan">Stop scan</string>
     <string name="ar_closed_loop">closed loop</string>
+    <string name="ar_confidence_weak">Weakest point %1$d %% - tap it again to improve the run</string>
     <string name="ar_no_surface">No surface found. Aim at a wall or the floor.</string>
     <string name="ar_scan_progress">Room %1$d %% · %2$d k triangles</string>
     <string name="ar_scan_unavailable">Mesh scanning unavailable. Measuring still works.</string>

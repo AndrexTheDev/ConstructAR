@@ -289,6 +289,9 @@ fun ArMeasureScreen(
     }
     val guidanceText = tracking.guidance.message(tracking)
     val warningText = routeState.warning.message()
+    val weakPointText = RunConfidence
+        .weakPointPercent(routeState.nodeCount, routeState.worstNodeConfidence)
+        ?.let { percent -> stringResource(R.string.ar_confidence_weak, percent) }
     val readinessIssue = readiness
     val readinessText = if (readinessIssue != null && !readinessIssue.canStartSession) {
         readinessIssue.message()
@@ -515,6 +518,11 @@ fun ArMeasureScreen(
                     )
                 }
                 warningText?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
+                }
+                // The weakest point of the run, not the last one: one guessed point makes the
+                // whole length a guess, and this is the only moment it can still be re-tapped.
+                weakPointText?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
                 }
                 // Whether the point under the crosshair has settled. Until it has, a tap would

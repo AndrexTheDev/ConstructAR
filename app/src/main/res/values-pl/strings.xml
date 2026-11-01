@@ -60,6 +60,7 @@
     <string name="ar_scan">Skanuj pomieszczenie</string>
     <string name="ar_stop_scan">Zatrzymaj skan</string>
     <string name="ar_closed_loop">zamknięta</string>
+    <string name="ar_confidence_weak">Najsłabszy punkt %1$d %% - dotknij go ponownie, aby poprawić trasę</string>
     <string name="ar_no_surface">Nie znaleziono powierzchni. Wyceluj w ścianę lub podłogę.</string>
     <string name="ar_scan_progress">Pomieszczenie %1$d %% · %2$d tys. trójkątów</string>
     <string name="ar_scan_unavailable">Skanowanie siatki niedostępne. Pomiar nadal działa.</string>

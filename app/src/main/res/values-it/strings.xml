@@ -60,6 +60,7 @@
     <string name="ar_scan">Scansiona locale</string>
     <string name="ar_stop_scan">Ferma scansione</string>
     <string name="ar_closed_loop">chiuso</string>
+    <string name="ar_confidence_weak">Punto più debole %1$d %%: toccalo di nuovo per migliorare la tratta</string>
     <string name="ar_no_surface">Nessuna superficie trovata. Inquadra una parete o il pavimento.</string>
     <string name="ar_scan_progress">Locale %1$d %% · %2$d k triangoli</string>
     <string name="ar_scan_unavailable">Scansione della mesh non disponibile. La misura funziona comunque.</string>

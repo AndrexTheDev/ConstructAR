@@ -60,6 +60,7 @@
     <string name="ar_scan">Scanner la pièce</string>
     <string name="ar_stop_scan">Arrêter le scan</string>
     <string name="ar_closed_loop">fermé</string>
+    <string name="ar_confidence_weak">Point le plus faible %1$d %% : retouche-le pour améliorer le tracé</string>
     <string name="ar_no_surface">Aucune surface trouvée. Vise un mur ou le sol.</string>
     <string name="ar_scan_progress">Pièce %1$d %% · %2$d k triangles</string>
     <string name="ar_scan_unavailable">Scan du maillage indisponible. La mesure fonctionne toujours.</string>
