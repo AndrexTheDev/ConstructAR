@@ -39,7 +39,7 @@
     <string name="routing_cable">Câble</string>
     <string name="routing_pipe">Tuyau</string>
     <string name="routing_duct">Gaine</string>
-    <string name="hud_length">%1$.2f m</string>
+    <string name="hud_length">%1$s m</string>
     <string name="tier_plane">Plan</string>
     <string name="tier_depth_point">Point de profondeur</string>
     <string name="tier_direct_depth">Rayon de profondeur</string>

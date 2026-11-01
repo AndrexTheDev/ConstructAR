@@ -39,7 +39,7 @@
     <string name="routing_cable">Kabel</string>
     <string name="routing_pipe">Rura</string>
     <string name="routing_duct">Kanał</string>
-    <string name="hud_length">%1$.2f m</string>
+    <string name="hud_length">%1$s m</string>
     <string name="tier_plane">Płaszczyzna</string>
     <string name="tier_depth_point">Punkt głębi</string>
     <string name="tier_direct_depth">Promień głębi</string>

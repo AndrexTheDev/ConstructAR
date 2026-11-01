@@ -43,6 +43,23 @@ class LengthFormatterTest {
     }
 
     @Test
+    fun `the digits alone are available for a resource that carries the unit`() {
+        // `hud_length` is "%1$s m": the operator's unit and its spacing stay translatable, the
+        // digits stay the protocol's. A German phone must not turn "12.50 m" into "12,50 m".
+        assertEquals("12.50", LengthFormatter.number(12.5f))
+        assertEquals("0.00", LengthFormatter.number(0f))
+        assertEquals("—", LengthFormatter.number(Float.NaN))
+        val german = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.GERMANY)
+            assertEquals("12.50", LengthFormatter.number(12.5f))
+            assertEquals("12.50 m", LengthFormatter.format(12.5f))
+        } finally {
+            Locale.setDefault(german)
+        }
+    }
+
+    @Test
     fun `nothing is claimed when the input is not a number`() {
         assertEquals("—", LengthFormatter.format(Float.NaN))
         assertEquals("—", LengthFormatter.format(Float.POSITIVE_INFINITY))

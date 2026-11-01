@@ -39,7 +39,7 @@
     <string name="routing_cable">Cable</string>
     <string name="routing_pipe">Pipe</string>
     <string name="routing_duct">Duct</string>
-    <string name="hud_length">%1$.2f m</string>
+    <string name="hud_length">%1$s m</string>
     <string name="tier_plane">Plane</string>
     <string name="tier_depth_point">Depth point</string>
     <string name="tier_direct_depth">Depth ray</string>

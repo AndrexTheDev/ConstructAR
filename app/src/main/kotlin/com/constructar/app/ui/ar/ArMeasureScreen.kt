@@ -280,7 +280,7 @@ fun ArMeasureScreen(
         controller.syncCommittedRoutes(project.routes.filterNot { it.recovered })
     }
 
-    val lengthText = stringResource(R.string.hud_length, routeState.lengthMeters)
+    val lengthText = stringResource(R.string.hud_length, LengthFormatter.number(routeState.lengthMeters))
     // The segment under the crosshair, while walking: the number that tells the operator when
     // to stop and tap, rather than tapping and then reading the result.
     val liveSegmentText = if (routeState.nodeCount > 0 && routeState.liveSegmentMeters >= 0.05f) {
@@ -745,7 +745,7 @@ fun ArMeasureScreen(
                                 R.plurals.ar_points,
                                 pending.nodes.size,
                                 pending.nodes.size,
-                            ) + " · " + stringResource(R.string.hud_length, pending.lengthMeters),
+                            ) + " · " + stringResource(R.string.hud_length, LengthFormatter.number(pending.lengthMeters)),
                             formatTimeLabel(pending.savedAtEpochMs),
                         ),
                         style = MaterialTheme.typography.bodyMedium,

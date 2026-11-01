@@ -204,8 +204,11 @@ BOM for Excel - see `docs/TESTING.md` findings 28 and 30.
 **Localisation seam.** The engine modules contain no user-facing strings. `TrackingMonitor`
 publishes a `Guidance` code, `RouteSession` a `RouteWarning` code, the hit cascade a
 `SurfaceKind`/`HitSource`, `ArSessionController` an `ArReadiness` branch. `:app` maps each to
-`stringResource` in `ui/Labels.kt`, and every length is formatted by `LengthFormatter` or the
-`hud_length` resource. That is what makes six locales complete without the engines carrying a
+`stringResource` in `ui/Labels.kt`, and every length is formatted by `LengthFormatter` - where
+the resource carries the unit (`hud_length` is `%1$s m`), the digits arrive through
+`LengthFormatter.number()`, never through a `%f` format, because a `%f` resource takes its
+decimal mark from the device and put `12,50 m` beside `28.80 m` in one HUD column (finding 39).
+That is what makes six locales complete without the engines carrying a
 Context — and it keeps the engines unit-testable on the JVM.
 
 ---
