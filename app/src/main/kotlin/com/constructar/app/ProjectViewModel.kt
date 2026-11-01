@@ -477,14 +477,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             // imported after upgrading.
             val room = (mutableState.value.entitlements.maxProjects - mutableState.value.projects.size)
                 .coerceAtLeast(0)
-            var imported = 0
-            var heldBack = 0
-            texts.forEachIndexed { index, text ->
-                if (index >= room) {
-                    heldBack++
-                    return@forEachIndexed
-                }
-                if (repository.importProject(text) != null) imported++ else heldBack++
+            val (imported, heldBack) = restoreOutcome(room, texts) { text ->
+                repository.importProject(text) != null
             }
             photos.forEach { (token, uri) ->
                 // `<project id>` for the room's own photo, `<project id>__diary_<entry>` for an
@@ -527,4 +521,33 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             onSaved(if (saved) updated else null)
         }
     }
+}
+
+/**
+ * What a restore reports as imported and held back.
+ *
+ * The plan limit has to be counted in **rooms actually created**, not in files attempted. The
+ * first version compared the file's position against the free slots, so a backup folder where the
+ * picker happened to hand over a stray `.json` first used up the slot with a file that could not
+ * be parsed: the operator was told one room was held back, and it was the only real room in the
+ * folder. A failed import frees its slot again, which is what this loop does.
+ *
+ * Pure on purpose - the count is the part that can be wrong, and it can be tested without an
+ * Android context.
+ */
+internal inline fun restoreOutcome(
+    slots: Int,
+    texts: List<String>,
+    import: (String) -> Boolean,
+): Pair<Int, Int> {
+    var imported = 0
+    var heldBack = 0
+    for (text in texts) {
+        if (imported >= slots) {
+            heldBack++
+            continue
+        }
+        if (import(text)) imported++ else heldBack++
+    }
+    return imported to heldBack
 }
