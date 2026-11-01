@@ -200,9 +200,15 @@ abstract class LocaleScreenshotMatrix(private val localeTag: String) {
     /** Every string the composition currently shows, in tree order. */
     private fun renderedTexts(): List<String> {
         val matcher = SemanticsMatcher.keyIsDefined(SemanticsProperties.Text)
-        return compose.onAllNodes(matcher).fetchSemanticsNodes().flatMap { node ->
-            node.config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text }
-        }.filter { it.isNotBlank() }
+        return compose.onAllNodes(matcher).fetchSemanticsNodes()
+            // `config[Text]` throws when a node has no text, which is the normal case for the
+            // containers in this tree; the failing branch is the one we want to ignore.
+            .flatMap { node ->
+                runCatching { node.config[SemanticsProperties.Text] }
+                    .getOrDefault(emptyList())
+                    .map { it.text }
+            }
+            .filter { it.isNotBlank() }
     }
 
     private companion object {

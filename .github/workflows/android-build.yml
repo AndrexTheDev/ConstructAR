@@ -176,6 +176,7 @@ jobs:
             :native-slam:compileDebugKotlin :native-slam:compileDebugUnitTestKotlin \
             > /tmp/step.log 2>&1
           code=$?
+          python3 scripts/ci_test_report.py || true
           bash scripts/ci_annotate.sh /tmp/step.log "JVM tests / Kotlin compile failed" "$code"
 
       - name: Host C++ tests - TSDF, Surface Nets, pose graph (-Werror)

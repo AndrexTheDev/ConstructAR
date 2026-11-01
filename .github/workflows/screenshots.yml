@@ -97,6 +97,7 @@ jobs:
             --tests "com.constructar.app.screenshots.*" \
             -Pconstructar.screenshots=true > /tmp/screenshots.log 2>&1
           code=$?
+          python3 scripts/ci_test_report.py || true
           bash scripts/ci_annotate.sh /tmp/screenshots.log "screenshot matrix failed" "$code"
 
       - name: Collect what was rendered
