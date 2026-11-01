@@ -199,9 +199,17 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         return check
     }
 
-    fun startTrial() {
-        entitlements.startTrial()
+    /**
+     * Starts the seven-day trial and says whether it did.
+     *
+     * The paywall used to switch itself to "trial active" before calling this, so a refusal - the
+     * trial was already used, the clock moved back, the build cannot vouch for itself - looked
+     * exactly like a success until the operator left the screen and found the app still free.
+     */
+    fun startTrial(): Boolean {
+        val started = entitlements.startTrial()
         refreshEntitlements()
+        return started
     }
 
     fun completeOnboarding() {

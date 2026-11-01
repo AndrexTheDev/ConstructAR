@@ -213,6 +213,7 @@
     <string name="paywall_trial_button">Wypróbuj Pro przez %1$d dni</string>
     <string name="paywall_trial_active">Próba aktywna, pozostało %1$d dni</string>
     <string name="paywall_trial_used">Próba została już wykorzystana.</string>
+    <string name="paywall_trial_unavailable">Wersji próbnej nie można uruchomić na tym telefonie. Kup licencję - działa offline, od razu.</string>
     <string name="paywall_active_title">Pro jest aktywne</string>
     <string name="paywall_active_until">Ważne do %1$s</string>
     <string name="paywall_active_forever">Ważne bezterminowo</string>

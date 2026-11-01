@@ -209,6 +209,7 @@
     <string name="paywall_trial_button">Essaie Pro pendant %1$d jours</string>
     <string name="paywall_trial_active">Essai actif, %1$d jours restants</string>
     <string name="paywall_trial_used">L’essai a déjà été utilisé.</string>
+    <string name="paywall_trial_unavailable">L’essai ne peut pas être lancé sur ce téléphone. Achète une licence : elle marche hors ligne, tout de suite.</string>
     <string name="paywall_active_title">Pro est activé</string>
     <string name="paywall_active_until">Valable jusqu’au %1$s</string>
     <string name="paywall_active_forever">Valable sans limite</string>

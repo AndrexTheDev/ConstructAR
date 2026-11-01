@@ -273,8 +273,11 @@ fun AppRoot(viewModel: ProjectViewModel) {
                         onBack = { navController.popBackStack() },
                         onActivate = { key -> viewModel.activateLicence(key) },
                         onStartTrial = {
-                            viewModel.startTrial()
-                            navController.popBackStack()
+                            // Only leave the paywall when the trial really started: the screen has
+                            // to stay if it did not, or it would announce a trial it never got.
+                            val started = viewModel.startTrial()
+                            if (started) navController.popBackStack()
+                            started
                         },
                     )
                 }

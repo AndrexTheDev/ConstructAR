@@ -209,6 +209,7 @@
     <string name="paywall_trial_button">%1$d Tage Pro testen</string>
     <string name="paywall_trial_active">Testversion aktiv, noch %1$d Tage</string>
     <string name="paywall_trial_used">Die Testversion wurde schon genutzt.</string>
+    <string name="paywall_trial_unavailable">Die Testversion lässt sich auf diesem Telefon nicht starten. Kauf eine Lizenz - sie funktioniert offline, sofort.</string>
     <string name="paywall_active_title">Pro ist aktiv</string>
     <string name="paywall_active_until">Gültig bis %1$s</string>
     <string name="paywall_active_forever">Unbegrenzt gültig</string>
