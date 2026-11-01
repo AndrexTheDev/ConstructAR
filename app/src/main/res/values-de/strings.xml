@@ -116,6 +116,10 @@
         <item quantity="one">%1$d Trasse</item>
         <item quantity="other">%1$d Trassen</item>
     </plurals>
+    <plurals name="home_unreadable">
+        <item quantity="one">1 Projektdatei konnte nicht gelesen werden. Die Datei wurde behalten - spiele sie aus einer Sicherung zurück.</item>
+        <item quantity="other">%1$d Projektdateien konnten nicht gelesen werden. Die Dateien wurden behalten - spiele sie aus einer Sicherung zurück.</item>
+    </plurals>
     <plurals name="ar_points">
         <item quantity="one">%1$d Punkt</item>
         <item quantity="other">%1$d Punkte</item>

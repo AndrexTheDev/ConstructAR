@@ -76,12 +76,31 @@ class ProjectRepository(private val context: Context) {
         val workRunning: Boolean = false,
     )
 
-    /** Lists projects, newest first. Corrupt files are skipped, never fatal. */
-    suspend fun list(): List<ProjectSummary> = withContext(Dispatchers.IO) {
-        directory.listFiles { file -> file.extension == "json" }
-            ?.mapNotNull { readProject(it) }
-            ?.map { project ->
-                ProjectSummary(
+    /**
+     * What the folder holds: the rooms that can be read, and how many files could not.
+     *
+     * The count is the point. A file is kept when it cannot be parsed - nothing here ever deletes
+     * a room it does not understand - but until now it was simply *absent* from the list, so a
+     * damaged project looked exactly like a deleted one and the operator had no way to know that
+     * his data was still on the phone.
+     */
+    data class Listing(
+        val projects: List<ProjectSummary> = emptyList(),
+        /** Files in the projects folder that could not be read as a project. */
+        val unreadable: Int = 0,
+    )
+
+    /** Lists projects, newest first. Corrupt files are reported, never fatal. */
+    suspend fun list(): Listing = withContext(Dispatchers.IO) {
+        val files = directory.listFiles { file -> file.extension == "json" }.orEmpty()
+        val summaries = ArrayList<ProjectSummary>(files.size)
+        var unreadable = 0
+        for (file in files) {
+            val project = readProject(file)
+            if (project == null) {
+                unreadable++
+            } else {
+                summaries += ProjectSummary(
                     id = project.id,
                     name = project.name,
                     siteName = project.siteName,
@@ -92,8 +111,8 @@ class ProjectRepository(private val context: Context) {
                     workRunning = WorkTime.isRunning(project.sessions),
                 )
             }
-            ?.sortedByDescending { it.updatedAtEpochMs }
-            ?: emptyList()
+        }
+        Listing(projects = summaries.sortedByDescending { it.updatedAtEpochMs }, unreadable = unreadable)
     }
 
     suspend fun load(id: String): ProjectRecord? = withContext(Dispatchers.IO) {

@@ -116,6 +116,10 @@
         <item quantity="one">%1$d tracé</item>
         <item quantity="other">%1$d tracés</item>
     </plurals>
+    <plurals name="home_unreadable">
+        <item quantity="one">1 fichier de projet n’a pas pu être lu. Il a été conservé : restaure-le depuis une sauvegarde.</item>
+        <item quantity="other">%1$d fichiers de projet n’ont pas pu être lus. Ils ont été conservés : restaure-les depuis une sauvegarde.</item>
+    </plurals>
     <plurals name="ar_points">
         <item quantity="one">%1$d point</item>
         <item quantity="other">%1$d points</item>

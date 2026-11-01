@@ -116,6 +116,10 @@
         <item quantity="one">%1$d trazado</item>
         <item quantity="other">%1$d trazados</item>
     </plurals>
+    <plurals name="home_unreadable">
+        <item quantity="one">No se pudo leer 1 archivo de proyecto. Se ha conservado: recupéralo desde una copia de seguridad.</item>
+        <item quantity="other">No se pudieron leer %1$d archivos de proyecto. Se han conservado: recupéralos desde una copia de seguridad.</item>
+    </plurals>
     <plurals name="ar_points">
         <item quantity="one">%1$d punto</item>
         <item quantity="other">%1$d puntos</item>

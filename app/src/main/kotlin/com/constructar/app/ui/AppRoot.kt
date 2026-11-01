@@ -96,6 +96,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                 composable(Routes.HOME) {
                     HomeScreen(
                         projects = state.projects,
+                        unreadableProjects = state.unreadableProjects,
                         loading = state.loading,
                         entitlements = state.entitlements,
                         trialDaysLeft = state.trialDaysLeft,

@@ -70,6 +70,11 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     data class UiState(
         val loading: Boolean = true,
         val projects: List<ProjectRepository.ProjectSummary> = emptyList(),
+        /**
+         * Files in the projects folder that could not be read. They are **kept**, not deleted, so
+         * the app has to say so rather than let a damaged room look like a deleted one.
+         */
+        val unreadableProjects: Int = 0,
         val openProject: ProjectRecord? = null,
         val materialList: MaterialList? = null,
         val lastError: UiMessage? = null,
@@ -127,8 +132,12 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     fun refresh() {
         viewModelScope.launch {
-            val projects = repository.list()
-            mutableState.value = mutableState.value.copy(loading = false, projects = projects)
+            val listing = repository.list()
+            mutableState.value = mutableState.value.copy(
+                loading = false,
+                projects = listing.projects,
+                unreadableProjects = listing.unreadable,
+            )
         }
     }
 

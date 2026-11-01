@@ -109,7 +109,7 @@ class ProjectRepositoryTest {
     fun `the list carries what the home screen shows`(): Unit = runBlocking {
         repository.save(room())
 
-        val summary = repository.list().single()
+        val summary = repository.list().projects.single()
         assertEquals("room-1", summary.id)
         assertEquals("Küche", summary.name)
         assertEquals("Seilerweg 14", summary.siteName)
@@ -133,16 +133,29 @@ class ProjectRepositoryTest {
         val restored = assertNotNull(repository.importProject(backupText))
 
         assertTrue(restored.id != "room-1", "the restored copy must get a fresh id")
-        assertEquals(2, repository.list().size)
+        assertEquals(2, repository.list().projects.size)
         assertEquals("Küche", repository.load("room-1")?.name)
         assertEquals("Küche", repository.load(restored.id)?.name)
+    }
+
+    @Test
+    fun `an empty file is unreadable, not an empty room`(): Unit = runBlocking {
+        // A write interrupted at the wrong moment can leave a zero-byte file; listing it as a
+        // room called "" would be worse than saying it could not be read.
+        repository.save(room())
+        File(projectsDirectory, "room-2.json").writeText("")
+
+        val listing = repository.list()
+
+        assertEquals(1, listing.projects.size)
+        assertEquals(1, listing.unreadable)
     }
 
     @Test
     fun `text that is not a project is refused, and nothing is written`(): Unit = runBlocking {
         assertNull(repository.importProject("{\"not\": \"a project\"}"))
         assertNull(repository.importProject(""))
-        assertTrue(repository.list().isEmpty())
+        assertTrue(repository.list().projects.isEmpty())
     }
 
     @Test
@@ -152,7 +165,9 @@ class ProjectRepositoryTest {
         file.writeText("{ this is not json")
 
         assertNull(repository.load("room-1"))
-        assertTrue(repository.list().isEmpty(), "an unreadable room cannot be listed")
+        val listing = repository.list()
+        assertTrue(listing.projects.isEmpty(), "an unreadable room cannot be listed")
+        assertEquals(1, listing.unreadable, "and it is counted, so the home screen can say so")
         assertTrue(file.exists(), "the bytes are the operator's only copy - keep them")
         assertTrue(file.readText().startsWith("{ this is not json"))
     }
@@ -209,7 +224,7 @@ class ProjectRepositoryTest {
         val restored = assertNotNull(repository.importProject(hostile))
 
         // The original stays, and the restored copy lands under a fresh, safe id.
-        assertEquals(2, repository.list().size)
+        assertEquals(2, repository.list().projects.size)
         assertEquals(1, projectsDirectory.listFiles()!!.count { it.name == "room-1.json" })
         assertTrue(restored.id != "../../escape", "the hostile id was kept")
         assertTrue(repository.isSafeToken(restored.id), "the stored id is not a plain token")

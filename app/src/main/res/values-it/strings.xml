@@ -116,6 +116,10 @@
         <item quantity="one">%1$d tracciato</item>
         <item quantity="other">%1$d tracciati</item>
     </plurals>
+    <plurals name="home_unreadable">
+        <item quantity="one">Non è stato possibile leggere 1 file di progetto. È stato conservato: ripristinalo da un backup.</item>
+        <item quantity="other">Non è stato possibile leggere %1$d file di progetto. Sono stati conservati: ripristinali da un backup.</item>
+    </plurals>
     <plurals name="ar_points">
         <item quantity="one">%1$d punto</item>
         <item quantity="other">%1$d punti</item>

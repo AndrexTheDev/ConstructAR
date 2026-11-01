@@ -79,6 +79,12 @@ fun HomeScreen(
     onCreate: (String) -> Unit,
     onUpgrade: () -> Unit,
     onHelp: () -> Unit,
+    /**
+     * Project files in the app's folder that could not be read. They are kept - nothing here
+     * deletes a room it does not understand - so the list has to say they exist, or a damaged
+     * project looks exactly like a deleted one.
+     */
+    unreadableProjects: Int = 0,
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
@@ -107,6 +113,20 @@ fun HomeScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (unreadableProjects > 0) {
+                item {
+                    Text(
+                        text = pluralStringResource(
+                            R.plurals.home_unreadable,
+                            unreadableProjects,
+                            unreadableProjects,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SiteColors.warning,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
             if (loading) {
                 item { Spacer(Modifier.height(24.dp)) }
             } else if (mostRecent != null) {
