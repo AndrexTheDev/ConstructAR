@@ -158,13 +158,16 @@ class ProjectRepositoryTest {
     }
 
     @Test
-    fun `a temporary file left behind by a kill is swept, the room is not`(): Unit = runBlocking {
+    fun `a temporary file left behind by a kill is swept on first use, the room is not`(): Unit = runBlocking {
         repository.save(room())
         val stale = File(projectsDirectory, "room-2.json${SafeFiles.TEMPORARY_SUFFIX}")
         stale.writeText("half written")
 
-        // A new instance is what the app does after a crash: the constructor sweeps.
+        // A new instance is what the app does after a restart. The sweep is part of the first
+        // touch of the projects directory - deliberately not of the constructor, so no file I/O
+        // happens on whatever thread built the repository.
         val reopened = ProjectRepository(context)
+        assertNotNull(reopened.list(), "the first read initialises the directory")
         assertFalse(stale.exists())
         assertNotNull(reopened.load("room-1"))
     }
