@@ -6,6 +6,7 @@
 
 package com.constructar.app.screenshots
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -167,7 +168,7 @@ abstract class LocaleScreenshotMatrix(private val localeTag: String) {
             entitlements = Entitlements.of(Plan.MONTHLY, expiresEpochDay = 20_604L, todayEpochDay = 20_574L),
             trialDaysLeft = 0,
             deviceTag = "CAR-4821-9F3C",
-            repository = ProjectRepository(ApplicationProvider.getApplicationContext()),
+            repository = ProjectRepository(ApplicationProvider.getApplicationContext<Context>()),
             onBack = {},
             onUpgrade = {},
             onRestore = { _, _, _ -> },

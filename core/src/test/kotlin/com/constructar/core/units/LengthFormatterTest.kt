@@ -75,7 +75,7 @@ class LengthFormatterTest {
     fun `the default locale of the phone cannot change a measurement`() {
         val original = Locale.getDefault()
         try {
-            for (locale in listOf(Locale.GERMANY, Locale.FRANCE, Locale("es", "ES"), Locale("pl", "PL"))) {
+            for (locale in listOf(Locale.GERMANY, Locale.FRANCE, Locale.forLanguageTag("es-ES"), Locale.forLanguageTag("pl-PL"))) {
                 Locale.setDefault(locale)
                 assertEquals("14.82 m", LengthFormatter.format(14.8234f), "changed under $locale")
                 assertEquals("18.40 m²", LengthFormatter.formatArea(18.4f), "changed under $locale")
