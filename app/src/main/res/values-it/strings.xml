@@ -338,4 +338,6 @@
     <string name="pdf_label_net_total">Totale netto</string>
     <string name="pdf_note_net">Importi netti, IVA esclusa. Il materiale è il forfait inserito in cantiere.</string>
     <string name="pdf_section_photos">Documentazione fotografica</string>
+    <string name="ar_hold_steady">Tieni fermo</string>
+    <string name="ar_point_locked">Punto agganciato</string>
 </resources>

@@ -338,4 +338,6 @@
     <string name="pdf_label_net_total">Net total</string>
     <string name="pdf_note_net">Net figures, no VAT. Material is the lump sum entered on site.</string>
     <string name="pdf_section_photos">Photo documentation</string>
+    <string name="ar_hold_steady">Hold steady</string>
+    <string name="ar_point_locked">Point locked</string>
 </resources>

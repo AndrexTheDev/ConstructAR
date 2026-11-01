@@ -11,6 +11,7 @@ import android.os.PowerManager
 import android.os.SystemClock
 import com.constructar.arengine.hit.ArInteraction
 import com.constructar.arengine.hit.HitResolution
+import com.constructar.arengine.hit.HitStabilizer
 import com.constructar.arengine.render.RouteSceneController
 import com.constructar.arengine.render.SceneMeshRenderer
 import com.constructar.arengine.render.SceneViewMaterialProvider
@@ -88,6 +89,14 @@ class ArMeasureController(private val context: Context) {
      */
     val hudScreenPixels = MutableStateFlow<Pair<Float, Float>?>(null)
     val lastHit: MutableStateFlow<HitResolution?> = MutableStateFlow(null)
+
+    /**
+     * State of the reticle's sample window: whether the point under the crosshair has settled
+     * to a centimetre yet. The HUD says "hold steady" until it has, and the committed node is
+     * the window's median rather than one noisy frame.
+     */
+    val stability: MutableStateFlow<HitStabilizer.Reading?> = MutableStateFlow(null)
+    private val hitStabilizer = HitStabilizer()
 
     /**
      * Set from the render thread when a tap has been resolved, consumed on the main thread.
@@ -191,7 +200,9 @@ class ArMeasureController(private val context: Context) {
             }
             activeInteraction.onFrameEnter(frame, viewWidth, viewHeight, SystemClock.uptimeMillis())
             // Live preview follows the reticle (throttled inside ArInteraction to 12 Hz).
-            routeSession.setLivePoint(activeInteraction.reticle.value)
+            val reticleHit = activeInteraction.reticle.value
+            routeSession.setLivePoint(reticleHit)
+            stability.value = hitStabilizer.sample(reticleHit, SystemClock.uptimeMillis())
         }
 
         routeSession.onFrame()
@@ -240,8 +251,15 @@ class ArMeasureController(private val context: Context) {
         val resolution = mutableHitEvents.value ?: return null
         mutableHitEvents.value = null
         lastHit.value = resolution
-        val hit = resolution.hit ?: return resolution
-        if (routeSession.addNode(hit)) {
+        val hit = resolution.hit
+        if (hit == null) {
+            // Tap into nothing: the window is stale, and keeping it would let a later tap
+            // commit a point the operator has already walked away from.
+            hitStabilizer.reset()
+            stability.value = null
+            return resolution
+        }
+        if (routeSession.addNode(hitStabilizer.stabilize(hit, SystemClock.uptimeMillis()))) {
             interaction?.previousNode = routeSession.state.value.nodes.lastOrNull()
         }
         return resolution
@@ -275,6 +293,8 @@ class ArMeasureController(private val context: Context) {
 
     fun undo() {
         routeSession.undo()
+        hitStabilizer.reset()
+        stability.value = null
         interaction?.previousNode = routeSession.state.value.nodes.lastOrNull()
     }
 
@@ -282,6 +302,8 @@ class ArMeasureController(private val context: Context) {
         val route = routeSession.finish(label) ?: return null
         // Keep the anchors alive: the committed run keeps following ARCore's refinement.
         routeSession.startNewRun()
+        hitStabilizer.reset()
+        stability.value = null
         interaction?.previousNode = null
         return route
     }

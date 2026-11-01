@@ -338,4 +338,6 @@
     <string name="pdf_label_net_total">Total net</string>
     <string name="pdf_note_net">Montants nets, hors TVA. Le matériel est le forfait saisi sur site.</string>
     <string name="pdf_section_photos">Documentation photo</string>
+    <string name="ar_hold_steady">Restez stable</string>
+    <string name="ar_point_locked">Point verrouillé</string>
 </resources>

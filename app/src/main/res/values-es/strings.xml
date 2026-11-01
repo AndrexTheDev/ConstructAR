@@ -338,4 +338,6 @@
     <string name="pdf_label_net_total">Total neto</string>
     <string name="pdf_note_net">Importes netos, sin IVA. El material es el tanto alzado introducido en obra.</string>
     <string name="pdf_section_photos">Documentación fotográfica</string>
+    <string name="ar_hold_steady">Mantén el pulso</string>
+    <string name="ar_point_locked">Punto fijado</string>
 </resources>

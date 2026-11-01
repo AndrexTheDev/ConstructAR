@@ -140,6 +140,7 @@ fun ArMeasureScreen(
     val torchOn by controller.torchOn.collectAsStateWithLifecycle()
     val hudPosition by controller.hudScreenPixels.collectAsStateWithLifecycle()
     val lastHit by controller.lastHit.collectAsStateWithLifecycle()
+    val stability by controller.stability.collectAsStateWithLifecycle()
 
     var spec by remember { mutableStateOf(ConduitPresets.all.first()) }
     var showScanner by remember { mutableStateOf(true) }
@@ -355,6 +356,23 @@ fun ArMeasureScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = SiteColors.danger,
                     )
+                }
+                // Whether the point under the crosshair has settled. Until it has, a tap would
+                // commit one noisy frame; the stabiliser says when it is worth tapping.
+                stability?.let { reading ->
+                    if (reading.hasPoint) {
+                        Text(
+                            text = stringResource(
+                                if (reading.settled) R.string.ar_point_locked else R.string.ar_hold_steady,
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (reading.settled) {
+                                SiteColors.accent
+                            } else {
+                                Color.White.copy(alpha = 0.7f)
+                            },
+                        )
+                    }
                 }
                 // Hit diagnostics, in the operator's language: which surface and which cascade
                 // tier produced the last node.

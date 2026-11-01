@@ -342,4 +342,6 @@
     <string name="pdf_label_net_total">Suma netto</string>
     <string name="pdf_note_net">Kwoty netto, bez VAT. Materiał to ryczałt wpisany na budowie.</string>
     <string name="pdf_section_photos">Dokumentacja zdjęciowa</string>
+    <string name="ar_hold_steady">Trzymaj nieruchomo</string>
+    <string name="ar_point_locked">Punkt ustalony</string>
 </resources>
