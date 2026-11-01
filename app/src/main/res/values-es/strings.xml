@@ -257,9 +257,11 @@
     <string name="backup_note">Cada proyecto es un archivo de esta app. Cópialos a una carpeta que elijas (sin nube, salvo que la elijas) y recupéralos en cualquier teléfono.</string>
     <string name="backup_export">Copiar todos los proyectos</string>
     <string name="backup_import">Restaurar proyectos</string>
-    <string name="backup_saved">%1$d proyectos copiados</string>
+    <string name="backup_saved">%1$d proyectos y %2$d fotos copiados</string>
     <string name="backup_imported">%1$d proyectos restaurados</string>
     <string name="backup_failed">Error en la copia: revisa la carpeta e inténtalo de nuevo.</string>
+    <string name="backup_nothing">Aún no hay nada que copiar: crea primero un proyecto.</string>
+    <string name="backup_photos_skipped">No se pudieron copiar %1$d de %2$d fotos.</string>
     <string name="waste_title">Reserva</string>
     <string name="waste_default">Estándar</string>
     <string name="waste_value">%1$d %%</string>

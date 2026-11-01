@@ -257,9 +257,11 @@
     <string name="backup_note">Chaque projet est un fichier de cette app. Copie-les dans un dossier de ton choix (pas de cloud, sauf si tu en choisis un) et relis-les sur n’importe quel téléphone.</string>
     <string name="backup_export">Sauvegarder tous les projets</string>
     <string name="backup_import">Restaurer des projets</string>
-    <string name="backup_saved">%1$d projets sauvegardés</string>
+    <string name="backup_saved">%1$d projets et %2$d photos copiés</string>
     <string name="backup_imported">%1$d projets restaurés</string>
     <string name="backup_failed">Échec de la sauvegarde : vérifie le dossier et réessaie.</string>
+    <string name="backup_nothing">Rien à sauvegarder pour l’instant : crée d’abord un projet.</string>
+    <string name="backup_photos_skipped">%1$d photos sur %2$d n’ont pas pu être copiées.</string>
     <string name="waste_title">Réserve</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>

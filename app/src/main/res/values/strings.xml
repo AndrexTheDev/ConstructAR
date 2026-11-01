@@ -257,9 +257,11 @@
     <string name="backup_note">Every project is one file in this app. Copy them into a folder of your choice - no cloud unless you pick one - and read them back on any phone.</string>
     <string name="backup_export">Back up all projects</string>
     <string name="backup_import">Restore projects</string>
-    <string name="backup_saved">%1$d projects copied</string>
+    <string name="backup_saved">%1$d projects and %2$d photos copied</string>
     <string name="backup_imported">%1$d projects restored</string>
     <string name="backup_failed">Backup failed - check the folder and try again.</string>
+    <string name="backup_nothing">Nothing to back up yet - create a project first.</string>
+    <string name="backup_photos_skipped">%1$d of %2$d photos could not be copied.</string>
     <string name="waste_title">Waste factor</string>
     <string name="waste_default">Default</string>
     <string name="waste_value">%1$d %%</string>
