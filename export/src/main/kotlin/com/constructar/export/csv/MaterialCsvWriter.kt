@@ -22,6 +22,10 @@ import java.util.Locale
  *    explicitly — the default locale would write `14,82` and break the column alignment.
  *
  * A UTF-8 BOM is prepended by default so Excel shows `Ø`/`mm²` correctly.
+ *
+ * Headers and trade names stay English, for the same reason as the decimal point: this file is
+ * data for a spreadsheet, not a document for the customer. The protocol (PDF) is the localised
+ * one — it carries all six languages, and it is the file that gets signed.
  */
 object MaterialCsvWriter {
 

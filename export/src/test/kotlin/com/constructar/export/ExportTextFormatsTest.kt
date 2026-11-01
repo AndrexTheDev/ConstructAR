@@ -135,9 +135,18 @@ class ExportTextFormatsTest {
         assertEquals(1, lines.count { it.startsWith("comment mesh ") })
         assertTrue(lines.none { it == "element vertex 999999" })
 
-        val binary = PlyWriter.writeBinaryLittleEndian(listOf(PlyWriter.PlyPart(nasty, triangleMesh())))
-        val header = String(binary, 0, indexOf(binary, "end_header\n".toByteArray()) + 1, Charsets.US_ASCII)
-        assertEquals(1, header.lines().count { it.startsWith("comment mesh ") })
+        // The binary writer has one comment line for the whole file, so the injection point is
+        // the comment argument itself.
+        val binary = PlyWriter.writeBinaryLittleEndian(
+            parts = listOf(PlyWriter.PlyPart("tri", triangleMesh())),
+            comment = "scan\nelement vertex 999999",
+        )
+        val headerLength = indexOf(binary, "end_header\n".toByteArray()) + 1
+        val header = String(binary, 0, headerLength, Charsets.US_ASCII).lines()
+        assertEquals(1, header.count { it.startsWith("comment ") })
+        assertTrue(header.none { it == "element vertex 999999" })
+        assertEquals(1, header.count { it == "element vertex 3" })
+        assertEquals(1, header.count { it == "end_header" })
     }
 
     private fun indexOf(haystack: ByteArray, needle: ByteArray): Int {
