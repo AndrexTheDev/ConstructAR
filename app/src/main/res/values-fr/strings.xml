@@ -347,6 +347,7 @@
     <string name="pdf_label_address">Adresse</string>
     <string name="pdf_label_phone">Téléphone</string>
     <string name="pdf_label_work_total">Temps total</string>
+    <string name="pdf_note_open_session">Le chronomètre tourne encore (%1$s jusqu’ici) - le total et le coût le comptent jusqu’à cet export.</string>
     <string name="pdf_status_open">Ouvert</string>
     <string name="pdf_status_resolved">Résolu</string>
 

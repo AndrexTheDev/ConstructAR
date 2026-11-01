@@ -347,6 +347,7 @@
     <string name="pdf_label_address">Dirección</string>
     <string name="pdf_label_phone">Teléfono</string>
     <string name="pdf_label_work_total">Horas totales</string>
+    <string name="pdf_note_open_session">El reloj sigue en marcha (%1$s hasta ahora): el total y el coste la incluyen hasta este export.</string>
     <string name="pdf_status_open">Abierto</string>
     <string name="pdf_status_resolved">Resuelto</string>
 

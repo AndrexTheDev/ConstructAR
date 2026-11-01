@@ -52,6 +52,7 @@ import com.constructar.core.model.ProjectRecord
 import com.constructar.core.price.Pricing
 import com.constructar.core.units.LengthFormatter
 import com.constructar.export.ExportService
+import com.constructar.export.pdf.PdfSection
 import com.constructar.export.csv.MaterialCsvWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -120,6 +121,7 @@ fun ExportScreen(
         columnDuration = stringResource(R.string.pdf_column_duration),
         totalLabel = stringResource(R.string.pdf_label_work_total),
         runningLabel = stringResource(R.string.field_time_open),
+        openSessionNote = stringResource(R.string.pdf_note_open_session),
         diaryTitle = stringResource(R.string.pdf_section_diary),
         defectsTitle = stringResource(R.string.pdf_section_defects),
         columnDefect = stringResource(R.string.pdf_column_note),
@@ -141,10 +143,14 @@ fun ExportScreen(
         photoDiaryPrefix = stringResource(R.string.pdf_section_diary),
         photoDefectPrefix = stringResource(R.string.pdf_section_defects),
     )
-    val siteFileSections = remember(project, siteFileTexts, hourlyRateCents) {
+    // Built at the moment of the export, not at the moment the screen appeared: a session that
+    // is still open keeps counting, and a protocol whose time table is frozen at composition
+    // would print a total that is minutes or hours behind the phone - the same divergence
+    // between screen and paperwork that findings 39, 46 and 47 were about. The sections are a
+    // pure function of project + words + a clock, so recomputing them costs nothing.
+    fun sectionsNow(): List<PdfSection> =
         buildSiteFileSections(project, siteFileTexts) +
             listOfNotNull(buildCostSection(project, hourlyRateCents, siteFileTexts))
-    }
     val photoAppendix = remember(project, fieldPhotos, siteFileTexts) {
         buildPhotoAppendix(project, fieldPhotos, siteFileTexts)
     }
@@ -194,7 +200,7 @@ fun ExportScreen(
                             signatureTitle = signatureTitle,
                             signatureCaption = signatureCaption,
                             labels = pdfLabels,
-                            sections = siteFileSections,
+                            sections = sectionsNow(),
                             photos = photoAppendix,
                             photosTitle = siteFileTexts.photosTitle,
                             logo = logo,

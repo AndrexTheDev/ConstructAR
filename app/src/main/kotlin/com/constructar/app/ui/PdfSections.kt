@@ -39,6 +39,8 @@ internal data class SiteFileTexts(
     val columnDuration: String,
     val totalLabel: String,
     val runningLabel: String,
+    /** Printed under the time table while a session is still open; `%1$s` is the duration. */
+    val openSessionNote: String,
     val diaryTitle: String,
     val defectsTitle: String,
     val columnDefect: String,
@@ -92,11 +94,19 @@ internal fun buildSiteFileSections(
             )
         }
         val total = duration(WorkTime.totalMillis(project.sessions, nowMs), texts)
+        // A clock left running is warned about on the phone (finding 44) and was silent here:
+        // the table says "running" in the end column and the total - and therefore the cost
+        // below it - keeps growing until the export happens. The operator sees the warning, the
+        // customer sees a number nobody explained, so the protocol says it too. Nothing is
+        // capped or guessed; the sentence only names what the arithmetic already did.
+        val open = WorkTime.runningSession(project.sessions)
         sections += PdfSection(
             title = texts.timesTitle,
             columns = listOf(texts.columnDate, texts.columnStart, texts.columnEnd, texts.columnDuration),
             columnWidths = columns(0.34f, 0.20f, 0.20f, 0.26f),
             rows = rows,
+            paragraphs = open?.let { listOf(String.format(Locale.ROOT, texts.openSessionNote, duration(WorkTime.sessionMillis(it, nowMs), texts))) }
+                ?: emptyList(),
             note = "${texts.totalLabel}: $total",
         )
     }

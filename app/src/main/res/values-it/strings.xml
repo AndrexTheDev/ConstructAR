@@ -347,6 +347,7 @@
     <string name="pdf_label_address">Indirizzo</string>
     <string name="pdf_label_phone">Telefono</string>
     <string name="pdf_label_work_total">Ore totali</string>
+    <string name="pdf_note_open_session">Il timer è ancora in corso (%1$s finora): il totale e il costo lo contano fino a questo export.</string>
     <string name="pdf_status_open">Aperto</string>
     <string name="pdf_status_resolved">Risolto</string>
 

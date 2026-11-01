@@ -351,6 +351,7 @@
     <string name="pdf_label_address">Adres</string>
     <string name="pdf_label_phone">Telefon</string>
     <string name="pdf_label_work_total">Czas łączny</string>
+    <string name="pdf_note_open_session">Zegar wciąż działa (dotąd %1$s) - suma i koszt liczą go do momentu tego eksportu.</string>
     <string name="pdf_status_open">Otwarta</string>
     <string name="pdf_status_resolved">Naprawiona</string>
 
