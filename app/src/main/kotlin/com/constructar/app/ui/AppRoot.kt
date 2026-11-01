@@ -270,7 +270,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                         repository = viewModel.repository(),
                         onBack = { navController.popBackStack() },
                         onUpgrade = { navController.navigate(Routes.PAYWALL) },
-                        onRestore = { texts, photos -> viewModel.importBackup(texts, photos) },
+                        onRestore = { texts, photos, done -> viewModel.importBackup(texts, photos, done) },
                     )
                 }
             }

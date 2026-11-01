@@ -72,6 +72,13 @@ enum class RouteWarning {
      * the operator knows whether the jump was intended.
      */
     SURFACE_JUMP,
+
+    /**
+     * The run was closed into a ring, but its first and last node are not on top of each other:
+     * the closing segment would be invented rather than measured. Harmless for the length (the
+     * loop is still a polyline), wrong for the drawing and for anyone reading the metres later.
+     */
+    LOOP_TOO_WIDE,
     ;
 
     val isPresent: Boolean get() = this != NONE
@@ -229,14 +236,29 @@ class RouteSession(
         mutableState.value = recompute(mutableState.value.copy(nodes = emptyList(), closedLoop = false))
     }
 
-    /** Closes the run into a loop (rings, closed cable trays). */
+    /**
+     * Closes the run into a loop (rings, closed cable trays) or opens it again.
+     *
+     * Closing is checked: if the last node is not within [LOOP_TOLERANCE_METERS] of the first,
+     * the operator is told, because the ring would be closed by a segment nobody measured.
+     */
     @Synchronized
     fun closeLoop(): Boolean {
         val current = mutableState.value
         if (current.nodes.size < 3) return false
         previewDirty = true
-        mutableState.value = recompute(current.copy(closedLoop = !current.closedLoop))
+        val closing = !current.closedLoop
+        val gap = if (closing) loopGap(current.nodes) else 0f
+        val warning = if (gap > LOOP_TOLERANCE_METERS) RouteWarning.LOOP_TOO_WIDE else RouteWarning.NONE
+        mutableState.value = recompute(current.copy(closedLoop = closing, warning = warning))
         return true
+    }
+
+    /** Distance between the first and the last node, or `0` for a run with fewer than two. */
+    fun loopGap(nodes: List<RouteNodeRecord> = mutableState.value.nodes): Float {
+        val first = nodes.firstOrNull() ?: return 0f
+        val last = nodes.lastOrNull() ?: return 0f
+        return first.position.distanceTo(last.position)
     }
 
     /**
@@ -361,6 +383,9 @@ class RouteSession(
 
         /** A parallel surface further than this from the last node is a different wall. */
         const val SURFACE_JUMP_METERS = 0.20f
+
+        /** A ring whose ends are further apart than this was closed by an unmeasured segment. */
+        const val LOOP_TOLERANCE_METERS = 0.15f
 
         /** Anchor refinement below this is ignored so the mesh does not shimmer. */
         const val MOVEMENT_THRESHOLD_METERS = 0.005f

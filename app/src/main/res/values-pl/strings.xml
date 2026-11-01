@@ -350,4 +350,6 @@
     <string name="licence_clock_rollback">Zegar urządzenia jest opóźniony względem ostatniej daty widzianej przez aplikację. Ustaw poprawną datę i godzinę – subskrypcja i okres próbny są sprawdzane według ostatniej znanej daty.</string>
     <string name="licence_integrity_failed">Nie udało się potwierdzić tej instalacji, więc funkcje Pro są wyłączone. Twoje projekty pozostają czytelne i można je eksportować.</string>
     <string name="licence_demo_key">Uwaga dla dewelopera: ta kompilacja nadal zawiera demonstracyjny klucz weryfikacji. Zastąp go przed pierwszą sprzedażą.</string>
+    <string name="route_warning_loop_gap">Pierścień się nie zamyka – ustaw ostatni punkt na pierwszym</string>
+    <string name="backup_held_back">%1$d projekt(ów) wstrzymanych – pozostają w kopii zapasowej; Pro importuje wszystkie</string>
 </resources>

@@ -269,4 +269,53 @@ class RouteSessionTest {
         session.addNode(hit(1f, 0f, 0.05f))
         assertEquals(RouteWarning.NONE, session.state.value.warning)
     }
+
+    // ── Closing a ring ───────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `a ring whose ends meet is closed without a warning`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 0f))
+        session.addNode(hit(0.03f, 0f, 0.02f))
+        assertTrue(session.closeLoop())
+        assertTrue(session.state.value.closedLoop)
+        assertEquals(RouteWarning.NONE, session.state.value.warning)
+        assertTrue(session.loopGap() < RouteSession.LOOP_TOLERANCE_METERS)
+    }
+
+    @Test
+    fun `a ring that does not meet is flagged instead of silently invented`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 1f))
+        assertTrue(session.closeLoop())
+        // The last node is 1.4 m from the first: the closing segment would be measured nowhere.
+        assertEquals(RouteWarning.LOOP_TOO_WIDE, session.state.value.warning)
+        assertEquals(1.414f, session.loopGap(), 1e-3f)
+    }
+
+    @Test
+    fun `opening the ring again clears the warning`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 1f))
+        session.closeLoop()
+        assertEquals(RouteWarning.LOOP_TOO_WIDE, session.state.value.warning)
+
+        assertTrue(session.closeLoop())
+        assertFalse(session.state.value.closedLoop)
+        assertEquals(RouteWarning.NONE, session.state.value.warning)
+    }
+
+    @Test
+    fun `a run with two nodes cannot be closed`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 0f))
+        assertFalse(session.closeLoop())
+        assertFalse(session.state.value.closedLoop)
+    }
 }

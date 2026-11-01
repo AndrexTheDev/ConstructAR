@@ -134,13 +134,17 @@ across app restarts, a Bestellliste export, and a multi-run room summary.
 
 ## Data safety
 
-A project is one JSON file in app-private storage, written atomically (`tmp` + rename), so a crash
-mid-write cannot leave a half project behind. That survives updates and crashes — it does not
+A project is one JSON file in app-private storage, written atomically
+(`tmp` + `fsync` + rename in `core/io/SafeFiles.kt`), so a crash mid-write can neither leave a
+half project behind nor delete the previous version — the rename is the only moment the file
+changes, and it is atomic. That survives updates and crashes — it does not
 survive a cracked screen or an "app data" wipe, and for a foreman the measurements *are* the job.
 So the help screen can copy every project into a folder the operator picks (through the Storage
 Access Framework — no cloud unless they choose one) and read projects back from any phone.
 Restores never overwrite: a project whose id already exists is imported under a fresh id, so
-restoring onto a phone that still has the original leaves both copies in place.
+restoring onto a phone that still has the original leaves both copies in place. Restoring also
+obeys the plan's project limit — a free installation cannot be filled from somebody else's
+backup — and the files beyond the limit are left untouched in the zip, with the count shown.
 
 ---
 
@@ -153,8 +157,9 @@ adds unlimited rooms, a clean protocol and the GLB/PLY exports a BIM workflow co
 Payment is **crypto only** (SOL, BTC, ETH), because a store billing library needs the network and
 this app does not have it. A licence is a short signed string verified on the device against a
 public key that ships in the APK; the private key never leaves the developer. Everything about the
-model, the key handling and the honest limits of offline verification is in
-[docs/BILLING.md](docs/BILLING.md).
+model and the key handling are in [docs/BILLING.md](docs/BILLING.md); how far an offline
+licence can resist a cracked installation — clock rollback, sealed trial state, repackaged APKs,
+R8 dropping the verifier — and what is *not* claimed, is in [docs/SECURITY.md](docs/SECURITY.md).
 
 ---
 
@@ -327,6 +332,7 @@ without non-free modules — is in **[docs/SETUP.md](docs/SETUP.md)**.
 | Bend allowance | ~0 | Not measured: the *chord* length is what a tape measure shows. Bend allowance is reported separately and only used for procurement |
 | Angle / diagonal run on a plane | **±1 %** | Anchor drift over distance |
 | Effect of the settled reticle | **−30 to −60 %** of the per-point scatter | `HitStabilizer` commits the per-axis median of a 1.2 s / 5 sample window instead of one frame; a stray frame cannot move the point |
+| Wall-thickness slips | **caught, not measured** | `RouteWarning.SURFACE_JUMP`: a point that lands on a *parallel* surface more than 20 cm behind the last one is flagged (the "tapped through the doorway" error); a real corner stays silent |
 
 The app never inflates a measured length with a "cable slack" factor. Waste percentages are
 applied only in the procurement column, and the protocol prints both numbers.

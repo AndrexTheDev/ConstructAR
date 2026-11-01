@@ -346,4 +346,6 @@
     <string name="licence_clock_rollback">L\'orologio del dispositivo è indietro rispetto all\'ultima data vista dall\'app. Imposta data e ora corrette: abbonamento e prova vengono verificati sull\'ultima data nota.</string>
     <string name="licence_integrity_failed">Non è stato possibile confermare questa installazione, quindi le funzioni Pro sono disattivate. I tuoi cantieri restano leggibili ed esportabili.</string>
     <string name="licence_demo_key">Nota per lo sviluppatore: questa build contiene ancora la chiave di verifica demo. Sostituiscila prima della prima vendita.</string>
+    <string name="route_warning_loop_gap">L\'anello non si chiude: metti l\'ultimo punto sul primo</string>
+    <string name="backup_held_back">%1$d cantiere/i trattenuti: restano nel tuo backup; con Pro vengono importati tutti</string>
 </resources>
