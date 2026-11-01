@@ -48,8 +48,14 @@ emit() {
   local title="$1" file="$2"
   [ -s "$file" ] || return 0
   local msg
-  msg=$(awk '!seen[$0]++' "$file" | head -n 40 \
-    | sed -e 's/%/%25/g' -e 's/\t/  /g' | awk '{print $0 "%0A"}')
+  # One *physical* line per annotation: the workflow-command syntax ends at a newline, so a
+  # multi-line payload is silently truncated to its first line - which is exactly how a Gradle
+  # failure arrived here as a single deprecation warning. Lines are joined with the %0A escape
+  # that GitHub decodes back into newlines.
+  msg=$(awk '!seen[$0]++' "$file" | head -n 60 \
+    | sed -e 's/%/%25/g' -e 's/	/  /g' \
+    | awk 'BEGIN { ORS = "" } { print $0 "%0A" }' \
+    | cut -c1-20000)
   echo "::error title=${title}::${msg}"
 }
 
