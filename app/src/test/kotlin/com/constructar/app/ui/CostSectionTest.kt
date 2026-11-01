@@ -51,7 +51,7 @@ class CostSectionTest {
         columnDuration = "Dauer",
         totalLabel = "Summe",
         runningLabel = "läuft",
-        openSessionNote = "Die Uhr läuft noch (%1$s bisher) - Summe und Kosten unten rechnen sie bis zu diesem Export mit.",
+        openSessionNote = "Die Uhr läuft noch (%1\$s bisher) - Summe und Kosten unten rechnen sie bis zu diesem Export mit.",
         diaryTitle = "Bautagebuch",
         defectsTitle = "Mängel",
         columnDefect = "Mangel",

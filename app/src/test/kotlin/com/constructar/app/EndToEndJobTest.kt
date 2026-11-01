@@ -53,7 +53,7 @@ class EndToEndJobTest {
         columnDuration = "Duration",
         totalLabel = "Total",
         runningLabel = "running",
-        openSessionNote = "Die Uhr läuft noch (%1$s bisher) - Summe und Kosten unten rechnen sie bis zu diesem Export mit.",
+        openSessionNote = "Die Uhr läuft noch (%1\$s bisher) - Summe und Kosten unten rechnen sie bis zu diesem Export mit.",
         diaryTitle = "Site diary",
         defectsTitle = "Defects",
         columnDefect = "Defect",
