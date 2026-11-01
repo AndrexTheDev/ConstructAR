@@ -21,8 +21,9 @@
  * Requires `playwright` (`npm i playwright && npx playwright install --with-deps chromium`).
  */
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
@@ -46,6 +47,41 @@ const outIndex = process.argv.indexOf('--out');
 const OUT = resolve(outIndex > 0 ? process.argv[outIndex + 1] : 'build/site-matrix');
 
 const findings = [];
+const ORIGIN = 'https://andrexthedev.github.io/ConstructAR/';
+
+const CONTENT_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.webmanifest': 'application/manifest+json',
+  '.xml': 'application/xml',
+  '.txt': 'text/plain; charset=utf-8',
+};
+
+/**
+ * Serve the published origin from `docs/`.
+ *
+ * The pages are opened as `file://`, but the 404 page *must* use absolute URLs (GitHub Pages
+ * serves it at whatever path the visitor asked for) and a browser blocks those on a file://
+ * document. Intercepting the origin does two things at once: the absolute URLs resolve, and a
+ * URL that points at nothing becomes a finding instead of a silently empty box.
+ */
+async function routeOrigin(page) {
+  await page.route(`${ORIGIN}**`, async (route) => {
+    const requested = new URL(route.request().url());
+    const relative = decodeURIComponent(requested.pathname.replace(/^\/ConstructAR\//, ''));
+    const candidate = relative === '' || relative.endsWith('/') ? `${relative}index.html` : relative;
+    const file = resolve('docs', candidate);
+    if (existsSync(file)) {
+      await route.fulfill({ path: file, contentType: CONTENT_TYPES[extname(file)] ?? 'application/octet-stream' });
+    } else {
+      findings.push(`- **assets**: the site links to \`${requested.pathname}\`, which is not in docs/`);
+      await route.fulfill({ status: 404, body: 'missing' });
+    }
+  });
+}
 
 function fail(where, message) {
   findings.push(`- **${where}**: ${message}`);
@@ -58,6 +94,7 @@ for (const [locale, file] of PAGES) {
   for (const [device, width, height] of VIEWPORTS) {
     const where = `${locale}/${device}`;
     const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 2 });
+    await routeOrigin(page);
 
     const consoleErrors = [];
     page.on('pageerror', (error) => consoleErrors.push(error.message));
@@ -74,7 +111,9 @@ for (const [locale, file] of PAGES) {
       const images = [...document.images].map((image) => ({
         src: image.getAttribute('src'),
         broken: image.complete && image.naturalWidth === 0,
-        alt: image.getAttribute('alt'),
+        // `alt=""` marks a decorative image next to a text label and is correct; a *missing*
+        // attribute is what makes a screen reader read out a file name.
+        hasAlt: image.hasAttribute('alt'),
       }));
       const headings = [...document.querySelectorAll('h1')].map((h) => h.textContent?.trim() ?? '');
       return {
@@ -83,6 +122,24 @@ for (const [locale, file] of PAGES) {
         h1: headings,
         images,
         overflow: document.documentElement.scrollWidth - window.innerWidth,
+        widest: (() => {
+          const limit = window.innerWidth;
+          let worst = null;
+          for (const element of document.querySelectorAll('body *')) {
+            const box = element.getBoundingClientRect();
+            if (box.width === 0) continue;
+            const over = Math.round(box.right - limit);
+            if (over > 1 && (!worst || over > worst.over)) {
+              worst = {
+                over,
+                tag: element.tagName.toLowerCase(),
+                cls: element.className && typeof element.className === 'string' ? element.className : '',
+                text: (element.textContent ?? '').trim().slice(0, 60),
+              };
+            }
+          }
+          return worst;
+        })(),
         height: document.documentElement.scrollHeight,
         links: document.querySelectorAll('a[href]').length,
       };
@@ -92,11 +149,17 @@ for (const [locale, file] of PAGES) {
     if (!audit.title) fail(where, 'empty <title>');
     if (!audit.description) fail(where, 'empty meta description');
     if (audit.h1.length !== 1) fail(where, `expected exactly one <h1>, found ${audit.h1.length}`);
-    if (audit.h1[0] && audit.h1[0].length < 10) fail(where, `<h1> is suspiciously short: "${audit.h1[0]}"`);
-    if (audit.overflow > 1) fail(where, `horizontal overflow of ${audit.overflow}px`);
+    if (locale !== '404' && audit.h1[0] && audit.h1[0].length < 10) fail(where, `<h1> is suspiciously short: "${audit.h1[0]}"`);
+    if (audit.overflow > 1) {
+      const worst = audit.widest;
+      const culprit = worst
+        ? ` — widest culprit: <${worst.tag} class="${worst.cls}"> sticks out ${worst.over}px ("${worst.text}")`
+        : '';
+      fail(where, `horizontal overflow of ${audit.overflow}px${culprit}`);
+    }
     for (const image of audit.images) {
       if (image.broken) fail(where, `broken image ${image.src}`);
-      if (!image.alt) fail(where, `image without alt text: ${image.src}`);
+      if (!image.hasAlt) fail(where, `image without an alt attribute: ${image.src}`);
     }
 
     mkdirSync(resolve(OUT, locale), { recursive: true });

@@ -189,6 +189,17 @@ footer a{color:var(--chalk)}
 .sticky-cta .btn{display:flex; justify-content:center; width:100%; padding:14px 16px; font-size:.95rem}
 .sticky-cta small{display:block; color:var(--ash); font-size:.72rem; margin-top:2px}
 @media (max-width:700px){ .sticky-cta{display:block} body{padding-bottom:86px} }
+/* A phone is 390 px wide and a German compound word is long: nothing may push the page
+   sideways. Tables get their own scroll box instead of stretching the document, cells may
+   break inside a word, and the nowrap that keeps "±2 cm" tidy is dropped on small screens. */
+html, body{max-width:100%}
+.wrap{overflow-wrap:break-word}
+table.acc, table.cmp{display:block; width:100%; max-width:100%; overflow-x:auto}
+th, td{overflow-wrap:anywhere}
+@media (max-width:700px){
+  table.acc td:last-child{white-space:normal}
+  th, td{padding:11px 12px}
+}
 """
 
 CONTENT: dict[str, dict[str, str]] = {
@@ -766,7 +777,8 @@ def not_found() -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>404 — ConstructAR</title>
+<title>404 — Page not found · ConstructAR</title>
+<meta name="description" content="This page does not exist. ConstructAR — offline AR measuring for electricians, plumbers and ventilation crews.">
 <meta name="robots" content="noindex,follow">
 <meta name="theme-color" content="#0A0C07">
 <meta name="color-scheme" content="dark">
@@ -780,7 +792,8 @@ def not_found() -> str:
 <body>
 <main class="wrap" style="padding:64px 22px; max-width:760px">
   <a class="brand" href="{BASE_URL}"><img src="{BASE_URL}assets/logo.jpg" alt="ConstructAR" width="36" height="36"><span>ConstructAR</span></a>
-  <h1 style="margin-top:32px">404</h1>
+  <h1 style="margin-top:32px">Page not found</h1>
+  <p style="color:var(--ash); margin:8px 0 0; font-size:1.1rem">404 — the link is dead or the page has moved. Every language below still has a way back.</p>
   <div class="langs" style="display:block">{rows}</div>
   <p style="margin-top:28px"><a class="btn btn-primary" href="{BASE_URL}">ConstructAR</a></p>
 </main>

@@ -189,6 +189,17 @@ footer a{color:var(--chalk)}
 .sticky-cta .btn{display:flex; justify-content:center; width:100%; padding:14px 16px; font-size:.95rem}
 .sticky-cta small{display:block; color:var(--ash); font-size:.72rem; margin-top:2px}
 @media (max-width:700px){ .sticky-cta{display:block} body{padding-bottom:86px} }
+/* A phone is 390 px wide and a German compound word is long: nothing may push the page
+   sideways. Tables get their own scroll box instead of stretching the document, cells may
+   break inside a word, and the nowrap that keeps "±2 cm" tidy is dropped on small screens. */
+html, body{max-width:100%}
+.wrap{overflow-wrap:break-word}
+table.acc, table.cmp{display:block; width:100%; max-width:100%; overflow-x:auto}
+th, td{overflow-wrap:anywhere}
+@media (max-width:700px){
+  table.acc td:last-child{white-space:normal}
+  th, td{padding:11px 12px}
+}
 </style>
 </head>
 <body>

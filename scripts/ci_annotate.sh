@@ -62,18 +62,28 @@ sed -n '/^FAILURE:/,/^\* Exception is:/p' "$CLEAN" | head -n 40 > /tmp/ann_failu
 grep -E "^> Task .* FAILED" "$CLEAN" | head -n 20 >> /tmp/ann_failure.txt
 grep -E '(^|[[:space:]])(error:|Caused by:)' "$CLEAN" | head -n 20 >> /tmp/ann_failure.txt
 
+# 2b. Configuration failures and script compilations do not always produce a "What went wrong"
+# block: the reason can be the first thing Gradle prints (a version-catalogue alias, an
+# unresolved reference in a build script). Grep for the words those messages use.
+grep -nE "(Unresolved reference|Could not (find|resolve|compile|create|determine|generate)|Cannot (create|generate|resolve)|Invalid (alias|catalog)|Script compilation|build file .*failed)" \
+  "$CLEAN" | head -n 20 >> /tmp/ann_failure.txt
+
+# 2c. The head of the log: when Gradle dies while configuring, the reason precedes the noise.
+head -n 60 "$CLEAN" > /tmp/ann_head.txt
+
 # 3. The tail, always - it is the only thing left when nothing above matched.
 tail -n 40 "$CLEAN" > /tmp/ann_tail.txt
 
 emit "${TITLE} - diagnostics" /tmp/ann_kotlin.txt
 emit "${TITLE} - what went wrong" /tmp/ann_failure.txt
+emit "${TITLE} - log head" /tmp/ann_head.txt
 emit "${TITLE} - log tail" /tmp/ann_tail.txt
 
 {
   echo "## ${TITLE} (exit ${CODE})"
   echo ""
   echo '```'
-  cat /tmp/ann_kotlin.txt /tmp/ann_failure.txt /tmp/ann_tail.txt | awk '!seen[$0]++' | head -n 150
+  cat /tmp/ann_kotlin.txt /tmp/ann_failure.txt /tmp/ann_head.txt /tmp/ann_tail.txt | awk '!seen[$0]++' | head -n 150
   echo '```'
 } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
