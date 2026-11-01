@@ -221,13 +221,14 @@ fun FieldBookScreen(
                 )
             } else {
                 // Newest first on screen; the JSON keeps them oldest first.
-                project.sessions.asReversed().take(12).forEach { session ->
+                project.sessions.asReversed().take(FieldLists.SESSIONS_SHOWN).forEach { session ->
                     SessionRow(
                         session = session,
                         nowMs = nowMs,
                         onDelete = { onDeleteSession(session.id) },
                     )
                 }
+                FieldTail(FieldLists.hiddenCount(project.sessions.size, FieldLists.SESSIONS_SHOWN))
             }
         }
 
@@ -258,7 +259,7 @@ fun FieldBookScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                project.diary.take(20).forEach { entry ->
+                project.diary.take(FieldLists.DIARY_SHOWN).forEach { entry ->
                     val token = entry.photo
                     DiaryRow(
                         entry = entry,
@@ -267,6 +268,7 @@ fun FieldBookScreen(
                         onDelete = { onDeleteDiary(entry.id) },
                     )
                 }
+                FieldTail(FieldLists.hiddenCount(project.diary.size, FieldLists.DIARY_SHOWN))
             }
         }
 
@@ -338,7 +340,7 @@ fun FieldBookScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                project.defects.take(20).forEach { defect ->
+                project.defects.take(FieldLists.DEFECTS_SHOWN).forEach { defect ->
                     val token = defect.photo
                     DefectRow(
                         defect = defect,
@@ -348,9 +350,28 @@ fun FieldBookScreen(
                         onDelete = { onDeleteDefect(defect.id) },
                     )
                 }
+                FieldTail(FieldLists.hiddenCount(project.defects.size, FieldLists.DEFECTS_SHOWN))
             }
         }
     }
+}
+
+/**
+ * What the list above is not showing.
+ *
+ * Nothing at all when the list fits, which is the normal case on a job that fits on a phone -
+ * the sentence only appears when there really are older rows in the file that this screen left
+ * out. They are printed in full in the protocol, so the line points there rather than inviting
+ * the operator to believe the app lost them.
+ */
+@Composable
+private fun FieldTail(hidden: Int) {
+    if (hidden <= 0) return
+    Text(
+        stringResource(R.string.field_list_more, hidden),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /** One card of the site file, so the three sections cannot drift apart visually. */

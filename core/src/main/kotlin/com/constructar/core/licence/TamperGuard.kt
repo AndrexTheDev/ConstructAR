@@ -187,12 +187,18 @@ object EntitlementRules {
 
         // A rollback kills the trial, but never a paid licence: the licence has its own expiry
         // and is verified against the watermark day, so it simply stays expired.
+        //
+        // `day < start + TRIAL_DAYS`, not `<=`: epoch days are whole days, so `<=` grants the
+        // start day *plus* seven more - eight days for a trial the paywall calls seven - and,
+        // worse, the last of them is the one where `daysLeft` has already fallen to zero, so the
+        // screen read "trial active, 0 days left". Seven days is start..start+6, and on that last
+        // day the counter says one.
         val trialStart = input.trialStartEpochDay
         val trialUsed = trialStart >= 0L
         val trialActive = trialUsed &&
             !rolledBack &&
             trialStart <= day &&
-            day <= trialStart + Entitlements.TRIAL_DAYS
+            day < trialStart + Entitlements.TRIAL_DAYS
         if (trialActive) {
             return Output(
                 entitlements = Entitlements.of(

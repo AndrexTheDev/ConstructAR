@@ -309,6 +309,7 @@
     <string name="field_delete">Delete</string>
     <string name="field_open_count">%1$d open</string>
     <string name="field_resolved_count">%1$d resolved</string>
+    <string name="field_list_more">%1$d older entries are not shown here; the protocol prints them all.</string>
     <string name="severity_low">Minor</string>
     <string name="severity_medium">Important</string>
     <string name="severity_high">Critical</string>

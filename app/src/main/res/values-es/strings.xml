@@ -309,6 +309,7 @@
     <string name="field_delete">Eliminar</string>
     <string name="field_open_count">%1$d abiertos</string>
     <string name="field_resolved_count">%1$d resueltos</string>
+    <string name="field_list_more">%1$d entradas más antiguas no se muestran aquí; el protocolo las incluye todas.</string>
     <string name="severity_low">Leve</string>
     <string name="severity_medium">Importante</string>
     <string name="severity_high">Crítico</string>

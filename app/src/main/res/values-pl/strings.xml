@@ -313,6 +313,7 @@
     <string name="field_delete">Usuń</string>
     <string name="field_open_count">%1$d otwartych</string>
     <string name="field_resolved_count">%1$d naprawionych</string>
+    <string name="field_list_more">%1$d starszych wpisów nie jest tu pokazanych; protokół zawiera je wszystkie.</string>
     <string name="severity_low">Drobna</string>
     <string name="severity_medium">Ważna</string>
     <string name="severity_high">Krytyczna</string>

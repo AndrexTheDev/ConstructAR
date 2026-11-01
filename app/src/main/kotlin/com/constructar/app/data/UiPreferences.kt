@@ -11,10 +11,12 @@ import android.content.Context
 /**
  * The smallest possible store of "has the operator seen this screen already".
  *
- * Only two facts live here, and both are about the UI rather than the data: whether the
- * three-step introduction has been shown, and whether the help screen has ever been opened
- * (used to raise the "?" affordance until it has been). Everything else — projects, licence,
- * trial — has its own store, so nothing about the operator's work depends on this file.
+ * One fact lives here, and it is about the UI rather than the data: whether the three-step
+ * introduction has been shown. (This note used to promise a second fact - a "help screen has
+ * been opened" flag that would raise the "?" affordance until it had - but no such flag was ever
+ * read by anyone; the help button is simply always there, which is the better answer.) Everything
+ * else has its own store, so nothing about the operator's work depends on this file, and losing
+ * it costs the operator one introduction.
  */
 class UiPreferences(context: Context) {
 
