@@ -99,6 +99,45 @@ class ExportTextFormatsTest {
         assertEquals("Keller-Raum-2", ExportService.slug("Keller / Raum: 2"))
         assertEquals("project", ExportService.slug("   "))
         assertTrue(ExportService.slug("A".repeat(200)).length <= 40)
+        assertEquals("project", ExportService.slug("///"))
+        assertEquals("Bad-Keller", ExportService.slug("Bad/Keller"))
+        // Nothing a path cannot hold survives, whatever an operator pasted in.
+        for (hostile in listOf("a\\b", "a:b", "a*b", "a?b", "a\"b", "a<b", "a>b", "a|b", "a\u0000b", "..\\..")) {
+            val stem = ExportService.slug(hostile)
+            assertTrue("$hostile -> $stem", stem.none { it in "/\\:*?\"<>|" })
+            assertTrue("$hostile -> $stem", stem.isNotBlank())
+        }
+    }
+
+    @Test
+    fun `a room keeps its own name in the file stem`() {
+        // The umlaut used to be deleted, not transliterated: "Küche" became "Kche", which is not
+        // a short name but a different one. Every locale of this app types letters like these.
+        assertEquals("Küche", ExportService.slug("Küche"))
+        assertEquals("Chantier-Château", ExportService.slug("Chantier Château"))
+        assertEquals("Baño-2", ExportService.slug("Baño (2)"))
+        assertEquals("Łazienka", ExportService.slug("Łazienka"))
+        assertEquals("Cucina-Öl-1", ExportService.slug("Cucina Öl 1"))
+        assertEquals("Café-1-OG", ExportService.slug("Café 1. OG"))
+        // A surrogate pair is never cut in half.
+        val emoji = ExportService.slug("A" + "🛠".repeat(40))
+        assertTrue(emoji.none { it.isHighSurrogate() && emoji.indexOf(it) == emoji.length - 1 })
+    }
+
+    @Test
+    fun `a run label cannot inject a ply header line`() {
+        val nasty = "tri\nelement vertex 999999\nend_header"
+        val ply = PlyWriter.writeAscii(listOf(PlyWriter.PlyPart(nasty, triangleMesh())))
+        val lines = ply.lines()
+        assertEquals(1, lines.count { it == "element vertex 3" })
+        assertEquals(1, lines.count { it == "element face 1" })
+        assertEquals(1, lines.count { it == "end_header" })
+        assertEquals(1, lines.count { it.startsWith("comment mesh ") })
+        assertTrue(lines.none { it == "element vertex 999999" })
+
+        val binary = PlyWriter.writeBinaryLittleEndian(listOf(PlyWriter.PlyPart(nasty, triangleMesh())))
+        val header = String(binary, 0, indexOf(binary, "end_header\n".toByteArray()) + 1, Charsets.US_ASCII)
+        assertEquals(1, header.lines().count { it.startsWith("comment mesh ") })
     }
 
     private fun indexOf(haystack: ByteArray, needle: ByteArray): Int {

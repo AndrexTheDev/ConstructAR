@@ -258,13 +258,40 @@ def check_manifest_hardening() -> None:
 
 
 def strip_kotlin(text: str) -> str:
-    """Removes comments and string/char literals so structural counting is meaningful."""
-    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
-    text = re.sub(r"//[^\n]*", "", text)
+    """Removes comments and string/char literals so structural counting is meaningful.
+
+    Order matters and both orders are wrong on their own:
+
+      * comments first, and a literal like `"///"` becomes an unterminated string - the
+        remainder of the file shifts and the gate reports an unbalanced `}` in code that
+        compiles (this happened, in a test of `ExportService.slug`);
+      * literals first, and an apostrophe in a comment (`// don't`) opens a character literal
+        that never closes.
+
+    So: literals first, then comments, and the comment pass is a single character scan that
+    knows it is outside every literal by then. Raw strings are removed before normal ones, and
+    each removal collapses to `""`, which is why the bracket count still means something.
+    """
     text = re.sub(r'"""(?:.|\n)*?"""', '""', text)
     text = re.sub(r'"(?:\\.|[^"\\\n])*"', '""', text)
     text = re.sub(r"'(?:\\.|[^'\\\n])'", "''", text)
-    return text
+
+    out: list[str] = []
+    index = 0
+    length = len(text)
+    while index < length:
+        pair = text[index:index + 2]
+        if pair == "//":
+            newline = text.find("\n", index)
+            index = length if newline < 0 else newline
+            continue
+        if pair == "/*":
+            end_of_block = text.find("*/", index + 2)
+            index = length if end_of_block < 0 else end_of_block + 2
+            continue
+        out.append(text[index])
+        index += 1
+    return "".join(out)
 
 
 def check_kotlin_structure() -> None:

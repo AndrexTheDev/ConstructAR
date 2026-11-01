@@ -217,17 +217,38 @@ class ExportService(
     }
 
     companion object {
-        /** Filesystem-safe stem: ASCII letters/digits/dash, ≤ 40 chars. */
+        /**
+         * Filesystem-safe stem in the operator's own words: letters of any script, digits, dash.
+         *
+         * The previous version kept ASCII only, so a room called "Küche" was exported as
+         * `ConstructAR_Kche_20260314-1015.pdf` - the umlaut was dropped rather than transliterated,
+         * which is not a shortened name but a different one. A French "Château", a Spanish "Baño"
+         * or a Polish "Łazienka" fared no better, and those are the names this app's users type.
+         *
+         * Safe does not mean ASCII: every filesystem the app can write to (app storage, SAF, a
+         * FAT/exFAT stick) stores UTF-8 names. What has to go is only what a path cannot hold -
+         * separators, the reserved Windows characters, control characters - and each of those is
+         * replaced by a dash so the surrounding words stay separated.
+         */
         fun slug(value: String, maxLength: Int = 40): String {
-            val cleaned = value.trim().map { character ->
+            val cleaned = StringBuilder(value.length)
+            for (character in value.trim()) {
                 when {
-                    character.isLetterOrDigit() && character.code < 128 -> character
-                    character == ' ' || character == '-' || character == '_' -> '-'
-                    else -> null
+                    character.isLetterOrDigit() -> cleaned.append(character)
+                    character == ' ' || character == '-' || character == '_' || character == '.' -> cleaned.append('-')
+                    character == '/' || character == '\\' -> cleaned.append('-')
+                    character.isISOControl() -> Unit
+                    character in "\\:*?\"<>|" -> cleaned.append('-')
+                    // Punctuation, emoji, quotes: dropped, so "Raum (2)" becomes "Raum-2" below.
+                    else -> Unit
                 }
-            }.filterNotNull().joinToString("").trim('-')
-            val collapsed = cleaned.replace(Regex("-{2,}"), "-")
-            return (collapsed.ifBlank { "project" }).take(maxLength).trim('-').ifBlank { "project" }
+            }
+            val collapsed = cleaned.toString().replace(Regex("-{2,}"), "-").trim('-')
+            val limit = maxLength.coerceAtLeast(1)
+            // Never cut a surrogate pair in half: an emoji in a room name must not become a
+            // replacement character in the file name.
+            val cut = if (collapsed.length > limit && collapsed[limit - 1].isHighSurrogate()) limit - 1 else limit
+            return collapsed.take(cut).trim('-').ifBlank { "project" }
         }
 
         private fun colourFor(label: String, project: ProjectRecord): Int =
