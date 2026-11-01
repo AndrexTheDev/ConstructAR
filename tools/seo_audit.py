@@ -20,6 +20,9 @@ regression ship. It answers the questions a crawler asks, in the order it asks t
      resolves, every image has alt text and intrinsic size, no duplicate ids)
   6. Are the crawler files consistent with the pages?     (sitemap URLs + lastmod, robots Sitemap
      line, manifest icons that exist at the size they claim)
+  7. Can a reader who needs large type read it?           (no `font-size` in px in the generated
+     CSS: a px size overrides the browser's own font-size preference, so the paragraphs stay small
+     while the rem-sized headings grow - finding 68)
 
 The check is deliberately strict about *honesty* rather than volume: it verifies that the prices
 in the structured data are the four prices the product actually charges, and that a claimed icon
@@ -502,6 +505,25 @@ def check_uniqueness(documents: dict[str, Document]) -> None:
             seen[value] = lang
 
 
+PX_FONT_SIZE = re.compile(r"font-size\s*:\s*[0-9.]+px")
+
+
+def check_font_size_units() -> None:
+    """A `font-size` in px overrides the reader's browser preference; rem does not.
+
+    The body rule was `font-size:17px` while every other size in the stylesheet was in rem - so a
+    reader who raises the browser's default font size got bigger headings over unchanged body text,
+    which is the combination that makes a page unusable rather than merely large (finding 68).
+    """
+    for lang in LANGS:
+        path = page_path(lang)
+        text = path.read_text(encoding="utf-8")
+        for match in PX_FONT_SIZE.finditer(text):
+            line = text[: match.start()].count("\n") + 1
+            add(path, f"line {line}: `{match.group(0)}` is a px font size - use rem so the reader's "
+                      f"font-size preference is honoured")
+
+
 def main() -> int:
     missing = [str(page_path(code)) for code in LANGS if not page_path(code).exists()]
     if missing:
@@ -516,6 +538,7 @@ def main() -> int:
     check_robots()
     check_manifest()
     check_not_found()
+    check_font_size_units()
 
     if findings:
         print(f"seo_audit: {len(findings)} finding(s)\n")
