@@ -5,9 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ConstructAR — offline AR measuring for electricians and plumbers</title>
 <meta name="description" content="Scan the room with your phone, draw the cable or pipe run, get the metres, the material list and a signed PDF protocol. 100 % offline, six languages, PDF/CSV/GLB.">
-<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
 <meta name="author" content="AndrexTheDev">
 <meta name="theme-color" content="#0A0C07">
+<meta name="color-scheme" content="dark">
+<meta name="application-name" content="ConstructAR">
+<meta name="apple-mobile-web-app-title" content="ConstructAR">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="canonical" href="https://andrexthedev.github.io/ConstructAR/">
 <link rel="alternate" hreflang="en" href="https://andrexthedev.github.io/ConstructAR/">
 <link rel="alternate" hreflang="de" href="https://andrexthedev.github.io/ConstructAR/de/">
@@ -18,14 +23,17 @@
 <link rel="alternate" hreflang="x-default" href="https://andrexthedev.github.io/ConstructAR/">
 <link rel="icon" href="assets/favicon.png" sizes="64x64" type="image/png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ConstructAR">
 <meta property="og:title" content="ConstructAR — offline AR measuring for electricians and plumbers">
 <meta property="og:description" content="Scan the room with your phone, draw the cable or pipe run, get the metres, the material list and a signed PDF protocol. 100 % offline, six languages, PDF/CSV/GLB.">
 <meta property="og:url" content="https://andrexthedev.github.io/ConstructAR/">
 <meta property="og:image" content="https://andrexthedev.github.io/ConstructAR/assets/og-image.png">
+<meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="ConstructAR: dark app interface with a lime AR measuring line running along a scanned wall">
 <meta property="og:locale" content="en_GB">
 <meta property="og:locale:alternate" content="de_DE">
 <meta property="og:locale:alternate" content="es_ES">
@@ -36,7 +44,8 @@
 <meta name="twitter:title" content="ConstructAR — offline AR measuring for electricians and plumbers">
 <meta name="twitter:description" content="Scan the room with your phone, draw the cable or pipe run, get the metres, the material list and a signed PDF protocol. 100 % offline, six languages, PDF/CSV/GLB.">
 <meta name="twitter:image" content="https://andrexthedev.github.io/ConstructAR/assets/og-image.png">
-<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "SoftwareApplication", "name": "ConstructAR", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Android", "softwareVersion": "1.0", "inLanguage": ["en", "de", "es", "fr", "it", "pl"], "url": "https://andrexthedev.github.io/ConstructAR/", "image": "https://andrexthedev.github.io/ConstructAR/assets/logo.jpg", "description": "Scan the room with your phone, draw the cable or pipe run, get the metres, the material list and a signed PDF protocol. 100 % offline, six languages, PDF/CSV/GLB.", "featureList": ["Scan the room", "Draw flush to the surface", "Metres and material list", "A protocol the customer signs", "Works without signal", "Six languages", "The site file is inside"], "author": {"@type": "Person", "name": "AndrexTheDev", "email": "hippie.highho@gmail.com"}, "offers": [{"@type": "Offer", "name": "Free", "price": "0", "priceCurrency": "EUR"}, {"@type": "Offer", "name": "Pro monthly", "price": "10", "priceCurrency": "EUR"}, {"@type": "Offer", "name": "Pro yearly", "price": "100", "priceCurrency": "EUR"}, {"@type": "Offer", "name": "Lifetime", "price": "999", "priceCurrency": "EUR"}]}, {"@type": "FAQPage", "inLanguage": "en", "mainEntity": [{"@type": "Question", "name": "Does it work without internet?", "acceptedAnswer": {"@type": "Answer", "text": "Yes — the app has no INTERNET permission at all. Nothing is uploaded, nothing is downloaded, and tracking, depth and rendering run on the phone."}}, {"@type": "Question", "name": "Which phones are supported?", "acceptedAnswer": {"@type": "Answer", "text": "Android phones with ARCore and Android 7.0 or newer. A depth sensor (ToF) improves the numbers but is not required."}}, {"@type": "Question", "name": "Is it a laser replacement?", "acceptedAnswer": {"@type": "Answer", "text": "For runs on flat walls, yes, to within a couple of centimetres. For anything technical or hidden behind a panel, check with a tape measure before cutting — the protocol states the expected error too."}}, {"@type": "Question", "name": "Where do my measurements live?", "acceptedAnswer": {"@type": "Answer", "text": "In one JSON file per room, in the app's private storage. You can copy every project and its photo into a folder of your choice and restore them on another phone."}}, {"@type": "Question", "name": "Do I need an account?", "acceptedAnswer": {"@type": "Answer", "text": "No. No sign-in, no cloud, no subscription tracking — a licence is a short signed key that the app verifies offline."}}, {"@type": "Question", "name": "How do I pay?", "acceptedAnswer": {"@type": "Answer", "text": "In SOL, BTC or ETH to the address shown in the app. Send the transaction id and your device code, and you get a licence key back."}}, {"@type": "Question", "name": "What if the phone breaks?", "acceptedAnswer": {"@type": "Answer", "text": "Every project can be copied into a folder of your choice — a USB stick, an SD card, your own drive. Restoring on a new phone brings the photos along."}}, {"@type": "Question", "name": "Do I have to take out a subscription?", "acceptedAnswer": {"@type": "Answer", "text": "No. Month, year or once — and when a subscription ends nothing is taken away: every room stays readable and exportable."}}]}]}</script>
+<meta name="twitter:image:alt" content="ConstructAR: dark app interface with a lime AR measuring line running along a scanned wall">
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "SoftwareApplication", "name": "ConstructAR", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Android", "softwareVersion": "1.0", "inLanguage": ["en", "de", "es", "fr", "it", "pl"], "url": "https://andrexthedev.github.io/ConstructAR/", "image": "https://andrexthedev.github.io/ConstructAR/assets/logo.jpg", "description": "Scan the room with your phone, draw the cable or pipe run, get the metres, the material list and a signed PDF protocol. 100 % offline, six languages, PDF/CSV/GLB.", "featureList": ["Scan the room", "Draw flush to the surface", "Metres and material list", "A protocol the customer signs", "Works without signal", "Six languages", "The site file is inside"], "author": {"@type": "Person", "name": "AndrexTheDev", "email": "hippie.highho@gmail.com"}, "sameAs": ["https://github.com/AndrexTheDev/ConstructAR"], "isAccessibleForFree": true, "offers": [{"@type": "Offer", "name": "Free", "price": "0", "priceCurrency": "EUR", "availability": "https://schema.org/InStock", "url": "https://andrexthedev.github.io/ConstructAR/#pricing"}, {"@type": "Offer", "name": "Pro monthly", "price": "10", "priceCurrency": "EUR", "availability": "https://schema.org/InStock", "url": "https://andrexthedev.github.io/ConstructAR/#pricing"}, {"@type": "Offer", "name": "Pro yearly", "price": "100", "priceCurrency": "EUR", "availability": "https://schema.org/InStock", "url": "https://andrexthedev.github.io/ConstructAR/#pricing"}, {"@type": "Offer", "name": "Lifetime", "price": "999", "priceCurrency": "EUR", "availability": "https://schema.org/InStock", "url": "https://andrexthedev.github.io/ConstructAR/#pricing"}]}, {"@type": "WebSite", "@id": "https://andrexthedev.github.io/ConstructAR/#website", "url": "https://andrexthedev.github.io/ConstructAR/", "name": "ConstructAR", "inLanguage": "en", "publisher": {"@type": "Organization", "name": "AndrexTheDev", "url": "https://github.com/AndrexTheDev/ConstructAR"}}, {"@type": "FAQPage", "inLanguage": "en", "mainEntity": [{"@type": "Question", "name": "Does it work without internet?", "acceptedAnswer": {"@type": "Answer", "text": "Yes — the app has no INTERNET permission at all. Nothing is uploaded, nothing is downloaded, and tracking, depth and rendering run on the phone."}}, {"@type": "Question", "name": "Which phones are supported?", "acceptedAnswer": {"@type": "Answer", "text": "Android phones with ARCore and Android 7.0 or newer. A depth sensor (ToF) improves the numbers but is not required."}}, {"@type": "Question", "name": "Is it a laser replacement?", "acceptedAnswer": {"@type": "Answer", "text": "For runs on flat walls, yes, to within a couple of centimetres. For anything technical or hidden behind a panel, check with a tape measure before cutting — the protocol states the expected error too."}}, {"@type": "Question", "name": "Where do my measurements live?", "acceptedAnswer": {"@type": "Answer", "text": "In one JSON file per room, in the app's private storage. You can copy every project and its photo into a folder of your choice and restore them on another phone."}}, {"@type": "Question", "name": "Do I need an account?", "acceptedAnswer": {"@type": "Answer", "text": "No. No sign-in, no cloud, no subscription tracking — a licence is a short signed key that the app verifies offline."}}, {"@type": "Question", "name": "How do I pay?", "acceptedAnswer": {"@type": "Answer", "text": "In SOL, BTC or ETH to the address shown in the app. Send the transaction id and your device code, and you get a licence key back."}}, {"@type": "Question", "name": "What if the phone breaks?", "acceptedAnswer": {"@type": "Answer", "text": "Every project can be copied into a folder of your choice — a USB stick, an SD card, your own drive. Restoring on a new phone brings the photos along."}}, {"@type": "Question", "name": "Do I have to take out a subscription?", "acceptedAnswer": {"@type": "Answer", "text": "No. Month, year or once — and when a subscription ends nothing is taken away: every room stays readable and exportable."}}]}]}</script>
 <style>
 :root{
   --ink:#0A0C07; --ink-elevated:#14180E; --surface-high:#1E2314;
@@ -180,6 +189,17 @@ footer a{color:var(--chalk)}
 .sticky-cta .btn{display:flex; justify-content:center; width:100%; padding:14px 16px; font-size:.95rem}
 .sticky-cta small{display:block; color:var(--ash); font-size:.72rem; margin-top:2px}
 @media (max-width:700px){ .sticky-cta{display:block} body{padding-bottom:86px} }
+/* A phone is 390 px wide and a German compound word is long: nothing may push the page
+   sideways. Tables get their own scroll box instead of stretching the document, cells may
+   break inside a word, and the nowrap that keeps "±2 cm" tidy is dropped on small screens. */
+html, body{max-width:100%}
+.wrap{overflow-wrap:break-word}
+table.acc, table.cmp{display:block; width:100%; max-width:100%; overflow-x:auto}
+th, td{overflow-wrap:anywhere}
+@media (max-width:700px){
+  table.acc td:last-child{white-space:normal}
+  th, td{padding:11px 12px}
+}
 </style>
 </head>
 <body>
@@ -195,7 +215,7 @@ footer a{color:var(--chalk)}
       <a href="#faq">FAQ</a>
       <a href="https://github.com/AndrexTheDev/ConstructAR" rel="noopener">GitHub</a>
     </nav>
-    <nav class="lang" aria-label="Languages"><a href="" hreflang="en" aria-current="true">en</a><a href="../de/" hreflang="de">de</a><a href="../es/" hreflang="es">es</a><a href="../fr/" hreflang="fr">fr</a><a href="../it/" hreflang="it">it</a><a href="../pl/" hreflang="pl">pl</a></nav>
+    <nav class="lang" aria-label="Languages"><a href="" hreflang="en" aria-current="true">en</a><a href="de/" hreflang="de">de</a><a href="es/" hreflang="es">es</a><a href="fr/" hreflang="fr">fr</a><a href="it/" hreflang="it">it</a><a href="pl/" hreflang="pl">pl</a></nav>
   </div>
 </header>
 
@@ -328,7 +348,7 @@ footer a{color:var(--chalk)}
   <section class="section" id="languages">
     <div class="wrap">
       <div class="section-head"><h2>Six languages, one build</h2><p>Every screen and the exported protocol are translated — and the build refuses a release in which one language is missing a key.</p></div>
-      <div class="langs"><a href="" hreflang="en">English</a><a href="../de/" hreflang="de">Deutsch</a><a href="../es/" hreflang="es">Español</a><a href="../fr/" hreflang="fr">Français</a><a href="../it/" hreflang="it">Italiano</a><a href="../pl/" hreflang="pl">Polski</a></div>
+      <div class="langs"><a href="" hreflang="en">English</a><a href="de/" hreflang="de">Deutsch</a><a href="es/" hreflang="es">Español</a><a href="fr/" hreflang="fr">Français</a><a href="it/" hreflang="it">Italiano</a><a href="pl/" hreflang="pl">Polski</a></div>
     </div>
   </section>
 

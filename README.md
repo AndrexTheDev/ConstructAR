@@ -361,6 +361,13 @@ Known limitations, deliberately documented rather than hidden:
   measurement, tube/duct mesh invariants, BOM aggregation, the working-time clock, the money
   arithmetic (`Pricing`: rounding, both decimal separators, thousand dots, euro forced on a
   `pl-PL` phone) and the photo-token naming contract.
+* **JVM (`:app`, Robolectric)** — the storage layer against a real filesystem: a room survives
+  a save and a load, a blank name falls back, restoring a backup of a room that is still on the
+  phone keeps both, text that is not a project is refused, a corrupt file is reported as
+  unreadable but never deleted (the bytes are the operator's only copy), a temp file left by a
+  kill is swept while the room is not, deleting one room leaves the others and their photos
+  intact, and the backup is byte-for-byte what the app wrote. Plus the theme: WCAG contrast is
+  computed for every text pair the UI draws and asserted at 4.5:1.
 * **JVM (`:app`)** — the printed cost block: no block without time or material, labour +
   material = net total through the same formatter the PDF uses, a running session billed to now,
   a project rate overriding the firm's.
@@ -384,11 +391,27 @@ Known limitations, deliberately documented rather than hidden:
   the test reports. That workflow — not a local machine — is where the "it compiles" claim is
   proven.
 * **Static gates**: `scripts/verify_sources.py` checks copyright headers, the reflection ban,
-  hardcoded UI text, string-resource references, locale parity and XML well-formedness without
-  needing a JDK.
+  hardcoded UI text in shipped code, string-resource references, locale parity, XML
+  well-formedness and the manifest hardening — without needing a JDK.
+* **Site gate**: `tools/seo_audit.py` reads the *generated* landing pages and refuses a
+  regression: canonical and the six `hreflang` pairs, title/description lengths, Open Graph and
+  Twitter cards with a real image size, JSON-LD whose offers match the four real prices, every
+  internal link and fragment resolving, sitemap `<lastmod>`, robots.txt, the manifest icons
+  (declared size checked against the file), and a 404 that is `noindex` with absolute URLs only.
+* **Agreement gates**: `tools/i18n_audit.py` fails when a translated locale still carries the
+  English string (with a reviewed allowlist for words that are genuinely the same — "Export" is
+  German, "Surface" is French), and `tools/consistency_audit.py` fails when the landing page and
+  the app disagree on the three wallet addresses, the four prices, the six languages or the
+  version.
+* **The temporary screenshot matrix** (`.github/workflows/screenshots.yml`) renders every screen
+  in all six languages on the JVM and every landing page in real Chromium at three viewports. It
+  lives in build output, is not part of the release gate, and is meant to be deleted after the
+  review — [docs/TESTING.md](docs/TESTING.md) says exactly what it touches.
 
 The pre-release gate (device matrix, measurement verification against a laser, licensing,
-performance) is [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md).
+performance) is [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md). How each layer is run,
+what it can and cannot prove, and the defect log of the systematic beta test are in
+[docs/TESTING.md](docs/TESTING.md).
 
 ---
 
@@ -399,9 +422,12 @@ errors:
 
 | Gate | Result |
 |------|--------|
-| `scripts/verify_sources.py` (headers, reflection ban, i18n parity) | pass — 109 files |
+| `scripts/verify_sources.py` (headers, reflection ban, i18n parity) | pass — 162 files |
+| `tools/seo_audit.py` (metadata, structured data, links, sitemap, manifest) | pass — 6 pages + 404 |
+| `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 210 tests in the app+core+ar-engine+export suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 44 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |

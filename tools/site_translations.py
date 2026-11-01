@@ -9,7 +9,7 @@ easy to spot: every language must define exactly the same keys as the English so
 
 EXTRA: dict[str, dict[str, str]] = {
     "es": {
-        "meta_title": "ConstructAR — medición AR sin conexión para electricistas e instaladores",
+        "meta_title": "ConstructAR — medición AR offline para electricistas",
         "meta_desc": "Escanea la estancia con el móvil, dibuja el trazado del cable o la tubería y obtén los metros, la lista de material y un protocolo PDF firmado. 100 % sin conexión, seis idiomas, PDF/CSV/GLB.",
         "nav_features": "Funciones", "nav_how": "Cómo funciona", "nav_price": "Precios",
         "nav_faq": "Preguntas", "nav_repo": "GitHub",

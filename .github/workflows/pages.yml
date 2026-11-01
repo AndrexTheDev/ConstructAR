@@ -91,6 +91,34 @@ jobs:
           print(f"{len(build_site.CONTENT)} languages, {len(base)} keys each")
           PY
 
+      - name: Translation and price agreement
+        run: |
+          python3 tools/i18n_audit.py
+          python3 tools/consistency_audit.py
+
+      - name: SEO and structured-data audit
+        # The gate the page has to pass before it is published: canonical and hreflang sets,
+        # Open Graph and Twitter cards, JSON-LD that matches the real price list, every internal
+        # link and anchor resolving, sitemap/robots/manifest agreeing with the pages.
+        run: |
+          python3 tools/seo_audit.py --verbose
+          test -f docs/manifest.webmanifest || { echo "missing manifest"; exit 1; }
+
+      - name: The committed site matches the generator
+        # `docs/` is generated output. If a hand edit survives in the tree, the next deploy
+        # silently reverts it; if a translation change was never rendered, the published page is
+        # stale. `sitemap.xml` is exempt because its <lastmod> is deliberately today's date.
+        run: |
+          git add -A -- docs
+          changed=$(git diff --cached --name-only -- docs | grep -v '^docs/sitemap.xml$' || true)
+          if [ -n "$changed" ]; then
+            echo "docs/ is out of date with tools/build_site.py:"
+            echo "$changed"
+            git diff --cached --stat -- docs
+            exit 1
+          fi
+          echo "docs/ matches the generator"
+
       - uses: actions/configure-pages@v5
         if: steps.pages_enabled.outputs.enabled == 'true'
 

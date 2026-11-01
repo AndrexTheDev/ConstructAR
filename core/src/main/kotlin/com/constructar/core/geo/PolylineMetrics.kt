@@ -9,9 +9,11 @@ package com.constructar.core.geo
 import com.constructar.core.math.Vec3
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ConduitSpec
+import com.constructar.core.model.HitConfidence
 import com.constructar.core.model.HitSource
 import com.constructar.core.model.RouteNodeRecord
 import com.constructar.core.model.SurfaceKind
+
 import kotlin.math.PI
 import kotlin.math.ceil
 import kotlin.math.max
@@ -67,9 +69,21 @@ data class RouteMetrics(
 ) {
     val segmentCount: Int get() = segments.size
 
-    /** Nodes measured from a soft source (feature point / manual) — flag for review. */
+    /**
+     * Nodes that must be reviewed before the customer pays for them.
+     *
+     * Two ways to be soft: the hit came from a source that is a guess by design (a feature point
+     * or a manual placement), or the surface confidence the tracker reported is below
+     * [HitConfidence.TRUSTED]. The second case used to be ignored
+     * here while the AR screen warned about it, so a run measured on a badly tracked plane
+     * reached the order list unflagged.
+     */
     val lowConfidenceNodes: Int
-        get() = segments.count { it.hitSource == HitSource.FEATURE_POINT || it.hitSource == HitSource.MANUAL }
+        get() = segments.count {
+            it.hitSource == HitSource.FEATURE_POINT ||
+                it.hitSource == HitSource.MANUAL ||
+                it.confidence < HitConfidence.TRUSTED
+        }
 }
 
 /**

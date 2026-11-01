@@ -129,8 +129,14 @@ def check_reflection() -> None:
 
 
 def check_app_hardcoded_text() -> None:
+    """No literal user-visible string in shipped UI code.
+
+    Test sources are exempt on purpose: a screenshot fixture and a unit-test expectation are
+    sample data, not something a user reads on a phone, and translating them would make the
+    fixtures unreadable without making the app any more localised.
+    """
     for path in kotlin_sources("app"):
-        if "/res/" in str(path):
+        if "/res/" in str(path) or "/src/test/" in str(path) or "/src/androidTest/" in str(path):
             continue
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             stripped = line.strip()

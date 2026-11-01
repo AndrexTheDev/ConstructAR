@@ -24,6 +24,7 @@ JSON-LD for `SoftwareApplication` (with the real prices) and `FAQPage` (with the
 from __future__ import annotations
 
 import html
+from datetime import date
 import json
 from pathlib import Path
 
@@ -188,6 +189,17 @@ footer a{color:var(--chalk)}
 .sticky-cta .btn{display:flex; justify-content:center; width:100%; padding:14px 16px; font-size:.95rem}
 .sticky-cta small{display:block; color:var(--ash); font-size:.72rem; margin-top:2px}
 @media (max-width:700px){ .sticky-cta{display:block} body{padding-bottom:86px} }
+/* A phone is 390 px wide and a German compound word is long: nothing may push the page
+   sideways. Tables get their own scroll box instead of stretching the document, cells may
+   break inside a word, and the nowrap that keeps "±2 cm" tidy is dropped on small screens. */
+html, body{max-width:100%}
+.wrap{overflow-wrap:break-word}
+table.acc, table.cmp{display:block; width:100%; max-width:100%; overflow-x:auto}
+th, td{overflow-wrap:anywhere}
+@media (max-width:700px){
+  table.acc td:last-child{white-space:normal}
+  th, td{padding:11px 12px}
+}
 """
 
 CONTENT: dict[str, dict[str, str]] = {
@@ -291,7 +303,7 @@ CONTENT: dict[str, dict[str, str]] = {
         "plan_free": "Kostenlos", "plan_free_p": "0 €", "plan_free_b": "Ein Raum, unbegrenzte Strecken, CSV und PDF mit Wasserzeichen.",
         "plan_m": "Pro monatlich", "plan_m_p": "10 € / Monat", "plan_m_b": "Unbegrenzte Räume, sauberes PDF, GLB + PLY.",
         "plan_y": "Pro jährlich", "plan_y_p": "100 € / Jahr", "plan_y_b": "Wie monatlich, zwei Monate gratis.", "plan_y_tag": "Bester Preis",
-        "plan_l": "Lifetime", "plan_l_p": "999 € einmalig", "plan_l_b": "Einmal zahlen, dauerhaft nutzen.",
+        "plan_l": "Lebenslang", "plan_l_p": "999 € einmalig", "plan_l_b": "Einmal zahlen, dauerhaft nutzen.",
         "price_note": "Sieben Tage Pro sind gratis — ohne Karte, ohne Fragen. Bezahlt wird in SOL, BTC oder ETH; du bekommst einen Lizenzschlüssel, den die App offline prüft. Wenn ein Abo endet, wird nichts entzogen.",
         "crypto_title": "Zahlungsadressen",
         "lang_title": "Sechs Sprachen, ein Build",
@@ -328,6 +340,19 @@ for _lang, _extra in MARKETING.items():
     CONTENT[_lang].update(_extra)
 
 
+# Social cards and the manifest need a *description* of the picture, not just its URL: a card
+# without `og:image:alt` is an unlabelled image for every screen reader and every crawler that
+# builds a preview from alt text. One line per language, written for a listener.
+OG_IMAGE_ALT = {
+    "en": "ConstructAR: dark app interface with a lime AR measuring line running along a scanned wall",
+    "de": "ConstructAR: dunkle App-Oberfläche mit limettengrüner AR-Messlinie entlang einer gescannten Wand",
+    "es": "ConstructAR: interfaz oscura con una línea de medición AR verde lima sobre una pared escaneada",
+    "fr": "ConstructAR : interface sombre avec une ligne de mesure AR vert citron le long d'un mur scanné",
+    "it": "ConstructAR: interfaccia scura con una linea di misura AR verde lime lungo una parete scansionata",
+    "pl": "ConstructAR: ciemny interfejs z limonkową linią pomiaru AR wzdłuż zeskanowanej ściany",
+}
+
+
 def esc(value: str) -> str:
     return html.escape(value, quote=True)
 
@@ -338,6 +363,17 @@ def url_for(lang: str) -> str:
 
 def root_for(lang: str) -> str:
     return "" if lang == "en" else "../"
+def sibling_for(lang: str, other: str) -> str:
+    """A relative link from the page in [lang] to the page in [other].
+
+    The English page lives at the site root and every other page one directory down, so `../de/`
+    is right from `/de/` and wrong from `/`: it leaves the site. This was written as
+    `"../" + other` for every page, which sent English visitors to `https://…/de/` — a 404 on
+    GitHub Pages and a dead internal link for every crawler.
+    """
+    prefix = root_for(lang)
+    return prefix if other == "en" else f"{prefix}{other}/"
+
 
 
 def price_row(lang: str, c: dict[str, str]) -> str:
@@ -345,6 +381,21 @@ def price_row(lang: str, c: dict[str, str]) -> str:
         f'<li><span class="sym">{esc(symbol)}</span><code>{esc(address)}</code></li>'
         for symbol, address in COINS
     )
+
+
+def offer(name: str, price: str) -> dict[str, str]:
+    """One price row of the freemium model, as a schema.org Offer.
+
+    `availability` matters: an offer without it is ignored by some consumers as "not for sale".
+    """
+    return {
+        "@type": "Offer",
+        "name": name,
+        "price": price,
+        "priceCurrency": "EUR",
+        "availability": "https://schema.org/InStock",
+        "url": f"{BASE_URL}#pricing",
+    }
 
 
 def json_ld(lang: str, c: dict[str, str]) -> str:
@@ -363,12 +414,22 @@ def json_ld(lang: str, c: dict[str, str]) -> str:
                 "description": c["meta_desc"],
                 "featureList": [c[f"f{i}t"] for i in range(1, 8)],
                 "author": {"@type": "Person", "name": DEVELOPER, "email": EMAIL},
+                "sameAs": [REPO_URL],
+                "isAccessibleForFree": True,
                 "offers": [
-                    {"@type": "Offer", "name": c["plan_free"], "price": "0", "priceCurrency": "EUR"},
-                    {"@type": "Offer", "name": c["plan_m"], "price": "10", "priceCurrency": "EUR"},
-                    {"@type": "Offer", "name": c["plan_y"], "price": "100", "priceCurrency": "EUR"},
-                    {"@type": "Offer", "name": c["plan_l"], "price": "999", "priceCurrency": "EUR"},
+                    offer(c["plan_free"], "0"),
+                    offer(c["plan_m"], "10"),
+                    offer(c["plan_y"], "100"),
+                    offer(c["plan_l"], "999"),
                 ],
+            },
+            {
+                "@type": "WebSite",
+                "@id": f"{BASE_URL}#website",
+                "url": BASE_URL,
+                "name": "ConstructAR",
+                "inLanguage": lang,
+                "publisher": {"@type": "Organization", "name": DEVELOPER, "url": REPO_URL},
             },
             {
                 "@type": "FAQPage",
@@ -396,7 +457,7 @@ def page(lang: str) -> str:
     ) + f'<link rel="alternate" hreflang="x-default" href="{BASE_URL}">\n'
     switcher = "".join(
         '<a href="{href}" hreflang="{code}"{current}>{code}</a>'.format(
-            href="" if other == "en" else "../" + other + "/",
+            href=sibling_for(lang, other),
             code=other,
             current=' aria-current="true"' if other == lang else "",
         )
@@ -416,8 +477,7 @@ def page(lang: str) -> str:
         for i in range(1, 9)
     )
     lang_links = "".join(
-        f'<a href="{"" if other == "en" else "../" + other + "/"}" hreflang="{other}">'
-        f'{LANG_NAMES[other]}</a>'
+        f'<a href="{sibling_for(lang, other)}" hreflang="{other}">{LANG_NAMES[other]}</a>'
         for other in LANGS
     )
     og_alternates = "".join(
@@ -432,25 +492,34 @@ def page(lang: str) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{esc(c["meta_title"])}</title>
 <meta name="description" content="{esc(c["meta_desc"])}">
-<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
 <meta name="author" content="{DEVELOPER}">
 <meta name="theme-color" content="#0A0C07">
+<meta name="color-scheme" content="dark">
+<meta name="application-name" content="ConstructAR">
+<meta name="apple-mobile-web-app-title" content="ConstructAR">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="canonical" href="{url_for(lang)}">
 {alternates}<link rel="icon" href="{root}assets/favicon.png" sizes="64x64" type="image/png">
 <link rel="apple-touch-icon" href="{root}assets/apple-touch-icon.png">
+<link rel="manifest" href="{root}manifest.webmanifest">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ConstructAR">
 <meta property="og:title" content="{esc(c["meta_title"])}">
 <meta property="og:description" content="{esc(c["meta_desc"])}">
 <meta property="og:url" content="{url_for(lang)}">
 <meta property="og:image" content="{BASE_URL}assets/og-image.png">
+<meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="{esc(OG_IMAGE_ALT[lang])}">
 <meta property="og:locale" content="{OG_LOCALES[lang]}">
 {og_alternates}<meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{esc(c["meta_title"])}">
 <meta name="twitter:description" content="{esc(c["meta_desc"])}">
 <meta name="twitter:image" content="{BASE_URL}assets/og-image.png">
+<meta name="twitter:image:alt" content="{esc(OG_IMAGE_ALT[lang])}">
 <script type="application/ld+json">{json_ld(lang, c)}</script>
 <style>{CSS}</style>
 </head>
@@ -651,7 +720,13 @@ def page(lang: str) -> str:
 """
 
 
-def sitemap() -> str:
+def sitemap(lastmod: str) -> str:
+    """The six landing pages, cross-linked, with a real `lastmod`.
+
+    `lastmod` is the day the file was generated: the sitemap is only rewritten when the site is
+    rebuilt, so the date is a publish date rather than an invented freshness signal. Google
+    ignores `changefreq` and `priority`; they stay because other consumers still read them.
+    """
     entries = []
     for lang in LANGS:
         alternates = "".join(
@@ -661,6 +736,7 @@ def sitemap() -> str:
         entries.append(
             "  <url>\n"
             f"    <loc>{url_for(lang)}</loc>\n"
+            f"    <lastmod>{lastmod}</lastmod>\n"
             + alternates
             + "    <changefreq>monthly</changefreq>\n"
             "    <priority>1.0</priority>\n"
@@ -693,7 +769,7 @@ def not_found() -> str:
     ]
     rows = "".join(
         f'<p lang="{code}"><strong>{esc(title)}</strong> — {esc(line)} '
-        f'<a href="{"" if code == "en" else code + "/"}" hreflang="{code}">{LANG_NAMES[code]}</a></p>'
+        f'<a href="{url_for(code)}" hreflang="{code}">{LANG_NAMES[code]}</a></p>'
         for code, title, line in headings
     )
     return f"""<!DOCTYPE html>
@@ -701,23 +777,55 @@ def not_found() -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>404 — ConstructAR</title>
+<title>404 — Page not found · ConstructAR</title>
+<meta name="description" content="This page does not exist. ConstructAR — offline AR measuring for electricians, plumbers and ventilation crews.">
 <meta name="robots" content="noindex,follow">
 <meta name="theme-color" content="#0A0C07">
-<link rel="icon" href="assets/favicon.png" sizes="64x64" type="image/png">
-<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<meta name="color-scheme" content="dark">
+<!-- Absolute on purpose: GitHub Pages serves this document at the *requested* path, so a
+     relative "assets/..." would resolve against a directory that does not exist. -->
+<link rel="icon" href="{BASE_URL}assets/favicon.png" sizes="64x64" type="image/png">
+<link rel="apple-touch-icon" href="{BASE_URL}assets/apple-touch-icon.png">
+<link rel="manifest" href="{BASE_URL}manifest.webmanifest">
 <style>{CSS}</style>
 </head>
 <body>
 <main class="wrap" style="padding:64px 22px; max-width:760px">
-  <a class="brand" href="{BASE_URL}"><img src="assets/logo.jpg" alt="ConstructAR" width="36" height="36"><span>ConstructAR</span></a>
-  <h1 style="margin-top:32px">404</h1>
+  <a class="brand" href="{BASE_URL}"><img src="{BASE_URL}assets/logo.jpg" alt="ConstructAR" width="36" height="36"><span>ConstructAR</span></a>
+  <h1 style="margin-top:32px">Page not found</h1>
+  <p style="color:var(--ash); margin:8px 0 0; font-size:1.1rem">404 — the link is dead or the page has moved. Every language below still has a way back.</p>
   <div class="langs" style="display:block">{rows}</div>
   <p style="margin-top:28px"><a class="btn btn-primary" href="{BASE_URL}">ConstructAR</a></p>
 </main>
 </body>
 </html>
 """
+
+
+def manifest() -> str:
+    """A minimal web app manifest: installable on a home screen, black status bar, no splash.
+
+    The site is a landing page, not a PWA, so there is no service worker and no offline cache.
+    The manifest exists because the browser derives the install name, colours and icons from it,
+    and because a missing manifest is a console error on every visit.
+    """
+    data = {
+        "name": "ConstructAR",
+        "short_name": "ConstructAR",
+        "description": CONTENT["en"]["meta_desc"],
+        "lang": "en",
+        "start_url": BASE_URL,
+        "scope": BASE_URL,
+        "display": "browser",
+        "background_color": "#0A0C07",
+        "theme_color": "#0A0C07",
+        "icons": [
+            {"src": f"{BASE_URL}assets/favicon.png", "sizes": "64x64", "type": "image/png", "purpose": "any"},
+            {"src": f"{BASE_URL}assets/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any"},
+            {"src": f"{BASE_URL}assets/logo.jpg", "sizes": "768x768", "type": "image/jpeg", "purpose": "any"},
+        ],
+    }
+    return json.dumps(data, ensure_ascii=False, indent=2) + "\n"
 
 
 def main() -> None:
@@ -729,7 +837,8 @@ def main() -> None:
         f"Sitemap: {BASE_URL}sitemap.xml\n",
         encoding="utf-8",
     )
-    (DOCS / "sitemap.xml").write_text(sitemap(), encoding="utf-8")
+    (DOCS / "sitemap.xml").write_text(sitemap(date.today().isoformat()), encoding="utf-8")
+    (DOCS / "manifest.webmanifest").write_text(manifest(), encoding="utf-8")
     (DOCS / "404.html").write_text(not_found(), encoding="utf-8")
     for lang in LANGS:
         target = DOCS / "index.html" if lang == "en" else DOCS / lang / "index.html"

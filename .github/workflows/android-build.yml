@@ -56,6 +56,21 @@ jobs:
       - name: verify_sources.py
         run: python3 scripts/verify_sources.py --verbose
 
+      - name: seo_audit.py
+        # Cheap and independent of Android: the six landing pages, their structured data, their
+        # internal links, the sitemap, robots.txt and the manifest.
+        run: |
+          python3 tools/build_site.py
+          python3 tools/seo_audit.py --verbose
+
+      - name: i18n_audit.py and consistency_audit.py
+        # Two questions the structural gate cannot answer: does each locale actually translate
+        # (rather than copy English), and do the page and the app still agree on prices,
+        # addresses, languages and version?
+        run: |
+          python3 tools/i18n_audit.py --verbose
+          python3 tools/consistency_audit.py --verbose
+
   android:
     name: assembleDebug + testDebugUnitTest
     runs-on: ubuntu-latest
@@ -169,6 +184,7 @@ jobs:
             :native-slam:compileDebugKotlin :native-slam:compileDebugUnitTestKotlin \
             > /tmp/step.log 2>&1
           code=$?
+          python3 scripts/ci_test_report.py || true
           bash scripts/ci_annotate.sh /tmp/step.log "JVM tests / Kotlin compile failed" "$code"
 
       - name: Host C++ tests - TSDF, Surface Nets, pose graph (-Werror)
@@ -203,6 +219,7 @@ jobs:
           set +e
           gradle --no-daemon --console=plain --stacktrace --continue --warning-mode all assembleDebug testDebugUnitTest > /tmp/step.log 2>&1
           code=$?
+          python3 scripts/ci_test_report.py || true
           bash scripts/ci_annotate.sh /tmp/step.log "full gate failed" "$code"
 
       - name: Release build - R8, resource shrink, six locales

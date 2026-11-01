@@ -1,0 +1,168 @@
+# Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+# All rights reserved. Proprietary and confidential - see LICENSE.
+# SPDX-License-Identifier: LicenseRef-Proprietary
+
+name: screenshots
+
+# The **temporary** screenshot matrix.
+#
+# Two jobs, both uploaded as artifacts and neither one wired into the release gate:
+#
+#  * `app-matrix` renders every screen in all six languages on the JVM (Robolectric +
+#    Roborazzi) — the only way to look at the UI without a phone in the reviewer's hand.
+#  * `site-matrix` renders the six landing pages and the 404 in real Chromium at three
+#    viewports and doubles as a front-end smoke test (broken images, overflow, console errors).
+#
+# Delete this file together with `tools/screenshots_site.mjs` and the
+# `com.constructar.app.screenshots` package when the review is over: the artifacts are the
+# deliverable, not the pipeline.
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+concurrency:
+  group: screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GRADLE_VERSION: "9.6.0"
+  JAVA_VERSION: "21"
+  GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
+
+jobs:
+  app-matrix:
+    name: App screens (6 locales × 7 screens)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Android SDK licences
+        run: |
+          set -uo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SM" ] || SM="$(command -v sdkmanager || true)"
+          [ -n "${SM:-}" ] && yes | "$SM" --licenses > /dev/null 2>&1 || true
+          echo "sdkmanager: ${SM:-<not found>}"
+
+      - name: Install Gradle ${{ env.GRADLE_VERSION }}
+        run: |
+          set -euo pipefail
+          base=https://services.gradle.org/distributions
+          ok=""
+          for name in "gradle-${GRADLE_VERSION}-bin.zip" "gradle-${GRADLE_VERSION}.0-bin.zip" "gradle-8.14-bin.zip"; do
+            code=$(curl -sSL -o /tmp/gradle.zip -w '%{http_code}' "$base/$name" || true)
+            if [ "$code" = "200" ]; then ok="$name"; break; fi
+          done
+          if [ -z "$ok" ]; then
+            latest=$(curl -sSL https://services.gradle.org/versions/current \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')
+            curl -sSL -o /tmp/gradle.zip "$base/gradle-${latest}-bin.zip"
+          fi
+          rm -rf /opt/gradle && mkdir -p /opt/gradle
+          unzip -q /tmp/gradle.zip -d /opt/gradle
+          GRADLE_BIN=$(dirname "$(find /opt/gradle -maxdepth 3 -name gradle -type f | head -n 1)")
+          echo "$GRADLE_BIN" >> "$GITHUB_PATH"
+          "$GRADLE_BIN/gradle" --version
+
+      - name: Cache Gradle downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/jdks
+          key: screenshots-${{ env.GRADLE_VERSION }}-${{ hashFiles('gradle/libs.versions.toml', '**/build.gradle.kts') }}
+          restore-keys: screenshots-${{ env.GRADLE_VERSION }}-
+
+      - name: Render the matrix
+        # `--tests` keeps the run to the matrix classes; the property turns on recording and
+        # stops the build config from filtering them out.
+        run: |
+          set +e
+          gradle --no-daemon --console=plain --stacktrace \
+            :app:testDebugUnitTest \
+            --tests "com.constructar.app.screenshots.*" \
+            -Pconstructar.screenshots=true > /tmp/screenshots.log 2>&1
+          code=$?
+          python3 scripts/ci_test_report.py || true
+          bash scripts/ci_annotate.sh /tmp/screenshots.log "screenshot matrix failed" "$code"
+
+      - name: Collect what was rendered
+        if: always()
+        run: |
+          set -uo pipefail
+          echo "--- produced files"
+          find app/build/screenshot-matrix -type f 2>/dev/null | head -100 || echo "none"
+          echo "--- text matrix"
+          for f in app/build/screenshot-matrix/*/*.txt; do
+            [ -f "$f" ] || continue
+            echo "## $f"
+          done
+
+      - name: Upload the matrix
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-screen-matrix
+          path: |
+            app/build/screenshot-matrix
+            app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: warn
+          retention-days: 14
+
+  site-matrix:
+    name: Landing pages (6 locales × 3 viewports)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Regenerate the site
+        run: python3 tools/build_site.py
+
+      - name: Install Chromium for Playwright
+        run: |
+          npm install --no-save --silent playwright
+          npx playwright install --with-deps chromium
+
+      - name: Render and audit
+        # The findings are turned into one check-run annotation: raw job logs are not always
+        # reachable from a phone or an API client, and a red check without a reason is useless.
+        run: |
+          set +e
+          node tools/screenshots_site.mjs --out build/site-matrix > /tmp/site.log 2>&1
+          code=$?
+          cat /tmp/site.log
+          if [ -f build/site-matrix/report.md ]; then
+            summary=$(grep '^- \*\*' build/site-matrix/report.md | sed 's/^- \*\*//' | tr '\n' '|' | cut -c1-6000)
+            if [ -n "$summary" ]; then
+              echo "::error title=site matrix findings::$summary"
+            fi
+          fi
+          exit $code
+
+      - name: Upload the matrix
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-screen-matrix
+          path: build/site-matrix
+          if-no-files-found: warn
+          retention-days: 14
