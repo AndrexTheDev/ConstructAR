@@ -82,6 +82,17 @@ again. Each line names what was read, not what was assumed.
 * **Storage reclaimed on delete.** `ProjectRepository.delete` removes the room's JSON, its draft and
   every photo whose name starts with `<id>__`, and the diary/defect delete paths remove their own
   photo; nothing orphaned in private storage.
+* **Run numbering with gaps.** `RouteLabels.next` numbers past the highest number in use and
+  loops while the label it builds is already taken, so deleting run #2 of three cannot make the
+  next run #3 as well, and a hand-edited label cannot be handed out twice.
+* **Deleting the room you are standing in.** The delete confirmation carries the project id, not a
+  list position, so a refresh behind the dialog cannot make it delete a different room; the quick
+  resume preference is cleared when its room goes, and the open project is dropped from the state.
+* **A backup of a room that no longer parses.** `backupEntries` copies every `.json` file byte for
+  byte, including one this app can no longer read, so the file that a restore now reports as
+  unreadable (finding 55) is still in the backup rather than silently dropped.
+* **A licence key pasted out of an e-mail.** `LicenceFormat.split` removes spaces, line breaks and
+  carriage returns before parsing, so a key that wrapped over three lines still verifies.
 * **Free-plan promises on the landing pages.** "One room, unlimited routes, CSV and PDF with a
   watermark" was checked line by line against `Entitlements` (`FREE_PROJECTS = 1`,
   `maxRoutesPerProject = MAX_VALUE`, `canExportCsv`, `canExportPdf`, `pdfWatermark = !isPro`), and
