@@ -65,9 +65,7 @@ import com.constructar.core.licence.LicenceCheck
 import com.constructar.core.licence.Plan
 import com.constructar.core.licence.Product
 import java.text.NumberFormat
-import java.text.SimpleDateFormat
 import java.util.Currency
-import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
@@ -475,13 +473,12 @@ private fun price(product: Product): String {
     return format.format(product.eur)
 }
 
-/** Epoch days are UTC by contract, so the displayed date has to be too. */
-private fun formatEpochDay(epochDay: Long): String {
-    val format = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-    return format.format(Date(epochDay * 86_400_000L))
-}
+/**
+ * Epoch days are UTC by contract, so the displayed date has to be too - and Gregorian, because a
+ * locale-built formatter would print the Thai Buddhist year on a Thai phone (`formatDayLabel`).
+ */
+private fun formatEpochDay(epochDay: Long): String =
+    formatDayLabel(epochDay * 86_400_000L, TimeZone.getTimeZone("UTC"))
 
 private fun copyToClipboard(context: Context, value: String) {
     val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return

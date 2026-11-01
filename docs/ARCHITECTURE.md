@@ -183,7 +183,11 @@ duration line use `Locale.ROOT`, so the same protocol prints `14.82 m`, `2 h 15 
 device was set to another language, and formatting with the device locale once put
 Arabic-Indic digits (`٢ h ١٥ min`) into an English page. Money is the deliberate exception:
 `MoneyFormatter` follows the phone's convention (`1.250,00 €` in German) because the price is
-read by the customer, and it forces **euro** regardless of locale. The CSV is the third case:
+read by the customer, and it forces **euro** regardless of locale. Dates are two cases of
+their own: free-form labels (a diary line) follow the phone's `DateFormat`, while the fixed
+numeric day (`01.11.2026` in the project list and on the licence expiry) is pinned to
+`Locale.ROOT` - a `SimpleDateFormat` takes its *calendar* from the locale, so a Thai phone
+printed a licence expiring in 2569. The CSV is the third case:
 it is data for a spreadsheet, so it is always `.`-decimal with `;` separators, plus a UTF-8
 BOM for Excel - see `docs/TESTING.md` findings 28 and 30.
 

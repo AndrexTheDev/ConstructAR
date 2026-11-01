@@ -60,9 +60,6 @@ import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.licence.Entitlements
 import com.constructar.core.units.LengthFormatter
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * The home screen: one job — get the operator back to work in one tap.
@@ -401,7 +398,8 @@ private fun ProjectRow(project: ProjectRepository.ProjectSummary, onClick: () ->
 
 @Composable
 private fun ProjectMetaLine(project: ProjectRepository.ProjectSummary) {
-    val formatter = remember { SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()) }
+    // Gregorian and identical in all six languages: see `formatDayLabel`.
+    val updatedLabel = remember(project.updatedAtEpochMs) { formatDayLabel(project.updatedAtEpochMs) }
     // Resolved at composition: `pluralStringResource` is @Composable and must not be called
     // from inside `buildString`.
     val runsText = pluralStringResource(R.plurals.home_runs, project.routeCount, project.routeCount)
@@ -417,7 +415,7 @@ private fun ProjectMetaLine(project: ProjectRepository.ProjectSummary) {
             append(" · ")
             append(LengthFormatter.format(project.totalLengthMeters))
             append(" · ")
-            append(formatter.format(Date(project.updatedAtEpochMs)))
+            append(updatedLabel)
             if (project.siteName.isNotBlank()) {
                 append(" · ")
                 append(project.siteName)
