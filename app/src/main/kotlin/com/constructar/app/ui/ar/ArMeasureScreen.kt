@@ -164,6 +164,13 @@ fun ArMeasureScreen(
     }
 
     val lengthText = stringResource(R.string.hud_length, routeState.lengthMeters)
+    // The segment under the crosshair, while walking: the number that tells the operator when
+    // to stop and tap, rather than tapping and then reading the result.
+    val liveSegmentText = if (routeState.nodeCount > 0 && routeState.liveSegmentMeters >= 0.05f) {
+        stringResource(R.string.hud_segment, routeState.liveSegmentMeters)
+    } else {
+        null
+    }
     val guidanceText = tracking.guidance.message(tracking)
     val warningText = routeState.warning.message()
     val readinessIssue = readiness
@@ -283,6 +290,15 @@ fun ArMeasureScreen(
                             style = MaterialTheme.typography.displaySmall,
                             color = SiteColors.cable,
                         )
+                        // Total above, the segment under the crosshair below it: while walking,
+                        // the second number is the one being decided.
+                        liveSegmentText?.let { segment ->
+                            Text(
+                                text = segment,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White.copy(alpha = 0.75f),
+                            )
+                        }
                         Text(
                             text = buildString {
                                 append(routingText)

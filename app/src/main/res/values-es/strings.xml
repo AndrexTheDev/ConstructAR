@@ -340,4 +340,10 @@
     <string name="pdf_section_photos">Documentación fotográfica</string>
     <string name="ar_hold_steady">Mantén el pulso</string>
     <string name="ar_point_locked">Punto fijado</string>
+    <string name="hud_segment">Tramo %1$.2f m</string>
+    <string name="route_warning_surface_jump">Ese punto está detrás de la última superficie: comprueba la pared antes de seguir</string>
+    <string name="paywall_err_untrusted">No se puede confirmar esta instalación. Instala la versión oficial desde la fuente original e inténtalo de nuevo.</string>
+    <string name="licence_clock_rollback">El reloj del dispositivo está por detrás de la última fecha vista por la app. Ajusta fecha y hora: la suscripción y la prueba se comprueban con la última fecha conocida.</string>
+    <string name="licence_integrity_failed">No se pudo confirmar esta instalación, así que las funciones Pro están desactivadas. Tus proyectos siguen siendo legibles y exportables.</string>
+    <string name="licence_demo_key">Nota para el desarrollador: esta compilación aún lleva la clave de verificación de demostración. Sustitúyela antes de la primera venta.</string>
 </resources>

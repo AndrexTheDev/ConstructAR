@@ -77,6 +77,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val trialDaysLeft: Long = 0L,
         /** True while the bundled licence key is the demo key — surfaced in a debug build only. */
         val demoSigningKey: Boolean = false,
+        /** The device clock is behind the last day this install has seen. */
+        val clockRolledBack: Boolean = false,
+        /** The installation could not be confirmed (re-signed APK or an attached debugger). */
+        val integrityFailed: Boolean = false,
         val onboardingDone: Boolean = false,
         /** Firm-wide waste factor, `null` = each conduit family's default. */
         val wasteOverride: Float? = null,
@@ -128,6 +132,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             trialUsed = entitlements.trialUsed(),
             trialDaysLeft = entitlements.trialDaysLeft(),
             demoSigningKey = LicencePublicKey.isDemoKey,
+            clockRolledBack = entitlements.diagnostics.value.clockRolledBack,
+            integrityFailed = entitlements.diagnostics.value.integrityFailed,
         )
     }
 

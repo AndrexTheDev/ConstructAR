@@ -55,6 +55,9 @@ fun HelpScreen(
     entitlements: Entitlements,
     trialDaysLeft: Long,
     deviceTag: String,
+    clockRolledBack: Boolean = false,
+    integrityFailed: Boolean = false,
+    demoSigningKey: Boolean = false,
     repository: ProjectRepository,
     onBack: () -> Unit,
     onUpgrade: () -> Unit,
@@ -125,6 +128,29 @@ fun HelpScreen(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 12.dp),
+                )
+            }
+            // Everything below is a *diagnosis*, shown only when it applies: a normal
+            // installation sees none of it.
+            if (clockRolledBack) {
+                Text(
+                    stringResource(R.string.licence_clock_rollback),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SiteColors.warning,
+                )
+            }
+            if (integrityFailed) {
+                Text(
+                    stringResource(R.string.licence_integrity_failed),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SiteColors.danger,
+                )
+            }
+            if (demoSigningKey) {
+                Text(
+                    stringResource(R.string.licence_demo_key),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SiteColors.warning,
                 )
             }
             if (!entitlements.isPro) {

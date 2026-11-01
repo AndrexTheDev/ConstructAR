@@ -55,9 +55,15 @@ class RouteSessionTest {
         }
     }
 
-    private fun hit(x: Float, y: Float, z: Float, source: HitSource = HitSource.PLANE_POLYGON) = SurfaceHit(
+    private fun hit(
+        x: Float,
+        y: Float,
+        z: Float,
+        source: HitSource = HitSource.PLANE_POLYGON,
+        normal: Vec3 = Vec3(0f, 0f, 1f),
+    ) = SurfaceHit(
         point = Vec3(x, y, z),
-        normal = Vec3(0f, 0f, 1f),
+        normal = normal,
         source = source,
         confidence = source.reliability,
         distanceMeters = z.let { if (it < 0f) -it else it },
@@ -178,5 +184,89 @@ class RouteSessionTest {
         assertEquals(normal.x, mapped.x, 1e-5f)
         assertEquals(normal.y, mapped.y, 1e-5f)
         assertEquals(normal.z, mapped.z, 1e-5f)
+    }
+
+    // ── Live segment under the reticle ───────────────────────────────────────────────────
+
+    @Test
+    fun `the live segment is the distance from the last node to the reticle`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        session.setLivePoint(hit(1.5f, 0f, 0f))
+        assertEquals(1.5f, session.state.value.liveSegmentMeters, 1e-5f)
+
+        // Walking on: the number follows the reticle without creating a node.
+        session.setLivePoint(hit(2.25f, 0f, 0f))
+        assertEquals(2.25f, session.state.value.liveSegmentMeters, 1e-5f)
+        assertEquals(1, session.state.value.nodeCount)
+    }
+
+    @Test
+    fun `the live segment restarts from the node that was just committed`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        session.setLivePoint(hit(1f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 0f))
+        // The reticle still sits on the node that was just placed: no phantom segment.
+        assertEquals(0f, session.state.value.liveSegmentMeters, 1e-5f)
+
+        session.setLivePoint(hit(1f, 0f, 0.8f))
+        assertEquals(0.8f, session.state.value.liveSegmentMeters, 1e-5f)
+    }
+
+    @Test
+    fun `a dead run reports no live segment`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.setLivePoint(hit(1f, 0f, 0f))
+        assertEquals(0f, session.state.value.liveSegmentMeters, 1e-5f)
+        // Losing the reticle (tap into nothing) must not leave a frozen number on screen.
+        session.addNode(hit(0f, 0f, 0f))
+        session.setLivePoint(hit(1f, 0f, 0f))
+        session.setLivePoint(null)
+        assertEquals(0f, session.state.value.liveSegmentMeters, 1e-5f)
+    }
+
+    // ── Measurement quality ──────────────────────────────────────────────────────────────
+
+    @Test
+    fun `the weakest node sets the quality of the run`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f, source = HitSource.PLANE_POLYGON))
+        session.addNode(hit(1f, 0f, 0f, source = HitSource.FEATURE_POINT))
+        val state = session.state.value
+        assertEquals(HitSource.FEATURE_POINT.reliability, state.worstNodeConfidence, 1e-5f)
+        assertEquals(HitSource.FEATURE_POINT.reliability, state.lastNodeConfidence, 1e-5f)
+        assertTrue(state.lastNodeConfidence > 0f)
+    }
+
+    // ── Surface jump ────────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `a parallel surface half a metre behind the wall is flagged`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        // Same normal, but 0.5 m further away: the ray slipped through an opening.
+        session.addNode(hit(1f, 0f, 0.5f))
+        assertEquals(RouteWarning.SURFACE_JUMP, session.state.value.warning)
+        // Flagged, not rejected: the operator decides, and the segment is still measured.
+        assertEquals(2, session.state.value.nodeCount)
+    }
+
+    @Test
+    fun `a right-angled corner is a turn, not a jump`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        // The perpendicular wall: normal 90 degrees off, one metre along the first wall.
+        session.addNode(hit(1f, 0f, 0f, normal = Vec3(1f, 0f, 0f)))
+        assertEquals(RouteWarning.NONE, session.state.value.warning)
+    }
+
+    @Test
+    fun `a parallel surface within the tolerance is the same wall`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        // 5 cm of plaster unevenness on the same wall must not nag the operator.
+        session.addNode(hit(1f, 0f, 0.05f))
+        assertEquals(RouteWarning.NONE, session.state.value.warning)
     }
 }

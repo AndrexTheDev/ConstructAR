@@ -238,6 +238,30 @@ jobs:
           echo "Largest entries in the release APK:"
           unzip -l "$release_apk" | sort -k1 -n -r | head -12
 
+      - name: Verify the licence checks survived R8
+        # The release build is shrunk and optimised; a verifier that R8 decided was unreachable
+        # would accept every forged key, and nothing in the debug build would show it. The
+        # markers below are the ECDSA algorithm name, the licence wire-format prefix and the
+        # Cipher/HMAC primitives the tamper checks use.
+        run: |
+          set -euo pipefail
+          apk=$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)
+          echo "APK: $apk"
+          mkdir -p /tmp/dex && rm -rf /tmp/dex/* && unzip -o -q "$apk" 'classes*.dex' -d /tmp/dex
+          for marker in SHA256withECDSA CAR1. HmacSHA256; do
+            if grep -rqa "$marker" /tmp/dex; then
+              echo "found: $marker"
+            else
+              echo "MISSING from the release DEX: $marker"; exit 1
+            fi
+          done
+          # The key itself: an empty or stripped constant would make every licence fail.
+          if grep -rqa "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE" /tmp/dex; then
+            echo "found: licence public key"
+          else
+            echo "MISSING from the release DEX: licence public key"; exit 1
+          fi
+
       - name: Verify the native library shipped for arm64
         run: |
           set -euo pipefail

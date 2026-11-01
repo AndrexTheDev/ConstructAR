@@ -61,6 +61,13 @@ sealed interface LicenceCheck {
 
     /** Valid signature, but the licence expired (subscription not renewed). */
     data object Expired : LicenceCheck
+
+    /**
+     * The installation itself is not trusted: it was re-signed (so this is not the build that
+     * was released) or a debugger is attached in a release build. Signature, device and expiry
+     * may all be fine - it is the app around them that cannot be vouched for.
+     */
+    data object UntrustedBuild : LicenceCheck
 }
 
 /**

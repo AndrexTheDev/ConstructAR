@@ -340,4 +340,10 @@
     <string name="pdf_section_photos">Documentazione fotografica</string>
     <string name="ar_hold_steady">Tieni fermo</string>
     <string name="ar_point_locked">Punto agganciato</string>
+    <string name="hud_segment">Tratto %1$.2f m</string>
+    <string name="route_warning_surface_jump">Quel punto è dietro l\'ultima superficie: controlla la parete prima di proseguire</string>
+    <string name="paywall_err_untrusted">Impossibile confermare questa installazione. Installa la versione ufficiale dalla fonte originale e riprova.</string>
+    <string name="licence_clock_rollback">L\'orologio del dispositivo è indietro rispetto all\'ultima data vista dall\'app. Imposta data e ora corrette: abbonamento e prova vengono verificati sull\'ultima data nota.</string>
+    <string name="licence_integrity_failed">Non è stato possibile confermare questa installazione, quindi le funzioni Pro sono disattivate. I tuoi cantieri restano leggibili ed esportabili.</string>
+    <string name="licence_demo_key">Nota per lo sviluppatore: questa build contiene ancora la chiave di verifica demo. Sostituiscila prima della prima vendita.</string>
 </resources>
