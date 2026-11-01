@@ -9,6 +9,9 @@ Everything here is a gate before an APK reaches a site, in the order it should b
 - [ ] `gradle lint` has no `Error` severity issues
 - [ ] No `-Pconstructar.lenientWarnings=true` in any release invocation (that flag exists only
       to unblock a toolchain regression, never a release)
+- [ ] `python3 tools/seo_audit.py`, `python3 tools/i18n_audit.py` and
+      `python3 tools/consistency_audit.py` all report `OK` (the published pages, the six
+      translations, and agreement between the page and the app)
 - [ ] `python3 scripts/verify_sources.py --verbose` reports `OK` (headers, reflection ban,
       string-resource references, six-locale parity)
 - [ ] `.github/workflows/android-build.yml` is green, including the check that

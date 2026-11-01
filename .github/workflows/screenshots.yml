@@ -121,6 +121,7 @@ jobs:
             app/build/screenshot-matrix
             app/build/reports/tests/testDebugUnitTest
           if-no-files-found: warn
+          retention-days: 14
 
   site-matrix:
     name: Landing pages (6 locales × 3 viewports)
@@ -164,3 +165,4 @@ jobs:
           name: site-screen-matrix
           path: build/site-matrix
           if-no-files-found: warn
+          retention-days: 14

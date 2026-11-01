@@ -93,7 +93,9 @@ for (const [locale, file] of PAGES) {
   const url = pathToFileURL(resolve(file)).href;
   for (const [device, width, height] of VIEWPORTS) {
     const where = `${locale}/${device}`;
-    const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 2 });
+    // One device pixel per CSS pixel: these are review images, not print assets, and 2x
+    // doubled the artifact to 28 MB a run for no extra information.
+    const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
     await routeOrigin(page);
 
     const consoleErrors = [];
