@@ -88,6 +88,15 @@ enum class RouteWarning {
      * is told, so he can re-tap where the wall is actually tracked.
      */
     LOW_CONFIDENCE,
+
+    /**
+     * The new point is more than [RouteSession.HEIGHT_JUMP_METERS] above or below the previous
+     * one: either a riser up to the ceiling, or the classic mis-tap that caught the floor or the
+     * ceiling instead of the wall. Accepted, because a riser is a real thing to measure - but
+     * flagged, because a mis-tap here adds a metre of cable nobody will install and an elbow on
+     * each end of it, and both of those end up on the customer's invoice.
+     */
+    HEIGHT_JUMP,
     ;
 
     val isPresent: Boolean get() = this != NONE
@@ -214,6 +223,8 @@ class RouteSession(
             else -> hit.copy(point = snapTarget.position, normal = snapTarget.normal)
         }
         val surfaceJump = previous != null && isSurfaceJump(previous, placed)
+        val heightJump = previous != null &&
+            kotlin.math.abs(placed.point.y - previous.position.y) >= HEIGHT_JUMP_METERS
         val anchor = anchorFactory.create(placed.point, placed.normal)
         if (anchor == null) {
             mutableState.value = current.copy(warning = RouteWarning.UNPINNED)
@@ -230,8 +241,11 @@ class RouteSession(
                 lastHit = null,
                 liveSegmentMeters = liveDistance,
                 warning = when {
-                    // The wall-thickness slip is the more dangerous of the two, so it wins.
+                    // The wall-thickness slip is the more dangerous of the three, so it wins.
                     surfaceJump -> RouteWarning.SURFACE_JUMP
+                    // A metre of height between two taps is a riser or a mistake, and only the
+                    // operator can tell which - the app just refuses to stay quiet about it.
+                    heightJump -> RouteWarning.HEIGHT_JUMP
                     placed.confidence < MIN_TRUSTED_CONFIDENCE -> RouteWarning.LOW_CONFIDENCE
                     else -> RouteWarning.NONE
                 },
@@ -446,6 +460,15 @@ class RouteSession(
 
         /** A ring whose ends are further apart than this was closed by an unmeasured segment. */
         const val LOOP_TOLERANCE_METERS = 0.15f
+
+        /**
+         * A height difference between two consecutive taps that deserves a question.
+         *
+         * A riser from the worktop to the ceiling is about 1.1 m, and the same jump is what a
+         * mis-tap on the floor or the ceiling produces, so the app cannot decide - it asks. Below
+         * a metre nothing is ambiguous enough to interrupt a run in progress.
+         */
+        const val HEIGHT_JUMP_METERS = 1.0f
 
         /** Below this the node did not come from a detected plane; the operator is told. */
         /** Kept as the public name the AR tests use; the value lives in `:core`. */

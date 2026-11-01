@@ -382,4 +382,5 @@
     <string name="route_warning_loop_gap">Pierścień się nie zamyka – ustaw ostatni punkt na pierwszym</string>
     <string name="backup_held_back">%1$d projekt(ów) wstrzymanych – pozostają w kopii zapasowej; Pro importuje wszystkie</string>
     <string name="route_warning_low_confidence">Ten punkt pochodzi z danych głębi – dotknij ponownie wykrytej ściany, aby uzyskać pewniejszą wartość</string>
+    <string name="route_warning_height_jump">To duży skok wysokości: pion do sufitu czy przypadkowe dotknięcie podłogi? Cofnij, jeśli to był błąd</string>
 </resources>

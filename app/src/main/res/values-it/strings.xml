@@ -378,4 +378,5 @@
     <string name="route_warning_loop_gap">L’anello non si chiude: metti l’ultimo punto sul primo</string>
     <string name="backup_held_back">%1$d cantiere/i trattenuti: restano nel tuo backup; con Pro vengono importati tutti</string>
     <string name="route_warning_low_confidence">Questo punto proviene dai dati di profondità: tocca di nuovo la parete rilevata per un valore più solido</string>
+    <string name="route_warning_height_jump">È un salto di quota notevole: una salita al soffitto o un tocco sul pavimento? Annullalo se è stato un errore</string>
 </resources>

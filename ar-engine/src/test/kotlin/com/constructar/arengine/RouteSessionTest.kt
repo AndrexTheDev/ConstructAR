@@ -270,6 +270,41 @@ class RouteSessionTest {
         assertEquals(RouteWarning.NONE, session.state.value.warning)
     }
 
+    // ── Height jumps ────────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `a metre of height between two taps is questioned`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        // Up to the ceiling: a riser, or a mis-tap that caught the ceiling. Both are accepted,
+        // and both add a metre of cable and an elbow at each end.
+        session.addNode(hit(0.2f, 1.4f, 0f))
+
+        assertEquals(RouteWarning.HEIGHT_JUMP, session.state.value.warning)
+        assertEquals(2, session.state.value.nodeCount)
+    }
+
+    @Test
+    fun `a normal wall run does not nag about height`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        // A hand's width of drift along the wall is not a jump.
+        session.addNode(hit(1f, 0.4f, 0f))
+
+        assertEquals(RouteWarning.NONE, session.state.value.warning)
+    }
+
+    @Test
+    fun `a slip through a doorway outranks the height question`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        // Half a metre further away *and* a metre up: the wall-thickness slip is the worse of the
+        // two, and the operator has to see that one first.
+        session.addNode(hit(1f, 1.4f, 0.5f))
+
+        assertEquals(RouteWarning.SURFACE_JUMP, session.state.value.warning)
+    }
+
     // ── Closing a ring ───────────────────────────────────────────────────────────────────
 
     @Test

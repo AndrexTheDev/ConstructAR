@@ -378,4 +378,5 @@
     <string name="route_warning_loop_gap">L’anneau ne se ferme pas - place le dernier point sur le premier</string>
     <string name="backup_held_back">%1$d chantier(s) retenu(s) - ils restent dans ta sauvegarde ; Pro les importe tous</string>
     <string name="route_warning_low_confidence">Ce point vient des données de profondeur - touche à nouveau le mur détecté pour une valeur plus sûre</string>
+    <string name="route_warning_height_jump">C’est un grand écart de hauteur : une montée au plafond ou un appui sur le sol ? Annule-le si c’était une erreur</string>
 </resources>
