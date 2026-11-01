@@ -227,6 +227,8 @@
     <string name="runs_title">Strecken</string>
     <string name="run_detail">%1$s · %2$s</string>
     <string name="run_delete">Strecke löschen</string>
+    <string name="run_delete_title">Diese Strecke löschen?</string>
+    <string name="run_delete_body">%1$s, %2$s. Die Strecke verschwindet aus der Materialliste, dem Protokoll und dem 3D-Modell. Zurückholen geht nicht.</string>
     <string name="run_recovered">Nach einem Abbruch geborgen - Längen und Fittings stimmen, die 3D-Position nicht</string>
     <string name="technician_title">Monteur vor Ort</string>
     <string name="technician_hint">Name, wie er auf dem Protokoll stehen soll</string>

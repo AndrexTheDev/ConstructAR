@@ -62,6 +62,7 @@ import com.constructar.app.R
 import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.bom.MaterialList
+import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.model.WorkTime
 import com.constructar.core.price.MoneyFormatter
@@ -99,6 +100,10 @@ fun ProjectScreen(
 ) {
     var renameOpen by remember { mutableStateOf(false) }
     var deleteOpen by remember { mutableStateOf(false) }
+    // Removing a run used to be one tap on a 48 dp icon next to the length - the most valuable
+    // thing on the screen (thirty taps of measuring) and the only destructive action on it that
+    // asked nothing. It asks now, and names what goes.
+    var routeToRemove by remember { mutableStateOf<ConduitRoute?>(null) }
     var nameDraft by remember(project.id) { mutableStateOf(project.name) }
     var notesDraft by remember(project.id) { mutableStateOf(project.notes) }
     var notesSaved by remember(project.id) { mutableStateOf(false) }
@@ -357,7 +362,7 @@ fun ProjectScreen(
                         // fitting, but its 3D geometry is not in the model. Saying so is the
                         // difference between a documented limitation and a surprise in a viewer.
                         badge = if (route.recovered) stringResource(R.string.run_recovered) else null,
-                        onDelete = { onRemoveRoute(route.id) },
+                        onDelete = { routeToRemove = route },
                     )
                 }
             }
@@ -593,6 +598,33 @@ fun ProjectScreen(
             },
             dismissButton = {
                 TextButton(onClick = { renameOpen = false }) { Text(stringResource(R.string.home_cancel)) }
+            },
+        )
+    }
+
+    routeToRemove?.let { run ->
+        AlertDialog(
+            onDismissRequest = { routeToRemove = null },
+            title = { Text(stringResource(R.string.run_delete_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.run_delete_body,
+                        stringResource(R.string.run_detail, run.spec.label, run.spec.sizeLabel),
+                        LengthFormatter.format(run.polylineLengthMeters),
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        routeToRemove = null
+                        onRemoveRoute(run.id)
+                    },
+                ) { Text(stringResource(R.string.action_delete), color = SiteColors.danger) }
+            },
+            dismissButton = {
+                TextButton(onClick = { routeToRemove = null }) { Text(stringResource(R.string.home_cancel)) }
             },
         )
     }

@@ -227,6 +227,8 @@
     <string name="runs_title">Recorridos</string>
     <string name="run_detail">%1$s · %2$s</string>
     <string name="run_delete">Borrar recorrido</string>
+    <string name="run_delete_title">¿Borrar este recorrido?</string>
+    <string name="run_delete_body">%1$s, %2$s. Desaparece de la lista de material, del protocolo y del modelo 3D. No se puede recuperar.</string>
     <string name="run_recovered">Recuperado tras una interrupción: longitudes y accesorios son exactos, la posición 3D no</string>
     <string name="technician_title">Montador en obra</string>
     <string name="technician_hint">Nombre tal como debe figurar en el protocolo</string>

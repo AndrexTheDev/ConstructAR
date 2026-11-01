@@ -227,6 +227,8 @@
     <string name="runs_title">Runs</string>
     <string name="run_detail">%1$s · %2$s</string>
     <string name="run_delete">Delete run</string>
+    <string name="run_delete_title">Delete this run?</string>
+    <string name="run_delete_body">%1$s, %2$s. It disappears from the bill of materials, the protocol and the 3D model. Nothing brings it back.</string>
     <string name="run_recovered">Recovered after an interruption - lengths and fittings are exact, the 3D position is not</string>
     <string name="technician_title">Fitter on site</string>
     <string name="technician_hint">Name as it should appear on the protocol</string>

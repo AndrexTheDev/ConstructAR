@@ -227,6 +227,8 @@
     <string name="runs_title">Percorsi</string>
     <string name="run_detail">%1$s · %2$s</string>
     <string name="run_delete">Elimina percorso</string>
+    <string name="run_delete_title">Eliminare questo percorso?</string>
+    <string name="run_delete_body">%1$s, %2$s. Sparisce dalla distinta materiali, dal protocollo e dal modello 3D. Non si può recuperare.</string>
     <string name="run_recovered">Recuperata dopo un’interruzione: lunghezze e raccordi sono esatti, la posizione 3D no</string>
     <string name="technician_title">Installatore in cantiere</string>
     <string name="technician_hint">Nome come deve comparire sul protocollo</string>
