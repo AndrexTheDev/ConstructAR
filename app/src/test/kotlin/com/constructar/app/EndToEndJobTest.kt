@@ -115,8 +115,13 @@ class EndToEndJobTest {
         assertEquals("Total: 2 h 30 min", time.note)
         assertTrue(cost!!.paragraphs.first(), cost.paragraphs.first().startsWith("Labour: 2 h 30 min x "))
         assertEquals(12_000L, Pricing.labourCents(9_000_000L, Pricing.DEFAULT_HOURLY_RATE_CENTS))
-        // 2 h 30 min of labour plus the 250,00 € lump sum, in the money formatter every surface uses.
-        assertEquals("Labour: 2 h 30 min x " + MoneyFormatter.format(12_000L), cost.paragraphs[0])
+        // The page states the calculation (hours x rate) and the two amounts that follow from it,
+        // in the money formatter every surface uses: 2 h 30 min at 48,00 € an hour is 120,00 €,
+        // plus the 250,00 € lump sum makes 370,00 €.
+        assertEquals(
+            "Labour: 2 h 30 min x " + MoneyFormatter.format(Pricing.DEFAULT_HOURLY_RATE_CENTS.toLong()),
+            cost.paragraphs[0],
+        )
         assertEquals("Material: " + MoneyFormatter.format(25_000L), cost.paragraphs[1])
         assertEquals("Net: " + MoneyFormatter.format(37_000L), cost.paragraphs[2])
     }
