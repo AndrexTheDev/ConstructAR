@@ -58,6 +58,35 @@ argue with; a golden image is not.
 * **Anything about a real purchase.** There is no checkout server; the licence flow is tested
   with keys minted by `tools/mint_licence.py`.
 
+## Swept clean
+
+Areas walked end-to-end with **no defect found**, so the next round does not spend its time there
+again. Each line names what was read, not what was assumed.
+
+* **AR screen re-entry and anchor lifetime.** `ArMeasureController.release()` runs from the
+  screen's `DisposableEffect`, drops every anchor (`ArCoreAnchorFactory.detachAll`), closes the
+  monocular depth model and stops the pipeline; `RouteSession` gets a fresh state per entry. No
+  path found that leaves anchors or a depth session behind across entries.
+* **PLY number formatting.** Every float goes through `String.format(Locale.ROOT, "%.5f", …)` and a
+  non-finite value becomes `0.00000`, so a German phone cannot write a comma decimal into an ASCII
+  PLY. The comment sanitising is finding 17's.
+* **Export file names.** Two rooms exported in the same minute differ by name *and* timestamp in
+  the stem, and `createFile` uniquifies a duplicate anyway, so nothing is silently overwritten.
+* **A folder deleted after an export.** The app asks for the folder on every export and stores no
+  handle, so a deleted folder cannot become a stale permission that fails later.
+* **Project creation entry points.** The plan gate lives in `ProjectViewModel.createProject`, the
+  only function that inserts a project, so a share intent or a future screen cannot bypass it.
+* **Stale mesh export after a licence lapses.** `includeGlb`/`includePly` are `remember`ed *keyed on*
+  `entitlements.isPro`, so a lapse resets them to the (false) entitlement rather than leaving a
+  paid format ticked.
+* **Storage reclaimed on delete.** `ProjectRepository.delete` removes the room's JSON, its draft and
+  every photo whose name starts with `<id>__`, and the diary/defect delete paths remove their own
+  photo; nothing orphaned in private storage.
+* **Free-plan promises on the landing pages.** "One room, unlimited routes, CSV and PDF with a
+  watermark" was checked line by line against `Entitlements` (`FREE_PROJECTS = 1`,
+  `maxRoutesPerProject = MAX_VALUE`, `canExportCsv`, `canExportPdf`, `pdfWatermark = !isPro`), and
+  "seven days of Pro" against `Plan.TRIAL(isPaid = true)`.
+
 ## Findings from the systematic beta test
 
 Each row is a defect that was found, fixed and — where a machine can see it — now prevented from
@@ -65,10 +94,10 @@ coming back. The "guard" column is the reason to believe it stays fixed.
 
 | # | Finding | Found by | Fix | Guard |
 | --- | --- | --- | --- | --- |
-| 1 | The landing page scrolled sideways on a phone: 161 px of horizontal overflow in English, 307 px in French. The accuracy and comparison tables could not shrink below the width of their `nowrap` cells, so the whole document widened instead | real Chromium at 390×844 | tables get their own scroll box, cells may break inside a word, `nowrap` dropped below 700 px | the site matrix fails on any overflow and names the widest element |
+| 1 | The landing page scrolled sideways on a phone: 161 px of horizontal overflow in English, 307 px in French. The accuracy and comparison tables could not shrink below the width of their `nowrap` cells, so the whole document widened instead | real Chromium at 390×844 | tables get their own scroll box, cells may break inside a word, `nowrap` dropped below 700 px | `seo_audit.py` holds the structural half (the scroll box, the `nowrap` rule); the width itself is now a release-checklist item, because the matrix that measured it was deleted with the rest of the screenshot machinery |
 | 2 | The language switcher on the **English** page linked to `../de/`, `../es/` … which resolves to `https://…/de/` — one level *above* the site. Every one of the ten language links on the root page was a 404 | `tools/seo_audit.py` (internal-link check) | `sibling_for()` computes the correct relative depth per page | the same audit checks every internal link on every page |
 | 3 | The 404 page used relative asset and language URLs. GitHub Pages serves `404.html` at the *requested* path, so those resolve against a directory that does not exist | `seo_audit.py` + Chromium (`ERR_BLOCKED_BY_ORB`) | absolute URLs, with the reason in a comment | `check_not_found()` rejects any relative URL on that page |
-| 4 | The 404 page had no description and an `<h1>` that read "404" | Chromium audit | a real headline and a description; the six-language list follows it | `seo_audit.py` + the site matrix |
+| 4 | The 404 page had no description and an `<h1>` that read "404" | Chromium audit | a real headline and a description; the six-language list follows it | `seo_audit.py` (description on all six pages, `h1` present and not `404`) |
 | 5 | The Spanish `<title>` was 72 characters — truncated in a search result | `seo_audit.py` (20–70 window) | shortened to 52 | the same window, on all six pages |
 | 6 | A run measured on a plane the tracker itself rated below 0.5 was warned about on the AR screen but **not** flagged in the bill of materials: the BOM counted only "soft sources" (feature points, manual placement), so the warning died with the session and the soft measurement went into the order without a second look | a new unit test that expected the flag | one shared threshold, `HitConfidence.TRUSTED`, read by both the AR session and the BOM | `MaterialListTest` (three cases: soft source, untrusted plane, clean run) |
 | 7 | Missing `og:image:alt`, `twitter:image:alt`, a web app manifest, `color-scheme`, `sitemap` `<lastmod>`, `availability` on the offers and a `WebSite` node | manual metadata audit | all added by the generator | `seo_audit.py` checks each one, including that a declared icon size matches the file on disk |
