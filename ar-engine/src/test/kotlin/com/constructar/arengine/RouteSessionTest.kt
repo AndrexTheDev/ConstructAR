@@ -325,4 +325,31 @@ class RouteSessionTest {
         assertFalse(session.closeLoop())
         assertFalse(session.state.value.closedLoop)
     }
+
+    // ── Trust of a single node ───────────────────────────────────────────────────────────
+
+    @Test
+    fun `a node from a detected plane needs no comment`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f, source = HitSource.PLANE_POLYGON))
+        assertEquals(RouteWarning.NONE, session.state.value.warning)
+    }
+
+    @Test
+    fun `a node taken from a feature point is measured but questioned`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f, source = HitSource.PLANE_POLYGON))
+        session.addNode(hit(1f, 0f, 0f, source = HitSource.FEATURE_POINT))
+        // Measured all the same: refusing it would leave the operator without a number.
+        assertEquals(2, session.state.value.nodeCount)
+        assertEquals(RouteWarning.LOW_CONFIDENCE, session.state.value.warning)
+    }
+
+    @Test
+    fun `the wall-thickness slip outranks the confidence comment`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f, source = HitSource.PLANE_POLYGON))
+        session.addNode(hit(1f, 0f, 0.5f, source = HitSource.DIRECT_DEPTH_RAYCAST))
+        assertEquals(RouteWarning.SURFACE_JUMP, session.state.value.warning)
+    }
 }

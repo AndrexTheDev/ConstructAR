@@ -348,4 +348,5 @@
     <string name="licence_demo_key">Hinweis für den Entwickler: In diesem Build steckt noch der Demo-Prüfschlüssel. Vor dem ersten Verkauf ersetzen.</string>
     <string name="route_warning_loop_gap">Der Ring schließt nicht – setze den letzten Punkt auf den ersten</string>
     <string name="backup_held_back">%1$d Raum/Räume zurückgehalten – sie bleiben in deiner Sicherung; mit Pro werden alle importiert</string>
+    <string name="route_warning_low_confidence">Dieser Punkt stammt aus Tiefendaten – tippe für einen sichereren Wert erneut auf die erkannte Wand</string>
 </resources>

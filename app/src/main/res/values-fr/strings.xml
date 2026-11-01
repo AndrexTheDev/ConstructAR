@@ -348,4 +348,5 @@
     <string name="licence_demo_key">Note pour le développeur : cette version contient encore la clé de vérification de démonstration. Remplacez-la avant la première vente.</string>
     <string name="route_warning_loop_gap">L\'anneau ne se ferme pas - placez le dernier point sur le premier</string>
     <string name="backup_held_back">%1$d chantier(s) retenu(s) - ils restent dans votre sauvegarde ; Pro les importe tous</string>
+    <string name="route_warning_low_confidence">Ce point vient des données de profondeur - touchez à nouveau le mur détecté pour une valeur plus sûre</string>
 </resources>

@@ -216,6 +216,40 @@ def check_offline_guarantees() -> None:
                 add(path, f"forbidden cloud dependency marker: {marker}")
 
 
+def check_manifest_hardening() -> None:
+    """Rules that keep a release build from handing its own data to anyone with a cable.
+
+    These are cheap to check and expensive to get wrong: a debug flag that slips into a
+    release, or a component exported "just for testing", is exactly the kind of hole that is
+    never noticed until it is used.
+    """
+    manifest = ROOT / "app" / "src" / "main" / "AndroidManifest.xml"
+    text = manifest.read_text(encoding="utf-8")
+    if "android:debuggable" in text:
+        add(manifest, "android:debuggable must never be set in the manifest")
+    if 'android:allowBackup="true"' in text:
+        add(manifest, "allowBackup must stay false: projects are backed up by the operator, "
+                      "not extracted over adb")
+    # Every component must declare its exposure explicitly, and only the launcher may be
+    # exported. `exported` defaults changed in API 31; relying on the default is a bug either
+    # way because nobody can see the intent.
+    for match in re.finditer(r"<(activity|service|receiver|provider)\b([^>]*)>", text):
+        kind, attributes = match.group(1), match.group(2)
+        name = re.search(r'android:name="([^"]+)"', attributes)
+        label = name.group(1) if name else kind
+        exported = re.search(r'android:exported="(true|false)"', attributes)
+        if not exported:
+            add(manifest, f"{kind} {label} does not declare android:exported")
+            continue
+        if exported.group(1) != "true":
+            continue
+        # Only the launcher entry point may be exported; its MAIN action lives in the child
+        # <intent-filter>, so the element body is what has to be searched.
+        body = text[match.end():match.end() + 400]
+        if "android.intent.action.MAIN" not in attributes + body:
+            add(manifest, f"{kind} {label} is exported without being the launcher entry point")
+
+
 def strip_kotlin(text: str) -> str:
     """Removes comments and string/char literals so structural counting is meaningful."""
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
@@ -270,6 +304,7 @@ def main() -> int:
     strings, plurals = check_locales()
     check_references(strings, plurals)
     check_offline_guarantees()
+    check_manifest_hardening()
     check_kotlin_structure()
     check_resource_xml()
 

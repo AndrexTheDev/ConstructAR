@@ -348,4 +348,5 @@
     <string name="licence_demo_key">Developer note: this build still carries the demo verification key. Replace it before the first sale.</string>
     <string name="route_warning_loop_gap">The ring does not close - set the last point on the first one</string>
     <string name="backup_held_back">%1$d project(s) held back - they stay in your backup; Pro imports all of them</string>
+    <string name="route_warning_low_confidence">This point came from depth data - tap the tracked wall again for a firmer value</string>
 </resources>

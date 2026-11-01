@@ -79,6 +79,13 @@ enum class RouteWarning {
      * loop is still a polyline), wrong for the drawing and for anyone reading the metres later.
      */
     LOOP_TOO_WIDE,
+
+    /**
+     * The node came from a noisy tier (depth or feature point) rather than a detected plane.
+     * Accepted, because a measured millimetre is better than no cable at all - but the operator
+     * is told, so he can re-tap where the wall is actually tracked.
+     */
+    LOW_CONFIDENCE,
     ;
 
     val isPresent: Boolean get() = this != NONE
@@ -197,7 +204,12 @@ class RouteSession(
                 nodes = current.nodes + node,
                 lastHit = null,
                 liveSegmentMeters = liveDistance,
-                warning = if (surfaceJump) RouteWarning.SURFACE_JUMP else RouteWarning.NONE,
+                warning = when {
+                    // The wall-thickness slip is the more dangerous of the two, so it wins.
+                    surfaceJump -> RouteWarning.SURFACE_JUMP
+                    hit.confidence < MIN_TRUSTED_CONFIDENCE -> RouteWarning.LOW_CONFIDENCE
+                    else -> RouteWarning.NONE
+                },
             ),
         )
         return true
@@ -386,6 +398,9 @@ class RouteSession(
 
         /** A ring whose ends are further apart than this was closed by an unmeasured segment. */
         const val LOOP_TOLERANCE_METERS = 0.15f
+
+        /** Below this the node did not come from a detected plane; the operator is told. */
+        const val MIN_TRUSTED_CONFIDENCE = 0.5f
 
         /** Anchor refinement below this is ignored so the mesh does not shimmer. */
         const val MOVEMENT_THRESHOLD_METERS = 0.005f
