@@ -19,11 +19,25 @@ package com.constructar.core.model
 object RouteLabels {
 
     /**
-     * `CABLE 16 #3` for the next run, given how many the project already has.
+     * `CABLE 16 #3` for the next run, given the labels the project already carries.
      *
-     * @param existingRoutes runs already stored; the label counts from 1, so the first run of a
-     *   project is `#1`.
+     * Numbered **past the highest number in use**, not by counting the runs. Counting meant that
+     * deleting run #2 of three made the next run #3 as well: two runs with one name in the project
+     * list, the bill of materials, the CSV and the printed protocol - and the customer signing it
+     * has no way to know which #3 the second page is talking about (finding 45). Numbers are
+     * append-only for the same reason: a protocol that went out as #1, #3, #4 must not later be
+     * contradicted by a new #1.
+     *
+     * @param existingLabels the `label` of every run already stored.
      */
-    fun next(spec: ConduitSpec, existingRoutes: Int): String =
-        "${spec.kind.name} ${spec.sizeLabel} #${existingRoutes + 1}"
+    fun next(spec: ConduitSpec, existingLabels: Collection<String>): String {
+        val prefix = "${spec.kind.name} ${spec.sizeLabel} #"
+        val used = existingLabels.mapNotNull { label ->
+            label.takeIf { it.startsWith(prefix) }?.removePrefix(prefix)?.toIntOrNull()
+        }
+        var number = (used.maxOrNull() ?: 0) + 1
+        // A label with a hand-edited or imported number still may not be repeated.
+        while (existingLabels.contains(prefix + number)) number++
+        return prefix + number
+    }
 }

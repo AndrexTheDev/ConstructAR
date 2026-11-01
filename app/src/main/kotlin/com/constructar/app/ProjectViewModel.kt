@@ -263,7 +263,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val project = mutableState.value.openProject ?: return
         val route = draft.toRoute(
             id = "route-${UUID.randomUUID()}",
-            label = RouteLabels.next(draft.spec, project.routes.size),
+            label = RouteLabels.next(draft.spec, project.routes.map { it.label }),
             createdAtEpochMs = System.currentTimeMillis(),
         ) ?: return
         mutableState.value = mutableState.value.copy(pendingDraft = null)

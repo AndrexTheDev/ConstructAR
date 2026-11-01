@@ -242,7 +242,7 @@ fun ArMeasureScreen(
     val commitRun: () -> Unit = {
         // Persisted label: locale-independent and stable across devices, so a run reads the same
         // in the CSV, the PDF and the project file. One implementation, in `RouteLabels`.
-        val runLabel = RouteLabels.next(spec, project.routes.size)
+        val runLabel = RouteLabels.next(spec, project.routes.map { it.label })
         controller.finish(label = runLabel)?.let { route ->
             onRouteFinished(route)
             // Snapshot the scan statistics with the first finished run: the protocol header must
