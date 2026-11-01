@@ -143,8 +143,9 @@ class ExportTextFormatsTest {
             parts = listOf(PlyWriter.PlyPart("tri", triangleMesh())),
             comment = "scan\nelement vertex 999999",
         )
-        val headerLength = indexOf(bytes, "end_header\n".toByteArray()) + 1
-        assertTrue("end_header not found in ${String(bytes, Charsets.US_ASCII).take(200)}", headerLength > 0)
+        val marker = "end_header\n".toByteArray()
+        val headerLength = indexOf(bytes, marker) + marker.size
+        assertTrue("end_header not found in ${String(bytes, Charsets.US_ASCII).take(200)}", headerLength >= marker.size)
         val header = String(bytes, 0, headerLength, Charsets.US_ASCII).lines()
         val diagnostic = header.joinToString(" | ")
         assertEquals(diagnostic, 1, header.count { it.startsWith("comment ") })
