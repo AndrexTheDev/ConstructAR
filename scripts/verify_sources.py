@@ -18,6 +18,7 @@ and most expensive to discover in a 12-minute Gradle run:
   6. resource XML is well-formed, apostrophes escaped         (aapt2 break)
   7. Kotlin files have balanced brackets                      (truncation guard)
   8. no INTERNET permission and no cloud SDK markers           (offline guarantee)
+  9. no work-time total cached in `remember`                  (a clock must tick)
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -64,6 +65,12 @@ HARDCODED_UI_PATTERNS = [
     re.compile(r"\btext\s*=\s*\"[^\"\n]{2,}\""),
     re.compile(r"\bstringResource\s*\(\s*\""),
 ]
+
+# A `remember` block that adds up work time: the key it is remembered on is the session list,
+# and that list does not change while a clock runs - so the value freezes at the moment the
+# screen opened (finding 59). Anything that totals a running clock has to be recomputed from
+# a clock that ticks (`ui/ClockTick.kt`).
+CACHED_CLOCK = re.compile(r"remember\s*\([^)]*\)\s*\{[^}]*totalWorkMillis\s*\(")
 
 R_REFERENCE = re.compile(r"\bR\s*\.\s*(string|plurals|array|drawable|xml|style)\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)")
 
@@ -223,6 +230,16 @@ def check_offline_guarantees() -> None:
                 add(path, f"forbidden cloud dependency marker: {marker}")
 
 
+def check_cached_clock() -> None:
+    """A running total may not be remembered: it would freeze when the screen opened."""
+    for path in kotlin_sources("app"):
+        text = path.read_text(encoding="utf-8")
+        for match in CACHED_CLOCK.finditer(text):
+            line = text[: match.start()].count("\n") + 1
+            add(path, f"line {line}: a work-time total inside `remember` cannot move while a clock "
+                      f"runs - total it from rememberNowMs(...) instead")
+
+
 def check_manifest_hardening() -> None:
     """Rules that keep a release build from handing its own data to anyone with a cable.
 
@@ -366,6 +383,7 @@ def main() -> int:
     strings, plurals = check_locales()
     check_references(strings, plurals)
     check_offline_guarantees()
+    check_cached_clock()
     check_manifest_hardening()
     check_kotlin_structure()
     check_resource_xml()

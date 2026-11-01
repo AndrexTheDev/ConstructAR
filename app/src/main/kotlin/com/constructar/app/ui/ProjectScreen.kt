@@ -63,6 +63,7 @@ import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.model.WorkTime
 import com.constructar.core.price.MoneyFormatter
 import com.constructar.core.price.Pricing
 import com.constructar.core.units.LengthFormatter
@@ -149,7 +150,12 @@ fun ProjectScreen(
     val parsedMaterial = materialInput.cents
     val effectiveRate = parsedRate ?: hourlyRateCents
     val priceDirty = parsedRate != project.hourlyRateCents || parsedMaterial != project.materialLumpSumCents
-    val workMillis = remember(project.sessions, project.id) { project.totalWorkMillis() }
+    // The preview the operator reads while typing a rate. Not remembered: a running session makes
+    // this number grow, and the key that would have to invalidate it - the session list - does not
+    // change while a clock runs. [rememberNowMs] moves it on every half minute, exactly like the
+    // field book's total and unlike the frozen value this used to be.
+    val nowMs = rememberNowMs(WorkTime.isRunning(project.sessions))
+    val workMillis = project.totalWorkMillis(nowMs)
     val labourPreview = Pricing.labourCents(workMillis, effectiveRate)
     val totalPreview = Pricing.totalCents(labourPreview, parsedMaterial)
     val customerDirty = customerName != project.customerName ||

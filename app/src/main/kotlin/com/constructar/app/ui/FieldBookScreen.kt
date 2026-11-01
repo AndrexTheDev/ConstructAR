@@ -41,7 +41,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,7 +65,6 @@ import com.constructar.core.model.DiaryEntry
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.model.WorkSession
 import com.constructar.core.model.WorkTime
-import kotlinx.coroutines.delay
 
 /**
  * The site file: working time, the diary and the defect list, on one scrolling screen.
@@ -96,15 +94,9 @@ fun FieldBookScreen(
 ) {
     val running = WorkTime.isRunning(project.sessions)
 
-    // A running clock has to move on its own; half a minute is enough to keep "running since"
-    // honest without waking the screen every second on a phone whose battery is the shift.
-    var nowMs by remember(project.id) { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(running) {
-        while (running) {
-            nowMs = System.currentTimeMillis()
-            delay(30_000L)
-        }
-    }
+    // A running clock has to move on its own; [rememberNowMs] is the one ticker every screen
+    // showing a running total uses (see ClockTick.kt).
+    val nowMs = rememberNowMs(running)
 
     var diaryDraft by remember(project.id) { mutableStateOf("") }
     var defectTitle by remember(project.id) { mutableStateOf("") }
