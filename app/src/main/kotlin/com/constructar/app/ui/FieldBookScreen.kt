@@ -222,15 +222,14 @@ fun FieldBookScreen(
             } else {
                 // Newest first on screen; the JSON keeps them oldest first.
                 project.sessions.asReversed().take(FieldLists.SESSIONS_SHOWN).forEach { session ->
+                    // Resolved here, in composition: `sessionLabel` needs string resources, and the
+                    // delete callback runs later, outside a composable context.
+                    val label = sessionLabel(session, nowMs)
                     SessionRow(
                         session = session,
                         nowMs = nowMs,
                         onDelete = {
-                            pendingDelete = PendingDelete(
-                                kind = DeleteKind.SESSION,
-                                id = session.id,
-                                summary = sessionLabel(session, nowMs),
-                            )
+                            pendingDelete = PendingDelete(DeleteKind.SESSION, session.id, label)
                         },
                     )
                 }
