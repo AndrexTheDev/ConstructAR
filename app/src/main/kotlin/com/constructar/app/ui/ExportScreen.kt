@@ -202,7 +202,13 @@ fun ExportScreen(
             }
             busy = false
             status = outcome.fold(
-                onSuccess = { (count, stem) -> ExportStatus.Saved(count = count, folder = stem) },
+                onSuccess = { (count, stem) ->
+                    ExportStatus.of(
+                        written = count,
+                        folder = stem,
+                        folderUnreadable = context.getString(R.string.export_folder_inaccessible),
+                    )
+                },
                 onFailure = { error -> ExportStatus.Failed(error.message ?: error.javaClass.simpleName) },
             )
         }
@@ -351,7 +357,10 @@ fun ExportScreen(
                 is ExportStatus.Saved -> stringResource(R.string.export_success, current.count, current.folder)
                 is ExportStatus.Failed -> stringResource(R.string.export_failed, current.detail)
             }
-            Text(text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+            // A failure is not a success in another shade: it is red, like every other failure
+            // in this app (BackupCard does the same). It used to be drawn in the accent colour.
+            val tone = if (status is ExportStatus.Failed) SiteColors.danger else SiteColors.accent
+            Text(text, style = MaterialTheme.typography.bodyLarge, color = tone)
         }
 
         // Ownership line: the operator always sees whose build this is.
@@ -434,9 +443,25 @@ private fun FormatRow(
  * Outcome of one export, kept as data so the sentence is rendered by Compose (and therefore
  * localised) instead of being formatted inside the IO coroutine.
  */
-private sealed interface ExportStatus {
+internal sealed interface ExportStatus {
     data class Saved(val count: Int, val folder: String) : ExportStatus
     data class Failed(val detail: String) : ExportStatus
+
+    companion object {
+        /**
+         * What to tell the operator after an export attempt.
+         *
+         * Writing zero files is a failure, not a success with a zero in it. It is also the most
+         * likely failure there is: the folder picker hands back a tree the app may create
+         * directories in but not write into (a read-only SD card, a revoked grant, a provider
+         * that only supports directory creation). Every artifact's `openOutputStream` returns
+         * `null`, nothing is thrown, and the old code then reported "saved 0 files" in the
+         * success colour - on the screen whose entire job is to tell the operator whether his
+         * protocol exists.
+         */
+        fun of(written: Int, folder: String, folderUnreadable: String): ExportStatus =
+            if (written > 0) Saved(count = written, folder = folder) else Failed(folderUnreadable)
+    }
 }
 
 /** Fallback when the view model has no cached list (e.g. deep link straight into Export). */
