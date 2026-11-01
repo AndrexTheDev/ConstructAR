@@ -618,7 +618,11 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             // new room, a fresh id when the old one was taken. A photo follows its room, never
             // the name it happened to have in the zip.
             val homes = HashMap<String, String>()
-            val counts = restoreOutcome(room, texts) { text ->
+            val counts = restoreOutcome(
+                slots = room,
+                texts = texts,
+                parse = { text -> repository.parseProject(text) != null },
+            ) { text ->
                 val result = repository.importProjectDetailed(text)
                 if (result == null) {
                     false
@@ -688,14 +692,22 @@ internal data class RestoreCounts(
 internal inline fun restoreOutcome(
     slots: Int,
     texts: List<String>,
+    parse: (String) -> Boolean,
     import: (String) -> Boolean,
 ): RestoreCounts {
     var imported = 0
     var heldBack = 0
     var unreadable = 0
     for (text in texts) {
-        // Past the plan's slots nothing is attempted, so nothing is known about the file: it is
-        // held back, not unreadable.
+        // Two questions, in this order, because they have different answers. "Is this a room at
+        // all?" is answered by parsing, for every file in the selection - a file past the free
+        // slots is still either a room waiting for Pro or a truncated file nobody can import, and
+        // calling the second one "held back" is the sentence that makes a customer pay for an
+        // upgrade that will import nothing. "Does the plan have a room left?" is the quota.
+        if (!parse(text)) {
+            unreadable++
+            continue
+        }
         if (imported >= slots) {
             heldBack++
             continue

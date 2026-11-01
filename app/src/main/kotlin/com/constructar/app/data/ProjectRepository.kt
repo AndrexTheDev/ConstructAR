@@ -198,11 +198,21 @@ class ProjectRepository(private val context: Context) {
      */
     suspend fun importProject(text: String): ProjectRecord? = importProjectDetailed(text)?.project
 
+    /**
+     * The room in [text], or `null` when the text is not one.
+     *
+     * Pure: nothing is written, no id is re-keyed, no file is touched. The restore uses it to tell
+     * "a room this plan had no slot for" from "not a room at all" *before* it decides which files
+     * it can even attempt - a file past the free slots is otherwise classified as held back for an
+     * upgrade it would never survive.
+     */
+    fun parseProject(text: String): ProjectRecord? = runCatching {
+        json.decodeFromString(ProjectRecord.serializer(), text)
+    }.getOrNull()
+
     /** [importProject], also reporting the id the file carried before any re-keying. */
     suspend fun importProjectDetailed(text: String): ImportedProject? = withContext(Dispatchers.IO) {
-        val parsed = runCatching {
-            json.decodeFromString(ProjectRecord.serializer(), text)
-        }.getOrNull() ?: return@withContext null
+        val parsed = parseProject(text) ?: return@withContext null
         // The id becomes a file name, and this text came from a file somebody handed over.
         // An id of "../../databases/x" must never reach `File(directory, "$id.json")`, so an
         // id that is not a plain token is replaced - the project is still imported, under a
