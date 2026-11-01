@@ -82,6 +82,10 @@ data class ProjectRecord(
     val defects: List<DefectItem> = emptyList(),
     /** Working time, oldest first; the last one may still be running. */
     val sessions: List<WorkSession> = emptyList(),
+    /** Hourly rate for this job in cents; `null` = the firm's default from settings. */
+    val hourlyRateCents: Int? = null,
+    /** Lump sum for material, in cents. The app never invents a material price. */
+    val materialLumpSumCents: Long = 0L,
     val schemaVersion: Int = SCHEMA_VERSION,
 ) {
     /** Defects still to be fixed — the number the project screen shows in red. */
@@ -113,6 +117,13 @@ data class ProjectRecord(
     // Every mutation stamps `updatedAtEpochMs`, because the project list is sorted by it and
     // a diary entry is as much "the job moved" as a new run is.
 
+    /** Sets the two money fields the operator actually types. Both are optional. */
+    fun withPricing(hourlyRateCents: Int?, materialLumpSumCents: Long): ProjectRecord = copy(
+        hourlyRateCents = hourlyRateCents?.takeIf { it > 0 },
+        materialLumpSumCents = materialLumpSumCents.coerceAtLeast(0L),
+        updatedAtEpochMs = System.currentTimeMillis(),
+    )
+
     fun withCustomer(name: String, address: String, phone: String): ProjectRecord = copy(
         customerName = name.trim(),
         customerAddress = address.trim(),
@@ -122,6 +133,17 @@ data class ProjectRecord(
 
     fun addDiaryEntry(entry: DiaryEntry): ProjectRecord = copy(
         diary = listOf(entry) + diary.filterNot { it.id == entry.id },
+        updatedAtEpochMs = System.currentTimeMillis(),
+    )
+
+    /** Attaches (or clears) the documentation photo of one diary entry. */
+    fun withDiaryPhoto(entryId: String, photoToken: String?): ProjectRecord = copy(
+        diary = diary.map { if (it.id == entryId) it.copy(photo = photoToken) else it },
+        updatedAtEpochMs = System.currentTimeMillis(),
+    )
+
+    fun withDefectPhoto(defectId: String, photoToken: String?): ProjectRecord = copy(
+        defects = defects.map { if (it.id == defectId) it.copy(photo = photoToken) else it },
         updatedAtEpochMs = System.currentTimeMillis(),
     )
 

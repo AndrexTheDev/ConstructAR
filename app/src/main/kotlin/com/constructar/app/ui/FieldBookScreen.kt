@@ -6,6 +6,11 @@
 
 package com.constructar.app.ui
 
+import android.graphics.Bitmap
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +18,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Card
@@ -42,6 +49,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,6 +60,7 @@ import com.constructar.app.R
 import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.model.DefectItem
+import com.constructar.core.model.PhotoTokens
 import com.constructar.core.model.DefectSeverity
 import com.constructar.core.model.DiaryEntry
 import com.constructar.core.model.ProjectRecord
@@ -79,6 +90,8 @@ fun FieldBookScreen(
     onAddDefect: (title: String, location: String, severity: DefectSeverity) -> Unit,
     onToggleDefect: (String) -> Unit,
     onDeleteDefect: (String) -> Unit,
+    photoFor: (String) -> Bitmap?,
+    onAttachPhoto: (token: String, uri: Uri) -> Unit,
 ) {
     val running = WorkTime.isRunning(project.sessions)
 
@@ -98,6 +111,28 @@ fun FieldBookScreen(
     var defectSeverity by remember(project.id) { mutableStateOf(DefectSeverity.MEDIUM) }
 
     val totalMillis = WorkTime.totalMillis(project.sessions, nowMs)
+
+    // One camera launcher serves every entry: the pending token decides which diary line or
+    // defect the picture ends up on. The camera app writes straight into our cache through the
+    // FileProvider, so no storage permission and no copy of the operator's gallery is needed.
+    val context = LocalContext.current
+    var pending by remember { mutableStateOf<Pair<String, Uri>?>(null) }
+    val captureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+        val target = pending
+        pending = null
+        if (captured && target != null) onAttachPhoto(target.first, target.second)
+    }
+    val capture: (String) -> Unit = { token ->
+        val directory = java.io.File(context.cacheDir, "capture").apply { mkdirs() }
+        val file = java.io.File(directory, "entry-" + System.currentTimeMillis() + ".jpg")
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            context.packageName + ".fileprovider",
+            file,
+        )
+        pending = token to uri
+        captureLauncher.launch(uri)
+    }
 
     Column(
         modifier = Modifier
@@ -205,7 +240,13 @@ fun FieldBookScreen(
                 )
             } else {
                 project.diary.take(20).forEach { entry ->
-                    DiaryRow(entry = entry, onDelete = { onDeleteDiary(entry.id) })
+                    val token = entry.photo
+                    DiaryRow(
+                        entry = entry,
+                        thumbnail = token?.let(photoFor),
+                        onPhoto = { capture(PhotoTokens.forDiary(project.id, entry.id)) },
+                        onDelete = { onDeleteDiary(entry.id) },
+                    )
                 }
             }
         }
@@ -279,8 +320,11 @@ fun FieldBookScreen(
                 )
             } else {
                 project.defects.take(20).forEach { defect ->
+                    val token = defect.photo
                     DefectRow(
                         defect = defect,
+                        thumbnail = token?.let(photoFor),
+                        onPhoto = { capture(PhotoTokens.forDefect(project.id, defect.id)) },
                         onToggle = { onToggleDefect(defect.id) },
                         onDelete = { onDeleteDefect(defect.id) },
                     )
@@ -337,7 +381,12 @@ private fun SessionRow(session: WorkSession, nowMs: Long) {
 }
 
 @Composable
-private fun DiaryRow(entry: DiaryEntry, onDelete: () -> Unit) {
+private fun DiaryRow(
+    entry: DiaryEntry,
+    thumbnail: Bitmap?,
+    onPhoto: () -> Unit,
+    onDelete: () -> Unit,
+) {
     Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f)) {
             Text(
@@ -346,6 +395,27 @@ private fun DiaryRow(entry: DiaryEntry, onDelete: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(entry.text, style = MaterialTheme.typography.bodyMedium)
+            if (thumbnail != null) {
+                Image(
+                    bitmap = thumbnail.asImageBitmap(),
+                    contentDescription = stringResource(R.string.photo_title),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .padding(top = 6.dp)
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                )
+            }
+        }
+        IconButton(onClick = onPhoto, modifier = Modifier.size(48.dp)) {
+            Icon(
+                Icons.Default.PhotoCamera,
+                contentDescription = stringResource(
+                    if (thumbnail == null) R.string.field_photo_add else R.string.field_photo_replace,
+                ),
+                tint = if (thumbnail == null) MaterialTheme.colorScheme.onSurfaceVariant else Jamaica.Lime,
+            )
         }
         IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
             Icon(
@@ -358,7 +428,13 @@ private fun DiaryRow(entry: DiaryEntry, onDelete: () -> Unit) {
 }
 
 @Composable
-private fun DefectRow(defect: DefectItem, onToggle: () -> Unit, onDelete: () -> Unit) {
+private fun DefectRow(
+    defect: DefectItem,
+    thumbnail: Bitmap?,
+    onPhoto: () -> Unit,
+    onToggle: () -> Unit,
+    onDelete: () -> Unit,
+) {
     val accent = when {
         defect.resolved -> Jamaica.LimeDim
         defect.severity == DefectSeverity.HIGH -> SiteColors.danger
@@ -391,6 +467,27 @@ private fun DefectRow(defect: DefectItem, onToggle: () -> Unit, onDelete: () -> 
                 },
             )
             Text(detail, style = MaterialTheme.typography.labelSmall, color = accent)
+            if (thumbnail != null) {
+                Image(
+                    bitmap = thumbnail.asImageBitmap(),
+                    contentDescription = stringResource(R.string.photo_title),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .padding(top = 6.dp)
+                        .fillMaxWidth()
+                        .height(110.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                )
+            }
+        }
+        IconButton(onClick = onPhoto, modifier = Modifier.size(48.dp)) {
+            Icon(
+                Icons.Default.PhotoCamera,
+                contentDescription = stringResource(
+                    if (thumbnail == null) R.string.field_photo_add else R.string.field_photo_replace,
+                ),
+                tint = if (thumbnail == null) MaterialTheme.colorScheme.onSurfaceVariant else Jamaica.Lime,
+            )
         }
         IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
             Icon(

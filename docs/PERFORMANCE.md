@@ -138,6 +138,13 @@ dropping depth, rendering or the room scan.
   on `Dispatchers.IO`; the UI reads a `StateFlow`.
 * **Nothing on a timer that is not needed.** The site file's clock only ticks (every 30 s) while
   a session is running; there is no background service, no job scheduler and no alarm.
+* **Field photos are bounded twice.** A diary or defect photo is decoded at 640 px for the site
+  file and only the first 12 are held in memory (`MAX_FIELD_PHOTOS`), so a punch list with forty
+  entries cannot grow the heap with the size of the folder. The export re-reads the same file at
+  1 200 px for the appendix, one page at a time — the bitmaps are never all resident at once.
+* **The reticle stabiliser is free.** Five `Vec3` samples and three median sorts per settled
+  frame: ~1 µs on the main thread, no allocation after the first window, and it removes the per
+  tap end-point scatter that would otherwise show up as measurement error.
 
 ---
 

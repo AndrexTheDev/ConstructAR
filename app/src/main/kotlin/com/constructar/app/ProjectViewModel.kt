@@ -25,8 +25,11 @@ import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.DefectItem
 import com.constructar.core.model.DefectSeverity
 import com.constructar.core.model.DiaryEntry
+import com.constructar.core.model.PhotoKind
+import com.constructar.core.model.PhotoTokens
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.model.WorkSession
+import com.constructar.core.price.Pricing
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -79,6 +82,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val wasteOverride: Float? = null,
         /** Documentation photo of the open project, decoded for screen and protocol. */
         val photo: Bitmap? = null,
+        /** Firm-wide hourly rate, used when a project does not override it. */
+        val firmHourlyRateCents: Int = Pricing.DEFAULT_HOURLY_RATE_CENTS,
+        /** Decoded thumbnails of the open project's entry photos, by token. */
+        val fieldPhotos: Map<String, Bitmap> = emptyMap(),
     )
 
     private val mutableState = MutableStateFlow(UiState())
@@ -100,6 +107,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             demoSigningKey = LicencePublicKey.isDemoKey,
             onboardingDone = preferences.onboardingDone(),
             wasteOverride = settings.wasteFactorOverride(),
+            firmHourlyRateCents = settings.hourlyRateCents() ?: Pricing.DEFAULT_HOURLY_RATE_CENTS,
         )
         refresh()
     }
@@ -173,6 +181,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 openProject = project,
                 materialList = buildMaterialList(project),
                 photo = repository.loadPhoto(project.id),
+                fieldPhotos = loadFieldPhotos(project),
                 lastError = null,
             )
             onOpened(project)
@@ -235,6 +244,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     fun deleteDiaryEntry(entryId: String) {
         val project = mutableState.value.openProject ?: return
+        project.diary.firstOrNull { it.id == entryId }?.photo?.let { token ->
+            repository.deletePhotoAs(token)
+            mutableState.value = mutableState.value.copy(fieldPhotos = mutableState.value.fieldPhotos - token)
+        }
         mutate(project.removeDiaryEntry(entryId))
     }
 
@@ -268,6 +281,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     fun deleteDefect(defectId: String) {
         val project = mutableState.value.openProject ?: return
+        project.defects.firstOrNull { it.id == defectId }?.photo?.let { token ->
+            repository.deletePhotoAs(token)
+            mutableState.value = mutableState.value.copy(fieldPhotos = mutableState.value.fieldPhotos - token)
+        }
         mutate(project.removeDefect(defectId))
     }
 
@@ -289,6 +306,62 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val project = mutableState.value.openProject ?: return
         val stopped = project.stopSession()
         if (stopped !== project) mutate(stopped)
+    }
+
+    // ── Pricing ─────────────────────────────────────────────────────────────────────────
+    fun updatePricing(hourlyRateCents: Int?, materialLumpSumCents: Long, onSaved: (ProjectRecord?) -> Unit = {}) {
+        val project = mutableState.value.openProject ?: return
+        mutate(project.withPricing(hourlyRateCents, materialLumpSumCents), onSaved)
+    }
+
+    /** The rate this project bills at: its own override, or the firm's default. */
+    fun hourlyRateCents(project: ProjectRecord): Int =
+        project.hourlyRateCents ?: mutableState.value.firmHourlyRateCents
+
+    /**
+     * Attaches the photo of a diary entry or a defect.
+     *
+     * The token carries the kind (`<project>__diary_<id>`) so one code path serves both, and
+     * the file name alone is enough to restore it from a backup.
+     */
+    fun attachFieldPhoto(token: String, uri: Uri, onDone: (Boolean) -> Unit = {}) {
+        val project = mutableState.value.openProject ?: return
+        viewModelScope.launch {
+            val saved = repository.savePhotoAs(token, uri)
+            if (!saved) {
+                onDone(false)
+                return@launch
+            }
+            val entryId = PhotoTokens.entryOf(token)
+            val updated = when (PhotoTokens.kindOf(token)) {
+                PhotoKind.DIARY -> entryId?.let { project.withDiaryPhoto(it, token) } ?: project
+                PhotoKind.DEFECT -> entryId?.let { project.withDefectPhoto(it, token) } ?: project
+                PhotoKind.ROOM -> project
+            }
+            val thumbnail = repository.loadPhotoAs(token)
+            mutate(updated) { _ ->
+                val photos = if (thumbnail != null) {
+                    mutableState.value.fieldPhotos + (token to thumbnail)
+                } else {
+                    mutableState.value.fieldPhotos
+                }
+                mutableState.value = mutableState.value.copy(fieldPhotos = photos)
+                onDone(true)
+            }
+        }
+    }
+
+    private suspend fun loadFieldPhotos(project: ProjectRecord): Map<String, Bitmap> {
+        val tokens = buildList {
+            project.diary.forEach { entry -> entry.photo?.let { add(it) } }
+            project.defects.forEach { defect -> defect.photo?.let { add(it) } }
+        }.take(MAX_FIELD_PHOTOS)
+        if (tokens.isEmpty()) return emptyMap()
+        val out = LinkedHashMap<String, Bitmap>(tokens.size)
+        tokens.forEach { token ->
+            repository.loadPhotoAs(token)?.let { out[token] = it }
+        }
+        return out
     }
 
     fun deleteProject(id: String, onDeleted: () -> Unit = {}) {
@@ -330,7 +403,12 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun closeProject() {
-        mutableState.value = mutableState.value.copy(openProject = null, materialList = null, photo = null)
+        mutableState.value = mutableState.value.copy(
+            openProject = null,
+            materialList = null,
+            photo = null,
+            fieldPhotos = emptyMap(),
+        )
     }
 
     /**
@@ -343,6 +421,19 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         mutableState.value = mutableState.value.copy(
             wasteOverride = value,
             materialList = project?.let { buildMaterialList(it) },
+        )
+    }
+
+    /**
+     * Sets the firm's hourly rate, the default every project bills at unless it overrides it.
+     *
+     * Re-emitting the state is what makes the open project's card and the protocol pick the new
+     * number up without reopening the job.
+     */
+    fun setFirmHourlyRate(cents: Int?) {
+        settings.setHourlyRateCents(cents)
+        mutableState.value = mutableState.value.copy(
+            firmHourlyRateCents = cents ?: Pricing.DEFAULT_HOURLY_RATE_CENTS,
         )
     }
 
@@ -377,8 +468,11 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             texts.forEach { text ->
                 if (repository.importProject(text) != null) imported++
             }
-            photos.forEach { (projectId, uri) ->
-                if (repository.hasProject(projectId)) repository.savePhoto(projectId, uri)
+            photos.forEach { (token, uri) ->
+                // `<project id>` for the room's own photo, `<project id>__diary_<entry>` for an
+                // entry photo: the room decides whether the photo has a home on this phone.
+                val projectId = PhotoTokens.projectOf(token)
+                if (repository.hasProject(projectId)) repository.savePhotoAs(token, uri)
             }
             refresh()
             mutableState.value.openProject?.let { open ->
@@ -388,11 +482,17 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                         openProject = reloaded,
                         materialList = buildMaterialList(reloaded),
                         photo = repository.loadPhoto(reloaded.id),
+                        fieldPhotos = loadFieldPhotos(reloaded),
                     )
                 }
             }
             onDone(imported)
         }
+    }
+
+    private companion object {
+        /** Enough documentation for a protocol appendix, few enough to keep the heap flat. */
+        const val MAX_FIELD_PHOTOS = 12
     }
 
     private fun mutate(updated: ProjectRecord, onSaved: (ProjectRecord?) -> Unit = {}) {

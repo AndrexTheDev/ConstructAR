@@ -10,6 +10,9 @@ import com.constructar.core.model.DefectItem
 import com.constructar.core.model.DefectSeverity
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.model.WorkTime
+import com.constructar.core.price.MoneyFormatter
+import com.constructar.core.price.Pricing
+import com.constructar.export.pdf.PdfPhoto
 import com.constructar.export.pdf.PdfSection
 import java.util.Locale
 
@@ -48,6 +51,14 @@ internal data class SiteFileTexts(
     val severityHigh: String,
     val hoursMinutes: String,
     val minutesOnly: String,
+    val costsTitle: String,
+    val labourLabel: String,
+    val materialLabel: String,
+    val netTotalLabel: String,
+    val netNote: String,
+    val photosTitle: String,
+    val photoDiaryPrefix: String,
+    val photoDefectPrefix: String,
 )
 
 /** A4 printable width at 72 dpi, the budget the tables divide between their columns. */
@@ -141,4 +152,74 @@ private fun columns(vararg fractions: Float): List<Int> {
     val widths = fractions.map { (PRINTABLE_PT * it).toInt() }
     val used = widths.sum()
     return widths.dropLast(1) + (PRINTABLE_PT - (used - widths.last()))
+}
+
+/**
+ * Turns hours and material into the money block the customer actually reads.
+ *
+ * Returns `null` for a project without time and without material: an empty "0,00 €" block would
+ * only invite the question whether the job was free.
+ *
+ * The arithmetic lives in [Pricing], not here, so the protocol and the on-screen card cannot
+ * drift apart.
+ */
+internal fun buildCostSection(
+    project: ProjectRecord,
+    hourlyRateCents: Int,
+    texts: SiteFileTexts,
+    nowMs: Long = System.currentTimeMillis(),
+): PdfSection? {
+    val workMillis = WorkTime.totalMillis(project.sessions, nowMs)
+    val labour = Pricing.labourCents(workMillis, hourlyRateCents)
+    val material = project.materialLumpSumCents
+    if (workMillis <= 0L && material <= 0L) return null
+
+    val lines = ArrayList<String>(3)
+    if (workMillis > 0L) {
+        lines += "%s: %s x %s".format(
+            texts.labourLabel,
+            duration(workMillis, texts),
+            MoneyFormatter.format(hourlyRateCents.toLong()),
+        )
+    }
+    if (material > 0L) {
+        lines += "%s: %s".format(texts.materialLabel, MoneyFormatter.format(material))
+    }
+    lines += "%s: %s".format(texts.netTotalLabel, MoneyFormatter.format(labour + material))
+
+    return PdfSection(
+        title = texts.costsTitle,
+        paragraphs = lines,
+        note = texts.netNote,
+    )
+}
+
+/**
+ * Collects the entry photos that exist on this phone, newest first.
+ *
+ * Only photos that are actually stored are listed - a token whose file failed to decode must not
+ * produce a caption pointing at nothing.
+ */
+internal fun buildPhotoAppendix(
+    project: ProjectRecord,
+    photos: Map<String, android.graphics.Bitmap>,
+    texts: SiteFileTexts,
+): List<PdfPhoto> {
+    if (photos.isEmpty()) return emptyList()
+    val diary = project.diary.mapNotNull { entry ->
+        val bitmap = entry.photo?.let(photos::get) ?: return@mapNotNull null
+        PdfPhoto(
+            caption = "%s %s".format(texts.photoDiaryPrefix, formatDateLabel(entry.createdAtEpochMs)),
+            bitmap = bitmap,
+        )
+    }
+    val defects = project.defects.mapNotNull { defect ->
+        val bitmap = defect.photo?.let(photos::get) ?: return@mapNotNull null
+        PdfPhoto(
+            caption = "%s: %s".format(texts.photoDefectPrefix, defect.title),
+            bitmap = bitmap,
+        )
+    }
+    // Open defects first: those are what the customer is asked to sign off as still outstanding.
+    return (defects + diary).take(8)
 }

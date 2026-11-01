@@ -96,8 +96,10 @@ punch list printed two weeks later — and it all lives in the same project file
 | **Working time** | start/stop, one open session at most, per-session and total hours | *Working time* table with a total |
 | **Site diary** | timestamped free text, newest first | *Site diary* section, printed forwards in time |
 | **Defects** | what, where, severity (minor / important / critical), open or resolved | *Defects* table with status |
+| **Entry photos** | one documentation photo per diary entry and per defect, taken in the app | *Photo documentation* appendix, two per row |
+| **Costs** | hours x hourly rate + the material lump sum typed on site | *Costs* block: labour, material, net total |
 
-Three deliberate choices:
+Four deliberate choices:
 
 * **The clock cannot be double-started.** `startSession` refuses a second open session, so a
   double tap on a wet screen cannot double the hours; `stopSession` closes whatever is open.
@@ -109,13 +111,24 @@ Three deliberate choices:
 * **The protocol carries it.** `ProtocolPdfWriter` learned a generic `PdfSection` (table and/or
   paragraphs plus a note); the app assembles the sections from localised strings, because only
   the app has the string table. Adding a new kind of on-site note needs no change in `:export`.
+* **A photo is a file name, not a database row.** `PhotoTokens` defines the three names
+  (`<project>`, `<project>__diary_<entry>`, `<project>__defect_<entry>`), so a backup, a restore
+  onto a new phone and the cascade delete all work from the name alone — and a project deleted on
+  site cannot leave an orphan image behind.
+* **Money is integer cents, formatted once.** `Pricing` (labour = work time x rate, rounded once)
+  and `MoneyFormatter` (always euro, in the phone's own grouping) are the only place money is
+  computed or printed, so the card on screen, the PDF and the CSV cannot disagree. Both decimal
+  separators are accepted, both thousand-dot habits too, and an impossible grouping is rejected
+  rather than guessed.
 
 The project screen reflects the file back before the operator leaves the site: six readiness
 chips (customer, technician, scan, runs, photo, time) and a line naming exactly what is still
 missing for a handover-quality protocol.
 
-Not done, and on the roadmap rather than in the product: a photo per diary entry or defect,
-and turning the hours into a priced line item.
+The costs block is not a quotation engine and says so in the protocol: no VAT, no discount, no
+per-item material prices — the tradesman types the lump sum he would have typed into a
+spreadsheet. Not done, and on the roadmap rather than in the product: a draft/run persistence
+across app restarts, a Bestellliste export, and a multi-run room summary.
 
 ---
 
@@ -313,6 +326,7 @@ without non-free modules — is in **[docs/SETUP.md](docs/SETUP.md)**.
 | Run across depth-only areas | **±3–6 cm** | Raw depth resolution plus confidence filtering |
 | Bend allowance | ~0 | Not measured: the *chord* length is what a tape measure shows. Bend allowance is reported separately and only used for procurement |
 | Angle / diagonal run on a plane | **±1 %** | Anchor drift over distance |
+| Effect of the settled reticle | **−30 to −60 %** of the per-point scatter | `HitStabilizer` commits the per-axis median of a 1.2 s / 5 sample window instead of one frame; a stray frame cannot move the point |
 
 The app never inflates a measured length with a "cable slack" factor. Waste percentages are
 applied only in the procurement column, and the protocol prints both numbers.
@@ -338,10 +352,17 @@ Known limitations, deliberately documented rather than hidden:
   SE(3) exp/log round trip, TSDF integration on synthetic depth, sphere/wall reconstruction
   areas and extents, triangle budget, invalid input, pose-graph closure, proximity loop closure.
 * **JVM (`:core`)** — transform maths, plane fits and polygon containment, fillet smoothing,
-  measurement, tube/duct mesh invariants, BOM aggregation.
+  measurement, tube/duct mesh invariants, BOM aggregation, the working-time clock, the money
+  arithmetic (`Pricing`: rounding, both decimal separators, thousand dots, euro forced on a
+  `pl-PL` phone) and the photo-token naming contract.
+* **JVM (`:app`)** — the printed cost block: no block without time or material, labour +
+  material = net total through the same formatter the PDF uses, a running session billed to now,
+  a project rate overriding the firm's.
 * **JVM (`:ar-engine`, `:export`)** — hit cascade priority and rejection reasons, metric depth
   calibration (including "refuses to fit on noise"), routing/anchor behaviour, GLB/PLY/CSV
-  structural validation.
+  structural validation, and the ten rules of the reticle stabiliser (a settled median, an
+  outvoted stray frame, a moving hand that never locks, a plane or tier change that resets the
+  window, a miss that clears it).
 * **JVM (`:core` licence)** — the freemium gate: a signed licence verifies, a tampered payload
   and a key from another signing key are refused, a licence bound to another phone is refused,
   an expired subscription is reported as *expired* rather than invalid, the URL-safe base64

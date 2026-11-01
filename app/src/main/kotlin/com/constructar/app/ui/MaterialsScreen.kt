@@ -24,12 +24,19 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.constructar.app.R
@@ -38,6 +45,7 @@ import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.bom.MaterialLine
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.model.ConduitKind
+import com.constructar.core.price.Pricing
 import com.constructar.core.units.LengthFormatter
 
 /**
@@ -58,8 +66,14 @@ fun MaterialsScreen(
     materialList: MaterialList?,
     wasteOverride: Float?,
     onWasteChange: (Float?) -> Unit,
+    firmHourlyRateCents: Int,
+    onHourlyRateChange: (Int?) -> Unit,
     onBack: () -> Unit,
 ) {
+    // Blank means "the built-in default", so the field is a string and not a number.
+    var rateDraft by remember(firmHourlyRateCents) {
+        mutableStateOf(Pricing.formatForInput(firmHourlyRateCents.toLong()))
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -85,6 +99,35 @@ fun MaterialsScreen(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+
+        // ── The firm's hourly rate ──────────────────────────────────────────────────
+        // Sits with the waste factor because it is the same kind of number: entered once, used
+        // on every job. A project can still override it on its own card.
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                stringResource(R.string.firm_rate_title),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+            OutlinedTextField(
+                value = rateDraft,
+                onValueChange = { text ->
+                    rateDraft = text
+                    onHourlyRateChange(Pricing.parseCents(text)?.toInt()?.takeIf { it > 0 })
+                },
+                label = { Text(stringResource(R.string.firm_rate_label)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                stringResource(R.string.firm_rate_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp),
+            )
         }
 
         if (materialList == null || materialList.isEmpty) {

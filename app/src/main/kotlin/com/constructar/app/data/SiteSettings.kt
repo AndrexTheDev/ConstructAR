@@ -34,8 +34,24 @@ class SiteSettings(context: Context) {
         }.apply()
     }
 
+    /**
+     * The firm's hourly rate in cents, or `null` for the built-in default.
+     *
+     * Kept with the app rather than per project because a shop bills the same rate on every job;
+     * a project may still override it (a warranty visit, a fixed-price contract).
+     */
+    fun hourlyRateCents(): Int? = preferences.getInt(KEY_HOURLY, UNSET_RATE).takeIf { it > 0 }
+
+    fun setHourlyRateCents(cents: Int?) {
+        preferences.edit().apply {
+            if (cents == null || cents <= 0) remove(KEY_HOURLY) else putInt(KEY_HOURLY, cents)
+        }.apply()
+    }
+
     private companion object {
         const val KEY_WASTE = "waste_factor_override"
+        const val KEY_HOURLY = "hourly_rate_cents"
+        const val UNSET_RATE = -1
 
         /** `-1` is outside every plausible factor, so it can mean "not set". */
         const val UNSET = -1f

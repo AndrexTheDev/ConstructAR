@@ -322,4 +322,22 @@
     <string name="pdf_status_open">Offen</string>
     <string name="pdf_status_resolved">Erledigt</string>
 
+    <string name="field_photo_add">Foto aufnehmen</string>
+    <string name="field_photo_replace">Foto ersetzen</string>
+    <string name="project_costs_title">Was der Auftrag wert ist</string>
+    <string name="project_costs_rate">Stundensatz (€)</string>
+    <string name="project_costs_material">Materialpauschale (€)</string>
+    <string name="project_costs_labour">Arbeitslohn</string>
+    <string name="project_costs_total">Summe netto</string>
+    <string name="firm_rate_title">Stundensatz des Betriebs</string>
+    <string name="firm_rate_label">Satz pro Stunde (€)</string>
+    <string name="firm_rate_hint">Gilt für jeden Auftrag, solange ein Projekt keinen eigenen Satz setzt.</string>
+    <string name="pdf_section_costs">Kosten</string>
+    <string name="pdf_label_labour">Arbeitslohn</string>
+    <string name="pdf_label_material">Material</string>
+    <string name="pdf_label_net_total">Summe netto</string>
+    <string name="pdf_note_net">Nettobeträge, ohne MwSt. Material ist die vor Ort eingetragene Pauschale.</string>
+    <string name="pdf_section_photos">Fotodokumentation</string>
+    <string name="ar_hold_steady">Ruhig halten</string>
+    <string name="ar_point_locked">Punkt gesetzt</string>
 </resources>

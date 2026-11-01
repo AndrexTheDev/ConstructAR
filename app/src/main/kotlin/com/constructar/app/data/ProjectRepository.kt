@@ -168,7 +168,11 @@ class ProjectRepository(private val context: Context) {
     }
 
     suspend fun delete(id: String): Boolean = withContext(Dispatchers.IO) {
-        photoFile(id).delete()
+        // The site photo is `<id>.jpg`, an entry photo is `<id>__diary_<entry>.jpg`; deleting a
+        // project must not leave either of them orphaned in private storage.
+        photoDirectory.listFiles()
+            ?.filter { it.name == "$id.jpg" || it.name.startsWith("${id}__") }
+            ?.forEach { it.delete() }
         fileFor(id).delete()
     }
 
@@ -190,10 +194,20 @@ class ProjectRepository(private val context: Context) {
      */
     fun photoFile(id: String): File = File(photoDirectory, "$id.jpg")
 
-    /** Copies a picture the camera app wrote into our cache; the project keeps one photo. */
-    suspend fun savePhoto(projectId: String, source: Uri): Boolean = withContext(Dispatchers.IO) {
+    /**
+     * Any stored photo by its token.
+     *
+     * A token is `<project id>` for the documentation photo of the room, or
+     * `<project id>__diary_<entry id>` / `<project id>__defect_<entry id>` for an entry photo.
+     * The project id is always the part before `__`, which is what makes a backup restorable:
+     * every photo can be matched back to the room it belongs to from its file name alone.
+     */
+    fun photoFileByName(token: String): File = File(photoDirectory, "$token.jpg")
+
+    /** Copies a picked picture into private storage under [token]. */
+    suspend fun savePhotoAs(token: String, source: Uri): Boolean = withContext(Dispatchers.IO) {
         runCatching {
-            val target = photoFile(projectId)
+            val target = photoFileByName(token)
             val copied = context.contentResolver.openInputStream(source)?.use { input ->
                 target.outputStream().use { output -> input.copyTo(output) }
                 true
@@ -203,6 +217,35 @@ class ProjectRepository(private val context: Context) {
         }.getOrDefault(false)
     }
 
+    fun deletePhotoAs(token: String): Boolean = photoFileByName(token).delete()
+
+    /**
+     * Decodes a stored photo at a size fit for its purpose.
+     *
+     * Thumbnails in the site file are 640 px; the export re-reads the same file larger for the
+     * appendix. Sampling is power-of-two, so the working set stays a few megabytes either way.
+     */
+    suspend fun loadPhotoAs(token: String, maxDimensionPx: Int = 640): Bitmap? =
+        withContext(Dispatchers.IO) {
+            decodeSampled(photoFileByName(token), maxDimensionPx)
+        }
+
+    private fun decodeSampled(file: File, maxDimensionPx: Int): Bitmap? {
+        if (!file.exists() || file.length() == 0L) return null
+        return runCatching {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(file.absolutePath, bounds)
+            var sample = 1
+            while (bounds.outWidth / (sample * 2) >= maxDimensionPx || bounds.outHeight / (sample * 2) >= maxDimensionPx) {
+                sample *= 2
+            }
+            BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
+        }.getOrNull()
+    }
+
+    /** Copies a picture the camera app wrote into our cache; the project keeps one photo. */
+    suspend fun savePhoto(projectId: String, source: Uri): Boolean = savePhotoAs(projectId, source)
+
     /**
      * Decodes the photo at a size fit for a screen and an A4 page.
      *
@@ -211,19 +254,7 @@ class ProjectRepository(private val context: Context) {
      * cannot use more detail than this anyway.
      */
     suspend fun loadPhoto(projectId: String, maxDimensionPx: Int = 1_200): Bitmap? =
-        withContext(Dispatchers.IO) {
-            val file = photoFile(projectId)
-            if (!file.exists() || file.length() == 0L) return@withContext null
-            runCatching {
-                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeFile(file.absolutePath, bounds)
-                var sample = 1
-                while (bounds.outWidth / (sample * 2) >= maxDimensionPx || bounds.outHeight / (sample * 2) >= maxDimensionPx) {
-                    sample *= 2
-                }
-                BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
-            }.getOrNull()
-        }
+        loadPhotoAs(projectId, maxDimensionPx)
 
     /** Where exports are staged before the operator picks a destination folder. */
     fun exportStagingDirectory(): File = File(context.cacheDir, "exports").apply { mkdirs() }

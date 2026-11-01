@@ -322,4 +322,22 @@
     <string name="pdf_status_open">Open</string>
     <string name="pdf_status_resolved">Resolved</string>
 
+    <string name="field_photo_add">Add photo</string>
+    <string name="field_photo_replace">Replace photo</string>
+    <string name="project_costs_title">What the job is worth</string>
+    <string name="project_costs_rate">Hourly rate (€)</string>
+    <string name="project_costs_material">Material lump sum (€)</string>
+    <string name="project_costs_labour">Labour</string>
+    <string name="project_costs_total">Net total</string>
+    <string name="firm_rate_title">Firm hourly rate</string>
+    <string name="firm_rate_label">Rate per hour (€)</string>
+    <string name="firm_rate_hint">Used on every job unless a project sets its own rate.</string>
+    <string name="pdf_section_costs">Costs</string>
+    <string name="pdf_label_labour">Labour</string>
+    <string name="pdf_label_material">Material</string>
+    <string name="pdf_label_net_total">Net total</string>
+    <string name="pdf_note_net">Net figures, no VAT. Material is the lump sum entered on site.</string>
+    <string name="pdf_section_photos">Photo documentation</string>
+    <string name="ar_hold_steady">Hold steady</string>
+    <string name="ar_point_locked">Point locked</string>
 </resources>

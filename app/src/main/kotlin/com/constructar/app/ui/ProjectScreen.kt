@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -51,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,6 +63,8 @@ import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.price.MoneyFormatter
+import com.constructar.core.price.Pricing
 import com.constructar.core.units.LengthFormatter
 
 /**
@@ -85,6 +89,9 @@ fun ProjectScreen(
     onMaterials: () -> Unit,
     onFieldBook: () -> Unit,
     onSaveCustomer: (name: String, address: String, phone: String) -> Unit,
+    /** Effective rate for this job - the project's own, or the firm default behind it. */
+    hourlyRateCents: Int,
+    onSavePricing: (hourlyRateCents: Int?, materialLumpSumCents: Long) -> Unit,
     photo: Bitmap?,
     onPhoto: (Uri) -> Unit,
     onDelete: () -> Unit,
@@ -125,6 +132,23 @@ fun ProjectScreen(
     var customerName by remember(project.id) { mutableStateOf(project.customerName) }
     var customerAddress by remember(project.id) { mutableStateOf(project.customerAddress) }
     var customerPhone by remember(project.id) { mutableStateOf(project.customerPhone) }
+    // Blank means "use the firm rate", which is why the fields are strings and not numbers: an
+    // empty field has to be distinguishable from a typed zero.
+    var rateDraft by remember(project.id) {
+        mutableStateOf(project.hourlyRateCents?.let { Pricing.formatForInput(it.toLong()) } ?: "")
+    }
+    var materialDraft by remember(project.id) {
+        mutableStateOf(
+            project.materialLumpSumCents.takeIf { it > 0L }?.let(Pricing::formatForInput) ?: "",
+        )
+    }
+    val parsedRate = Pricing.parseCents(rateDraft)?.toInt()?.takeIf { it > 0 }
+    val parsedMaterial = Pricing.parseCents(materialDraft) ?: 0L
+    val effectiveRate = parsedRate ?: hourlyRateCents
+    val priceDirty = parsedRate != project.hourlyRateCents || parsedMaterial != project.materialLumpSumCents
+    val workMillis = remember(project.sessions, project.id) { project.totalWorkMillis() }
+    val labourPreview = Pricing.labourCents(workMillis, effectiveRate)
+    val totalPreview = Pricing.totalCents(labourPreview, parsedMaterial)
     val customerDirty = customerName != project.customerName ||
         customerAddress != project.customerAddress ||
         customerPhone != project.customerPhone
@@ -401,6 +425,58 @@ fun ProjectScreen(
             }
         }
 
+        // ── What the job is worth ───────────────────────────────────────────────────────
+        // The two numbers a tradesman would otherwise type into a spreadsheet at ten in the
+        // evening. The labour line updates as he types, so the rate is never entered blind.
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = RoundedCornerShape(18.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.project_costs_title), style = MaterialTheme.typography.titleMedium)
+                OutlinedTextField(
+                    value = rateDraft,
+                    onValueChange = { rateDraft = it },
+                    label = { Text(stringResource(R.string.project_costs_rate)) },
+                    placeholder = { Text(Pricing.formatForInput(hourlyRateCents.toLong())) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = materialDraft,
+                    onValueChange = { materialDraft = it },
+                    label = { Text(stringResource(R.string.project_costs_material)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                PriceLine(
+                    label = stringResource(R.string.project_costs_labour),
+                    value = MoneyFormatter.format(labourPreview),
+                )
+                if (parsedMaterial > 0L) {
+                    PriceLine(
+                        label = stringResource(R.string.project_costs_material),
+                        value = MoneyFormatter.format(parsedMaterial),
+                    )
+                }
+                PriceLine(
+                    label = stringResource(R.string.project_costs_total),
+                    value = MoneyFormatter.format(totalPreview),
+                    emphasis = true,
+                )
+                GloveButton(
+                    label = stringResource(R.string.action_save),
+                    icon = Icons.Default.Check,
+                    tone = ActionTone.SECONDARY,
+                    enabled = priceDirty,
+                    onClick = { onSavePricing(parsedRate, parsedMaterial) },
+                )
+            }
+        }
+
         // ── Who signs the protocol ──────────────────────────────────────────────────
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -516,6 +592,26 @@ fun ProjectScreen(
 }
 
 /** One measured run: what it is, where it runs, how long it is, and a way to remove it. */
+@Composable
+private fun PriceLine(label: String, value: String, emphasis: Boolean = false) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = if (emphasis) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium,
+            color = if (emphasis) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            value,
+            style = if (emphasis) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium,
+            color = if (emphasis) Jamaica.Lime else MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
 @Composable
 private fun RouteRow(kind: String, detail: String, length: String, onDelete: () -> Unit) {
     Row(
