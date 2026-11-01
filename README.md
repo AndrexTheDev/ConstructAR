@@ -361,6 +361,13 @@ Known limitations, deliberately documented rather than hidden:
   measurement, tube/duct mesh invariants, BOM aggregation, the working-time clock, the money
   arithmetic (`Pricing`: rounding, both decimal separators, thousand dots, euro forced on a
   `pl-PL` phone) and the photo-token naming contract.
+* **JVM (`:app`, Robolectric)** — the storage layer against a real filesystem: a room survives
+  a save and a load, a blank name falls back, restoring a backup of a room that is still on the
+  phone keeps both, text that is not a project is refused, a corrupt file is reported as
+  unreadable but never deleted (the bytes are the operator's only copy), a temp file left by a
+  kill is swept while the room is not, deleting one room leaves the others and their photos
+  intact, and the backup is byte-for-byte what the app wrote. Plus the theme: WCAG contrast is
+  computed for every text pair the UI draws and asserted at 4.5:1.
 * **JVM (`:app`)** — the printed cost block: no block without time or material, labour +
   material = net total through the same formatter the PDF uses, a running session billed to now,
   a project rate overriding the firm's.

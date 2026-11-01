@@ -115,6 +115,36 @@ permissions = read("app/src/main/AndroidManifest.xml")
 if "android.permission.INTERNET" in permissions:
     add("the app declares INTERNET while the page promises it sends nothing")
 
+# ---------------------------------------------------------------------------------------------
+# The same palette on both sides. The page is styled with CSS custom properties, the app with
+# `Color(0xFF…)`; they are two copies of one design, and a colour changed in one place only is
+# how a product starts looking like two products.
+# ---------------------------------------------------------------------------------------------
+theme = read("app/src/main/kotlin/com/constructar/app/ui/theme/Theme.kt")
+jamaica = dict(re.findall(r"val (\w+) = Color\(0xFF([0-9A-Fa-f]{6})\)", theme))
+css_root = re.search(r":root\{(.*?)\}", build_site.CSS, re.S).group(1)
+css_vars = {name: value.upper() for name, value in re.findall(r"--([\w-]+):\s*#([0-9A-Fa-f]{6})", css_root)}
+palette = {
+    "ink": "Ink",
+    "ink-elevated": "InkElevated",
+    "surface-high": "SurfaceHigh",
+    "lime": "Lime",
+    "gold": "Gold",
+    "green": "Green",
+    "chalk": "Chalk",
+    "ash": "Ash",
+    "wire": "Wire",
+}
+for css_name, kotlin_name in palette.items():
+    if css_name not in css_vars:
+        add(f"the site CSS no longer defines --{css_name}")
+        continue
+    if kotlin_name not in jamaica:
+        add(f"the app theme no longer defines Jamaica.{kotlin_name}")
+        continue
+    if css_vars[css_name] != jamaica[kotlin_name].upper():
+        add(f"--{css_name} is #{css_vars[css_name]} on the page but #{jamaica[kotlin_name].upper()} in the app")
+
 for lang in ("de", "es", "fr", "it", "pl"):
     localized = (ROOT / "docs" / lang / "index.html").read_text(encoding="utf-8")
     if not all(address in localized for address in page_addresses.values()):
