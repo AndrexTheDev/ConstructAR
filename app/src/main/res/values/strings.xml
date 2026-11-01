@@ -84,6 +84,9 @@
     <string name="export_saving">Saving…</string>
     <string name="export_success">Saved %1$d files to %2$s.</string>
     <string name="export_failed">Export failed: %1$s</string>
+    <string name="export_partial">Only %1$d of %2$d files were saved in %3$s.</string>
+    <string name="export_nothing_selected">Pick at least one file format.</string>
+    <string name="export_nothing_to_export">No 3D geometry yet: measure a run or scan the room first.</string>
     <string name="export_measurement">Measurement</string>
     <string name="export_runs_total">%1$d runs · %2$s total</string>
     <string name="export_order_length">Order length incl. waste: %1$s</string>

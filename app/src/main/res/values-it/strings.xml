@@ -84,6 +84,9 @@
     <string name="export_saving">Salvataggio…</string>
     <string name="export_success">Salvati %1$d file in %2$s.</string>
     <string name="export_failed">Esportazione non riuscita: %1$s</string>
+    <string name="export_partial">Sono stati salvati solo %1$d file su %2$d in %3$s.</string>
+    <string name="export_nothing_selected">Scegli almeno un formato di file.</string>
+    <string name="export_nothing_to_export">Ancora nessuna geometria 3D: misura prima una tratta o scansiona la stanza.</string>
     <string name="export_measurement">Rilievo</string>
     <string name="export_runs_total">%1$d tracciati · %2$s in totale</string>
     <string name="export_order_length">Lunghezza di ordine con sfrido: %1$s</string>

@@ -84,6 +84,9 @@
     <string name="export_saving">Guardando…</string>
     <string name="export_success">Se han guardado %1$d archivos en %2$s.</string>
     <string name="export_failed">Error al exportar: %1$s</string>
+    <string name="export_partial">Solo se guardaron %1$d de %2$d archivos en %3$s.</string>
+    <string name="export_nothing_selected">Elige al menos un formato de archivo.</string>
+    <string name="export_nothing_to_export">Aún no hay geometría 3D: mide un tramo o escanea la sala primero.</string>
     <string name="export_measurement">Medición</string>
     <string name="export_runs_total">%1$d trazados · %2$s en total</string>
     <string name="export_order_length">Longitud de pedido con merma: %1$s</string>

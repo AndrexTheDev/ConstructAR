@@ -12,25 +12,63 @@ import org.junit.Test
 /**
  * What the export screen says after an attempt.
  *
- * The case worth a test is the quiet one: a folder the app may create directories in but not
- * write into. Nothing throws, every `openOutputStream` returns `null`, and the screen used to
- * announce "saved 0 files" in the success colour.
+ * Three counts, three honest answers, and one order between them. The case that matters most is
+ * the quiet one: a folder the app may create directories in but not write into - nothing throws,
+ * every `openOutputStream` returns `null`, and the screen used to announce "saved 0 files" in the
+ * success colour. The cases that matter just as much are the two where nothing was written for a
+ * reason that has nothing to do with the folder: blaming it there is a wrong answer delivered with
+ * confidence, and it sends the operator to check a card that is perfectly fine.
  */
 class ExportStatusTest {
 
-    private val unreadable = "No se puede escribir en la carpeta elegida."
+    private val messages = ExportStatus.Messages(
+        folderUnreadable = "No se puede escribir en la carpeta elegida.",
+        nothingSelected = "Elige al menos un formato de archivo.",
+        nothingToExport = "Aún no hay geometría 3D.",
+    )
+
+    private fun report(requested: Int, produced: Int, written: Int) = ExportStatus.Report(
+        requested = requested,
+        produced = produced,
+        written = written,
+        folder = "ConstructAR_Bad_20260314-1015",
+    )
 
     @Test
-    fun `writing at least one file is a success and names the files`() {
-        val status = ExportStatus.of(written = 4, folder = "ConstructAR_Bad_20260314-1015", folderUnreadable = unreadable)
+    fun `everything asked for was written, and the folder is named`() {
+        val status = ExportStatus.of(report(requested = 4, produced = 4, written = 4), messages)
 
         assertEquals(ExportStatus.Saved(count = 4, folder = "ConstructAR_Bad_20260314-1015"), status)
     }
 
     @Test
-    fun `writing nothing is a failure, not a zero-file success`() {
-        val status = ExportStatus.of(written = 0, folder = "ConstructAR_Bad_20260314-1015", folderUnreadable = unreadable)
+    fun `writing nothing that existed is a folder failure, not a zero-file success`() {
+        val status = ExportStatus.of(report(requested = 2, produced = 2, written = 0), messages)
 
-        assertEquals(ExportStatus.Failed(detail = unreadable), status)
+        assertEquals(ExportStatus.Failed(detail = messages.folderUnreadable), status)
+    }
+
+    @Test
+    fun `asking for nothing does not blame the folder`() {
+        val status = ExportStatus.of(report(requested = 0, produced = 0, written = 0), messages)
+
+        assertEquals(ExportStatus.Failed(detail = messages.nothingSelected), status)
+    }
+
+    @Test
+    fun `a mesh-only export of an unmeasured room says what is missing`() {
+        val status = ExportStatus.of(report(requested = 2, produced = 0, written = 0), messages)
+
+        assertEquals(ExportStatus.Failed(detail = messages.nothingToExport), status)
+    }
+
+    @Test
+    fun `a half-written folder is reported as partial, not as success`() {
+        val status = ExportStatus.of(report(requested = 3, produced = 3, written = 2), messages)
+
+        assertEquals(
+            ExportStatus.Partial(saved = 2, expected = 3, folder = "ConstructAR_Bad_20260314-1015"),
+            status,
+        )
     }
 }

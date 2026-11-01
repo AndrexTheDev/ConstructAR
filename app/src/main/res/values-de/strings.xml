@@ -84,6 +84,9 @@
     <string name="export_saving">Speichern…</string>
     <string name="export_success">%1$d Dateien in %2$s gespeichert.</string>
     <string name="export_failed">Export fehlgeschlagen: %1$s</string>
+    <string name="export_partial">Nur %1$d von %2$d Dateien wurden in %3$s gespeichert.</string>
+    <string name="export_nothing_selected">Wähle mindestens ein Dateiformat.</string>
+    <string name="export_nothing_to_export">Noch keine 3D-Geometrie: miss zuerst eine Strecke oder scanne den Raum.</string>
     <string name="export_measurement">Aufmaß</string>
     <string name="export_runs_total">%1$d Trassen · %2$s gesamt</string>
     <string name="export_order_length">Bestelllänge inkl. Verschnitt: %1$s</string>

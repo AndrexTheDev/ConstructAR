@@ -84,6 +84,9 @@
     <string name="export_saving">Enregistrement…</string>
     <string name="export_success">%1$d fichiers enregistrés dans %2$s.</string>
     <string name="export_failed">Échec de l’export : %1$s</string>
+    <string name="export_partial">Seuls %1$d fichiers sur %2$d ont été enregistrés dans %3$s.</string>
+    <string name="export_nothing_selected">Choisis au moins un format de fichier.</string>
+    <string name="export_nothing_to_export">Pas encore de géométrie 3D : mesure d’abord un tracé ou scanne la pièce.</string>
     <string name="export_measurement">Relevé</string>
     <string name="export_runs_total">%1$d tracés · %2$s au total</string>
     <string name="export_order_length">Longueur de commande avec chutes : %1$s</string>

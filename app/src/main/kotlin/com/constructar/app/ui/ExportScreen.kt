@@ -149,6 +149,9 @@ fun ExportScreen(
     val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         busy = true
+        // Read on the main thread, before the IO work: "requested" is what the switches said at
+        // the moment the operator pressed the button, not what they say when the write finishes.
+        val requestedCount = listOf(includePdf, includeCsv, includeGlb, includePly).count { it }
         scope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 runCatching {
@@ -197,16 +200,24 @@ fun ExportScreen(
                             file?.delete()
                         }
                     }
-                    written to stem
+                    Triple(written, artifacts.size, stem)
                 }
             }
             busy = false
             status = outcome.fold(
-                onSuccess = { (count, stem) ->
+                onSuccess = { (written, produced, stem) ->
                     ExportStatus.of(
-                        written = count,
-                        folder = stem,
-                        folderUnreadable = context.getString(R.string.export_folder_inaccessible),
+                        report = ExportStatus.Report(
+                            requested = requestedCount,
+                            produced = produced,
+                            written = written,
+                            folder = stem,
+                        ),
+                        messages = ExportStatus.Messages(
+                            folderUnreadable = context.getString(R.string.export_folder_inaccessible),
+                            nothingSelected = context.getString(R.string.export_nothing_selected),
+                            nothingToExport = context.getString(R.string.export_nothing_to_export),
+                        ),
                     )
                 },
                 onFailure = { error -> ExportStatus.Failed(error.message ?: error.javaClass.simpleName) },
@@ -344,22 +355,44 @@ fun ExportScreen(
             }
         }
 
+        // Every format switched off is not an export: the button stays disabled and says why,
+        // rather than opening a picker that can only end in a sentence about the folder.
+        val anyFormat = includePdf || includeCsv || includeGlb || includePly
         GloveButton(
             label = stringResource(if (busy) R.string.export_saving else R.string.export_choose_folder),
             icon = Icons.Default.CreateNewFolder,
             onClick = { folderLauncher.launch(null) },
-            enabled = !busy,
+            enabled = !busy && anyFormat,
             modifier = Modifier.fillMaxWidth(),
         )
+        if (!anyFormat) {
+            Text(
+                stringResource(R.string.export_nothing_selected),
+                style = MaterialTheme.typography.bodyMedium,
+                color = SiteColors.warning,
+            )
+        }
 
         status?.let { current ->
             val text = when (current) {
                 is ExportStatus.Saved -> stringResource(R.string.export_success, current.count, current.folder)
+                is ExportStatus.Partial -> stringResource(
+                    R.string.export_partial,
+                    current.saved,
+                    current.expected,
+                    current.folder,
+                )
                 is ExportStatus.Failed -> stringResource(R.string.export_failed, current.detail)
             }
             // A failure is not a success in another shade: it is red, like every other failure
             // in this app (BackupCard does the same). It used to be drawn in the accent colour.
-            val tone = if (status is ExportStatus.Failed) SiteColors.danger else SiteColors.accent
+            // A partial write is neither: it is the warning colour, because something *is* on
+            // the card but not everything the operator asked for.
+            val tone = when (current) {
+                is ExportStatus.Saved -> SiteColors.accent
+                is ExportStatus.Partial -> SiteColors.warning
+                is ExportStatus.Failed -> SiteColors.danger
+            }
             Text(text, style = MaterialTheme.typography.bodyLarge, color = tone)
         }
 
@@ -445,7 +478,28 @@ private fun FormatRow(
  */
 internal sealed interface ExportStatus {
     data class Saved(val count: Int, val folder: String) : ExportStatus
+
+    /** Some files made it and some did not: the operator must not walk away believing all did. */
+    data class Partial(val saved: Int, val expected: Int, val folder: String) : ExportStatus
+
     data class Failed(val detail: String) : ExportStatus
+
+    /**
+     * What the attempt asked for and what came of it.
+     *
+     * Three counts, because there are three different reasons for writing nothing and only one of
+     * them is a broken folder: nothing was *requested* (every switch off), nothing was *produced*
+     * (mesh-only export of a room with no routable run and no scan), or everything was produced
+     * and none of it could be written.
+     */
+    data class Report(val requested: Int, val produced: Int, val written: Int, val folder: String)
+
+    /** The three sentences, resolved at composition - never inside the export coroutine. */
+    data class Messages(
+        val folderUnreadable: String,
+        val nothingSelected: String,
+        val nothingToExport: String,
+    )
 
     companion object {
         /**
@@ -458,9 +512,21 @@ internal sealed interface ExportStatus {
          * `null`, nothing is thrown, and the old code then reported "saved 0 files" in the
          * success colour - on the screen whose entire job is to tell the operator whether his
          * protocol exists.
+         *
+         * The order matters: blaming the folder for a request that asked for nothing is a wrong
+         * answer in a confident tone, and it is what the first version of this rule did.
          */
-        fun of(written: Int, folder: String, folderUnreadable: String): ExportStatus =
-            if (written > 0) Saved(count = written, folder = folder) else Failed(folderUnreadable)
+        fun of(report: Report, messages: Messages): ExportStatus = when {
+            report.requested == 0 -> Failed(detail = messages.nothingSelected)
+            report.produced == 0 -> Failed(detail = messages.nothingToExport)
+            report.written == 0 -> Failed(detail = messages.folderUnreadable)
+            report.written < report.produced -> Partial(
+                saved = report.written,
+                expected = report.produced,
+                folder = report.folder,
+            )
+            else -> Saved(count = report.written, folder = report.folder)
+        }
     }
 }
 

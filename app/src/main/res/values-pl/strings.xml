@@ -84,6 +84,9 @@
     <string name="export_saving">Zapisywanie…</string>
     <string name="export_success">Zapisano %1$d plików w %2$s.</string>
     <string name="export_failed">Eksport nie powiódł się: %1$s</string>
+    <string name="export_partial">Zapisano tylko %1$d z %2$d plików w %3$s.</string>
+    <string name="export_nothing_selected">Wybierz co najmniej jeden format pliku.</string>
+    <string name="export_nothing_to_export">Nie ma jeszcze geometrii 3D: najpierw zmierz trasę albo zeskanuj pomieszczenie.</string>
     <string name="export_measurement">Pomiar</string>
     <string name="export_runs_total">%1$d tras · łącznie %2$s</string>
     <string name="export_order_length">Długość zamówienia z zapasem: %1$s</string>
