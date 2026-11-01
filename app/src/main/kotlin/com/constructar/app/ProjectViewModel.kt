@@ -460,30 +460,51 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
      *
      * The token carries the kind (`<project>__diary_<id>`) so one code path serves both, and
      * the file name alone is enough to restore it from a backup.
+     *
+     * The copy is the one step in this view model that suspends *before* it reads the project
+     * again, so it is also the one place where "the project" can move underneath it: the picker
+     * hands back a picture, the operator taps into another room while five megabytes are being
+     * copied, and the state this function started with is no longer what is on screen. The token
+     * names its own room, so the answer is not "apply it to whatever is open" - it is to follow
+     * the token, and if the room or the entry is gone by the time the copy lands, to remove the
+     * file again instead of leaving it in private storage with nothing pointing at it.
      */
     fun attachFieldPhoto(token: String, uri: Uri, onDone: (Boolean) -> Unit = {}) {
-        val project = mutableState.value.openProject ?: return
+        val entryId = PhotoTokens.entryOf(token) ?: return
+        val ownerId = PhotoTokens.projectOf(token)
         viewModelScope.launch {
-            val saved = repository.savePhotoAs(token, uri)
-            if (!saved) {
+            if (!repository.savePhotoAs(token, uri)) {
                 onDone(false)
                 return@launch
             }
-            val entryId = PhotoTokens.entryOf(token)
-            val updated = when (PhotoTokens.kindOf(token)) {
-                PhotoKind.DIARY -> entryId?.let { project.withDiaryPhoto(it, token) } ?: project
-                PhotoKind.DEFECT -> entryId?.let { project.withDefectPhoto(it, token) } ?: project
-                PhotoKind.ROOM -> project
-            }
-            val thumbnail = repository.loadPhotoAs(token)
-            mutate(updated) { _ ->
-                val photos = if (thumbnail != null) {
-                    mutableState.value.fieldPhotos + (token to thumbnail)
-                } else {
-                    mutableState.value.fieldPhotos
+            val open = mutableState.value.openProject
+            val stored = if (open?.id == ownerId) null else repository.load(ownerId)
+            when (val target = fieldPhotoTarget(token, entryId, open, stored)) {
+                is FieldPhotoTarget.OnScreen -> {
+                    val thumbnail = repository.loadPhotoAs(token)
+                    mutate(target.project) { _ ->
+                        val photos = if (thumbnail != null) {
+                            mutableState.value.fieldPhotos + (token to thumbnail)
+                        } else {
+                            mutableState.value.fieldPhotos
+                        }
+                        mutableState.value = mutableState.value.copy(fieldPhotos = photos)
+                        onDone(true)
+                    }
                 }
-                mutableState.value = mutableState.value.copy(fieldPhotos = photos)
-                onDone(true)
+                // Not the room the operator is looking at: write it where it belongs and let the
+                // list reload. Applying it to the open room would have shown the picture in the
+                // wrong room, and saving *that* project would have carried the entry's token into
+                // a room that never had the entry.
+                is FieldPhotoTarget.OffScreen -> {
+                    repository.save(target.project)
+                    refresh()
+                    onDone(true)
+                }
+                FieldPhotoTarget.Gone -> {
+                    repository.deletePhotoAs(token)
+                    onDone(false)
+                }
             }
         }
     }
@@ -666,6 +687,55 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             refresh()
             onSaved(if (saved) updated else null)
         }
+    }
+}
+
+/**
+ * Where an already-copied field photo belongs.
+ *
+ * Three answers, not two, because "the room is gone" and "the room is simply not on screen" have
+ * opposite consequences: the first means the file has to be removed again, the second means it has
+ * to be written to that room on disk. Everything this needs is a value, so the decision is decided
+ * - and tested - without a picker, a content resolver or a phone.
+ */
+internal sealed interface FieldPhotoTarget {
+    /** The room is open: apply it to the state the screen is showing. */
+    data class OnScreen(val project: ProjectRecord) : FieldPhotoTarget
+
+    /** The room exists but is not open: write it there without touching the open room. */
+    data class OffScreen(val project: ProjectRecord) : FieldPhotoTarget
+
+    /** The room or the entry it names no longer exists: the copy is an orphan and goes. */
+    data object Gone : FieldPhotoTarget
+}
+
+internal fun fieldPhotoTarget(
+    token: String,
+    entryId: String,
+    open: ProjectRecord?,
+    stored: ProjectRecord?,
+): FieldPhotoTarget {
+    val ownerId = PhotoTokens.projectOf(token)
+    val room = open?.takeIf { it.id == ownerId } ?: stored?.takeIf { it.id == ownerId }
+        ?: return FieldPhotoTarget.Gone
+    val updated = when (PhotoTokens.kindOf(token)) {
+        PhotoKind.DIARY -> room.withDiaryPhoto(entryId, token)
+        PhotoKind.DEFECT -> room.withDefectPhoto(entryId, token)
+        // A room photo is not attached through this path; the site photo has its own.
+        PhotoKind.ROOM -> return FieldPhotoTarget.Gone
+    }
+    // `with*Photo` maps over the entries, so an id that is not there comes back unchanged. That is
+    // the second way a copy can be an orphan, and it must not be mistaken for success.
+    val attached = when (PhotoTokens.kindOf(token)) {
+        PhotoKind.DIARY -> updated.diary.any { it.id == entryId && it.photo == token }
+        PhotoKind.DEFECT -> updated.defects.any { it.id == entryId && it.photo == token }
+        PhotoKind.ROOM -> false
+    }
+    if (!attached) return FieldPhotoTarget.Gone
+    return if (room.id == open?.id) {
+        FieldPhotoTarget.OnScreen(updated)
+    } else {
+        FieldPhotoTarget.OffScreen(updated)
     }
 }
 
