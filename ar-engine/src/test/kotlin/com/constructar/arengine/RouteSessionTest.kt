@@ -414,6 +414,32 @@ class RouteSessionTest {
     }
 
     @Test
+    fun `of two corners the nearer one is the snap target`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(0.03f, 0f, 0f))
+        // 1.1 cm from the first corner, 2.1 cm from the second: the nearer corner wins.
+        assertTrue(session.addNode(hit(0.01f, 0f, 0.005f)))
+        assertEquals(0f, session.state.value.nodes.last().position.x, 0f)
+        assertEquals(0.03f, session.state.value.nodes.last().position.z, 0f)
+    }
+
+    @Test
+    fun `the reticle snaps before the tap is committed`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 1f))
+
+        // The crosshair rests 3.6 cm from the first corner: the HUD must show the diagonal of
+        // the room (1.414 m), not 1.450 m, because that is what the tap will commit.
+        session.setLivePoint(hit(0.03f, 0f, 0.02f))
+        assertEquals(1.41421f, session.state.value.liveSegmentMeters, 1e-4f)
+        session.setLivePoint(null)
+        assertEquals(0f, session.state.value.liveSegmentMeters, 0f)
+    }
+
+    @Test
     fun `closing a ring on its own start is exact`() {
         val session = RouteSession(FakeAnchorFactory())
         session.addNode(hit(0f, 0f, 0f))

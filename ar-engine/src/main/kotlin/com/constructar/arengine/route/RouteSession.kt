@@ -161,7 +161,16 @@ class RouteSession(
     @Synchronized
     fun setLivePoint(hit: SurfaceHit?) {
         val previous = livePoint
-        val node = hit?.toRouteNode(id = LIVE_NODE_ID)
+        // The reticle snaps to an existing corner exactly like a tap does, so the length under
+        // the crosshair is the length that will be committed and the preview line ends on the
+        // corner the operator is aiming at - he sees the snap before he commits it.
+        val raw = hit?.toRouteNode(id = LIVE_NODE_ID)
+        val target = raw?.let { cornerNear(mutableState.value.nodes, it.position) }
+        val node = when {
+            raw == null -> null
+            target == null -> raw
+            else -> raw.copy(position = target.position, normal = target.normal)
+        }
         livePoint = node
         if (previous?.position != node?.position && node != null) previewDirty = true
 
@@ -195,9 +204,7 @@ class RouteSession(
         // own start - added a stray 3 cm segment with a bend at each end, and the bill of
         // materials ordered two extra elbows for it. The last node is excluded: snapping onto it
         // would create the zero-length segment the spacing guard exists to prevent.
-        val snapTarget = current.nodes
-            .dropLast(1)
-            .lastOrNull { node -> node.position.distanceTo(hit.point) <= SNAP_TO_NODE_METERS }
+        val snapTarget = cornerNear(current.nodes, hit.point)
         val placed = when {
             snapTarget == null -> hit
             previous != null && previous.position.distanceTo(snapTarget.position) < MIN_NODE_SPACING_METERS -> {
@@ -403,6 +410,20 @@ class RouteSession(
         val offset = kotlin.math.abs((previous.position - next.point) dot n)
         return offset > SURFACE_JUMP_METERS
     }
+
+    /**
+     * The corner of [nodes] that a point at [position] means, or null when it means itself.
+     *
+     * The last node is never a candidate: snapping a tap onto the node just set would create the
+     * zero-length segment [MIN_NODE_SPACING_METERS] exists to prevent. Of several candidates the
+     * nearest wins, so a tight corner cannot pull a tap across the room.
+     */
+    private fun cornerNear(nodes: List<RouteNodeRecord>, position: Vec3): RouteNodeRecord? =
+        nodes.dropLast(1)
+            .map { node -> node to node.position.distanceTo(position) }
+            .filter { (_, distance) -> distance <= SNAP_TO_NODE_METERS }
+            .minByOrNull { (_, distance) -> distance }
+            ?.first
 
     companion object {
         /** Two taps closer than this are the same tap (fat fingers + gloves). */
