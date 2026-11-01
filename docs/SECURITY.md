@@ -34,7 +34,9 @@ can honestly mean here.
   the source would break the project's own CI build. `AppIntegrity` uses trust-on-first-use
   instead: it detects a *change*, not an unknown first install. If you ship with a stable
   keystore, pin its SHA-256 in `AppIntegrity` and replace the TOFU comparison — the hook is
-  already there.
+  already there. The change is not a life sentence: a licence that verifies re-trusts the new
+  certificate (`activationGate`), so a rotated key costs the operator one activation and no data,
+  while a patched build with no valid licence still gets nothing.
 * **No root, emulator or hooking-framework detection.** Those heuristics produce false
   positives on cheap but legitimate hardware, and a foreman whose phone is "detected as rooted"
   would be locked out of work he paid for. A false lockout is worse than a theoretical bypass.
