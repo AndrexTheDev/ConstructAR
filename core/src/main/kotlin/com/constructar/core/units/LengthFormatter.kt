@@ -37,7 +37,9 @@ enum class LengthUnit(val symbol: String, val metersPerUnit: Float, val defaultD
 object LengthFormatter {
 
     fun format(meters: Float, unit: LengthUnit = LengthUnit.METER, decimals: Int = unit.defaultDecimals): String =
-        number(meters, unit, decimals) + " " + unit.symbol
+        // "—", not "— m": the unit is not the unknown part, and the protocol prints this where a
+        // length was never measured, so a stray unit reads like a measurement of something.
+        if (!meters.isFinite()) "—" else number(meters, unit, decimals) + " " + unit.symbol
 
     /**
      * `number(14.8234f)` → `"14.82"` — the digits alone, `Locale.ROOT`, for a resource that

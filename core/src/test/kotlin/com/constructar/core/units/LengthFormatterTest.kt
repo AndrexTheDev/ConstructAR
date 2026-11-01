@@ -63,6 +63,9 @@ class LengthFormatterTest {
     fun `nothing is claimed when the input is not a number`() {
         assertEquals("—", LengthFormatter.format(Float.NaN))
         assertEquals("—", LengthFormatter.format(Float.POSITIVE_INFINITY))
+        // The unit would be a second claim: a run nobody measured has no "— m" either.
+        assertEquals("—", LengthFormatter.format(Float.NEGATIVE_INFINITY))
+        assertEquals("—", LengthFormatter.format(Float.NaN, LengthUnit.CENTIMETER))
         assertEquals("—", LengthFormatter.formatDiameter(0f))
     }
 
