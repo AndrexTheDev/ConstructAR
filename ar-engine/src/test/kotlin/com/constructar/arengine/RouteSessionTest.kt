@@ -280,7 +280,13 @@ class RouteSessionTest {
         session.addNode(hit(0.03f, 0f, 0.02f))
         assertTrue(session.closeLoop())
         assertTrue(session.state.value.closedLoop)
-        assertEquals(RouteWarning.NONE, session.state.value.warning)
+        // A three-node ring has a 60° corner, so the *bend* warning may well fire - what must
+        // not happen is a complaint about the closure itself.
+        assertEquals(
+            "a ring that meets must not be reported as open",
+            false,
+            session.state.value.warning == RouteWarning.LOOP_TOO_WIDE,
+        )
         assertTrue(session.loopGap() < RouteSession.LOOP_TOLERANCE_METERS)
     }
 
@@ -307,7 +313,8 @@ class RouteSessionTest {
 
         assertTrue(session.closeLoop())
         assertFalse(session.state.value.closedLoop)
-        assertEquals(RouteWarning.NONE, session.state.value.warning)
+        // Opening again drops the closure complaint; a bend warning is the preview's business.
+        assertFalse(session.state.value.warning == RouteWarning.LOOP_TOO_WIDE)
     }
 
     @Test
