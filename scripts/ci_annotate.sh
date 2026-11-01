@@ -36,7 +36,13 @@ fi
 # sits in front of the line. Stripping them first is what makes the extraction reliable.
 ANSI='s/\x1b\[[0-9;]*[A-Za-z]//g'
 CLEAN=/tmp/step.clean.log
-sed -e "$ANSI" -e 's/\r//g' "$LOG" > "$CLEAN" || cp "$LOG" "$CLEAN"
+# A carriage return is a *line separator* here, not noise: Gradle's rich console and any
+# progress output write over the same line, and deleting the \r glues a whole failed task into
+# one unreadable line - which is exactly how a real failure once arrived as a 61-character
+# annotation containing only a deprecation warning.
+sed -e 's/\r\n/\n/g' -e 's/\r/\n/g' -e "$ANSI" "$LOG" > "$CLEAN" || cp "$LOG" "$CLEAN"
+# Progress lines repeat: keep the last of each identical prefix.
+awk '!(/^> / && seen[$0]++)' "$CLEAN" > "$CLEAN.2" && mv "$CLEAN.2" "$CLEAN"
 
 emit() {
   local title="$1" file="$2"

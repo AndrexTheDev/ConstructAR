@@ -162,7 +162,7 @@ jobs:
         # error in :app from costing another full CI cycle.
         run: |
           set +e
-          gradle --no-daemon --stacktrace --continue \
+          gradle --no-daemon --console=plain --stacktrace --continue \
             :core:test :export:test \
             :ar-engine:compileDebugKotlin :ar-engine:compileDebugUnitTestKotlin \
             :app:compileDebugKotlin :app:compileDebugUnitTestKotlin \
@@ -191,7 +191,7 @@ jobs:
       - name: NDK library - :native-slam
         run: |
           set +e
-          gradle --no-daemon --stacktrace --continue :native-slam:assembleDebug > /tmp/step.log 2>&1
+          gradle --no-daemon --console=plain --stacktrace --continue :native-slam:assembleDebug > /tmp/step.log 2>&1
           code=$?
           bash scripts/ci_annotate.sh /tmp/step.log "NDK build failed" "$code"
 
@@ -201,7 +201,7 @@ jobs:
         # here means "no warnings", not "warnings we chose to ignore".
         run: |
           set +e
-          gradle --no-daemon --stacktrace --continue --warning-mode all assembleDebug testDebugUnitTest > /tmp/step.log 2>&1
+          gradle --no-daemon --console=plain --stacktrace --continue --warning-mode all assembleDebug testDebugUnitTest > /tmp/step.log 2>&1
           code=$?
           bash scripts/ci_annotate.sh /tmp/step.log "full gate failed" "$code"
 
@@ -212,7 +212,7 @@ jobs:
         # library translations outside the six shipped locales.
         run: |
           set +e
-          gradle --no-daemon --stacktrace --continue assembleRelease > /tmp/step.log 2>&1
+          gradle --no-daemon --console=plain --stacktrace --continue assembleRelease > /tmp/step.log 2>&1
           code=$?
           bash scripts/ci_annotate.sh /tmp/step.log "release build failed" "$code"
 
