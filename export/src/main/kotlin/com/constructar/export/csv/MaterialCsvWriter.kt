@@ -110,10 +110,31 @@ object MaterialCsvWriter {
         return sb.toString()
     }
 
-    /** Field quoting per RFC 4180: double quotes, doubled internal quotes. */
+    /**
+     * Field quoting per RFC 4180: double quotes, doubled internal quotes — plus a formula guard.
+     *
+     * A cell that begins `=`, `+`, `@`, a tab or a carriage return is a formula to Excel and
+     * LibreOffice, not text. The names in this file are the operator's own (a room, a conduit
+     * label) and they also arrive from **restored backups written by someone else**, so a project
+     * called `=HYPERLINK("http://…","Rechnung")` runs on the foreman's machine the moment he opens
+     * the list to order material. Quoting alone does not stop that — the quotes are stripped by
+     * the parser before the cell is evaluated — so the cell is additionally prefixed with an
+     * apostrophe, the spreadsheet's own "this is text" marker.
+     *
+     * A leading minus is only guarded when what follows is not a plain number: `-5.00` is a
+     * value, `-2+3+cmd|' /C calc'!A0` is a formula.
+     */
     fun escape(value: String, separator: Char = ';'): String {
-        val needsQuotes = value.any { it == separator || it == '"' || it == '\n' || it == '\r' }
-        return if (needsQuotes) "\"" + value.replace("\"", "\"\"") + "\"" else value
+        val guarded = if (needsFormulaGuard(value)) "'" + value else value
+        val needsQuotes = guarded.any { it == separator || it == '"' || it == '\n' || it == '\r' }
+        return if (needsQuotes) "\"" + guarded.replace("\"", "\"\"") + "\"" else guarded
+    }
+
+    /** Whether a spreadsheet would evaluate this cell instead of displaying it. */
+    internal fun needsFormulaGuard(value: String): Boolean = when (value.firstOrNull()) {
+        '=', '+', '@', '\t', '\r' -> true
+        '-' -> value.toDoubleOrNull() == null
+        else -> false
     }
 
     private fun row(sb: StringBuilder, separator: Char, values: List<String>) {

@@ -19,6 +19,7 @@ import com.constructar.core.math.Vec3
 import com.constructar.export.csv.MaterialCsvWriter
 import com.constructar.export.ply.PlyWriter
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.ByteBuffer
@@ -67,6 +68,39 @@ class ExportTextFormatsTest {
     fun `csv escaping doubles internal quotes`() {
         assertEquals("\"a\"\"b\"", MaterialCsvWriter.escape("a\"b"))
         assertEquals("plain", MaterialCsvWriter.escape("plain"))
+    }
+
+    @Test
+    fun `a cell a spreadsheet would evaluate is prefixed as text`() {
+        // A restored backup can carry any name: the cell must be data, not a formula.
+        assertEquals("'=1+1", MaterialCsvWriter.escape("=1+1"))
+        assertTrue(MaterialCsvWriter.escape("+1+1").startsWith("'"))
+        assertTrue(MaterialCsvWriter.escape("@SUM(A1)").startsWith("'"))
+        assertTrue(MaterialCsvWriter.escape("\tk").startsWith("'"))
+        // The guard survives the RFC 4180 quoting when the value also needs quotes.
+        assertEquals("\"'=A;B\"", MaterialCsvWriter.escape("=A;B"))
+    }
+
+    @Test
+    fun `a minus sign is guarded only when it is not a number`() {
+        // -5.00 is a value that must survive untouched; -2+3 is a formula.
+        assertEquals("-5.00", MaterialCsvWriter.escape("-5.00"))
+        assertTrue(MaterialCsvWriter.escape("-2+3").startsWith("'"))
+        assertEquals("", MaterialCsvWriter.escape(""))
+    }
+
+    @Test
+    fun `a hostile project name cannot become a formula in the list`() {
+        val project = sampleProject().copy(name = "=cmd|' /C calc'!A0")
+        val csv = MaterialCsvWriter.write(
+            MaterialListBuilder.build(project, nowMs = 0L),
+            MaterialCsvWriter.Options(includeBom = false),
+        )
+        assertTrue(csv.contains("'=cmd"))
+        // Nothing in the file may begin a line with an evaluating character.
+        csv.lineSequence().forEach { line ->
+            assertFalse("line starts a formula: $line", line.startsWith("=") || line.startsWith("@"))
+        }
     }
 
     @Test

@@ -177,6 +177,16 @@ translucent scan overlay) in its constructor — which runs from `onSceneReady`,
 thread. A frame then only reads a `ConcurrentHashMap`: no material is created, and no object is
 allocated, in the render loop.
 
+**Numbers in an exported document.** One policy, three cases. Lengths, quantities and the
+duration line use `Locale.ROOT`, so the same protocol prints `14.82 m`, `2 h 15 min` and
+`1 250` on every phone - a signed handover document must not change its digits because the
+device was set to another language, and formatting with the device locale once put
+Arabic-Indic digits (`٢ h ١٥ min`) into an English page. Money is the deliberate exception:
+`MoneyFormatter` follows the phone's convention (`1.250,00 €` in German) because the price is
+read by the customer, and it forces **euro** regardless of locale. The CSV is the third case:
+it is data for a spreadsheet, so it is always `.`-decimal with `;` separators, plus a UTF-8
+BOM for Excel - see `docs/TESTING.md` findings 28 and 30.
+
 **Localisation seam.** The engine modules contain no user-facing strings. `TrackingMonitor`
 publishes a `Guidance` code, `RouteSession` a `RouteWarning` code, the hit cascade a
 `SurfaceKind`/`HitSource`, `ArSessionController` an `ArReadiness` branch. `:app` maps each to

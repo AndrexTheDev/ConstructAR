@@ -137,13 +137,26 @@ private fun defectRow(defect: DefectItem, texts: SiteFileTexts): List<String> = 
 )
 
 /** `2 h 15 min`, or `45 min` — the same split the site file shows on screen. */
-private fun duration(millis: Long, texts: SiteFileTexts): String {
+private fun duration(millis: Long, texts: SiteFileTexts): String =
+    durationText(millis, texts.hoursMinutes, texts.minutesOnly)
+
+/**
+ * The duration line of the time section.
+ *
+ * `Locale.ROOT`, like every other number in the document: `String.format(getDefault())` renders
+ * digits in the device's own shapes, so the same protocol printed on an Arabic-locale phone said
+ * `٢ h ١٥ min` next to `14.82 m` and `1.250,00 €`. A signed handover document must not change
+ * its digits because the phone was set to another language - and the six locales this app speaks
+ * all use Latin digits anyway, so nothing is lost. Money is the one deliberate exception (see
+ * `MoneyFormatter`: a price is read by the customer and follows the phone's convention).
+ */
+internal fun durationText(millis: Long, hoursTemplate: String, minutesTemplate: String): String {
     val hours = WorkTime.hours(millis)
     val minutes = WorkTime.minutes(millis)
     return if (hours > 0) {
-        String.format(Locale.getDefault(), texts.hoursMinutes, hours, minutes)
+        String.format(Locale.ROOT, hoursTemplate, hours, minutes)
     } else {
-        String.format(Locale.getDefault(), texts.minutesOnly, minutes)
+        String.format(Locale.ROOT, minutesTemplate, minutes)
     }
 }
 

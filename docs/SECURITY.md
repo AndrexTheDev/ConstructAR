@@ -19,6 +19,7 @@ can honestly mean here.
 | The same person, with the system clock | Set the date back a year to resurrect an expired subscription | `ClockGuard` keeps a **high-water mark**: expiry is judged against the last day this installation has ever seen, not against the clock. A one-day tolerance absorbs time zones and a late NTP sync. |
 | Somebody who patches the APK and re-signs it | Delete the licence check, ship it to colleagues | `AppIntegrity` remembers the signing certificate on first run and reports a re-signed build; a release build with an attached debugger counts the same. Paid features are refused — **the operator's projects stay readable and exportable**, because a licensing problem must never hold somebody's measurements hostage. |
 | Somebody who imports a shared backup | Fill a free installation with twenty rooms from a colleague's zip | Restoring obeys the same plan as creating (`Entitlements.maxProjects`). Files beyond the limit are *not* imported and *not* altered; the app says how many were held back, and they import after upgrading. |
+| Somebody who shares a backup, or just a project name | Put a spreadsheet formula in a room name so it runs on the machine of whoever opens the exported material list | `MaterialCsvWriter.escape` prefixes any cell a spreadsheet would evaluate (`= + @ \t \r`, and `-` unless what follows is a plain number) with the text marker `'`, after RFC 4180 quoting. A leading minus on a real number stays a number |
 | R8, accidentally | Optimise away the verifier because it "looks unreachable" | The workflow greps the **release** DEX for `SHA256withECDSA`, `CAR1.`, `HmacSHA256` and the public key. A build that lost its verification path fails CI. |
 
 ---
@@ -70,6 +71,7 @@ can honestly mean here.
 | Licence wire format and signature check | `core/src/main/kotlin/com/constructar/core/licence/{LicenceFormat,LicenceVerifier}.kt` |
 | Clock watermark, seal, entitlement decision | `core/src/main/kotlin/com/constructar/core/licence/TamperGuard.kt` |
 | Android store (prefs, sealing, integrity) | `app/src/main/kotlin/com/constructar/app/billing/{EntitlementStore,AppIntegrity}.kt` |
+| Spreadsheet-formula guard on exported CSV | `export/src/main/kotlin/com/constructar/export/csv/MaterialCsvWriter.kt` |
 | Survives-a-crash file writes | `core/src/main/kotlin/com/constructar/core/io/SafeFiles.kt` |
 | Tests | `core/src/test/kotlin/com/constructar/core/licence/TamperGuardTest.kt`, `…/core/io/SafeFilesTest.kt` |
 
