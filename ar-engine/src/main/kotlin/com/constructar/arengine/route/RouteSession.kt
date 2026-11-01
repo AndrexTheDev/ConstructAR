@@ -190,14 +190,30 @@ class RouteSession(
             mutableState.value = current.copy(warning = RouteWarning.TOO_CLOSE)
             return false
         }
-        val surfaceJump = previous != null && isSurfaceJump(previous, hit)
-        val anchor = anchorFactory.create(hit.point, hit.normal)
+        // A tap within a few centimetres of a corner the run already has *is* that corner.
+        // Without this, walking back to a corner to continue from it - or closing a ring on its
+        // own start - added a stray 3 cm segment with a bend at each end, and the bill of
+        // materials ordered two extra elbows for it. The last node is excluded: snapping onto it
+        // would create the zero-length segment the spacing guard exists to prevent.
+        val snapTarget = current.nodes
+            .dropLast(1)
+            .lastOrNull { node -> node.position.distanceTo(hit.point) <= SNAP_TO_NODE_METERS }
+        val placed = when {
+            snapTarget == null -> hit
+            previous != null && previous.position.distanceTo(snapTarget.position) < MIN_NODE_SPACING_METERS -> {
+                mutableState.value = current.copy(warning = RouteWarning.TOO_CLOSE)
+                return false
+            }
+            else -> hit.copy(point = snapTarget.position, normal = snapTarget.normal)
+        }
+        val surfaceJump = previous != null && isSurfaceJump(previous, placed)
+        val anchor = anchorFactory.create(placed.point, placed.normal)
         if (anchor == null) {
             mutableState.value = current.copy(warning = RouteWarning.UNPINNED)
             return false
         }
         anchors[anchor.id] = anchor
-        val node = hit.toRouteNode(id = "node-${UUID.randomUUID()}", anchorId = anchor.id)
+        val node = placed.toRouteNode(id = "node-${UUID.randomUUID()}", anchorId = anchor.id)
         previewDirty = true
         // The segment under the reticle is now measured from *this* node, not the previous one.
         val liveDistance = livePoint?.position?.let { node.position.distanceTo(it) } ?: 0f
@@ -209,7 +225,7 @@ class RouteSession(
                 warning = when {
                     // The wall-thickness slip is the more dangerous of the two, so it wins.
                     surfaceJump -> RouteWarning.SURFACE_JUMP
-                    hit.confidence < MIN_TRUSTED_CONFIDENCE -> RouteWarning.LOW_CONFIDENCE
+                    placed.confidence < MIN_TRUSTED_CONFIDENCE -> RouteWarning.LOW_CONFIDENCE
                     else -> RouteWarning.NONE
                 },
             ),
@@ -391,6 +407,15 @@ class RouteSession(
     companion object {
         /** Two taps closer than this are the same tap (fat fingers + gloves). */
         const val MIN_NODE_SPACING_METERS = 0.02f
+
+        /**
+         * A tap this close to a corner the run already has is that corner (see [addNode]).
+         *
+         * Sized for the reticle: the stabiliser keeps a committed point well inside 2 cm of where
+         * the operator aimed, and 4 cm is the smallest distance at which a "continue from that
+         * corner" tap is unambiguous on a phone held at arm's length.
+         */
+        const val SNAP_TO_NODE_METERS = 0.04f
 
         /** `dot >= 0.966` is within 15° — the surfaces are parallel for routing purposes. */
         private const val PARALLEL_COSINE = 0.966f

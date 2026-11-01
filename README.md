@@ -43,6 +43,7 @@ a 3D model for BIM — **without a single byte leaving the device**.
 | **B** | Strict hit-test cascade: **plane polygon → `DepthPoint` → direct depth raycast → feature point** | `ar-engine/.../hit` | Each tier is strictly less trustworthy; a node inherits the reliability of its tier and the export flags soft ones |
 | **C** | Surface-normal aligned procedural geometry: tubes for cables/pipes, channels for ducts, Bézier/fillet smoothing at bends | `core/.../mesh`, `core/.../geo` | Normals come from the hit tier, then are blended along the run so a tube hugs a wall without twisting |
 | **D** | Polyline length `L = Σ‖Pᵢ − Pᵢ₊₁‖`, every node bound to an ARCore `Anchor`, live HUD label from the `hud_length` format (`%1$.2f m`, localised) | `ar-engine/.../route`, `core/.../geo/PolylineMetrics.kt`, `app/src/main/res/values*/strings.xml` | Measured on the **surface** points, never the offset centreline |
+| **D2** | Crosshair snapping: a tap within 4 cm of a corner the run already has **is** that corner | `ar-engine/.../route/RouteSession.kt` | Exact geometry and an exact fitting count when a run returns to a corner or closes a ring on its start; the last node is never a target, and a snap that would land inside the 2 cm spacing guard is refused |
 | **E** | Local export: PDF protocol, CSV material list, `.glb` (glTF 2.0 binary) and `.ply` | `export/` | Written through the Storage Access Framework; no media storage permission, no share-to-cloud |
 
 Plus: auto-torch with hysteresis, monocular depth (Depth Anything V2 Small) fused into the
@@ -429,7 +430,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 294 tests in the app+core+ar-engine+export suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 299 tests in the app+core+ar-engine+export suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 44 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |

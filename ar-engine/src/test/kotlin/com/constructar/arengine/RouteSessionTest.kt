@@ -352,4 +352,79 @@ class RouteSessionTest {
         session.addNode(hit(1f, 0f, 0.5f, source = HitSource.DIRECT_DEPTH_RAYCAST))
         assertEquals(RouteWarning.SURFACE_JUMP, session.state.value.warning)
     }
+
+    // ── Crosshair snapping ──────────────────────────────────────────────────────────────
+
+    @Test
+    fun `a tap near an earlier corner is placed on that corner`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 1f))
+
+        // Back at the first corner to continue along the other wall: the reticle is 3.6 cm off.
+        assertTrue(session.addNode(hit(0.03f, 0f, 0.02f)))
+        val corner = session.state.value.nodes.last()
+        assertEquals(0f, corner.position.x, 0f)
+        assertEquals(0f, corner.position.z, 0f)
+        // 1 + 1 + 1, not 1 + 1 + 1.036: no stray segment, and no elbow ordered for it.
+        assertEquals(3f, session.state.value.lengthMeters, 1e-5f)
+    }
+
+    @Test
+    fun `a tap outside the snap radius stays where the operator aimed`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 1f))
+
+        // 6.4 cm from the first node: a deliberate new point, not the corner.
+        assertTrue(session.addNode(hit(0.05f, 0f, 0.04f)))
+        val placed = session.state.value.nodes.last()
+        assertEquals(0.05f, placed.position.x, 1e-6f)
+        assertEquals(0.04f, placed.position.z, 1e-6f)
+    }
+
+    @Test
+    fun `the last node is never a snap target`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(0f, 0f, 0.03f))
+        // 3 cm past the last node: inside the snap radius, but snapping back onto the node just
+        // set would create the zero-length segment the spacing guard exists to prevent.
+        assertTrue(session.addNode(hit(0f, 0f, 0.06f)))
+        assertEquals(0.06f, session.state.value.nodes.last().position.z, 1e-6f)
+        assertEquals(0.06f, session.state.value.lengthMeters, 1e-5f)
+    }
+
+    @Test
+    fun `a snap that would land on the previous node is refused`() {
+        val factory = FakeAnchorFactory()
+        val session = RouteSession(factory)
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(0.03f, 0f, 0f))
+
+        // ARCore pulls the second anchor back to within 5 mm of the first one.
+        factory.anchors[1].currentPosition = Vec3(0.005f, 0f, 0f)
+        session.onFrame()
+
+        assertFalse(session.addNode(hit(0.02f, 0f, 0f)))
+        assertEquals(2, session.state.value.nodeCount)
+        assertEquals(RouteWarning.TOO_CLOSE, session.state.value.warning)
+    }
+
+    @Test
+    fun `closing a ring on its own start is exact`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 1f))
+        session.addNode(hit(0f, 0f, 1f))
+        assertTrue(session.addNode(hit(0.02f, 0f, 0.01f)))
+        assertEquals(0f, session.loopGap(), 0f)
+        assertEquals(4f, session.state.value.lengthMeters, 1e-5f)
+
+        assertTrue(session.closeLoop())
+        assertEquals(4f, session.state.value.lengthMeters, 1e-5f)
+    }
 }
