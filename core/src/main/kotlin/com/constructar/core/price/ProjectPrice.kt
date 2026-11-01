@@ -53,25 +53,35 @@ object Pricing {
             .replace(" ", "")
             .replace("\u00A0", "")
         if (cleaned.isEmpty()) return null
-        val lastComma = cleaned.lastIndexOf(',')
-        val lastDot = cleaned.lastIndexOf('.')
-        val decimalIndex = maxOf(lastComma, lastDot)
-        val (whole, fraction) = if (decimalIndex < 0) {
-            cleaned to ""
-        } else {
-            // More than two digits after the separator means it was a thousands grouping.
-            val tail = cleaned.substring(decimalIndex + 1)
-            if (tail.length == 3 && tail.all { it.isDigit() } && cleaned.count { it == cleaned[decimalIndex] } == 1 && lastDot == decimalIndex) {
-                cleaned.replace(".", "").replace(",", "") to ""
-            } else {
-                cleaned.substring(0, decimalIndex) to tail
-            }
-        }
-        val wholeDigits = whole.replace(".", "").replace(",", "")
-        if (wholeDigits.isEmpty() || !wholeDigits.all { it.isDigit() }) return null
-        if (fraction.isNotEmpty() && !fraction.all { it.isDigit() }) return null
-        val cents = fraction.padEnd(2, '0').take(2).ifEmpty { "0" }
+
+        // The last separator is the decimal one if it is followed by one or two digits;
+        // otherwise every separator is thousands grouping. "1.250" therefore means one
+        // thousand two hundred fifty, which is what a German keyboard-intuitive field should do.
+        val separatorIndex = maxOf(cleaned.lastIndexOf(','), cleaned.lastIndexOf('.'))
+        val tail = if (separatorIndex < 0) "" else cleaned.substring(separatorIndex + 1)
+        val tailIsFraction = tail.length in 1..2 && tail.all { it.isDigit() }
+        val wholeText = if (tailIsFraction) cleaned.substring(0, separatorIndex) else cleaned
+        val fraction = if (tailIsFraction) tail else ""
+
+        val wholeDigits = stripGrouping(wholeText) ?: return null
+        val cents = fraction.padEnd(2, '0').ifEmpty { "00" }
         return runCatching { wholeDigits.toLong() * 100L + cents.toLong() }.getOrNull()
+    }
+
+    /**
+     * Removes thousands separators, or returns `null` when the grouping is impossible.
+     *
+     * `"1.250"` is fine, `"12,3,4"` is not: a group after a separator must be exactly three
+     * digits. Rejecting is the whole point - guessing would turn a typo into a rate.
+     */
+    private fun stripGrouping(text: String): String? {
+        if (text.isEmpty()) return null
+        val groups = text.split(',', '.')
+        if (groups.any { group -> group.isEmpty() || !group.all { it.isDigit() } }) return null
+        if (groups.size == 1) return groups[0]
+        if (groups.first().length !in 1..3) return null
+        if (groups.drop(1).any { it.length != 3 }) return null
+        return groups.joinToString("")
     }
 
     /** `48,50` → `4850` for a text field; the inverse of [parseCents] with a comma. */

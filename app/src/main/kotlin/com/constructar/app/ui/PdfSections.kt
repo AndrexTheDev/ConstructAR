@@ -10,6 +10,7 @@ import com.constructar.core.model.DefectItem
 import com.constructar.core.model.DefectSeverity
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.model.WorkTime
+import com.constructar.core.price.MoneyFormatter
 import com.constructar.core.price.Pricing
 import com.constructar.export.pdf.PdfPhoto
 import com.constructar.export.pdf.PdfSection

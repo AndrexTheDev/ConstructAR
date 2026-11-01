@@ -135,7 +135,7 @@ fun ProjectScreen(
     // Blank means "use the firm rate", which is why the fields are strings and not numbers: an
     // empty field has to be distinguishable from a typed zero.
     var rateDraft by remember(project.id) {
-        mutableStateOf(project.hourlyRateCents?.let(Pricing::formatForInput) ?: "")
+        mutableStateOf(project.hourlyRateCents?.let { Pricing.formatForInput(it.toLong()) } ?: "")
     }
     var materialDraft by remember(project.id) {
         mutableStateOf(
