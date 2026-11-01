@@ -80,6 +80,7 @@ import com.constructar.app.ui.formatTimeLabel
 import com.constructar.app.ui.label
 import com.constructar.app.ui.message
 import com.constructar.app.ui.routingLabel
+import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.app.ui.tierLabel
 import com.constructar.arengine.render.ArScene
@@ -423,7 +424,7 @@ fun ArMeasureScreen(
             if (routeState.nodeCount > 0 && viewSize.width > 0) {
                 val labelWidthPx = with(density) { 190.dp.toPx() }
                 Surface(
-                    color = Color.Black.copy(alpha = 0.7f),
+                    color = HudStyle.panel,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.offset {
                         IntOffset(
@@ -446,7 +447,7 @@ fun ArMeasureScreen(
 
         // ── Top status bar ───────────────────────────────────────────────────────────────
         Surface(
-            color = Color.Black.copy(alpha = 0.55f),
+            color = HudStyle.panel,
             shape = RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -468,7 +469,7 @@ fun ArMeasureScreen(
                             Text(
                                 text = segment,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White.copy(alpha = 0.75f),
+                                color = HudStyle.text,
                             )
                         }
                         Text(
@@ -484,20 +485,20 @@ fun ArMeasureScreen(
                                 }
                             },
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.85f),
+                            color = HudStyle.text,
                         )
                     }
                     // Offline badge: the operator must be able to see at a glance that
                     // nothing on this screen talks to a network.
                     Surface(
-                        color = Color.White.copy(alpha = 0.12f),
+                        color = HudStyle.rule,
                         shape = RoundedCornerShape(50),
                         modifier = Modifier.padding(end = 4.dp),
                     ) {
                         Text(
                             text = stringResource(R.string.ar_offline_badge),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.75f),
+                            color = HudStyle.text,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         )
                     }
@@ -531,7 +532,7 @@ fun ArMeasureScreen(
                         color = when {
                             warningText != null -> SiteColors.warning
                             tracking.quality == TrackingQuality.NOT_TRACKING -> SiteColors.danger
-                            else -> Color.White.copy(alpha = 0.75f)
+                            else -> HudStyle.text
                         },
                     )
                 }
@@ -558,7 +559,7 @@ fun ArMeasureScreen(
                             color = if (reading.settled) {
                                 SiteColors.accent
                             } else {
-                                Color.White.copy(alpha = 0.7f)
+                                HudStyle.text
                             },
                         )
                     }
@@ -574,7 +575,7 @@ fun ArMeasureScreen(
                             stringResource(R.string.ar_no_surface)
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (hit != null) Color.White.copy(alpha = 0.6f) else SiteColors.danger,
+                        color = if (hit != null) HudStyle.hint else SiteColors.danger,
                     )
                 }
             }
@@ -685,7 +686,7 @@ fun ArMeasureScreen(
                     Text(
                         text = stringResource(R.string.ar_leave_body, pointsText + " · " + lengthText),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.8f),
+                        color = HudStyle.dialogBody,
                     )
                     GloveButton(
                         label = stringResource(R.string.ar_leave_save),
@@ -714,7 +715,7 @@ fun ArMeasureScreen(
                         onClick = { confirmLeave = false },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(stringResource(R.string.home_cancel), color = Color.White.copy(alpha = 0.75f))
+                        Text(stringResource(R.string.home_cancel), color = HudStyle.dialogAction)
                     }
                 }
             }
@@ -749,7 +750,7 @@ fun ArMeasureScreen(
                             formatTimeLabel(pending.savedAtEpochMs),
                         ),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.8f),
+                        color = HudStyle.dialogBody,
                     )
                     GloveButton(
                         label = stringResource(R.string.draft_save),
@@ -815,8 +816,13 @@ private fun SpecChip(
         shape = RoundedCornerShape(14.dp),
         modifier = modifier.padding(vertical = 2.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) Color(spec.colorArgb).copy(alpha = 0.9f) else Color.Black.copy(alpha = 0.5f),
-            contentColor = Color.White,
+            // The selected chip used to be the spec colour at 90 % under *white* text - white on
+            // gold measures 1.4:1, so the one chip the worker just tapped was the one he could not
+            // read. The spec colours are all light (orange, blue, teal), which is exactly why the
+            // rest of the theme pairs them with Ink; do the same here and keep the fill opaque,
+            // because a label that depends on the camera behind it is not a label.
+            containerColor = if (selected) Color(spec.colorArgb) else HudStyle.panel,
+            contentColor = if (selected) Jamaica.Ink else HudStyle.text,
         ),
     ) {
         Text(

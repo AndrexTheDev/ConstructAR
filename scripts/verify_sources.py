@@ -72,6 +72,14 @@ HARDCODED_UI_PATTERNS = [
 # a clock that ticks (`ui/ClockTick.kt`).
 CACHED_CLOCK = re.compile(r"remember\s*\([^)]*\)\s*\{[^}]*totalWorkMillis\s*\(")
 
+# The AR overlay is the only surface that draws text over a *camera image*, so a transparency
+# written as a number there is text whose contrast nobody measures: it had drifted to 3.47:1 and
+# 2.81:1 against a white wall, and to 1.4:1 on the selected conduit chip (finding 69). Every
+# transparency lives in `HudStyle`, where `HudContrastTest` composites it over a white and a black
+# wall. A numeric alpha in the screen itself is a finding.
+AR_OVERLAY_SCREEN = "app/src/main/kotlin/com/constructar/app/ui/ar/ArMeasureScreen.kt"
+AR_LITERAL_ALPHA = re.compile(r"alpha\s*=\s*[0-9]*\.?[0-9]+f")
+
 R_REFERENCE = re.compile(r"\bR\s*\.\s*(string|plurals|array|drawable|xml|style)\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)")
 
 FORBIDDEN_PERMISSIONS = ["android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"]
@@ -240,6 +248,19 @@ def check_cached_clock() -> None:
                       f"runs - total it from rememberNowMs(...) instead")
 
 
+def check_ar_alpha_literals() -> None:
+    """No transparency may be written as a number inside the AR screen (finding 69)."""
+    path = ROOT / AR_OVERLAY_SCREEN
+    if not path.exists():
+        add(path, "the AR overlay screen is missing")
+        return
+    text = path.read_text(encoding="utf-8")
+    for match in AR_LITERAL_ALPHA.finditer(text):
+        line = text[: match.start()].count("\n") + 1
+        add(path, f"line {line}: transparency over the camera must come from `HudStyle`, where "
+                  f"`HudContrastTest` can measure it - not from a number here")
+
+
 def check_manifest_hardening() -> None:
     """Rules that keep a release build from handing its own data to anyone with a cable.
 
@@ -384,6 +405,7 @@ def main() -> int:
     check_references(strings, plurals)
     check_offline_guarantees()
     check_cached_clock()
+    check_ar_alpha_literals()
     check_manifest_hardening()
     check_kotlin_structure()
     check_resource_xml()
