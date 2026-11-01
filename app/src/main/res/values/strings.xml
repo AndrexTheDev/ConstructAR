@@ -63,6 +63,8 @@
     <string name="ar_session_retry">Try again</string>
     <string name="ar_camera_permission">Camera access is required to measure. It is used only on this device.</string>
     <string name="ar_grant_permission">Grant camera access</string>
+    <string name="ar_camera_blocked">Camera access is switched off for this app. Open the app settings and allow the camera.</string>
+    <string name="ar_open_settings">Open settings</string>
     <string name="ar_unavailable_unsupported">This device does not support ARCore. Switch to a supported phone or tablet.</string>
     <string name="ar_unavailable_needs_install">ARCore needs an update. Install it from the Play Store, then reopen ConstructAR.</string>
     <string name="ar_unavailable_declined">The ARCore install was declined. It is required to measure with the camera.</string>

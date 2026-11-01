@@ -10,7 +10,10 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -63,7 +66,11 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.constructar.app.R
 import com.constructar.app.ui.ActionTone
@@ -113,16 +120,47 @@ fun ArMeasureScreen(
     val controller = remember { ArMeasureController(context) }
     val activity = remember(context) { context.findActivity() }
 
-    var hasCameraPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
-        )
-    }
+    fun cameraGranted(): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+
+    var hasCameraPermission by remember { mutableStateOf(cameraGranted()) }
+    // Whether this screen has already asked. Before the first ask the system reports
+    // "no rationale" for a first request too, so the flag cannot be inferred.
+    var permissionAsked by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        permissionAsked = true
         hasCameraPermission = it
     }
     LaunchedEffect(Unit) {
-        if (!hasCameraPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
+        if (!hasCameraPermission) {
+            permissionAsked = true
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+    // Coming back from the settings app has to be noticed: the launcher callback only fires for
+    // a dialog, and there is none once the system has stopped showing it.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) hasCameraPermission = cameraGranted()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val permissionState = cameraPermissionState(
+        granted = hasCameraPermission,
+        asked = permissionAsked,
+        rationaleKnown = activity != null,
+        showRationale = activity != null &&
+            ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.CAMERA),
+    )
+    val openAppSettings: () -> Unit = {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", context.packageName, null),
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // A device without that activity must not crash on the one screen that is already broken.
+        runCatching { context.startActivity(intent) }
     }
 
     // ARCore readiness (installed / supported / up to date) — checked before the surface is
@@ -232,11 +270,24 @@ fun ArMeasureScreen(
             .onSizeChanged { viewSize = it },
     ) {
         when (arGate(hasCameraPermission, readinessText != null, sessionError != null)) {
-            ArGate.PERMISSION -> GateMessage(
-                text = stringResource(R.string.ar_camera_permission),
-                action = stringResource(R.string.ar_grant_permission),
-                onAction = { permissionLauncher.launch(Manifest.permission.CAMERA) },
-            )
+            // The system stops showing its dialog after two denials: a button that re-launches
+            // the request then does nothing at all. Say what actually has to happen instead.
+            ArGate.PERMISSION -> if (permissionState == CameraPermissionState.BLOCKED) {
+                GateMessage(
+                    text = stringResource(R.string.ar_camera_blocked),
+                    action = stringResource(R.string.ar_open_settings),
+                    onAction = openAppSettings,
+                )
+            } else {
+                GateMessage(
+                    text = stringResource(R.string.ar_camera_permission),
+                    action = stringResource(R.string.ar_grant_permission),
+                    onAction = {
+                        permissionAsked = true
+                        permissionLauncher.launch(Manifest.permission.CAMERA)
+                    },
+                )
+            }
 
             ArGate.READINESS -> GateMessage(
                 text = readinessText.orEmpty(),

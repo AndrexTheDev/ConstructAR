@@ -63,6 +63,8 @@
     <string name="ar_session_retry">Erneut versuchen</string>
     <string name="ar_camera_permission">Zum Messen ist Kamerazugriff nötig. Die Kamera wird nur auf diesem Gerät genutzt.</string>
     <string name="ar_grant_permission">Kamerazugriff erlauben</string>
+    <string name="ar_camera_blocked">Der Kamerazugriff ist für diese App ausgeschaltet. Öffne die App-Einstellungen und erlaube die Kamera.</string>
+    <string name="ar_open_settings">Einstellungen öffnen</string>
     <string name="ar_unavailable_unsupported">Dieses Gerät unterstützt ARCore nicht. Nutze ein unterstütztes Telefon oder Tablet.</string>
     <string name="ar_unavailable_needs_install">ARCore muss aktualisiert werden. Installiere sie im Play Store und öffne ConstructAR neu.</string>
     <string name="ar_unavailable_declined">Die ARCore-Installation wurde abgelehnt. Ohne sie ist Messen mit der Kamera nicht möglich.</string>

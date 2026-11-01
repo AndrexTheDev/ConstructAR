@@ -46,7 +46,8 @@ Everything here is a gate before an APK reaches a site, in the order it should b
 | Plane-only (no Depth API) | cascade falls back to plane + feature point, messaging is honest |
 | Tablet | glove controls, layout, split-screen |
 
-- [ ] Camera permission denied → rationale → settings round trip works
+- [ ] Camera permission denied twice → the gate offers *open settings* instead of a dead
+      *grant* button, and granting there is noticed on return (no app restart needed)
 - [ ] ARCore not installed → install flow → back to the app
 - [ ] ARCore session failure (occupy the camera from another app) → full-screen message, no
       live controls behind it; *try again* recovers, *save* keeps a run in progress
