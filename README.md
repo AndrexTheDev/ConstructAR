@@ -384,11 +384,22 @@ Known limitations, deliberately documented rather than hidden:
   the test reports. That workflow — not a local machine — is where the "it compiles" claim is
   proven.
 * **Static gates**: `scripts/verify_sources.py` checks copyright headers, the reflection ban,
-  hardcoded UI text, string-resource references, locale parity and XML well-formedness without
-  needing a JDK.
+  hardcoded UI text in shipped code, string-resource references, locale parity, XML
+  well-formedness and the manifest hardening — without needing a JDK.
+* **Site gate**: `tools/seo_audit.py` reads the *generated* landing pages and refuses a
+  regression: canonical and the six `hreflang` pairs, title/description lengths, Open Graph and
+  Twitter cards with a real image size, JSON-LD whose offers match the four real prices, every
+  internal link and fragment resolving, sitemap `<lastmod>`, robots.txt, the manifest icons
+  (declared size checked against the file), and a 404 that is `noindex` with absolute URLs only.
+* **The temporary screenshot matrix** (`.github/workflows/screenshots.yml`) renders every screen
+  in all six languages on the JVM and every landing page in real Chromium at three viewports. It
+  lives in build output, is not part of the release gate, and is meant to be deleted after the
+  review — [docs/TESTING.md](docs/TESTING.md) says exactly what it touches.
 
 The pre-release gate (device matrix, measurement verification against a laser, licensing,
-performance) is [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md).
+performance) is [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md). How each layer is run,
+what it can and cannot prove, and the defect log of the systematic beta test are in
+[docs/TESTING.md](docs/TESTING.md).
 
 ---
 
