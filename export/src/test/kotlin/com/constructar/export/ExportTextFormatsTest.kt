@@ -125,28 +125,32 @@ class ExportTextFormatsTest {
     }
 
     @Test
-    fun `a run label cannot inject a ply header line`() {
+    fun `a ply run label is flattened into the header, not spliced into it`() {
         val nasty = "tri\nelement vertex 999999\nend_header"
         val ply = PlyWriter.writeAscii(listOf(PlyWriter.PlyPart(nasty, triangleMesh())))
         val lines = ply.lines()
-        assertEquals(1, lines.count { it == "element vertex 3" })
-        assertEquals(1, lines.count { it == "element face 1" })
-        assertEquals(1, lines.count { it == "end_header" })
-        assertEquals(1, lines.count { it.startsWith("comment mesh ") })
-        assertTrue(lines.none { it == "element vertex 999999" })
+        val diagnostic = lines.joinToString(" | ")
+        assertEquals(diagnostic, 1, lines.count { it == "element vertex 3" })
+        assertEquals(diagnostic, 1, lines.count { it == "element face 1" })
+        assertEquals(diagnostic, 1, lines.count { it == "end_header" })
+        assertEquals(diagnostic, 1, lines.count { it.startsWith("comment mesh ") })
+        assertTrue(diagnostic, lines.none { it == "element vertex 999999" })
+    }
 
-        // The binary writer has one comment line for the whole file, so the injection point is
-        // the comment argument itself.
-        val binary = PlyWriter.writeBinaryLittleEndian(
+    @Test
+    fun `a ply comment is flattened into one header line`() {
+        val bytes = PlyWriter.writeBinaryLittleEndian(
             parts = listOf(PlyWriter.PlyPart("tri", triangleMesh())),
             comment = "scan\nelement vertex 999999",
         )
-        val headerLength = indexOf(binary, "end_header\n".toByteArray()) + 1
-        val header = String(binary, 0, headerLength, Charsets.US_ASCII).lines()
-        assertEquals(1, header.count { it.startsWith("comment ") })
-        assertTrue(header.none { it == "element vertex 999999" })
-        assertEquals(1, header.count { it == "element vertex 3" })
-        assertEquals(1, header.count { it == "end_header" })
+        val headerLength = indexOf(bytes, "end_header\n".toByteArray()) + 1
+        assertTrue("end_header not found in ${String(bytes, Charsets.US_ASCII).take(200)}", headerLength > 0)
+        val header = String(bytes, 0, headerLength, Charsets.US_ASCII).lines()
+        val diagnostic = header.joinToString(" | ")
+        assertEquals(diagnostic, 1, header.count { it.startsWith("comment ") })
+        assertTrue(diagnostic, header.none { it == "element vertex 999999" })
+        assertEquals(diagnostic, 1, header.count { it == "element vertex 3" })
+        assertEquals(diagnostic, 1, header.count { it == "end_header" })
     }
 
     private fun indexOf(haystack: ByteArray, needle: ByteArray): Int {
