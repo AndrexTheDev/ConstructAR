@@ -254,13 +254,24 @@ class RouteSession(
         return true
     }
 
+    /**
+     * Removes the last node - the one-tap correction.
+     *
+     * A closed ring does **not** survive an undo. The closure is a decision about one particular
+     * chain of nodes - in practice the node just removed is the one that came back to the start -
+     * so carrying it over re-draws the closing segment between two corners the operator never
+     * measured, and it blanks the [RouteWarning.LOOP_TOO_WIDE] that [closeLoop] had raised if the
+     * old ends did not meet. Closing again is one tap, and that tap re-runs the gap check.
+     */
     @Synchronized
     fun undo(): RouteNodeRecord? {
         val current = mutableState.value
         val removed = current.nodes.lastOrNull() ?: return null
         removed.anchorId?.let { anchors.remove(it)?.detach() }
         previewDirty = true
-        mutableState.value = recompute(current.copy(nodes = current.nodes.dropLast(1), warning = RouteWarning.NONE))
+        mutableState.value = recompute(
+            current.copy(nodes = current.nodes.dropLast(1), closedLoop = false, warning = RouteWarning.NONE),
+        )
         return removed
     }
 
@@ -296,7 +307,7 @@ class RouteSession(
     @Synchronized
     fun closeLoop(): Boolean {
         val current = mutableState.value
-        if (current.nodes.size < 3) return false
+        if (current.nodes.size < MIN_LOOP_NODES) return false
         previewDirty = true
         val closing = !current.closedLoop
         val gap = if (closing) loopGap(current.nodes) else 0f
@@ -460,6 +471,9 @@ class RouteSession(
 
         /** A ring whose ends are further apart than this was closed by an unmeasured segment. */
         const val LOOP_TOLERANCE_METERS = 0.15f
+
+        /** Fewest nodes that can enclose anything - the same floor [closeLoop] enforces. */
+        const val MIN_LOOP_NODES = 3
 
         /**
          * A height difference between two consecutive taps that deserves a question.

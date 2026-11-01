@@ -361,6 +361,53 @@ class RouteSessionTest {
         assertFalse(session.state.value.closedLoop)
     }
 
+    // ── Undo against a closed ring ───────────────────────────────────────────────────────
+
+    @Test
+    fun `undoing a corner opens the ring instead of inventing a closing segment`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 1f))
+        session.addNode(hit(0.05f, 0f, 0.05f))
+        assertTrue(session.closeLoop())
+        val closedLength = session.state.value.lengthMeters
+        // 1 m + 1 m + the run back to the corner, plus the short closing segment: ~3.48 m.
+        assertTrue("a closed ring is measured back to its start: $closedLength", closedLength > 3.4f)
+
+        session.undo()
+        assertFalse("the ring cannot outlive the corner that closed it", session.state.value.closedLoop)
+        // One metre along the wall and one metre up: exactly what was measured, nothing more.
+        assertEquals(2f, session.state.value.lengthMeters, 1e-3f)
+    }
+
+    @Test
+    fun `undoing below three corners leaves nothing that claims to be a ring`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 0f))
+        session.addNode(hit(0.03f, 0f, 0.02f))
+        assertTrue(session.closeLoop())
+
+        session.undo()
+        assertFalse(session.state.value.closedLoop)
+        assertEquals(1f, session.state.value.lengthMeters, 1e-3f)
+    }
+
+    @Test
+    fun `undoing a flagged ring takes the complaint with it`() {
+        val session = RouteSession(FakeAnchorFactory())
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 1f))
+        session.closeLoop()
+        assertEquals(RouteWarning.LOOP_TOO_WIDE, session.state.value.warning)
+
+        session.undo()
+        assertFalse(session.state.value.warning == RouteWarning.LOOP_TOO_WIDE)
+        assertFalse(session.state.value.closedLoop)
+    }
+
     // ── Trust of a single node ───────────────────────────────────────────────────────────
 
     @Test
