@@ -60,7 +60,11 @@ import java.util.Locale
 @Composable
 fun BackupCard(
     repository: ProjectRepository,
-    onRestore: (List<String>, List<Pair<String, Uri>>) -> Unit,
+    onRestore: (
+        texts: List<String>,
+        photos: List<Pair<String, Uri>>,
+        done: (imported: Int, heldBack: Int) -> Unit,
+    ) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -130,13 +134,19 @@ fun BackupCard(
                 }
                 projectTexts to photoAttachments
             }
-            onRestore(texts, photos)
-            outcome = if (texts.isEmpty() && photos.isEmpty()) {
-                BackupOutcome.Failed(context.getString(R.string.backup_failed))
-            } else {
-                BackupOutcome.Restored(texts.size)
+            if (texts.isEmpty() && photos.isEmpty()) {
+                outcome = BackupOutcome.Failed(context.getString(R.string.backup_failed))
+                busy = false
+                return@launch
             }
-            busy = false
+            onRestore(texts, photos) { imported, heldBack ->
+                outcome = if (imported == 0 && heldBack == 0) {
+                    BackupOutcome.Failed(context.getString(R.string.backup_failed))
+                } else {
+                    BackupOutcome.Restored(imported, heldBack)
+                }
+                busy = false
+            }
         }
     }
 
@@ -178,6 +188,15 @@ fun BackupCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (current is BackupOutcome.Failed) SiteColors.danger else SiteColors.accent,
                 )
+                // Said plainly, because the operator has to be able to trust a restore: the
+                // files are still in his zip, they were just not imported on this plan.
+                if (current is BackupOutcome.Restored && current.heldBack > 0) {
+                    Text(
+                        text = stringResource(R.string.backup_held_back, current.heldBack),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SiteColors.warning,
+                    )
+                }
             }
         }
     }
@@ -212,6 +231,6 @@ private const val ANY_MIME_TYPE: String = "*" + "/" + "*"
 /** Kept as data so the sentences are rendered by Compose (and therefore localised). */
 private sealed interface BackupOutcome {
     data class Saved(val count: Int) : BackupOutcome
-    data class Restored(val count: Int) : BackupOutcome
+    data class Restored(val count: Int, val heldBack: Int = 0) : BackupOutcome
     data class Failed(val detail: String) : BackupOutcome
 }

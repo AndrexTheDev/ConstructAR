@@ -340,4 +340,13 @@
     <string name="pdf_section_photos">Fotodokumentation</string>
     <string name="ar_hold_steady">Ruhig halten</string>
     <string name="ar_point_locked">Punkt gesetzt</string>
+    <string name="hud_segment">Abschnitt %1$.2f m</string>
+    <string name="route_warning_surface_jump">Der Punkt liegt hinter der letzten Fläche – prüfe die Wand, bevor du weitermachst</string>
+    <string name="paywall_err_untrusted">Diese Installation kann nicht bestätigt werden. Installiere die offizielle Version aus der Originalquelle und versuche es erneut.</string>
+    <string name="licence_clock_rollback">Die Uhr des Geräts steht vor dem zuletzt gesehenen Datum. Stelle Datum und Uhrzeit richtig ein – Abo und Testphase werden am zuletzt bekannten Datum geprüft.</string>
+    <string name="licence_integrity_failed">Diese Installation konnte nicht bestätigt werden, deshalb sind die Pro-Funktionen aus. Deine Projekte bleiben lesbar und exportierbar.</string>
+    <string name="licence_demo_key">Hinweis für den Entwickler: In diesem Build steckt noch der Demo-Prüfschlüssel. Vor dem ersten Verkauf ersetzen.</string>
+    <string name="route_warning_loop_gap">Der Ring schließt nicht – setze den letzten Punkt auf den ersten</string>
+    <string name="backup_held_back">%1$d Raum/Räume zurückgehalten – sie bleiben in deiner Sicherung; mit Pro werden alle importiert</string>
+    <string name="route_warning_low_confidence">Dieser Punkt stammt aus Tiefendaten – tippe für einen sichereren Wert erneut auf die erkannte Wand</string>
 </resources>

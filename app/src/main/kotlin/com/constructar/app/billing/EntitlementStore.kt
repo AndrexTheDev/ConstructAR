@@ -7,10 +7,12 @@
 package com.constructar.app.billing
 
 import android.content.Context
+import com.constructar.core.licence.ClockGuard
+import com.constructar.core.licence.EntitlementRules
 import com.constructar.core.licence.Entitlements
 import com.constructar.core.licence.LicenceCheck
+import com.constructar.core.licence.LicenceSeal
 import com.constructar.core.licence.LicenceVerifier
-import com.constructar.core.licence.Plan
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,11 +34,26 @@ import java.util.UUID
  * The installation id is a random UUID generated on first start and never leaves the device.
  * Licences bind to a *hash prefix* of it, so the developer can tie a purchase to a phone without
  * either side ever handling a hardware identifier.
+ *
+ * Three things make the local state hard to walk past:
+ *
+ *  * **The clock cannot go backwards.** A high-water mark of the latest calendar day is kept and
+ *    sealed; expiry is judged against it (`ClockGuard`), so setting the phone a year back does
+ *    not resurrect an expired subscription or restart the trial.
+ *  * **The trial and the watermark are sealed** with a key derived from the installation id
+ *    (`LicenceSeal`), so editing `SharedPreferences` produces a value that no longer checks out
+ *    and the trial counts as used.
+ *  * **The build is checked against itself** (`AppIntegrity`): a re-signed APK, or a release
+ *    build with a debugger attached, gets no paid features — while the operator's own projects
+ *    stay readable and exportable, because a licensing problem must never hold his measurements
+ *    hostage.
  */
 class EntitlementStore(
     context: Context,
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) {
+    /** Kept only for [AppIntegrity], which needs the package manager. */
+    private val appContext: Context = context.applicationContext
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
     private val verifier = LicenceVerifier(LicencePublicKey.PUBLIC_KEY_BASE64)
 
@@ -45,6 +62,25 @@ class EntitlementStore(
 
     private val mutableLicenceText = MutableStateFlow("")
     val licenceText: StateFlow<String> = mutableLicenceText.asStateFlow()
+
+    /** Why the paid plan looks the way it does - for the licence screen, not for gating. */
+    data class Diagnostics(
+        val clockRolledBack: Boolean = false,
+        val integrityFailed: Boolean = false,
+        val localStateTampered: Boolean = false,
+        val trialAvailable: Boolean = true,
+    )
+
+    private val mutableDiagnostics = MutableStateFlow(Diagnostics())
+    val diagnostics: StateFlow<Diagnostics> = mutableDiagnostics.asStateFlow()
+
+    /**
+     * True once a stored value has failed its seal - read by [refresh], cleared by it.
+     *
+     * Declared *before* `init` on purpose: property initialisers run in declaration order, so a
+     * flag declared below would be reset to `false` after the first refresh had set it.
+     */
+    private var localStateTampered = false
 
     /**
      * The code the operator sends along with the transaction id when paying.
@@ -60,16 +96,48 @@ class EntitlementStore(
         refresh()
     }
 
-    /** Re-derives the entitlements from the stored licence, the trial and today's date. */
+    /** Re-derives the entitlements from the stored licence, the trial, the watermark and today. */
     fun refresh() {
-        val today = LicenceVerifier.epochDay(clock())
+        val installation = installationId()
+        val now = LicenceVerifier.epochDay(clock())
+        val watermark = sealedLong(KEY_WATERMARK, KEY_WATERMARK_SEAL, installation, fallback = 0L)
+        val trialStart = sealedLong(KEY_TRIAL_START, KEY_TRIAL_SEAL, installation, fallback = EntitlementRules.NO_TRIAL)
+
+        // The day every expiry decision is made against: the device clock, unless it went back.
+        val verdict = ClockGuard.evaluate(now, watermark)
+
         val stored = preferences.getString(KEY_LICENCE, null).orEmpty().trim()
         mutableLicenceText.value = stored
-        val check = if (stored.isEmpty()) null else verifier.verify(stored, deviceTag, today)
-        mutableEntitlements.value = when (check) {
-            is LicenceCheck.Valid -> check.entitlements
-            else -> trialEntitlements(today)
-        }
+        val check = if (stored.isEmpty()) null else verifier.verify(stored, deviceTag, verdict.effectiveEpochDay)
+        val licence = (check as? LicenceCheck.Valid)?.entitlements
+
+        val integrity = AppIntegrity.check(
+            context = appContext,
+            knownSignature = preferences.getString(KEY_SIGNATURE, null),
+            remember = { signature -> preferences.edit().putString(KEY_SIGNATURE, signature).apply() },
+        )
+
+        val decision = EntitlementRules.decide(
+            EntitlementRules.Input(
+                licence = licence,
+                trialStartEpochDay = trialStart,
+                watermarkEpochDay = watermark,
+                nowEpochDay = now,
+                integrityOk = !integrity.tampered,
+            ),
+        )
+        // The watermark only ever rises; writing it back on every refresh is what makes it a
+        // watermark rather than a timestamp.
+        persistSealed(KEY_WATERMARK, KEY_WATERMARK_SEAL, installation, decision.watermarkEpochDay.toString())
+
+        mutableEntitlements.value = decision.entitlements
+        mutableDiagnostics.value = Diagnostics(
+            clockRolledBack = decision.clockRolledBack,
+            integrityFailed = decision.integrityFailed,
+            localStateTampered = localStateTampered,
+            trialAvailable = decision.trialAvailable,
+        )
+        localStateTampered = false
     }
 
     /**
@@ -79,7 +147,19 @@ class EntitlementStore(
      * another phone, an expired subscription) instead of a generic "invalid".
      */
     fun activate(raw: String): LicenceCheck {
-        val check = verifier.verify(raw, deviceTag, LicenceVerifier.epochDay(clock()))
+        // Activating on a build that cannot vouch for itself would only move the problem: the
+        // key would verify today and be discarded at the next start anyway.
+        val integrity = AppIntegrity.check(
+            context = appContext,
+            knownSignature = preferences.getString(KEY_SIGNATURE, null),
+            remember = { signature -> preferences.edit().putString(KEY_SIGNATURE, signature).apply() },
+        )
+        if (integrity.tampered) return LicenceCheck.UntrustedBuild
+
+        val installation = installationId()
+        val watermark = sealedLong(KEY_WATERMARK, KEY_WATERMARK_SEAL, installation, fallback = 0L)
+        val verdict = ClockGuard.evaluate(LicenceVerifier.epochDay(clock()), watermark)
+        val check = verifier.verify(raw, deviceTag, verdict.effectiveEpochDay)
         if (check is LicenceCheck.Valid) {
             preferences.edit().putString(KEY_LICENCE, raw.trim()).apply()
             refresh()
@@ -87,10 +167,17 @@ class EntitlementStore(
         return check
     }
 
-    /** Starts the one-shot trial. Returns false if it was already used. */
+    /**
+     * Starts the one-shot trial. Returns false if it was already used, if the clock has been
+     * moved back, or if the build cannot be trusted.
+     */
     fun startTrial(): Boolean {
-        if (preferences.contains(KEY_TRIAL_START)) return false
-        preferences.edit().putLong(KEY_TRIAL_START, LicenceVerifier.epochDay(clock())).apply()
+        refresh()
+        if (!mutableDiagnostics.value.trialAvailable) return false
+        val installation = installationId()
+        val verdict = ClockGuard.evaluate(LicenceVerifier.epochDay(clock()), sealedLong(KEY_WATERMARK, KEY_WATERMARK_SEAL, installation, 0L))
+        persistSealed(KEY_WATERMARK, KEY_WATERMARK_SEAL, installation, verdict.watermarkEpochDay.toString())
+        persistSealed(KEY_TRIAL_START, KEY_TRIAL_SEAL, installation, verdict.effectiveEpochDay.toString())
         refresh()
         return true
     }
@@ -99,23 +186,17 @@ class EntitlementStore(
 
     /** Days of trial left, `0` when there is no trial. Used by the paywall copy. */
     fun trialDaysLeft(): Long {
-        val start = preferences.getLong(KEY_TRIAL_START, -1L)
+        val installation = installationId()
+        val start = sealedLong(KEY_TRIAL_START, KEY_TRIAL_SEAL, installation, EntitlementRules.NO_TRIAL)
         if (start < 0L) return 0L
-        val today = LicenceVerifier.epochDay(clock())
-        return (start + Entitlements.TRIAL_DAYS - today).coerceAtLeast(0L)
+        val watermark = sealedLong(KEY_WATERMARK, KEY_WATERMARK_SEAL, installation, 0L)
+        val day = ClockGuard.evaluate(LicenceVerifier.epochDay(clock()), watermark).effectiveEpochDay
+        return (start + Entitlements.TRIAL_DAYS - day).coerceAtLeast(0L)
     }
 
     fun clearLicence() {
         preferences.edit().remove(KEY_LICENCE).apply()
         refresh()
-    }
-
-    private fun trialEntitlements(today: Long): Entitlements {
-        val start = preferences.getLong(KEY_TRIAL_START, -1L)
-        if (start < 0L) return Entitlements.FREE
-        val lastDay = start + Entitlements.TRIAL_DAYS
-        if (today > lastDay) return Entitlements.FREE
-        return Entitlements.of(Plan.TRIAL, expiresEpochDay = lastDay, todayEpochDay = today)
     }
 
     private fun installationId(): String {
@@ -126,10 +207,39 @@ class EntitlementStore(
         return generated
     }
 
+    // ── Sealed local state ───────────────────────────────────────────────────────────────
+
+    /**
+     * Reads a sealed number, or [fallback] when it is absent.
+     *
+     * A value whose seal does not match is *not* trusted: for the trial that means "already
+     * used" and for the watermark it means "no protection", which can only ever make the app
+     * stricter, never more generous.
+     */
+    private fun sealedLong(key: String, sealKey: String, installation: String, fallback: Long): Long {
+        val raw = preferences.getString(key, null) ?: return fallback
+        if (!LicenceSeal.matches(installation, raw, preferences.getString(sealKey, null))) {
+            localStateTampered = true
+            return if (key == KEY_TRIAL_START) 0L else fallback
+        }
+        return raw.toLongOrNull() ?: fallback
+    }
+
+    private fun persistSealed(key: String, sealKey: String, installation: String, value: String) {
+        preferences.edit()
+            .putString(key, value)
+            .putString(sealKey, LicenceSeal.seal(installation, value))
+            .apply()
+    }
+
     private companion object {
         const val PREFERENCES_NAME = "constructar.licence"
         const val KEY_LICENCE = "licence"
         const val KEY_TRIAL_START = "trial_start_epoch_day"
+        const val KEY_TRIAL_SEAL = "trial_start_seal"
+        const val KEY_WATERMARK = "clock_watermark_epoch_day"
+        const val KEY_WATERMARK_SEAL = "clock_watermark_seal"
+        const val KEY_SIGNATURE = "signing_certificate_sha256"
         const val KEY_INSTALL_ID = "install_id"
     }
 }

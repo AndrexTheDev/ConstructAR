@@ -77,6 +77,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val trialDaysLeft: Long = 0L,
         /** True while the bundled licence key is the demo key — surfaced in a debug build only. */
         val demoSigningKey: Boolean = false,
+        /** The device clock is behind the last day this install has seen. */
+        val clockRolledBack: Boolean = false,
+        /** The installation could not be confirmed (re-signed APK or an attached debugger). */
+        val integrityFailed: Boolean = false,
         val onboardingDone: Boolean = false,
         /** Firm-wide waste factor, `null` = each conduit family's default. */
         val wasteOverride: Float? = null,
@@ -128,6 +132,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             trialUsed = entitlements.trialUsed(),
             trialDaysLeft = entitlements.trialDaysLeft(),
             demoSigningKey = LicencePublicKey.isDemoKey,
+            clockRolledBack = entitlements.diagnostics.value.clockRolledBack,
+            integrityFailed = entitlements.diagnostics.value.integrityFailed,
         )
     }
 
@@ -461,12 +467,24 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun importBackup(
         texts: List<String>,
         photos: List<Pair<String, Uri>> = emptyList(),
-        onDone: (Int) -> Unit = {},
+        onDone: (imported: Int, heldBack: Int) -> Unit = { _, _ -> },
     ) {
         viewModelScope.launch {
+            // Restoring is a way to *create* projects, so it obeys the same plan as creating
+            // them. Without this, a free installation could be filled by importing somebody
+            // else's backup - and the free plan would mean nothing. The files that are held
+            // back are not deleted or altered; they stay in the operator's zip and can be
+            // imported after upgrading.
+            val room = (mutableState.value.entitlements.maxProjects - mutableState.value.projects.size)
+                .coerceAtLeast(0)
             var imported = 0
-            texts.forEach { text ->
-                if (repository.importProject(text) != null) imported++
+            var heldBack = 0
+            texts.forEachIndexed { index, text ->
+                if (index >= room) {
+                    heldBack++
+                    return@forEachIndexed
+                }
+                if (repository.importProject(text) != null) imported++ else heldBack++
             }
             photos.forEach { (token, uri) ->
                 // `<project id>` for the room's own photo, `<project id>__diary_<entry>` for an
@@ -486,7 +504,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
             }
-            onDone(imported)
+            onDone(imported, heldBack)
         }
     }
 

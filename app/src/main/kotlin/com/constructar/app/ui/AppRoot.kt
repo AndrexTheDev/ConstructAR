@@ -264,10 +264,13 @@ fun AppRoot(viewModel: ProjectViewModel) {
                         entitlements = state.entitlements,
                         trialDaysLeft = state.trialDaysLeft,
                         deviceTag = state.deviceTag,
+                        clockRolledBack = state.clockRolledBack,
+                        integrityFailed = state.integrityFailed,
+                        demoSigningKey = state.demoSigningKey,
                         repository = viewModel.repository(),
                         onBack = { navController.popBackStack() },
                         onUpgrade = { navController.navigate(Routes.PAYWALL) },
-                        onRestore = { texts, photos -> viewModel.importBackup(texts, photos) },
+                        onRestore = { texts, photos, done -> viewModel.importBackup(texts, photos, done) },
                     )
                 }
             }

@@ -11,6 +11,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
+import com.constructar.core.io.SafeFiles
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.model.WorkTime
 import com.constructar.core.model.ScanSummary
@@ -40,7 +41,12 @@ class ProjectRepository(private val context: Context) {
     }
 
     private val directory: File by lazy {
-        File(context.filesDir, "projects").apply { mkdirs() }
+        File(context.filesDir, "projects").apply {
+            mkdirs()
+            // A `.tmp` file here means a previous write was killed mid-flight; the target it
+            // would have replaced is still intact, so the leftover is simply removed.
+            SafeFiles.clearStaleTemporaries(this)
+        }
     }
 
     data class ProjectSummary(
@@ -99,26 +105,21 @@ class ProjectRepository(private val context: Context) {
         project
     }
 
+    /**
+     * Saves one project.
+     *
+     * The write itself is [SafeFiles.writeAtomically]: temporary file, `fsync`, then an atomic
+     * rename. The previous version deleted the target before renaming, which left a window in
+     * which a kill - or a battery that gave up - lost a whole room.
+     */
     suspend fun save(project: ProjectRecord): Boolean = withContext(Dispatchers.IO) {
         val updated = project.copy(updatedAtEpochMs = System.currentTimeMillis())
-        val target = fileFor(updated.id)
-        val temporary = File(target.parentFile, "${target.name}.tmp")
-        try {
-            temporary.writeText(json.encodeToString(ProjectRecord.serializer(), updated))
-            // Atomic replace: a crash mid-write must never leave a truncated project.
-            if (target.exists() && !target.delete()) {
-                Log.w(TAG, "could not remove old project file ${target.name}")
-            }
-            if (!temporary.renameTo(target)) {
-                temporary.copyTo(target, overwrite = true)
-                temporary.delete()
-            }
-            true
-        } catch (error: Throwable) {
-            Log.e(TAG, "saving project ${project.id} failed", error)
-            temporary.delete()
-            false
-        }
+        val text = runCatching {
+            json.encodeToString(ProjectRecord.serializer(), updated)
+        }.getOrNull() ?: return@withContext false
+        val saved = SafeFiles.writeAtomically(fileFor(updated.id), text)
+        if (!saved) Log.e(TAG, "saving project ${project.id} failed")
+        saved
     }
 
     /** One project file, verbatim — the unit of a backup. */

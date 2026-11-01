@@ -64,6 +64,28 @@ enum class RouteWarning {
 
     /** The swept conduit would bend tighter than the profile allows. */
     BEND_RADIUS_TOO_TIGHT,
+
+    /**
+     * The new point sits on a surface parallel to the previous one but clearly behind or in
+     * front of it: the classic "tapped through the doorway onto the far wall" slip, which is
+     * off by a wall thickness rather than by a millimetre. Accepted, but flagged, because only
+     * the operator knows whether the jump was intended.
+     */
+    SURFACE_JUMP,
+
+    /**
+     * The run was closed into a ring, but its first and last node are not on top of each other:
+     * the closing segment would be invented rather than measured. Harmless for the length (the
+     * loop is still a polyline), wrong for the drawing and for anyone reading the metres later.
+     */
+    LOOP_TOO_WIDE,
+
+    /**
+     * The node came from a noisy tier (depth or feature point) rather than a detected plane.
+     * Accepted, because a measured millimetre is better than no cable at all - but the operator
+     * is told, so he can re-tap where the wall is actually tracked.
+     */
+    LOW_CONFIDENCE,
     ;
 
     val isPresent: Boolean get() = this != NONE
@@ -103,6 +125,12 @@ class RouteSession(
         /** Non-fatal advice for the operator ("bend radius too tight"). */
         val warning: RouteWarning = RouteWarning.NONE,
         val nodeCount: Int = 0,
+        /** Distance from the last committed node to the live reticle, metres (0 when unknown). */
+        val liveSegmentMeters: Float = 0f,
+        /** Confidence of the last committed node, 0..1. */
+        val lastNodeConfidence: Float = 0f,
+        /** Weakest confidence in the run — the honest quality of this measurement. */
+        val worstNodeConfidence: Float = 0f,
         val canFinish: Boolean = false,
         val anchorCount: Int = 0,
     )
@@ -131,8 +159,19 @@ class RouteSession(
     @Synchronized
     fun setLivePoint(hit: SurfaceHit?) {
         val previous = livePoint
-        livePoint = hit?.toRouteNode(id = LIVE_NODE_ID)
-        if (previous?.position != livePoint?.position && livePoint != null) previewDirty = true
+        val node = hit?.toRouteNode(id = LIVE_NODE_ID)
+        livePoint = node
+        if (previous?.position != node?.position && node != null) previewDirty = true
+
+        // Published on every reticle update (12 Hz) because it costs one distance, not a
+        // geometry rebuild: the operator sees the segment under the crosshair growing while he
+        // walks, which is what tells him "stop, that is the 3 m I need".
+        val last = mutableState.value.nodes.lastOrNull()
+        val distance = if (last != null && node != null) last.position.distanceTo(node.position) else 0f
+        val current = mutableState.value
+        if (current.liveSegmentMeters != distance) {
+            mutableState.value = current.copy(liveSegmentMeters = distance)
+        }
     }
 
     /**
@@ -149,6 +188,7 @@ class RouteSession(
             mutableState.value = current.copy(warning = RouteWarning.TOO_CLOSE)
             return false
         }
+        val surfaceJump = previous != null && isSurfaceJump(previous, hit)
         val anchor = anchorFactory.create(hit.point, hit.normal)
         if (anchor == null) {
             mutableState.value = current.copy(warning = RouteWarning.UNPINNED)
@@ -157,7 +197,21 @@ class RouteSession(
         anchors[anchor.id] = anchor
         val node = hit.toRouteNode(id = "node-${UUID.randomUUID()}", anchorId = anchor.id)
         previewDirty = true
-        mutableState.value = recompute(current.copy(nodes = current.nodes + node, lastHit = null, warning = RouteWarning.NONE))
+        // The segment under the reticle is now measured from *this* node, not the previous one.
+        val liveDistance = livePoint?.position?.let { node.position.distanceTo(it) } ?: 0f
+        mutableState.value = recompute(
+            current.copy(
+                nodes = current.nodes + node,
+                lastHit = null,
+                liveSegmentMeters = liveDistance,
+                warning = when {
+                    // The wall-thickness slip is the more dangerous of the two, so it wins.
+                    surfaceJump -> RouteWarning.SURFACE_JUMP
+                    hit.confidence < MIN_TRUSTED_CONFIDENCE -> RouteWarning.LOW_CONFIDENCE
+                    else -> RouteWarning.NONE
+                },
+            ),
+        )
         return true
     }
 
@@ -194,14 +248,29 @@ class RouteSession(
         mutableState.value = recompute(mutableState.value.copy(nodes = emptyList(), closedLoop = false))
     }
 
-    /** Closes the run into a loop (rings, closed cable trays). */
+    /**
+     * Closes the run into a loop (rings, closed cable trays) or opens it again.
+     *
+     * Closing is checked: if the last node is not within [LOOP_TOLERANCE_METERS] of the first,
+     * the operator is told, because the ring would be closed by a segment nobody measured.
+     */
     @Synchronized
     fun closeLoop(): Boolean {
         val current = mutableState.value
         if (current.nodes.size < 3) return false
         previewDirty = true
-        mutableState.value = recompute(current.copy(closedLoop = !current.closedLoop))
+        val closing = !current.closedLoop
+        val gap = if (closing) loopGap(current.nodes) else 0f
+        val warning = if (gap > LOOP_TOLERANCE_METERS) RouteWarning.LOOP_TOO_WIDE else RouteWarning.NONE
+        mutableState.value = recompute(current.copy(closedLoop = closing, warning = warning))
         return true
+    }
+
+    /** Distance between the first and the last node, or `0` for a run with fewer than two. */
+    fun loopGap(nodes: List<RouteNodeRecord> = mutableState.value.nodes): Float {
+        val first = nodes.firstOrNull() ?: return 0f
+        val last = nodes.lastOrNull() ?: return 0f
+        return first.position.distanceTo(last.position)
     }
 
     /**
@@ -289,6 +358,9 @@ class RouteSession(
         return state.copy(
             nodes = state.nodes,
             lengthMeters = lengthMeters,
+            liveSegmentMeters = if (livePoint == null) 0f else state.liveSegmentMeters,
+            lastNodeConfidence = state.nodes.lastOrNull()?.confidence ?: 0f,
+            worstNodeConfidence = state.nodes.minOfOrNull { it.confidence } ?: 0f,
             metrics = metrics,
             preview = preview,
             warning = warning,
@@ -298,9 +370,37 @@ class RouteSession(
         )
     }
 
+    /**
+     * True when [next] lands on a surface parallel to [previous] but offset from it.
+     *
+     * A real corner (normal ~90°) is not a jump - that is how a run turns. What this catches is
+     * the parallel-but-displaced case: the ray slipped through a reveal, past a pipe or onto the
+     * far side of a partition, and the node is off by the thickness of a wall.
+     */
+    private fun isSurfaceJump(previous: RouteNodeRecord, next: SurfaceHit): Boolean {
+        val n = next.normal.normalizedOrZero()
+        if (n.isDegenerate()) return false
+        val cosine = (previous.normal dot n).coerceIn(-1f, 1f)
+        if (cosine < PARALLEL_COSINE) return false
+        val offset = kotlin.math.abs((previous.position - next.point) dot n)
+        return offset > SURFACE_JUMP_METERS
+    }
+
     companion object {
         /** Two taps closer than this are the same tap (fat fingers + gloves). */
         const val MIN_NODE_SPACING_METERS = 0.02f
+
+        /** `dot >= 0.966` is within 15° — the surfaces are parallel for routing purposes. */
+        private const val PARALLEL_COSINE = 0.966f
+
+        /** A parallel surface further than this from the last node is a different wall. */
+        const val SURFACE_JUMP_METERS = 0.20f
+
+        /** A ring whose ends are further apart than this was closed by an unmeasured segment. */
+        const val LOOP_TOLERANCE_METERS = 0.15f
+
+        /** Below this the node did not come from a detected plane; the operator is told. */
+        const val MIN_TRUSTED_CONFIDENCE = 0.5f
 
         /** Anchor refinement below this is ignored so the mesh does not shimmer. */
         const val MOVEMENT_THRESHOLD_METERS = 0.005f

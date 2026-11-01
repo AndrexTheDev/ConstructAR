@@ -340,4 +340,13 @@
     <string name="pdf_section_photos">Photo documentation</string>
     <string name="ar_hold_steady">Hold steady</string>
     <string name="ar_point_locked">Point locked</string>
+    <string name="hud_segment">Segment %1$.2f m</string>
+    <string name="route_warning_surface_jump">That point is behind the last surface - check the wall before you continue</string>
+    <string name="paywall_err_untrusted">This installation cannot be confirmed. Install the official build from the original source and try again.</string>
+    <string name="licence_clock_rollback">The device clock is behind the last date this app has seen. Set date and time correctly - subscriptions and the trial are checked against the last known date.</string>
+    <string name="licence_integrity_failed">This installation could not be confirmed, so Pro features are off. Your projects stay readable and exportable.</string>
+    <string name="licence_demo_key">Developer note: this build still carries the demo verification key. Replace it before the first sale.</string>
+    <string name="route_warning_loop_gap">The ring does not close - set the last point on the first one</string>
+    <string name="backup_held_back">%1$d project(s) held back - they stay in your backup; Pro imports all of them</string>
+    <string name="route_warning_low_confidence">This point came from depth data - tap the tracked wall again for a firmer value</string>
 </resources>

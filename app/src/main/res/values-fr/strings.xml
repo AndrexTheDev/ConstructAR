@@ -340,4 +340,13 @@
     <string name="pdf_section_photos">Documentation photo</string>
     <string name="ar_hold_steady">Restez stable</string>
     <string name="ar_point_locked">Point verrouillé</string>
+    <string name="hud_segment">Tronçon %1$.2f m</string>
+    <string name="route_warning_surface_jump">Ce point est derrière la dernière surface - vérifiez le mur avant de continuer</string>
+    <string name="paywall_err_untrusted">Cette installation ne peut pas être confirmée. Installez la version officielle depuis la source d\'origine et réessayez.</string>
+    <string name="licence_clock_rollback">L\'horloge de l\'appareil est en retard sur la dernière date vue par l\'application. Réglez la date et l\'heure : l\'abonnement et l\'essai sont vérifiés sur la dernière date connue.</string>
+    <string name="licence_integrity_failed">Cette installation n\'a pas pu être confirmée, les fonctions Pro sont donc désactivées. Vos chantiers restent lisibles et exportables.</string>
+    <string name="licence_demo_key">Note pour le développeur : cette version contient encore la clé de vérification de démonstration. Remplacez-la avant la première vente.</string>
+    <string name="route_warning_loop_gap">L\'anneau ne se ferme pas - placez le dernier point sur le premier</string>
+    <string name="backup_held_back">%1$d chantier(s) retenu(s) - ils restent dans votre sauvegarde ; Pro les importe tous</string>
+    <string name="route_warning_low_confidence">Ce point vient des données de profondeur - touchez à nouveau le mur détecté pour une valeur plus sûre</string>
 </resources>

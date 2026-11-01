@@ -462,6 +462,7 @@ private fun ActivationResult(check: LicenceCheck) {
         LicenceCheck.DeviceMismatch -> stringResource(R.string.paywall_err_device) to SiteColors.danger
         LicenceCheck.Expired -> stringResource(R.string.paywall_err_expired) to SiteColors.warning
         LicenceCheck.Malformed -> stringResource(R.string.paywall_err_malformed) to SiteColors.danger
+        LicenceCheck.UntrustedBuild -> stringResource(R.string.paywall_err_untrusted) to SiteColors.danger
     }
     Text(message, style = MaterialTheme.typography.bodyLarge, color = colour)
 }

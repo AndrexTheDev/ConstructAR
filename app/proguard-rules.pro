@@ -26,3 +26,13 @@
 # TFLite / LiteRT delegates are instantiated by name (NNAPI, GPU).
 -keep class org.tensorflow.lite.** { *; }
 -dontwarn org.tensorflow.lite.**
+
+# ── Licence and tamper checks ──────────────────────────────────────────────────────────────
+# Deliberately *no* `-keep` for the licence classes: they are reachable from `ProjectViewModel`
+# and every export gate is reachable from the UI, so R8 cannot remove them - and leaving them
+# obfuscatable keeps the names out of a would-be patcher's hands. What must be verified is that
+# the checks survive optimisation at all, which the workflow does by grepping the release DEX
+# for the algorithm and wire-format markers (see .github/workflows/android-build.yml). A silent
+# loss of the ECDSA path would otherwise accept every forged key.
+-dontwarn javax.crypto.**
+-dontwarn java.security.**

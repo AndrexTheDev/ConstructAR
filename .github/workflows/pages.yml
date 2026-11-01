@@ -40,8 +40,33 @@ jobs:
   build:
     name: Render the six-language site
     runs-on: ubuntu-latest
+    outputs:
+      pages: ${{ steps.pages_enabled.outputs.enabled }}
     steps:
       - uses: actions/checkout@v4
+
+      # A repository whose Pages source has not been switched on yet would otherwise fail this
+      # workflow on every push to `main`, and a permanent red check is how real failures stop
+      # being noticed. So the state is interrogated first: 404 means "not configured", and the
+      # job renders the site, verifies it, and stops there with a notice instead of an error.
+      # Any other answer (including a permission error) is treated as "configured" so the real
+      # failure still surfaces.
+      - name: Is GitHub Pages enabled?
+        id: pages_enabled
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          status=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages")
+          echo "Pages API status: $status"
+          if [ "$status" = "404" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=GitHub Pages not enabled::Set Settings > Pages > Source: GitHub Actions, then re-run this workflow. The site is rendered and verified below either way."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Render docs/ from the generator
         run: |
@@ -67,14 +92,17 @@ jobs:
           PY
 
       - uses: actions/configure-pages@v5
+        if: steps.pages_enabled.outputs.enabled == 'true'
 
       - uses: actions/upload-pages-artifact@v3
+        if: steps.pages_enabled.outputs.enabled == 'true'
         with:
           path: docs
 
   deploy:
     name: Publish to GitHub Pages
     needs: build
+    if: needs.build.outputs.pages == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
