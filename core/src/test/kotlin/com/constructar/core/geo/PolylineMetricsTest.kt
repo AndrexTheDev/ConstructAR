@@ -58,6 +58,26 @@ class PolylineMetricsTest {
     }
 
     @Test
+    fun `a closed ring counts the shared end clip once`() {
+        // A 1.5 m square: 4.5 m as an open run, 6 m once the ring is closed.
+        val nodes = listOf(
+            node(0f, 0f, 0f),
+            node(1.5f, 0f, 0f),
+            node(1.5f, 0f, 1.5f),
+            node(0f, 0f, 1.5f),
+        )
+        val open = PolylineMetrics.measure(nodes, ConduitSpec.cable(16f))
+        val ring = PolylineMetrics.measure(nodes, ConduitSpec.cable(16f), closed = true)
+
+        assertEquals(4.5f, open.totalMeters, 1e-4f)
+        assertEquals(6f, ring.totalMeters, 1e-4f)
+        // Open: ceil(4.5 / 0.6) + 1 = 9 — clipped at both ends.
+        assertEquals(9, open.clipCount)
+        // Closed: ceil(6 / 0.6) = 10 — the start clip is the end clip, so no extra one.
+        assertEquals(10, ring.clipCount)
+    }
+
+    @Test
     fun `bend classification tolerates ten degrees of tapping error`() {
         val points = listOf(Vec3(0f, 0f, 0f), Vec3(1f, 0f, 0f), Vec3(1f, 0f, 1.05f))
         val bends = PolylineMetrics.bendAngles(points, closed = false)

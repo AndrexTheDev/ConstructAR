@@ -175,7 +175,16 @@ object PolylineMetrics {
             }
         }.toFloat()
 
-        val clips = if (clipSpacingMeters <= 0f) 0 else ceil(total / clipSpacingMeters).toInt() + 1
+        // An open run is clipped at both ends, so it needs one more clip than it has gaps. A
+        // closed ring does not: the clip at the start *is* the clip at the end, and the run of
+        // 6 m at 0.6 m spacing needs exactly ten clips, not eleven. The extra clip used to be
+        // counted anyway, which put one fitting per ring on the order list.
+        val closedRing = closed && nodes.size > 2
+        val clips = if (clipSpacingMeters <= 0f) {
+            0
+        } else {
+            ceil(total / clipSpacingMeters).toInt() + if (closedRing) 0 else 1
+        }
         // One coupling per straight length limit exceeded: 3 m for ducts, 50 m cable pulls.
         val couplingLimit = if (spec.kind == com.constructar.core.model.ConduitKind.DUCT) 3f else 50f
         val couplings = if (total <= couplingLimit) 0 else ceil(total / couplingLimit).toInt() - 1
