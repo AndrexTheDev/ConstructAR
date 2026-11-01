@@ -16,6 +16,10 @@
 #   3. the last lines of the log
 #
 # Usage: ci_annotate.sh <log-file> <title> <exit-code>
+#
+# Emits three annotations (diagnostics, what-went-wrong, tail) instead of one blob: GitHub
+# truncates a single annotation at 64 KB, and the interesting `e: file:...: error:` line is
+# almost never in the last 25 lines of a Gradle log.
 
 set -uo pipefail
 
@@ -28,27 +32,44 @@ if [ ! -f "$LOG" ]; then
   exit "${CODE}"
 fi
 
-extract() {
-  if grep -qE '^e: ' "$LOG"; then
-    grep -E '^(e|w): ' "$LOG" | head -n 40
-  fi
-  if grep -q '^FAILURE:' "$LOG"; then
-    # The summary only: "What went wrong" + "Where", cut off before the Java stack trace.
-    sed -n '/^FAILURE:/,$p' "$LOG" | sed -n '1,/^\* Exception is:/p' | head -n 60
-  fi
-  if grep -qiE '^.*(error|exception|what went wrong).*$' "$LOG"; then
-    grep -iE '(^error|error:|exception|what went wrong)' "$LOG" | head -n 15
-  fi
-  tail -n 25 "$LOG"
+# Gradle colours its output; every anchor (`^e: `, `^FAILURE:`) misses when an escape sequence
+# sits in front of the line. Stripping them first is what makes the extraction reliable.
+ANSI='s/\x1b\[[0-9;]*[A-Za-z]//g'
+CLEAN=/tmp/step.clean.log
+sed -e "$ANSI" -e 's/\r//g' "$LOG" > "$CLEAN" || cp "$LOG" "$CLEAN"
+
+emit() {
+  local title="$1" file="$2"
+  [ -s "$file" ] || return 0
+  local msg
+  msg=$(awk '!seen[$0]++' "$file" | head -n 40 \
+    | sed -e 's/%/%25/g' -e 's/\t/  /g' | awk '{print $0 "%0A"}')
+  echo "::error title=${title}::${msg}"
 }
 
-MSG=$(extract \
-  | awk '!seen[$0]++' \
-  | head -n 55 \
-  | sed -e 's/%/%25/g' -e 's/\r//g' -e 's/\t/  /g' \
-  | awk '{print $0 "%0A"}')
+# 1. Kotlin diagnostics - the only lines that name a file, a line and a reason.
+grep -E '(^|: )(e|w): (file:|⚠)' "$CLEAN" | head -n 40 > /tmp/ann_kotlin.txt
+grep -E '^e: ' "$CLEAN" | head -n 40 >> /tmp/ann_kotlin.txt
 
-echo "::error title=${TITLE}::${MSG}"
+# 2. What went wrong: the FAILURE block and the failed task header.
+sed -n '/^FAILURE:/,/^\* Exception is:/p' "$CLEAN" | head -n 40 > /tmp/ann_failure.txt
+grep -E "^> Task .* FAILED" "$CLEAN" | head -n 20 >> /tmp/ann_failure.txt
+grep -E '(^|[[:space:]])(error:|Caused by:)' "$CLEAN" | head -n 20 >> /tmp/ann_failure.txt
+
+# 3. The tail, always - it is the only thing left when nothing above matched.
+tail -n 40 "$CLEAN" > /tmp/ann_tail.txt
+
+emit "${TITLE} - diagnostics" /tmp/ann_kotlin.txt
+emit "${TITLE} - what went wrong" /tmp/ann_failure.txt
+emit "${TITLE} - log tail" /tmp/ann_tail.txt
+
+{
+  echo "## ${TITLE} (exit ${CODE})"
+  echo ""
+  echo '```'
+  cat /tmp/ann_kotlin.txt /tmp/ann_failure.txt /tmp/ann_tail.txt | awk '!seen[$0]++' | head -n 150
+  echo '```'
+} >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
 # The whole log still goes to stdout for a normal (non-restricted) job view.
 tail -n 200 "$LOG"
