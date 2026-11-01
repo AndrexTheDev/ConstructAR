@@ -36,10 +36,10 @@ class LengthFormatterTest {
         // which is exactly the argument this app is supposed to end.
         assertEquals("1.00 m", LengthFormatter.format(0.996f))
         assertEquals("2.00 m", LengthFormatter.format(1.9999f))
+        // Both sides of the boundary: 0.994f is 0.99400001… and rounds down, 0.995f is
+        // 0.99500000… and rounds up. Half a millimetre apart, and both are documented.
         assertEquals("0.99 m", LengthFormatter.format(0.994f))
-        // The halfway case: `0.995f` is 0.99499994… in binary, so it rounds down. Documented,
-        // and half a millimetre below a claim of ±2 cm.
-        assertEquals("0.99 m", LengthFormatter.format(0.995f))
+        assertEquals("1.00 m", LengthFormatter.format(0.995f))
     }
 
     @Test

@@ -16,10 +16,12 @@ import com.constructar.core.mesh.RouteGeometryOptions
 import com.constructar.core.mesh.RouteGeometryResult
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ConduitSpec
+import com.constructar.core.model.HitConfidence
 import com.constructar.core.model.RouteNodeRecord
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+
 import java.util.UUID
 
 /**
@@ -400,7 +402,8 @@ class RouteSession(
         const val LOOP_TOLERANCE_METERS = 0.15f
 
         /** Below this the node did not come from a detected plane; the operator is told. */
-        const val MIN_TRUSTED_CONFIDENCE = 0.5f
+        /** Kept as the public name the AR tests use; the value lives in `:core`. */
+        const val MIN_TRUSTED_CONFIDENCE: Float = HitConfidence.TRUSTED
 
         /** Anchor refinement below this is ignored so the mesh does not shimmer. */
         const val MOVEMENT_THRESHOLD_METERS = 0.005f

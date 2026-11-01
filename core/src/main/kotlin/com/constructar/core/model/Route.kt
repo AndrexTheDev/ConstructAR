@@ -44,6 +44,20 @@ enum class HitSource {
 }
 
 /**
+ * The one number that decides whether a measured point may be trusted without review.
+ *
+ * Two unrelated places asked the same question and could have answered it differently: the AR
+ * session warns while a point is being taken (`RouteWarning.LOW_CONFIDENCE`), and the bill of
+ * materials decides whether an order line needs a second look. A run measured on a plane the
+ * tracker itself only half-believes is exactly as soft as one measured on a feature point, so
+ * both read the threshold from here.
+ */
+object HitConfidence {
+    /** Below this, a hit is reported to the operator and flagged in the paperwork. */
+    const val TRUSTED: Float = 0.5f
+}
+
+/**
  * One vertex of a routed conduit, in ARCore world space (metres).
  *
  * The live, runtime position is not read from here: every node is bound to an ARCore

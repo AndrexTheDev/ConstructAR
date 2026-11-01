@@ -28,12 +28,18 @@ import kotlin.test.assertTrue
  */
 class MaterialListTest {
 
-    private fun node(index: Int, x: Float, z: Float, confidence: Float = 0.95f) = RouteNodeRecord(
+    private fun node(
+        index: Int,
+        x: Float,
+        z: Float,
+        confidence: Float = 0.95f,
+        source: HitSource = HitSource.PLANE_POLYGON,
+    ) = RouteNodeRecord(
         id = "n$index",
         position = Vec3(x, 1.2f, z),
         normal = Vec3(0f, 0f, 1f),
         surface = SurfaceKind.WALL,
-        hitSource = HitSource.PLANE_POLYGON,
+        hitSource = source,
         confidence = confidence,
     )
 
@@ -42,11 +48,15 @@ class MaterialListTest {
         spec: ConduitSpec,
         lengthMeters: Float,
         confidence: Float = 0.95f,
+        source: HitSource = HitSource.PLANE_POLYGON,
     ) = ConduitRoute(
         id = id,
         label = id,
         spec = spec,
-        nodes = listOf(node(1, 0f, 0f, confidence), node(2, lengthMeters, 0f, confidence)),
+        nodes = listOf(
+            node(1, 0f, 0f, confidence, source),
+            node(2, lengthMeters, 0f, confidence, source),
+        ),
         createdAtEpochMs = 1_000L,
     )
 
@@ -124,6 +134,29 @@ class MaterialListTest {
         assertEquals(1, excluded.runCount)
         assertEquals(2f, excluded.totalMeters, 1e-3f)
         assertEquals(0, excluded.lowConfidenceRuns)
+    }
+
+    @Test
+    fun `a confident plane hit on a well tracked surface is not flagged`() {
+        val clean = MaterialListBuilder.build(project(route("a", cable, 3f)), nowMs = 0L).lines.single()
+        assertEquals(0, clean.lowConfidenceRuns)
+    }
+
+    @Test
+    fun `a plane hit the tracker did not trust is flagged like a guess`() {
+        // The AR screen warns while the point is taken; the order list has to agree, or the
+        // warning dies with the session and the customer is billed for a soft measurement.
+        val soft = MaterialListBuilder.build(
+            project(route("a", cable, 3f, confidence = 0.2f, source = HitSource.PLANE_POLYGON)),
+            nowMs = 0L,
+        ).lines.single()
+        assertEquals(1, soft.lowConfidenceRuns)
+
+        val guessed = MaterialListBuilder.build(
+            project(route("b", cable, 3f, source = HitSource.FEATURE_POINT)),
+            nowMs = 0L,
+        ).lines.single()
+        assertEquals(1, guessed.lowConfidenceRuns)
     }
 
     @Test

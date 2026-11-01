@@ -25,12 +25,14 @@ enum class LengthUnit(val symbol: String, val metersPerUnit: Float, val defaultD
 /**
  * Formats measured lengths for the HUD, the PDF protocol and the CSV.
  *
- * `format(14.8234f)` → `"14.82 m"`. Values are rounded half-up (never truncated), so a run of
- * 0.996 m reports `1.00 m` — an inspector comparing the protocol with a tape measure expects
- * that. The boundary is the *stored* value, not the decimal you would write down: `0.995f` is
- * 0.99499994… as a float and therefore reports `0.99 m`. Half a millimetre is far below the
- * accuracy this app claims, and pretending otherwise with a bigger epsilon would be dishonest
- * in the other direction.
+ * `format(14.8234f)` → `"14.82 m"`. Values are rounded (never truncated) so a 0.995 m run
+ * reports 1.00 m rather than 0.99 m — an inspector comparing the protocol with a tape measure
+ * expects that.
+ *
+ * "Rounded" means `String.format`, i.e. half-up on the binary value that is actually stored,
+ * which is why the boundary is tested from both sides: `0.994f` prints `0.99 m` and `0.995f`
+ * prints `1.00 m`. The difference is half a millimetre, three orders of magnitude below the
+ * accuracy this app claims.
  */
 object LengthFormatter {
 
