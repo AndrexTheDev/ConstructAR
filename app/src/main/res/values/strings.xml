@@ -268,6 +268,7 @@
     <string name="pdf_column_waste">Waste</string>
     <string name="pdf_column_order_meters">Order (m)</string>
     <string name="pdf_procurement_note">Order lengths include the site waste factor. Figures come from anchor-refined node positions; check critical runs with a tape measure before cutting.</string>
+    <string name="pdf_note_recovered">Recovered after an interruption - lengths and fittings are exact, the 3D position is not in the model: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - generated on device</string>
     <string name="pdf_page_label">Page %1$d</string>
     <string name="backup_title">Backup and restore</string>

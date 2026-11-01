@@ -268,6 +268,7 @@
     <string name="pdf_column_waste">Réserve</string>
     <string name="pdf_column_order_meters">Commande (m)</string>
     <string name="pdf_procurement_note">Les longueurs de commande incluent la réserve de chantier. Valeurs issues de nœuds affinés par ancres ; vérifie les tracés critiques au mètre avant de couper.</string>
+    <string name="pdf_note_recovered">Récupéré après une interruption : longueurs et raccords exacts, la position 3D n’est pas dans le modèle : %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - généré sur l’appareil</string>
     <string name="pdf_page_label">Page %1$d</string>
     <string name="backup_title">Sauvegarde et restauration</string>

@@ -268,6 +268,7 @@
     <string name="pdf_column_waste">Reserve</string>
     <string name="pdf_column_order_meters">Bestellung (m)</string>
     <string name="pdf_procurement_note">Bestelllängen enthalten die Reserve. Werte aus anker-verfeinerten Knotenpunkten - prüfe kritische Strecken vor dem Zuschnitt mit dem Maßband.</string>
+    <string name="pdf_note_recovered">Nach einem Abbruch geborgen - Längen und Fittings stimmen, die 3D-Position fehlt im Modell: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - auf dem Gerät erzeugt</string>
     <string name="pdf_page_label">Seite %1$d</string>
     <string name="backup_title">Sichern und wiederherstellen</string>

@@ -272,6 +272,7 @@
     <string name="pdf_column_waste">Zapas</string>
     <string name="pdf_column_order_meters">Zamówienie (m)</string>
     <string name="pdf_procurement_note">Długości zamówienia zawierają zapas budowlany. Wartości z węzłów doprecyzowanych kotwicami - krytyczne trasy sprawdź miarą przed cięciem.</string>
+    <string name="pdf_note_recovered">Odzyskana po przerwaniu - długości i kształtki są dokładne, pozycji 3D nie ma w modelu: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - wygenerowano na urządzeniu</string>
     <string name="pdf_page_label">Strona %1$d</string>
     <string name="backup_title">Kopia i przywracanie</string>

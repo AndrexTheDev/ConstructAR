@@ -239,6 +239,15 @@ class ProtocolPdfWriter(
                     }
                     y = drawTableRow(page.canvas, routeRow(route), columns, y)
                 }
+                // A run that survived an interruption counts in every length, every fitting and
+                // the price - its coordinates belong to an ARCore session that no longer exists,
+                // so it is not in the GLB. The screen says so with a badge and the 3D export
+                // leaves it out; the protocol said nothing, so the office importing the model
+                // later found a run missing from it with no explanation anywhere in the file.
+                recoveredRunsNote(content.project.routes, content.labels.recoveredNote)?.let { note ->
+                    y += 6
+                    y = drawNote(page.canvas, note, y)
+                }
             }
 
             // ── Procurement table ───────────────────────────────────────────────────────
@@ -577,4 +586,16 @@ class ProtocolPdfWriter(
         private const val MARGIN = 36
         private const val FOOTER_HEIGHT = 32
     }
+}
+
+/**
+ * The line the runs table gets when part of the room could not be placed, or `null` when it could.
+ *
+ * Kept out of the drawing code so the wording can be tested without a `PdfDocument`: which runs are
+ * named, in which order, and that a job with nothing recovered prints nothing at all.
+ */
+internal fun recoveredRunsNote(routes: List<ConduitRoute>, template: String): String? {
+    val labels = routes.filter { it.recovered }.map { it.label }
+    if (labels.isEmpty()) return null
+    return String.format(Locale.ROOT, template, labels.joinToString(", "))
 }

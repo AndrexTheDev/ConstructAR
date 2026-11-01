@@ -268,6 +268,7 @@
     <string name="pdf_column_waste">Reserva</string>
     <string name="pdf_column_order_meters">Pedido (m)</string>
     <string name="pdf_procurement_note">Las longitudes de pedido incluyen la reserva de obra. Valores de nodos refinados con anclas; comprueba los tramos críticos con cinta antes de cortar.</string>
+    <string name="pdf_note_recovered">Recuperado tras una interrupción: longitudes y accesorios son exactos, la posición 3D no está en el modelo: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - generado en el dispositivo</string>
     <string name="pdf_page_label">Página %1$d</string>
     <string name="backup_title">Copia y restauración</string>
