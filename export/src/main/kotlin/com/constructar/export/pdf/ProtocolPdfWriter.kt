@@ -494,13 +494,15 @@ class ProtocolPdfWriter(
         return y + 13
     }
 
-    private fun drawNote(canvas: Canvas, text: String, y: Int) {
+    /** Draws a grey note and returns the y the caller can continue from. */
+    private fun drawNote(canvas: Canvas, text: String, y: Int): Int {
         val paint = Paint(textPaint).apply { textSize = 8.5f; color = Color.DKGRAY }
         var lineY = y
         for (line in wrap(text, pageWidth - 2 * MARGIN, paint)) {
             canvas.drawText(line, MARGIN.toFloat(), lineY.toFloat(), paint)
             lineY += 11
         }
+        return lineY
     }
 
     /**
