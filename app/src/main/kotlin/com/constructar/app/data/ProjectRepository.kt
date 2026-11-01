@@ -179,8 +179,15 @@ class ProjectRepository(private val context: Context) {
         photoDirectory.listFiles()?.filter { it.isFile && it.length() > 0L }?.sortedBy { it.name }.orEmpty()
     }
 
-    /** Whether a project with [id] exists — used to re-attach a restored photo to its project. */
-    suspend fun hasProject(id: String): Boolean = withContext(Dispatchers.IO) { fileFor(id).exists() }
+    /**
+     * A restored project together with the id its file carried before any re-keying.
+     *
+     * The two ids differ exactly when the file's id was already taken - and that is the case in
+     * which the restore has to know, because the photo belongs to the project, not to the id: a
+     * re-keyed copy must take its photo with it instead of leaving it on the room that kept the
+     * old id.
+     */
+    data class ImportedProject(val originalId: String, val project: ProjectRecord)
 
     /**
      * Imports one project file.
@@ -189,7 +196,10 @@ class ProjectRepository(private val context: Context) {
      * backup onto a phone that still has the original must not destroy either copy.
      * Returns the stored project, or `null` when the text is not a project.
      */
-    suspend fun importProject(text: String): ProjectRecord? = withContext(Dispatchers.IO) {
+    suspend fun importProject(text: String): ProjectRecord? = importProjectDetailed(text)?.project
+
+    /** [importProject], also reporting the id the file carried before any re-keying. */
+    suspend fun importProjectDetailed(text: String): ImportedProject? = withContext(Dispatchers.IO) {
         val parsed = runCatching {
             json.decodeFromString(ProjectRecord.serializer(), text)
         }.getOrNull() ?: return@withContext null
@@ -202,7 +212,7 @@ class ProjectRepository(private val context: Context) {
         } else {
             parsed
         }
-        if (save(target)) target else null
+        if (save(target)) ImportedProject(originalId = parsed.id, project = target) else null
     }
 
     /**

@@ -535,10 +535,12 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     /**
      * Restores a backup: projects first, then the photos that belong to them.
      *
-     * Photos are matched by file name (which is the project id) and only attached when that
-     * project exists on this phone, so a restore never leaves an orphan image or, worse, puts a
-     * photo on the wrong room. The open project is re-read afterwards, so a restored photo shows
-     * up without leaving the screen.
+     * A photo is attached to the project **this restore created**, never to one that was already
+     * on the phone: a restore of last week's backup must not overwrite the picture taken since,
+     * and it must not leave a copy without its photo either. When a project had to be re-keyed
+     * because its id was taken (finding 40), the photo is re-homed onto the new id, so the copy
+     * comes back complete and the original keeps its own picture. The open project is re-read
+     * afterwards, so a restored photo shows up without leaving the screen.
      */
     fun importBackup(
         texts: List<String>,
@@ -553,14 +555,24 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             // imported after upgrading.
             val room = (mutableState.value.entitlements.maxProjects - mutableState.value.projects.size)
                 .coerceAtLeast(0)
+            // The id each restored file was stored under, keyed by the id it carried: equal for a
+            // new room, a fresh id when the old one was taken. A photo follows its room, never
+            // the name it happened to have in the zip.
+            val homes = HashMap<String, String>()
             val (imported, heldBack) = restoreOutcome(room, texts) { text ->
-                repository.importProject(text) != null
+                val result = repository.importProjectDetailed(text)
+                if (result == null) {
+                    false
+                } else {
+                    homes[result.originalId] = result.project.id
+                    true
+                }
             }
             photos.forEach { (token, uri) ->
                 // `<project id>` for the room's own photo, `<project id>__diary_<entry>` for an
-                // entry photo: the room decides whether the photo has a home on this phone.
-                val projectId = PhotoTokens.projectOf(token)
-                if (repository.hasProject(projectId)) repository.savePhotoAs(token, uri)
+                // entry photo: only a room this restore created gives the photo a home.
+                val home = homes[PhotoTokens.projectOf(token)] ?: return@forEach
+                repository.savePhotoAs(PhotoTokens.withProject(token, home), uri)
             }
             refresh()
             mutableState.value.openProject?.let { open ->

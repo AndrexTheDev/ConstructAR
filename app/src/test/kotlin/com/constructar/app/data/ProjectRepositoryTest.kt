@@ -121,7 +121,7 @@ class ProjectRepositoryTest {
     fun `a blank room name falls back instead of producing an unnamed room`(): Unit = runBlocking {
         val created = repository.create(name = "   ", fallbackName = "Raum")
         assertEquals("Raum", created.name)
-        assertTrue(repository.hasProject(created.id))
+        assertNotNull(repository.load(created.id))
     }
 
     @Test
@@ -136,6 +136,33 @@ class ProjectRepositoryTest {
         assertEquals(2, repository.list().projects.size)
         assertEquals("Küche", repository.load("room-1")?.name)
         assertEquals("Küche", repository.load(restored.id)?.name)
+    }
+
+    @Test
+    fun `a re-keyed restore reports the id the file carried`(): Unit = runBlocking {
+        // The room is still on the phone, so the restore stores a copy under a fresh id - and it
+        // has to say which id the *file* had, because that is the name its photo was saved under.
+        repository.save(room())
+        val backupText = repository.backupEntries().single().text
+
+        val restored = assertNotNull(repository.importProjectDetailed(backupText))
+
+        assertEquals("room-1", restored.originalId)
+        assertTrue(restored.project.id != "room-1", "the copy must get a fresh id")
+        assertEquals(restored.project.id, repository.list().projects.map { it.id }.firstOrNull { it != "room-1" })
+    }
+
+    @Test
+    fun `a restore onto an empty phone keeps the file's own id`(): Unit = runBlocking {
+        repository.save(room())
+        val backupText = repository.backupEntries().single().text
+        File(projectsDirectory, "room-1.json").delete()
+
+        val restored = assertNotNull(repository.importProjectDetailed(backupText))
+
+        // Nothing to collide with: the photo in the zip is named room-1 and stays correct.
+        assertEquals("room-1", restored.originalId)
+        assertEquals("room-1", restored.project.id)
     }
 
     @Test

@@ -54,6 +54,23 @@ class PhotoTokensTest {
     }
 
     @Test
+    fun `a re-homed photo keeps its entry and takes the new room`() {
+        // Finding 40: a restore that has to re-key a project must move the photo with the copy.
+        assertEquals("new-room", PhotoTokens.withProject("p-42", "new-room"))
+        assertEquals(
+            "new-room__diary_e-7",
+            PhotoTokens.withProject(PhotoTokens.forDiary("p-42", "e-7"), "new-room"),
+        )
+        assertEquals(
+            "new-room__defect_d-1",
+            PhotoTokens.withProject(PhotoTokens.forDefect("p-42", "d-1"), "new-room"),
+        )
+        // Re-homing is what the name says: the old room keeps its old token untouched.
+        assertEquals("p-42", PhotoTokens.projectOf(PhotoTokens.forRoom("p-42")))
+        assertEquals("e-7", PhotoTokens.entryOf(PhotoTokens.withProject(PhotoTokens.forDiary("p-42", "e-7"), "x")))
+    }
+
+    @Test
     fun `ids with hyphens survive the round trip`() {
         val token = PhotoTokens.forDiary("3f9c-11ab", "9d0c-77")
         assertEquals("3f9c-11ab", PhotoTokens.projectOf(token))
