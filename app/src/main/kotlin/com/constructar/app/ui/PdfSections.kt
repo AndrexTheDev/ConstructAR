@@ -219,20 +219,27 @@ internal fun buildPhotoAppendix(
     texts: SiteFileTexts,
 ): List<PdfPhoto> {
     if (photos.isEmpty()) return emptyList()
-    val diary = project.diary.mapNotNull { entry ->
-        val bitmap = entry.photo?.let(photos::get) ?: return@mapNotNull null
-        PdfPhoto(
-            caption = "%s %s".format(texts.photoDiaryPrefix, formatDateLabel(entry.createdAtEpochMs)),
-            bitmap = bitmap,
-        )
+    // The captions, keyed by token, so the page can follow the one order the field book uses -
+    // open defects first, because those are what the customer is asked to sign off as still
+    // outstanding, then the diary. Before finding 42 each list was appended in its own order and
+    // the cut at eight could drop the photo of every open defect for want of diary room.
+    val captions = HashMap<String, String>()
+    project.diary.forEach { entry ->
+        entry.photo?.let { token ->
+            captions.getOrPut(token) {
+                "%s %s".format(texts.photoDiaryPrefix, formatDateLabel(entry.createdAtEpochMs))
+            }
+        }
     }
-    val defects = project.defects.mapNotNull { defect ->
-        val bitmap = defect.photo?.let(photos::get) ?: return@mapNotNull null
-        PdfPhoto(
-            caption = "%s: %s".format(texts.photoDefectPrefix, defect.title),
-            bitmap = bitmap,
-        )
+    project.defects.forEach { defect ->
+        defect.photo?.let { token ->
+            captions[token] = "%s: %s".format(texts.photoDefectPrefix, defect.title)
+        }
     }
-    // Open defects first: those are what the customer is asked to sign off as still outstanding.
-    return (defects + diary).take(8)
+    return FieldPhotos.ordered(project)
+        .mapNotNull { token ->
+            val bitmap = photos[token] ?: return@mapNotNull null
+            PdfPhoto(caption = captions[token] ?: return@mapNotNull null, bitmap = bitmap)
+        }
+        .take(FieldPhotos.PDF_BUDGET)
 }

@@ -16,6 +16,7 @@ import com.constructar.app.billing.LicencePublicKey
 import com.constructar.app.data.ProjectRepository
 import com.constructar.app.data.SiteSettings
 import com.constructar.app.data.UiPreferences
+import com.constructar.app.ui.FieldPhotos
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.bom.MaterialListBuilder
 import com.constructar.core.bom.MaterialListOptions
@@ -434,10 +435,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun loadFieldPhotos(project: ProjectRecord): Map<String, Bitmap> {
-        val tokens = buildList {
-            project.diary.forEach { entry -> entry.photo?.let { add(it) } }
-            project.defects.forEach { defect -> defect.photo?.let { add(it) } }
-        }.take(MAX_FIELD_PHOTOS)
+        // The order matters: the budget is small, so it is spent on the photos that carry the
+        // most - an open defect before a resolved one, and both before the diary (finding 42).
+        val tokens = FieldPhotos.ordered(project).take(FieldPhotos.SCREEN_BUDGET)
         if (tokens.isEmpty()) return emptyMap()
         val out = LinkedHashMap<String, Bitmap>(tokens.size)
         tokens.forEach { token ->
@@ -588,11 +588,6 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             }
             onDone(imported, heldBack)
         }
-    }
-
-    private companion object {
-        /** Enough documentation for a protocol appendix, few enough to keep the heap flat. */
-        const val MAX_FIELD_PHOTOS = 12
     }
 
     private fun mutate(updated: ProjectRecord, onSaved: (ProjectRecord?) -> Unit = {}) {
