@@ -263,10 +263,12 @@ class ProjectRepository(private val context: Context) {
         photoDirectory.listFiles()
             ?.filter { it.name == "$id.jpg" || it.name.startsWith("${id}__") }
             ?.forEach { it.delete() }
-        fileFor(id).delete()
+        val removed = fileFor(id).delete()
         // A draft belongs to exactly one project; deleting the room must not leave it behind to
-        // be offered again on the next start (with nothing to attach it to).
+        // be offered again on the next start (with nothing to attach it to). The result of *that*
+        // delete is not the answer to "was the room deleted": with no draft it is `false`.
         draftFileFor(id).delete()
+        removed
     }
 
     /** Merges a finished scan summary into the stored project. */

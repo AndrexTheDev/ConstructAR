@@ -76,7 +76,8 @@ class DraftStoreTest {
         assertEquals(written.nodes.map { it.position }, loaded.nodes.map { it.position })
         assertEquals(written.closedLoop, loaded.closedLoop)
         assertEquals(written.spec.sizeLabel, loaded.spec.sizeLabel)
-        assertEquals(3f, loaded.lengthMeters, 0.001f)
+        // Points at 0, 1 and 2 m: two 1 m segments.
+        assertEquals(2f, loaded.lengthMeters, 0.001f)
     }
 
     @Test
