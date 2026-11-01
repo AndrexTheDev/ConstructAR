@@ -142,8 +142,11 @@ fun ProjectScreen(
             project.materialLumpSumCents.takeIf { it > 0L }?.let(Pricing::formatForInput) ?: "",
         )
     }
-    val parsedRate = Pricing.parseCents(rateDraft)?.toInt()?.takeIf { it > 0 }
-    val parsedMaterial = Pricing.parseCents(materialDraft) ?: 0L
+    // A typo is an error, not a zero: see PricingInput.
+    val rateInput = PricingInput.rate(rateDraft)
+    val materialInput = PricingInput.amount(materialDraft)
+    val parsedRate = rateInput.cents
+    val parsedMaterial = materialInput.cents
     val effectiveRate = parsedRate ?: hourlyRateCents
     val priceDirty = parsedRate != project.hourlyRateCents || parsedMaterial != project.materialLumpSumCents
     val workMillis = remember(project.sessions, project.id) { project.totalWorkMillis() }
@@ -445,6 +448,12 @@ fun ProjectScreen(
                     label = { Text(stringResource(R.string.project_costs_rate)) },
                     placeholder = { Text(Pricing.formatForInput(hourlyRateCents.toLong())) },
                     singleLine = true,
+                    isError = rateInput.invalid,
+                    supportingText = if (rateInput.invalid) {
+                        { Text(stringResource(R.string.project_costs_invalid)) }
+                    } else {
+                        null
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -453,6 +462,12 @@ fun ProjectScreen(
                     onValueChange = { materialDraft = it },
                     label = { Text(stringResource(R.string.project_costs_material)) },
                     singleLine = true,
+                    isError = materialInput.invalid,
+                    supportingText = if (materialInput.invalid) {
+                        { Text(stringResource(R.string.project_costs_invalid)) }
+                    } else {
+                        null
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -475,7 +490,8 @@ fun ProjectScreen(
                     label = stringResource(R.string.action_save),
                     icon = Icons.Default.Check,
                     tone = ActionTone.SECONDARY,
-                    enabled = priceDirty,
+                    // Nothing is saved while a field says it cannot read what was typed.
+                    enabled = priceDirty && !rateInput.invalid && !materialInput.invalid,
                     onClick = { onSavePricing(parsedRate, parsedMaterial) },
                 )
             }

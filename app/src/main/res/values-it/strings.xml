@@ -348,6 +348,7 @@
     <string name="field_photo_replace">Sostituisci foto</string>
     <string name="project_costs_title">Quanto vale il lavoro</string>
     <string name="project_costs_rate">Tariffa oraria (€)</string>
+    <string name="project_costs_invalid">Non è un importo: scrivilo come 48,00 o 48.00</string>
     <string name="project_costs_material">Materiale a corpo (€)</string>
     <string name="project_costs_labour">Manodopera</string>
     <string name="project_costs_total">Totale netto</string>

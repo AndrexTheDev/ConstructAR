@@ -352,6 +352,7 @@
     <string name="field_photo_replace">Zmień zdjęcie</string>
     <string name="project_costs_title">Wartość zlecenia</string>
     <string name="project_costs_rate">Stawka godzinowa (€)</string>
+    <string name="project_costs_invalid">To nie kwota - wpisz ją jak 48,00 lub 48.00</string>
     <string name="project_costs_material">Ryczałt za materiał (€)</string>
     <string name="project_costs_labour">Robocizna</string>
     <string name="project_costs_total">Suma netto</string>

@@ -74,6 +74,7 @@ fun MaterialsScreen(
     var rateDraft by remember(firmHourlyRateCents) {
         mutableStateOf(Pricing.formatForInput(firmHourlyRateCents.toLong()))
     }
+    val rateInvalid = PricingInput.rate(rateDraft).invalid
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -115,10 +116,20 @@ fun MaterialsScreen(
                 value = rateDraft,
                 onValueChange = { text ->
                     rateDraft = text
-                    onHourlyRateChange(Pricing.parseCents(text)?.toInt()?.takeIf { it > 0 })
+                    // Only a readable amount is stored. `48,` is the state of every keypress on
+                    // the way to `48,50`, and it used to be written to the settings as "no rate",
+                    // resetting the firm's rate to the built-in default (finding 43).
+                    val typed = PricingInput.rate(text)
+                    if (!typed.invalid) onHourlyRateChange(typed.cents)
                 },
                 label = { Text(stringResource(R.string.firm_rate_label)) },
                 singleLine = true,
+                isError = rateInvalid,
+                supportingText = if (rateInvalid) {
+                    { Text(stringResource(R.string.project_costs_invalid)) }
+                } else {
+                    null
+                },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth(),
             )
