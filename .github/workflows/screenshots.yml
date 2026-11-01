@@ -141,7 +141,20 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Render and audit
-        run: node tools/screenshots_site.mjs --out build/site-matrix
+        # The findings are turned into one check-run annotation: raw job logs are not always
+        # reachable from a phone or an API client, and a red check without a reason is useless.
+        run: |
+          set +e
+          node tools/screenshots_site.mjs --out build/site-matrix > /tmp/site.log 2>&1
+          code=$?
+          cat /tmp/site.log
+          if [ -f build/site-matrix/report.md ]; then
+            summary=$(grep '^- \*\*' build/site-matrix/report.md | sed 's/^- \*\*//' | tr '\n' '|' | cut -c1-6000)
+            if [ -n "$summary" ]; then
+              echo "::error title=site matrix findings::$summary"
+            fi
+          fi
+          exit $code
 
       - name: Upload the matrix
         if: always()

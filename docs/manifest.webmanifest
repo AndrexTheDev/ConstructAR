@@ -1,0 +1,31 @@
+{
+  "name": "ConstructAR",
+  "short_name": "ConstructAR",
+  "description": "Scan the room with your phone, draw the cable or pipe run, get the metres, the material list and a signed PDF protocol. 100 % offline, six languages, PDF/CSV/GLB.",
+  "lang": "en",
+  "start_url": "https://andrexthedev.github.io/ConstructAR/",
+  "scope": "https://andrexthedev.github.io/ConstructAR/",
+  "display": "browser",
+  "background_color": "#0A0C07",
+  "theme_color": "#0A0C07",
+  "icons": [
+    {
+      "src": "https://andrexthedev.github.io/ConstructAR/assets/favicon.png",
+      "sizes": "64x64",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://andrexthedev.github.io/ConstructAR/assets/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://andrexthedev.github.io/ConstructAR/assets/logo.jpg",
+      "sizes": "768x768",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}
