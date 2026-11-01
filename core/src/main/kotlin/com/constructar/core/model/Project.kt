@@ -187,7 +187,14 @@ data class ProjectRecord(
         this
     } else {
         copy(
-            sessions = sessions.map { it.copy(endEpochMs = it.endEpochMs ?: nowMs) },
+            sessions = sessions.map {
+                // Never before the start. A phone whose clock stepped backwards while the session
+                // ran (an NTP correction after a dead spot, a manual change, an RTC that lost
+                // time) would otherwise print 09:00-08:40 in a document the customer signs, and
+                // an office has to reject that. The duration is no less true for it: a session
+                // whose end is not after its start already counts as zero minutes in `WorkTime`.
+                it.copy(endEpochMs = it.endEpochMs ?: maxOf(nowMs, it.startEpochMs))
+            },
             updatedAtEpochMs = System.currentTimeMillis(),
         )
     }

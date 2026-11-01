@@ -59,6 +59,21 @@ class WorkTimeTest {
     }
 
     @Test
+    fun `a clock that stepped backwards does not close a session before it began`() {
+        // Start at 09:00, the phone is corrected to 08:40 while the session runs. The stored end
+        // must not be earlier than the start: the protocol would otherwise show a run of work that
+        // ends before it begins, on a page the customer signs.
+        val start = 1_767_229_200_000L
+        val project = ProjectRecord.empty(id = "p", name = "Keller")
+            .startSession(session(start))
+            .stopSession(nowMs = start - 20 * WorkTime.MINUTE_MS)
+
+        val closed = project.sessions.single()
+        assertEquals(start, closed.endEpochMs)
+        assertEquals(0L, project.totalWorkMillis(nowMs = start))
+    }
+
+    @Test
     fun `a second start does not open a second clock`() {
         val project = ProjectRecord.empty(id = "p", name = "Keller")
             .startSession(session(0L))
