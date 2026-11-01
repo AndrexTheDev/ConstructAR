@@ -192,6 +192,29 @@ data class ProjectRecord(
         )
     }
 
+    /**
+     * Drops one work session.
+     *
+     * Finding 44: a stopped session could not be corrected at all, and a running one could only
+     * be stopped *now*. Whoever came back the next morning to a clock he forgot to stop had one
+     * option left - delete the room and measure it again - because the 16 hours were already on
+     * the invoice line and in the protocol. Removing the session is the correction that costs the
+     * least: the room, the runs and the photos stay, and the price follows the times that are
+     * actually true.
+     *
+     * Removing the open session is deliberate and allowed: it is how a forgotten timer is
+     * cancelled without pretending the night was worked.
+     */
+    fun removeSession(sessionId: String): ProjectRecord =
+        if (sessions.none { it.id == sessionId }) {
+            this
+        } else {
+            copy(
+                sessions = sessions.filterNot { it.id == sessionId },
+                updatedAtEpochMs = System.currentTimeMillis(),
+            )
+        }
+
     companion object {
         /** Bump when the JSON shape changes; migrations live in `ProjectMigrations`. */
         const val SCHEMA_VERSION: Int = 1

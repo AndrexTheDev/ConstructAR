@@ -289,6 +289,8 @@
     <string name="field_time_start">Inizia lavoro</string>
     <string name="field_time_stop">Ferma lavoro</string>
     <string name="field_time_running">In corso dalle %1$s</string>
+    <string name="field_time_overdue">Attenzione: il timer va avanti da %1$s - hai dimenticato di fermarlo?</string>
+    <string name="field_time_delete">Elimina questa registrazione di tempo</string>
     <string name="field_time_total">Totale</string>
     <string name="field_time_empty">Nessun tempo registrato.</string>
     <string name="field_time_open">in corso</string>

@@ -85,6 +85,7 @@ fun FieldBookScreen(
     onBack: () -> Unit,
     onStartWork: () -> Unit,
     onStopWork: () -> Unit,
+    onDeleteSession: (String) -> Unit,
     onAddDiary: (String) -> Unit,
     onDeleteDiary: (String) -> Unit,
     onAddDefect: (title: String, location: String, severity: DefectSeverity) -> Unit,
@@ -190,6 +191,20 @@ fun FieldBookScreen(
                         color = Jamaica.Lime,
                     )
                 }
+                // A clock left running overnight bills the night at the hourly rate, and nothing
+                // else on this screen would say so. The number is not capped or guessed - the
+                // operator is asked, and can delete the session below (finding 44).
+                val overdue = WorkTime.overdueSession(project.sessions, nowMs)
+                if (overdue != null) {
+                    Text(
+                        stringResource(
+                            R.string.field_time_overdue,
+                            durationLabel(WorkTime.sessionMillis(overdue, nowMs)),
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SiteColors.warning,
+                    )
+                }
             }
             GloveButton(
                 label = stringResource(if (running) R.string.field_time_stop else R.string.field_time_start),
@@ -207,7 +222,11 @@ fun FieldBookScreen(
             } else {
                 // Newest first on screen; the JSON keeps them oldest first.
                 project.sessions.asReversed().take(12).forEach { session ->
-                    SessionRow(session = session, nowMs = nowMs)
+                    SessionRow(
+                        session = session,
+                        nowMs = nowMs,
+                        onDelete = { onDeleteSession(session.id) },
+                    )
                 }
             }
         }
@@ -372,12 +391,24 @@ private fun sessionLabel(session: WorkSession, nowMs: Long): String {
 }
 
 @Composable
-private fun SessionRow(session: WorkSession, nowMs: Long) {
-    Text(
-        sessionLabel(session, nowMs),
-        style = MaterialTheme.typography.bodySmall,
-        color = if (session.endEpochMs == null) Jamaica.Lime else MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+private fun SessionRow(session: WorkSession, nowMs: Long, onDelete: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            sessionLabel(session, nowMs),
+            style = MaterialTheme.typography.bodySmall,
+            color = if (session.endEpochMs == null) Jamaica.Lime else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        // The only correction there is: a stopped clock could not be edited before finding 44,
+        // so a forgotten stop cost the operator the whole night's hours.
+        IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = stringResource(R.string.field_time_delete),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 @Composable

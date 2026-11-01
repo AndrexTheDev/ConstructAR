@@ -289,6 +289,8 @@
     <string name="field_time_start">Commencer</string>
     <string name="field_time_stop">Arrêter</string>
     <string name="field_time_running">En cours depuis %1$s</string>
+    <string name="field_time_overdue">Attention : le chronomètre tourne depuis %1$s - as-tu oublié de l’arrêter ?</string>
+    <string name="field_time_delete">Supprimer ce relevé de temps</string>
     <string name="field_time_total">Total</string>
     <string name="field_time_empty">Aucun temps enregistré.</string>
     <string name="field_time_open">en cours</string>

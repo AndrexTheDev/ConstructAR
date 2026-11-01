@@ -289,6 +289,8 @@
     <string name="field_time_start">Empezar trabajo</string>
     <string name="field_time_stop">Parar trabajo</string>
     <string name="field_time_running">En marcha desde las %1$s</string>
+    <string name="field_time_overdue">Atención: el reloj lleva %1$s en marcha, ¿se te olvidó pararlo?</string>
+    <string name="field_time_delete">Eliminar este registro de tiempo</string>
     <string name="field_time_total">Total</string>
     <string name="field_time_empty">Todavía no hay horas registradas.</string>
     <string name="field_time_open">en curso</string>

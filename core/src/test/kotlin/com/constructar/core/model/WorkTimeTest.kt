@@ -75,6 +75,28 @@ class WorkTimeTest {
     }
 
     @Test
+    fun `a clock left running overnight is flagged, not billed quietly`() {
+        val start = 1_000L
+        val sessions = listOf(session(start))
+
+        // Eight hours in: a long shift, not a mistake.
+        assertNull(WorkTime.overdueSession(sessions, start + 8 * 3_600_000L))
+        // Twelve hours exactly is still a shift somebody may have worked.
+        assertNull(WorkTime.overdueSession(sessions, start + WorkTime.OVERDUE_SESSION_MS))
+        // One minute past it: the question is asked.
+        val overdue = WorkTime.overdueSession(sessions, start + WorkTime.OVERDUE_SESSION_MS + WorkTime.MINUTE_MS)
+        assertEquals(sessions.single(), overdue)
+    }
+
+    @Test
+    fun `a stopped session is never overdue, however long it was`() {
+        // A corrected, long shift is a fact; only a clock that is still running can be forgotten.
+        val sessions = listOf(session(0L, end = 20 * 3_600_000L))
+        assertNull(WorkTime.overdueSession(sessions, 40 * 3_600_000L))
+        assertNull(WorkTime.overdueSession(emptyList(), 40 * 3_600_000L))
+    }
+
+    @Test
     fun `the running session is the open one, not the newest by timestamp`() {
         val closed = session(0L, end = 100L)
         val open = session(200L)

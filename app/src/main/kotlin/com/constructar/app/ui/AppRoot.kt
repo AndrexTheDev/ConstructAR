@@ -237,6 +237,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onBack = { navController.popBackStack() },
                             onStartWork = { viewModel.startWorkSession() },
                             onStopWork = { viewModel.stopWorkSession() },
+                            onDeleteSession = { id -> viewModel.deleteWorkSession(id) },
                             onAddDiary = { text -> viewModel.addDiaryEntry(text) },
                             onDeleteDiary = { id -> viewModel.deleteDiaryEntry(id) },
                             onAddDefect = { title, location, severity ->

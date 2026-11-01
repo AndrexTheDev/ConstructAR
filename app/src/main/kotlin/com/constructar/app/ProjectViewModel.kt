@@ -391,6 +391,18 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         if (stopped !== project) mutate(stopped)
     }
 
+    /**
+     * Drops one work session - the correction for a clock that was stopped late, or not at all.
+     *
+     * The room, the runs and the photos stay; only the hours that are not true go. See
+     * [ProjectRecord.removeSession].
+     */
+    fun deleteWorkSession(sessionId: String) {
+        val project = mutableState.value.openProject ?: return
+        val corrected = project.removeSession(sessionId)
+        if (corrected !== project) mutate(corrected)
+    }
+
     // ── Pricing ─────────────────────────────────────────────────────────────────────────
     fun updatePricing(hourlyRateCents: Int?, materialLumpSumCents: Long, onSaved: (ProjectRecord?) -> Unit = {}) {
         val project = mutableState.value.openProject ?: return
