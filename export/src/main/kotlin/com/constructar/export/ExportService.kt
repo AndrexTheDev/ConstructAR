@@ -259,6 +259,11 @@ class ExportService(
         fun routeMeshes(project: ProjectRecord): List<Pair<String, MeshData>> =
             project.routes.mapNotNull { route ->
                 if (!route.isRoutable) return@mapNotNull null
+                // A recovered run's node coordinates are relative to an ARCore session that no
+                // longer exists: its lengths belong in the paperwork, its geometry does not
+                // belong in the room. Emitting it would put a floating length of conduit into
+                // every BIM viewer. See `ConduitRoute.recovered`.
+                if (route.recovered) return@mapNotNull null
                 runCatching { route.label to RouteGeometry.build(route).mesh }.getOrNull()
             }
 

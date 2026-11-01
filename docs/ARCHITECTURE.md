@@ -139,6 +139,16 @@ rename). Routes store node positions, normals, the hit source and confidence —
 measured from soft hits is identifiable months later. The scan mesh is *not* persisted: it is
 10 MB of derived data, regenerated on demand, exported on request.
 
+A run that is still being measured is written as it grows
+(`filesDir/drafts/<project id>.json`, same atomic write, one file per project). It is not a
+project and never appears in a backup: it exists so that a process killed mid-measurement — a
+phone call, a low-memory device, a battery that gave up — costs the operator nothing. On the next
+start the AR screen offers the run back. What survives exactly is what the paperwork needs (the
+points, the conduit spec, whether the loop was closed); what cannot survive is the ARCore world
+origin, so the recovered route is marked `recovered`: it counts fully in the bill of materials
+and the protocol, and it is kept out of the 3D export and the AR preview, where its coordinates
+would be a length of conduit floating somewhere in the room.
+
 Schema version `1`; `ProjectMigrations` is the place for the next one.
 
 ---

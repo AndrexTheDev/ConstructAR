@@ -52,6 +52,10 @@
     <string name="ar_leave_body">%1$s misurati. Salvarlo come tratta o scartarlo?</string>
     <string name="ar_leave_save">Salva come tratta</string>
     <string name="ar_leave_discard">Scarta</string>
+    <string name="draft_title">Misurazione non terminata</string>
+    <string name="draft_body">%1$s, salvata l’ultima volta alle %2$s. Le lunghezze e i raccordi sono esatti; la posizione 3D non è recuperabile.</string>
+    <string name="draft_save">Salva come tratta</string>
+    <string name="draft_discard">Scarta</string>
     <string name="ar_torch">Torcia</string>
     <string name="ar_scan">Scansiona locale</string>
     <string name="ar_stop_scan">Ferma scansione</string>

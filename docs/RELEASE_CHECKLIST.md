@@ -58,6 +58,9 @@ Everything here is a gate before an APK reaches a site, in the order it should b
       back with the dialog open closes the dialog, not the screen
 - [ ] Thermal: 15-minute continuous scan without ANR, throttle mode visible in the HUD
 - [ ] Process death during a scan → project list intact, no half-written JSON
+- [ ] Kill the app mid-run (Developer options → *Don't keep activities*, or swipe it away
+      after 3+ points) → re-entering the AR screen offers the run back; *save* restores the
+      length and the fittings, *discard* removes the offer for good
 
 ## 4. Measurement verification (the one that matters)
 

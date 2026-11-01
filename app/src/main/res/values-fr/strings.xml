@@ -52,6 +52,10 @@
     <string name="ar_leave_body">%1$s mesurés. L’enregistrer comme tracé ou l’abandonner ?</string>
     <string name="ar_leave_save">Enregistrer comme tracé</string>
     <string name="ar_leave_discard">Abandonner</string>
+    <string name="draft_title">Mesure inachevée</string>
+    <string name="draft_body">%1$s, enregistrée pour la dernière fois à %2$s. Les longueurs et les raccords sont exacts ; la position 3D ne peut pas être rétablie.</string>
+    <string name="draft_save">Enregistrer comme tracé</string>
+    <string name="draft_discard">Abandonner</string>
     <string name="ar_torch">Torche</string>
     <string name="ar_scan">Scanner la pièce</string>
     <string name="ar_stop_scan">Arrêter le scan</string>

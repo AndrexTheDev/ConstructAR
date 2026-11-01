@@ -96,6 +96,18 @@ data class ConduitRoute(
     /** `true` when the operator closed the loop (rings / closed circuits). */
     val closedLoop: Boolean = false,
     val notes: String = "",
+    /**
+     * `true` when this run was recovered from a draft after the app was killed mid-measurement.
+     *
+     * Its **lengths, fitting counts and paperwork are exact** — they come from the recorded
+     * points — but its *coordinates* are not: an ARCore world origin does not survive the
+     * process, so the points are relative to a session that no longer exists. Therefore a
+     * recovered run is deliberately kept out of the 3D export and out of the AR preview
+     * (it would appear at a random place in the room) while counting fully in the bill of
+     * materials and the protocol. Losing a measurement to a crash is the one failure this app
+     * cannot accept; pretending the geometry is where it was would be the second.
+     */
+    val recovered: Boolean = false,
 ) {
     val points: List<Vec3> get() = nodes.map { it.position }
 

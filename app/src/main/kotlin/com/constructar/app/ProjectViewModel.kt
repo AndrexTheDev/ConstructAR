@@ -28,6 +28,8 @@ import com.constructar.core.model.DiaryEntry
 import com.constructar.core.model.PhotoKind
 import com.constructar.core.model.PhotoTokens
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.model.RouteDraft
+import com.constructar.core.model.RouteLabels
 import com.constructar.core.model.WorkSession
 import com.constructar.core.price.Pricing
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -90,6 +92,13 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val firmHourlyRateCents: Int = Pricing.DEFAULT_HOURLY_RATE_CENTS,
         /** Decoded thumbnails of the open project's entry photos, by token. */
         val fieldPhotos: Map<String, Bitmap> = emptyMap(),
+        /**
+         * A run that a killed process left behind, ready to be offered on the AR screen.
+         *
+         * Loaded when the screen is entered, so a cold start never has to read a file on the
+         * way to the viewfinder.
+         */
+        val pendingDraft: RouteDraft? = null,
     )
 
     private val mutableState = MutableStateFlow(UiState())
@@ -199,6 +208,64 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val project = mutableState.value.openProject ?: return
         val updated = project.upsertRoute(route)
         mutate(updated, onSaved)
+    }
+
+    // ── Drafts of a run in progress ────────────────────────────────────────────────────────
+
+    /**
+     * Loads whatever the last process left of a run for the open project.
+     *
+     * Called on entering the AR screen rather than at start-up: a draft is only interesting to
+     * the screen that can do something with it, and reading it here keeps the home screen free
+     * of file access it does not need.
+     */
+    fun loadDraft() {
+        val project = mutableState.value.openProject ?: return
+        viewModelScope.launch {
+            val draft = repository.loadDraft(project.id)
+            // Still the same project? The operator may have gone back while this was in flight.
+            if (mutableState.value.openProject?.id == project.id) {
+                mutableState.value = mutableState.value.copy(pendingDraft = draft)
+            }
+        }
+    }
+
+    /**
+     * Persists the run being measured, or clears it with `null`.
+     *
+     * Fire-and-forget on purpose: the screen writes on every committed point, and a write that
+     * fails must never interrupt a measurement. The cost of a lost draft is the same as before
+     * this existed; the cost of a blocked tap is worse.
+     */
+    fun saveDraft(draft: RouteDraft?) {
+        val projectId = mutableState.value.openProject?.id ?: return
+        viewModelScope.launch {
+            if (draft == null || !draft.isRecoverable) {
+                repository.deleteDraft(projectId)
+            } else {
+                repository.saveDraft(draft)
+            }
+        }
+    }
+
+    /** Takes the interrupted run as a finished route - marked as recovered - and drops the draft. */
+    fun recoverDraft(draft: RouteDraft) {
+        val project = mutableState.value.openProject ?: return
+        val route = draft.toRoute(
+            id = "route-${UUID.randomUUID()}",
+            label = RouteLabels.next(draft.spec, project.routes.size),
+            createdAtEpochMs = System.currentTimeMillis(),
+        ) ?: return
+        mutableState.value = mutableState.value.copy(pendingDraft = null)
+        viewModelScope.launch { repository.deleteDraft(project.id) }
+        upsertRoute(route)
+    }
+
+    /** Forgets the interrupted run, because the operator said so. */
+    fun discardDraft() {
+        val project = mutableState.value.openProject ?: return
+        mutableState.value = mutableState.value.copy(pendingDraft = null)
+        viewModelScope.launch { repository.deleteDraft(project.id) }
     }
 
     fun removeRoute(routeId: String, onSaved: (ProjectRecord?) -> Unit = {}) {

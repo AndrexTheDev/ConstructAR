@@ -76,6 +76,7 @@ import com.constructar.app.R
 import com.constructar.app.ui.ActionTone
 import com.constructar.app.ui.GloveButton
 import com.constructar.app.ui.GloveButtonRow
+import com.constructar.app.ui.formatTimeLabel
 import com.constructar.app.ui.label
 import com.constructar.app.ui.message
 import com.constructar.app.ui.routingLabel
@@ -88,6 +89,8 @@ import com.google.ar.core.Config
 import com.constructar.core.model.ConduitPresets
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.model.RouteDraft
+import com.constructar.core.model.RouteLabels
 
 /**
  * The AR measuring screen.
@@ -113,6 +116,12 @@ fun ArMeasureScreen(
     onRouteFinished: (com.constructar.core.model.ConduitRoute) -> Unit,
     onScanSummary: (com.constructar.core.model.ScanSummary) -> Unit,
     onOpenExport: () -> Unit,
+    /** A run a killed process left behind, loaded by the caller. Offered back once per entry. */
+    draft: RouteDraft? = null,
+    /** `null` clears the stored draft; anything else is the run as it stands. */
+    onDraftChanged: (RouteDraft?) -> Unit = {},
+    onDraftRecovered: (RouteDraft) -> Unit = {},
+    onDraftDiscarded: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -196,10 +205,43 @@ fun ArMeasureScreen(
      * run to save, above it there is.
      */
     var confirmLeave by remember { mutableStateOf(false) }
+
+    /**
+     * The interrupted run, offered once per entry.
+     *
+     * Only while nothing has been tapped in this session: a draft that arrives from disk a moment
+     * after the operator has started measuring must never replace what is on screen.
+     */
+    var recoverable by remember(project.id) { mutableStateOf<RouteDraft?>(null) }
+    LaunchedEffect(project.id, draft) {
+        if (draft != null && draft.isRecoverable && routeState.nodeCount == 0) recoverable = draft
+    }
+    // Whether *this* screen has written a draft, so the first composition (zero points) does not
+    // delete the draft it is about to offer.
+    var draftWritten by remember(project.id) { mutableStateOf(false) }
+    LaunchedEffect(project.id, routeState.nodeCount, routeState.closedLoop) {
+        val state = routeState
+        if (state.nodeCount >= LeaveGuard.MIN_NODES_FOR_A_RUN) {
+            onDraftChanged(
+                RouteDraft(
+                    projectId = project.id,
+                    spec = state.spec,
+                    nodes = state.nodes,
+                    closedLoop = state.closedLoop,
+                    savedAtEpochMs = System.currentTimeMillis(),
+                ),
+            )
+            draftWritten = true
+        } else if (draftWritten) {
+            // Everything was undone: there is no run left to recover.
+            onDraftChanged(null)
+            draftWritten = false
+        }
+    }
     val commitRun: () -> Unit = {
         // Persisted label: locale-independent and stable across devices, so a run reads the same
-        // in the CSV, the PDF and the project file.
-        val runLabel = "${spec.kind.name} ${spec.sizeLabel} #${project.routes.size + 1}"
+        // in the CSV, the PDF and the project file. One implementation, in `RouteLabels`.
+        val runLabel = RouteLabels.next(spec, project.routes.size)
         controller.finish(label = runLabel)?.let { route ->
             onRouteFinished(route)
             // Snapshot the scan statistics with the first finished run: the protocol header must
@@ -232,7 +274,9 @@ fun ArMeasureScreen(
     }
     // Committed runs are re-meshed when a new one is added (and at most once per second).
     LaunchedEffect(project.routes.size) {
-        controller.syncCommittedRoutes(project.routes)
+        // A recovered run's coordinates belong to a session that no longer exists: drawing it
+        // would put a length of conduit in a random spot of this room.
+        controller.syncCommittedRoutes(project.routes.filterNot { it.recovered })
     }
 
     val lengthText = stringResource(R.string.hud_length, routeState.lengthMeters)
@@ -620,6 +664,7 @@ fun ArMeasureScreen(
                         onClick = {
                             confirmLeave = false
                             commitRun()
+                            onDraftChanged(null)
                             onBack()
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -629,6 +674,8 @@ fun ArMeasureScreen(
                         icon = Icons.Default.Close,
                         onClick = {
                             confirmLeave = false
+                            // A deliberate discard must not come back as an offer next time.
+                            onDraftChanged(null)
                             onBack()
                         },
                         tone = ActionTone.DANGER,
@@ -640,6 +687,60 @@ fun ArMeasureScreen(
                     ) {
                         Text(stringResource(R.string.home_cancel), color = Color.White.copy(alpha = 0.75f))
                     }
+                }
+            }
+        }
+    }
+
+    // The run the last process did not finish. Drawn over the viewfinder so it cannot be
+    // scrolled past, and not dismissible by tapping outside: the operator has to decide.
+    recoverable?.let { pending ->
+        Dialog(onDismissRequest = {}) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xFF10140C),
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.draft_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.draft_body,
+                            pluralStringResource(
+                                R.plurals.ar_points,
+                                pending.nodes.size,
+                                pending.nodes.size,
+                            ) + " · " + stringResource(R.string.hud_length, pending.lengthMeters),
+                            formatTimeLabel(pending.savedAtEpochMs),
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.8f),
+                    )
+                    GloveButton(
+                        label = stringResource(R.string.draft_save),
+                        icon = Icons.Default.Save,
+                        onClick = {
+                            recoverable = null
+                            onDraftRecovered(pending)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    GloveButton(
+                        label = stringResource(R.string.draft_discard),
+                        icon = Icons.Default.Close,
+                        onClick = {
+                            recoverable = null
+                            onDraftDiscarded()
+                        },
+                        tone = ActionTone.DANGER,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         }

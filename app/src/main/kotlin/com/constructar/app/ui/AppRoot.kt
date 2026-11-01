@@ -173,12 +173,19 @@ fun AppRoot(viewModel: ProjectViewModel) {
                         )
                         LaunchedEffect(Unit) { navController.popBackStack() }
                     } else {
+                        // Read once per visit to the viewfinder: a draft only matters to the
+                        // screen that can offer it back.
+                        LaunchedEffect(project.id) { viewModel.loadDraft() }
                         ArMeasureScreen(
                             project = project,
                             onBack = { navController.popBackStack() },
                             onRouteFinished = { route -> viewModel.upsertRoute(route) },
                             onScanSummary = { summary -> viewModel.updateScanSummary(summary) },
                             onOpenExport = { navController.navigate(Routes.EXPORT) },
+                            draft = state.pendingDraft,
+                            onDraftChanged = { draft -> viewModel.saveDraft(draft) },
+                            onDraftRecovered = { draft -> viewModel.recoverDraft(draft) },
+                            onDraftDiscarded = { viewModel.discardDraft() },
                         )
                     }
                 }

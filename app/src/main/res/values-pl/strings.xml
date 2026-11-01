@@ -52,6 +52,10 @@
     <string name="ar_leave_body">Zmierzono %1$s. Zapisać jako trasę czy odrzucić?</string>
     <string name="ar_leave_save">Zapisz jako trasę</string>
     <string name="ar_leave_discard">Odrzuć</string>
+    <string name="draft_title">Nieukończony pomiar</string>
+    <string name="draft_body">%1$s, ostatni zapis o %2$s. Długości i kształtki są dokładne; pozycji 3D nie da się odtworzyć.</string>
+    <string name="draft_save">Zapisz jako trasę</string>
+    <string name="draft_discard">Odrzuć</string>
     <string name="ar_torch">Latarka</string>
     <string name="ar_scan">Skanuj pomieszczenie</string>
     <string name="ar_stop_scan">Zatrzymaj skan</string>

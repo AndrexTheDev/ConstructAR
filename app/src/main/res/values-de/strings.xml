@@ -52,6 +52,10 @@
     <string name="ar_leave_body">%1$s gemessen. Als Strecke speichern oder verwerfen?</string>
     <string name="ar_leave_save">Als Strecke speichern</string>
     <string name="ar_leave_discard">Verwerfen</string>
+    <string name="draft_title">Nicht beendete Messung</string>
+    <string name="draft_body">%1$s, zuletzt gespeichert um %2$s. Längen und Fittings stimmen; die 3D-Position lässt sich nicht wiederherstellen.</string>
+    <string name="draft_save">Als Strecke speichern</string>
+    <string name="draft_discard">Verwerfen</string>
     <string name="ar_torch">Lampe</string>
     <string name="ar_scan">Raum scannen</string>
     <string name="ar_stop_scan">Scan stoppen</string>

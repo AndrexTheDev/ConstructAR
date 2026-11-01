@@ -52,6 +52,10 @@
     <string name="ar_leave_body">%1$s medidos. ¿Guardarlo como tramo o descartarlo?</string>
     <string name="ar_leave_save">Guardar como tramo</string>
     <string name="ar_leave_discard">Descartar</string>
+    <string name="draft_title">Medición sin terminar</string>
+    <string name="draft_body">%1$s, guardada por última vez a las %2$s. Las longitudes y los accesorios son exactos; la posición 3D no se puede recuperar.</string>
+    <string name="draft_save">Guardar como tramo</string>
+    <string name="draft_discard">Descartar</string>
     <string name="ar_torch">Linterna</string>
     <string name="ar_scan">Escanear estancia</string>
     <string name="ar_stop_scan">Detener escaneo</string>

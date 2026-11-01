@@ -52,6 +52,10 @@
     <string name="ar_leave_body">%1$s measured. Save it as a run, or discard it?</string>
     <string name="ar_leave_save">Save as run</string>
     <string name="ar_leave_discard">Discard</string>
+    <string name="draft_title">Unfinished measurement</string>
+    <string name="draft_body">%1$s, last saved at %2$s. Lengths and fittings are exact; the 3D position cannot be restored.</string>
+    <string name="draft_save">Save as route</string>
+    <string name="draft_discard">Discard</string>
     <string name="ar_torch">Torch</string>
     <string name="ar_scan">Scan room</string>
     <string name="ar_stop_scan">Stop scan</string>

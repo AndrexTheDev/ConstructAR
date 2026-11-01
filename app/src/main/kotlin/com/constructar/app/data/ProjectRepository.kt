@@ -13,6 +13,7 @@ import android.net.Uri
 import android.util.Log
 import com.constructar.core.io.SafeFiles
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.model.RouteDraft
 import com.constructar.core.model.WorkTime
 import com.constructar.core.model.ScanSummary
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +46,19 @@ class ProjectRepository(private val context: Context) {
             mkdirs()
             // A `.tmp` file here means a previous write was killed mid-flight; the target it
             // would have replaced is still intact, so the leftover is simply removed.
+            SafeFiles.clearStaleTemporaries(this)
+        }
+    }
+
+    /**
+     * Drafts of runs that are still being measured, one file per project.
+     *
+     * A separate directory from the projects on purpose: a draft is not a project and must never
+     * be listed as one, and a backup must not carry half a measurement as if it were a room.
+     */
+    private val draftDirectory: File by lazy {
+        File(context.filesDir, "drafts").apply {
+            mkdirs()
             SafeFiles.clearStaleTemporaries(this)
         }
     }
@@ -207,6 +221,41 @@ class ProjectRepository(private val context: Context) {
         String(buffer.toByteArray(), Charsets.UTF_8)
     }.getOrNull()
 
+    // ── Drafts of runs in progress ──────────────────────────────────────────────────────────
+
+    /**
+     * Writes the run that is being measured, so a killed process does not take it.
+     *
+     * Called on every committed point, so the write has to be cheap and atomic - it is the same
+     * `SafeFiles.writeAtomically` path a project uses (temporary file, `fsync`, rename), which
+     * means a kill in the middle leaves the previous draft intact rather than a half-written one.
+     * A draft with fewer than two points is a mis-tap, not a measurement: it is deleted instead.
+     */
+    suspend fun saveDraft(draft: RouteDraft): Boolean = withContext(Dispatchers.IO) {
+        if (!isSafeToken(draft.projectId)) return@withContext false
+        if (!draft.isRecoverable) return@withContext deleteDraft(draft.projectId)
+        val text = runCatching {
+            json.encodeToString(RouteDraft.serializer(), draft)
+        }.getOrNull() ?: return@withContext false
+        SafeFiles.writeAtomically(draftFileFor(draft.projectId), text)
+    }
+
+    /** The stored draft for [projectId], or `null` when there is none (or it is unreadable). */
+    suspend fun loadDraft(projectId: String): RouteDraft? = withContext(Dispatchers.IO) {
+        if (!isSafeToken(projectId)) return@withContext null
+        val file = draftFileFor(projectId)
+        if (!file.isFile) return@withContext null
+        runCatching {
+            json.decodeFromString(RouteDraft.serializer(), file.readText())
+        }.getOrNull()?.takeIf { it.isRecoverable }
+    }
+
+    suspend fun deleteDraft(projectId: String): Boolean = withContext(Dispatchers.IO) {
+        if (!isSafeToken(projectId)) return@withContext false
+        val file = draftFileFor(projectId)
+        !file.exists() || file.delete()
+    }
+
     suspend fun delete(id: String): Boolean = withContext(Dispatchers.IO) {
         if (!isSafeToken(id)) return@withContext false
         // The site photo is `<id>.jpg`, an entry photo is `<id>__diary_<entry>.jpg`; deleting a
@@ -215,6 +264,9 @@ class ProjectRepository(private val context: Context) {
             ?.filter { it.name == "$id.jpg" || it.name.startsWith("${id}__") }
             ?.forEach { it.delete() }
         fileFor(id).delete()
+        // A draft belongs to exactly one project; deleting the room must not leave it behind to
+        // be offered again on the next start (with nothing to attach it to).
+        draftFileFor(id).delete()
     }
 
     /** Merges a finished scan summary into the stored project. */
@@ -304,6 +356,8 @@ class ProjectRepository(private val context: Context) {
     fun exportStagingDirectory(): File = File(context.cacheDir, "exports").apply { mkdirs() }
 
     private fun fileFor(id: String) = File(directory, "$id.json")
+
+    private fun draftFileFor(id: String) = File(draftDirectory, "$id.json")
 
     private val photoDirectory: File by lazy {
         File(context.filesDir, "photos").apply { mkdirs() }
