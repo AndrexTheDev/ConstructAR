@@ -48,6 +48,10 @@
     <string name="ar_undo">Annuler</string>
     <string name="ar_close_loop">Fermer</string>
     <string name="ar_finish">Terminer le tracé</string>
+    <string name="ar_leave_title">Quitter le tracé ?</string>
+    <string name="ar_leave_body">%1$s mesurés. L’enregistrer comme tracé ou l’abandonner ?</string>
+    <string name="ar_leave_save">Enregistrer comme tracé</string>
+    <string name="ar_leave_discard">Abandonner</string>
     <string name="ar_torch">Torche</string>
     <string name="ar_scan">Scanner la pièce</string>
     <string name="ar_stop_scan">Arrêter le scan</string>

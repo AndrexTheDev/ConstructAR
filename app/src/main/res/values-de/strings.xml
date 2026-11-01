@@ -48,6 +48,10 @@
     <string name="ar_undo">Zurück</string>
     <string name="ar_close_loop">Schließen</string>
     <string name="ar_finish">Trasse fertig</string>
+    <string name="ar_leave_title">Strecke verlassen?</string>
+    <string name="ar_leave_body">%1$s gemessen. Als Strecke speichern oder verwerfen?</string>
+    <string name="ar_leave_save">Als Strecke speichern</string>
+    <string name="ar_leave_discard">Verwerfen</string>
     <string name="ar_torch">Lampe</string>
     <string name="ar_scan">Raum scannen</string>
     <string name="ar_stop_scan">Scan stoppen</string>

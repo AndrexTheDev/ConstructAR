@@ -48,6 +48,10 @@
     <string name="ar_undo">Undo</string>
     <string name="ar_close_loop">Close loop</string>
     <string name="ar_finish">Finish run</string>
+    <string name="ar_leave_title">Leave this run?</string>
+    <string name="ar_leave_body">%1$s measured. Save it as a run, or discard it?</string>
+    <string name="ar_leave_save">Save as run</string>
+    <string name="ar_leave_discard">Discard</string>
     <string name="ar_torch">Torch</string>
     <string name="ar_scan">Scan room</string>
     <string name="ar_stop_scan">Stop scan</string>

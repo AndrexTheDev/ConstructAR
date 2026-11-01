@@ -51,6 +51,8 @@ Everything here is a gate before an APK reaches a site, in the order it should b
 - [ ] Airplane mode: scan, measure, export all work
 - [ ] Torch: supported device turns it on below 40 lux, off above 120 lux, no flicker
 - [ ] Tracking loss (cover the camera) → coaching text, recovery without losing the run
+- [ ] Back gesture and close button after ≥ 2 points → dialog offers save / discard / cancel;
+      back with the dialog open closes the dialog, not the screen
 - [ ] Thermal: 15-minute continuous scan without ANR, throttle mode visible in the HUD
 - [ ] Process death during a scan → project list intact, no half-written JSON
 

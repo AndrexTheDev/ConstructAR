@@ -48,6 +48,10 @@
     <string name="ar_undo">Deshacer</string>
     <string name="ar_close_loop">Cerrar</string>
     <string name="ar_finish">Terminar trazado</string>
+    <string name="ar_leave_title">¿Salir del trazado?</string>
+    <string name="ar_leave_body">%1$s medidos. ¿Guardarlo como tramo o descartarlo?</string>
+    <string name="ar_leave_save">Guardar como tramo</string>
+    <string name="ar_leave_discard">Descartar</string>
     <string name="ar_torch">Linterna</string>
     <string name="ar_scan">Escanear estancia</string>
     <string name="ar_stop_scan">Detener escaneo</string>

@@ -48,6 +48,10 @@
     <string name="ar_undo">Cofnij</string>
     <string name="ar_close_loop">Zamknij</string>
     <string name="ar_finish">Zakończ trasę</string>
+    <string name="ar_leave_title">Wyjść z trasy?</string>
+    <string name="ar_leave_body">Zmierzono %1$s. Zapisać jako trasę czy odrzucić?</string>
+    <string name="ar_leave_save">Zapisz jako trasę</string>
+    <string name="ar_leave_discard">Odrzuć</string>
     <string name="ar_torch">Latarka</string>
     <string name="ar_scan">Skanuj pomieszczenie</string>
     <string name="ar_stop_scan">Zatrzymaj skan</string>

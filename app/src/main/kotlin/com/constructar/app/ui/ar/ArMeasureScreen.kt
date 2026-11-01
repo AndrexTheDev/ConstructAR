@@ -11,6 +11,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.PackageManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -40,6 +41,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -60,6 +62,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.constructar.app.R
@@ -145,6 +148,34 @@ fun ArMeasureScreen(
     var spec by remember { mutableStateOf(ConduitPresets.all.first()) }
     var showScanner by remember { mutableStateOf(true) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
+
+    /**
+     * A run of two points or more is the operator's work, and leaving the screen used to throw
+     * it away without a word: the on-screen close button and the system back gesture both popped
+     * the screen, `release()` dropped the anchors, and eight taps along a wall were gone. The
+     * system gesture had no handler at all, so the *quietest* way out was the one that lost the
+     * most. Two points is the same threshold as `ConduitRoute.isRoutable` - below it there is no
+     * run to save, above it there is.
+     */
+    var confirmLeave by remember { mutableStateOf(false) }
+    val commitRun: () -> Unit = {
+        // Persisted label: locale-independent and stable across devices, so a run reads the same
+        // in the CSV, the PDF and the project file.
+        val runLabel = "${spec.kind.name} ${spec.sizeLabel} #${project.routes.size + 1}"
+        controller.finish(label = runLabel)?.let { route ->
+            onRouteFinished(route)
+            // Snapshot the scan statistics with the first finished run: the protocol header must
+            // describe the room as it was measured.
+            onScanSummary(controller.scanSummary())
+        }
+    }
+    val leave: () -> Unit = {
+        if (LeaveGuard.needsConfirmation(routeState.nodeCount)) confirmLeave = true else onBack()
+    }
+    // Back closes the dialog before it closes the screen.
+    BackHandler(enabled = LeaveGuard.needsConfirmation(routeState.nodeCount)) {
+        confirmLeave = !confirmLeave
+    }
 
     // Tap results are produced on the render thread; they are applied here, on the main
     // thread, where anchor creation belongs.
@@ -336,7 +367,7 @@ fun ArMeasureScreen(
                             tint = Color.White,
                         )
                     }
-                    IconButton(onClick = onBack, modifier = Modifier.size(56.dp)) {
+                    IconButton(onClick = leave, modifier = Modifier.size(56.dp)) {
                         Icon(
                             Icons.Default.Close,
                             contentDescription = stringResource(R.string.ar_close),
@@ -468,17 +499,7 @@ fun ArMeasureScreen(
                 GloveButton(
                     label = stringResource(R.string.ar_finish),
                     icon = Icons.Default.Save,
-                    onClick = {
-                        // Persisted label: locale-independent and stable across devices, so a
-                        // run reads the same in the CSV, the PDF and the project file.
-                        val runLabel = "${spec.kind.name} ${spec.sizeLabel} #${project.routes.size + 1}"
-                        controller.finish(label = runLabel)?.let { route ->
-                            onRouteFinished(route)
-                            // Snapshot the scan statistics with the first finished run: the
-                            // protocol header must describe the room as it was measured.
-                            onScanSummary(controller.scanSummary())
-                        }
-                    },
+                    onClick = commitRun,
                     tone = ActionTone.PRIMARY,
                     enabled = routeState.canFinish,
                     modifier = Modifier.weight(2f),
@@ -500,6 +521,58 @@ fun ArMeasureScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+    }
+
+    if (confirmLeave) {
+        Dialog(onDismissRequest = { confirmLeave = false }) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xFF10140C),
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.ar_leave_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                    )
+                    // Same two strings the HUD already resolved: no second formatting site.
+                    Text(
+                        text = stringResource(R.string.ar_leave_body, pointsText + " · " + lengthText),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.8f),
+                    )
+                    GloveButton(
+                        label = stringResource(R.string.ar_leave_save),
+                        icon = Icons.Default.Save,
+                        onClick = {
+                            confirmLeave = false
+                            commitRun()
+                            onBack()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    GloveButton(
+                        label = stringResource(R.string.ar_leave_discard),
+                        icon = Icons.Default.Close,
+                        onClick = {
+                            confirmLeave = false
+                            onBack()
+                        },
+                        tone = ActionTone.DANGER,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    TextButton(
+                        onClick = { confirmLeave = false },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.home_cancel), color = Color.White.copy(alpha = 0.75f))
+                    }
+                }
+            }
         }
     }
 }
