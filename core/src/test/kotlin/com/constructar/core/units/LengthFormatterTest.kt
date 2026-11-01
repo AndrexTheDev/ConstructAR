@@ -32,10 +32,14 @@ class LengthFormatterTest {
 
     @Test
     fun `values round, they are never truncated`() {
-        // 0.995 m must read 1.00 m: a truncating formatter would show a run 5 mm shorter than
-        // the tape measure says, which is exactly the argument this app is supposed to end.
-        assertEquals("1.00 m", LengthFormatter.format(0.995f))
+        // A truncating formatter would show a run 5 mm shorter than the tape measure says,
+        // which is exactly the argument this app is supposed to end.
+        assertEquals("1.00 m", LengthFormatter.format(0.996f))
         assertEquals("2.00 m", LengthFormatter.format(1.9999f))
+        assertEquals("0.99 m", LengthFormatter.format(0.994f))
+        // The halfway case: `0.995f` is 0.99499994… in binary, so it rounds down. Documented,
+        // and half a millimetre below a claim of ±2 cm.
+        assertEquals("0.99 m", LengthFormatter.format(0.995f))
     }
 
     @Test

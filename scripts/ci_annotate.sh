@@ -63,8 +63,12 @@ emit() {
 grep -E '(^|: )(e|w): (file:|⚠)' "$CLEAN" | head -n 40 > /tmp/ann_kotlin.txt
 grep -E '^e: ' "$CLEAN" | head -n 40 >> /tmp/ann_kotlin.txt
 
-# 2. What went wrong: the FAILURE block and the failed task header.
-sed -n '/^FAILURE:/,/^\* Exception is:/p' "$CLEAN" | head -n 40 > /tmp/ann_failure.txt
+# 2. What went wrong: everything from the FAILURE line to the end of the log. A modern Gradle
+# failure prints its reason *after* the header ("1: Task failed with an exception. / * What
+# went wrong: ..."), so stopping at the first "Exception is:" or at the first 40 lines is how
+# the reason gets lost.
+awk '/^FAILURE:/{found = NR} {lines[NR] = $0} END { if (found) for (i = found; i <= NR; i++) print lines[i] }' \
+  "$CLEAN" | head -n 120 > /tmp/ann_failure.txt
 grep -E "^> Task .* FAILED" "$CLEAN" | head -n 20 >> /tmp/ann_failure.txt
 grep -E '(^|[[:space:]])(error:|Caused by:)' "$CLEAN" | head -n 20 >> /tmp/ann_failure.txt
 
