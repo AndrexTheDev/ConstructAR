@@ -364,6 +364,7 @@
 
     <string name="field_photo_add">Dodaj zdjęcie</string>
     <string name="field_photo_replace">Zmień zdjęcie</string>
+    <string name="field_photo_on_file">Zdjęcie już zapisane</string>
     <string name="project_costs_title">Wartość zlecenia</string>
     <string name="project_costs_rate">Stawka godzinowa (€)</string>
     <string name="project_costs_invalid">To nie kwota - wpisz ją jak 48,00 lub 48.00</string>

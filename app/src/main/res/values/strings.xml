@@ -360,6 +360,7 @@
 
     <string name="field_photo_add">Add photo</string>
     <string name="field_photo_replace">Replace photo</string>
+    <string name="field_photo_on_file">Photo on file</string>
     <string name="project_costs_title">What the job is worth</string>
     <string name="project_costs_rate">Hourly rate (€)</string>
     <string name="project_costs_invalid">No amount: write it like 48,00 or 48.00</string>

@@ -269,6 +269,7 @@ fun FieldBookScreen(
                     DiaryRow(
                         entry = entry,
                         thumbnail = token?.let(photoFor),
+                        hasPhoto = token != null,
                         onPhoto = { capture(PhotoTokens.forDiary(project.id, entry.id)) },
                         onDelete = {
                             pendingDelete = PendingDelete(DeleteKind.DIARY, entry.id, entry.text)
@@ -352,6 +353,7 @@ fun FieldBookScreen(
                     DefectRow(
                         defect = defect,
                         thumbnail = token?.let(photoFor),
+                        hasPhoto = token != null,
                         onPhoto = { capture(PhotoTokens.forDefect(project.id, defect.id)) },
                         onToggle = { onToggleDefect(defect.id) },
                         onDelete = {
@@ -485,9 +487,11 @@ private fun SessionRow(session: WorkSession, nowMs: Long, onDelete: () -> Unit) 
 private fun DiaryRow(
     entry: DiaryEntry,
     thumbnail: Bitmap?,
+    hasPhoto: Boolean,
     onPhoto: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val affordance = photoAffordance(hasPhoto = hasPhoto, loaded = thumbnail != null)
     Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f)) {
             Text(
@@ -496,9 +500,10 @@ private fun DiaryRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(entry.text, style = MaterialTheme.typography.bodyMedium)
-            if (thumbnail != null) {
-                Image(
-                    bitmap = thumbnail.asImageBitmap(),
+            when (affordance) {
+                PhotoAffordance.ADD -> Unit
+                PhotoAffordance.REPLACE -> Image(
+                    bitmap = requireNotNull(thumbnail).asImageBitmap(),
                     contentDescription = stringResource(R.string.photo_title),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -507,15 +512,27 @@ private fun DiaryRow(
                         .height(120.dp)
                         .clip(RoundedCornerShape(12.dp)),
                 )
+                // The photo exists and this screen did not decode it: say so, so the camera is
+                // read as "replace" and a tap cannot quietly overwrite a picture already taken.
+                PhotoAffordance.ON_FILE -> Text(
+                    stringResource(R.string.field_photo_on_file),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
             }
         }
         IconButton(onClick = onPhoto, modifier = Modifier.size(48.dp)) {
             Icon(
                 Icons.Default.PhotoCamera,
                 contentDescription = stringResource(
-                    if (thumbnail == null) R.string.field_photo_add else R.string.field_photo_replace,
+                    if (affordance == PhotoAffordance.ADD) R.string.field_photo_add else R.string.field_photo_replace,
                 ),
-                tint = if (thumbnail == null) MaterialTheme.colorScheme.onSurfaceVariant else Jamaica.Lime,
+                tint = if (affordance == PhotoAffordance.ADD) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    Jamaica.Lime
+                },
             )
         }
         IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
@@ -532,6 +549,7 @@ private fun DiaryRow(
 private fun DefectRow(
     defect: DefectItem,
     thumbnail: Bitmap?,
+    hasPhoto: Boolean,
     onPhoto: () -> Unit,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
@@ -543,6 +561,7 @@ private fun DefectRow(
         else -> Jamaica.Ash
     }
     val severity = severityLabel(defect.severity)
+    val affordance = photoAffordance(hasPhoto = hasPhoto, loaded = thumbnail != null)
     val resolvedLabel = stringResource(R.string.pdf_status_resolved)
     val detail = listOfNotNull(
         defect.location.takeIf { it.isNotBlank() },
@@ -568,9 +587,10 @@ private fun DefectRow(
                 },
             )
             Text(detail, style = MaterialTheme.typography.labelSmall, color = accent)
-            if (thumbnail != null) {
-                Image(
-                    bitmap = thumbnail.asImageBitmap(),
+            when (affordance) {
+                PhotoAffordance.ADD -> Unit
+                PhotoAffordance.REPLACE -> Image(
+                    bitmap = requireNotNull(thumbnail).asImageBitmap(),
                     contentDescription = stringResource(R.string.photo_title),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -579,15 +599,25 @@ private fun DefectRow(
                         .height(110.dp)
                         .clip(RoundedCornerShape(12.dp)),
                 )
+                PhotoAffordance.ON_FILE -> Text(
+                    stringResource(R.string.field_photo_on_file),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
             }
         }
         IconButton(onClick = onPhoto, modifier = Modifier.size(48.dp)) {
             Icon(
                 Icons.Default.PhotoCamera,
                 contentDescription = stringResource(
-                    if (thumbnail == null) R.string.field_photo_add else R.string.field_photo_replace,
+                    if (affordance == PhotoAffordance.ADD) R.string.field_photo_add else R.string.field_photo_replace,
                 ),
-                tint = if (thumbnail == null) MaterialTheme.colorScheme.onSurfaceVariant else Jamaica.Lime,
+                tint = if (affordance == PhotoAffordance.ADD) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    Jamaica.Lime
+                },
             )
         }
         IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {

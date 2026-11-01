@@ -360,6 +360,7 @@
 
     <string name="field_photo_add">Añadir foto</string>
     <string name="field_photo_replace">Cambiar foto</string>
+    <string name="field_photo_on_file">Hay una foto guardada</string>
     <string name="project_costs_title">Lo que vale el trabajo</string>
     <string name="project_costs_rate">Precio por hora (€)</string>
     <string name="project_costs_invalid">No es un importe: escríbelo como 48,00 o 48.00</string>

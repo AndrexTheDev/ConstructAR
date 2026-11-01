@@ -360,6 +360,7 @@
 
     <string name="field_photo_add">Ajouter une photo</string>
     <string name="field_photo_replace">Remplacer la photo</string>
+    <string name="field_photo_on_file">Photo déjà enregistrée</string>
     <string name="project_costs_title">Ce que vaut le chantier</string>
     <string name="project_costs_rate">Taux horaire (€)</string>
     <string name="project_costs_invalid">Ce n’est pas un montant : saisissez-le comme 48,00 ou 48.00</string>

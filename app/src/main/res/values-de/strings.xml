@@ -360,6 +360,7 @@
 
     <string name="field_photo_add">Foto aufnehmen</string>
     <string name="field_photo_replace">Foto ersetzen</string>
+    <string name="field_photo_on_file">Foto liegt vor</string>
     <string name="project_costs_title">Was der Auftrag wert ist</string>
     <string name="project_costs_rate">Stundensatz (€)</string>
     <string name="project_costs_invalid">Kein Betrag - schreib ihn wie 48,00 oder 48.00</string>

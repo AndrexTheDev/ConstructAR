@@ -45,3 +45,25 @@ object FieldPhotos {
         }
     }
 }
+
+/**
+ * What the camera button on a diary or defect row can do, and what it has to say.
+ *
+ * The row used to decide this from the thumbnail alone: no bitmap meant "add a photo". That is
+ * true for a row without a photo and false for one whose photo exists but is outside the twelve
+ * thumbnails the screen keeps - eighteen photos on a job is an ordinary Tuesday - so the app
+ * offered to *add* a picture to an entry that already had one, and taking it overwrote the file
+ * under the same token. The photograph the operator had already taken was replaced, silently,
+ * by a picture of the same wall.
+ *
+ * [ON_FILE] is the third state that was missing: a photo exists, this screen has not decoded it,
+ * and the row has to say so instead of pretending the camera is the only way forward.
+ */
+internal enum class PhotoAffordance { ADD, REPLACE, ON_FILE }
+
+/** The state from the model, never from what happened to be in memory. */
+internal fun photoAffordance(hasPhoto: Boolean, loaded: Boolean): PhotoAffordance = when {
+    !hasPhoto -> PhotoAffordance.ADD
+    loaded -> PhotoAffordance.REPLACE
+    else -> PhotoAffordance.ON_FILE
+}

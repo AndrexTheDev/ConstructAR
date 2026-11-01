@@ -129,4 +129,18 @@ class FieldPhotosTest {
     fun `an empty job asks for nothing`() {
         assertEquals(emptyList(), FieldPhotos.ordered(project()))
     }
+
+    /**
+     * Finding 65: the camera button used to decide from the thumbnail alone, so an entry whose
+     * photo simply was not decoded (eighteen photos on a job, twelve kept) offered to *add* a
+     * picture - and taking it overwrote the file under the same token.
+     */
+    @Test
+    fun `an entry with a photo that is not decoded says so instead of offering to add one`() {
+        assertEquals(PhotoAffordance.ADD, photoAffordance(hasPhoto = false, loaded = false))
+        assertEquals(PhotoAffordance.REPLACE, photoAffordance(hasPhoto = true, loaded = true))
+        assertEquals(PhotoAffordance.ON_FILE, photoAffordance(hasPhoto = true, loaded = false))
+        // A decoded bitmap without a token in the model cannot happen; the model wins if it does.
+        assertEquals(PhotoAffordance.ADD, photoAffordance(hasPhoto = false, loaded = true))
+    }
 }

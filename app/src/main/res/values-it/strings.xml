@@ -360,6 +360,7 @@
 
     <string name="field_photo_add">Aggiungi foto</string>
     <string name="field_photo_replace">Sostituisci foto</string>
+    <string name="field_photo_on_file">Foto già salvata</string>
     <string name="project_costs_title">Quanto vale il lavoro</string>
     <string name="project_costs_rate">Tariffa oraria (€)</string>
     <string name="project_costs_invalid">Non è un importo: scrivilo come 48,00 o 48.00</string>
