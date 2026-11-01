@@ -148,9 +148,11 @@ class HitStabilizerTest {
 
         stabilizer.sample(hit(1.000f, 0f, 0f), 1_040L)
         stabilizer.sample(hit(1.006f, 0f, 0f), 1_080L)
-        // Three samples within 1 cm: the median wins over the raw tap.
+        // Four samples inside 1 cm: the median wins over the raw tap. With an even count the
+        // median is the mean of the two middle values (1,006 and 1,010), i.e. 1,008 - still
+        // closer to the operator's intended point than either edge of the window.
         val committed = stabilizer.stabilize(hit(1.010f, 0f, 0f), 1_120L)
-        assertClose(1.006f, committed.point.x)
+        assertClose(1.008f, committed.point.x)
         // The tier is never upgraded by averaging.
         assertEquals(HitSource.PLANE_POLYGON, committed.source)
     }
