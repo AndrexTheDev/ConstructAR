@@ -192,7 +192,10 @@ fun PaywallScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 else -> GloveButton(
-                    label = stringResource(R.string.paywall_trial_button),
+                    label = stringResource(
+                        R.string.paywall_trial_button,
+                        Entitlements.TRIAL_DAYS.toInt(),
+                    ),
                     icon = Icons.Default.Star,
                     tone = ActionTone.SECONDARY,
                     onClick = {

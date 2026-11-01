@@ -92,6 +92,7 @@
     <string name="export_success">Salvati %1$d file in %2$s.</string>
     <string name="export_failed">Esportazione non riuscita: %1$s</string>
     <string name="export_partial">Sono stati salvati solo %1$d file su %2$d in %3$s.</string>
+    <string name="export_meshless">Salvati %1$d file su %2$d in %3$s. Questo progetto non ha una scansione 3D, quindi GLB e PLY sono stati saltati.</string>
     <string name="export_nothing_selected">Scegli almeno un formato di file.</string>
     <string name="export_nothing_to_export">Ancora nessuna geometria 3D: misura prima una tratta o scansiona la stanza.</string>
     <string name="export_measurement">Rilievo</string>
@@ -203,7 +204,7 @@
     <string name="paywall_err_signature">Questa chiave non è stata emessa per questa app.</string>
     <string name="paywall_err_device">Questa chiave appartiene a un altro dispositivo.</string>
     <string name="paywall_err_expired">Questa chiave è scaduta.</string>
-    <string name="paywall_trial_button">Prova Pro per 7 giorni</string>
+    <string name="paywall_trial_button">Prova Pro per %1$d giorni</string>
     <string name="paywall_trial_active">Prova attiva, %1$d giorni rimasti</string>
     <string name="paywall_trial_used">La prova è già stata usata.</string>
     <string name="paywall_active_title">Pro è attivo</string>

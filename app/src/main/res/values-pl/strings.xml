@@ -92,6 +92,7 @@
     <string name="export_success">Zapisano %1$d plików w %2$s.</string>
     <string name="export_failed">Eksport nie powiódł się: %1$s</string>
     <string name="export_partial">Zapisano tylko %1$d z %2$d plików w %3$s.</string>
+    <string name="export_meshless">Zapisano %1$d z %2$d plików w %3$s. Ten projekt nie ma skanu 3D, więc pominięto GLB i PLY.</string>
     <string name="export_nothing_selected">Wybierz co najmniej jeden format pliku.</string>
     <string name="export_nothing_to_export">Nie ma jeszcze geometrii 3D: najpierw zmierz trasę albo zeskanuj pomieszczenie.</string>
     <string name="export_measurement">Pomiar</string>
@@ -207,7 +208,7 @@
     <string name="paywall_err_signature">Ten klucz nie został wydany dla tej aplikacji.</string>
     <string name="paywall_err_device">Ten klucz należy do innego urządzenia.</string>
     <string name="paywall_err_expired">Ten klucz wygasł.</string>
-    <string name="paywall_trial_button">Wypróbuj Pro przez 7 dni</string>
+    <string name="paywall_trial_button">Wypróbuj Pro przez %1$d dni</string>
     <string name="paywall_trial_active">Próba aktywna, pozostało %1$d dni</string>
     <string name="paywall_trial_used">Próba została już wykorzystana.</string>
     <string name="paywall_active_title">Pro jest aktywne</string>

@@ -92,6 +92,7 @@
     <string name="export_success">Saved %1$d files to %2$s.</string>
     <string name="export_failed">Export failed: %1$s</string>
     <string name="export_partial">Only %1$d of %2$d files were saved in %3$s.</string>
+    <string name="export_meshless">%1$d of %2$d files saved in %3$s. No 3D scan in this project, so GLB and PLY were skipped.</string>
     <string name="export_nothing_selected">Pick at least one file format.</string>
     <string name="export_nothing_to_export">No 3D geometry yet: measure a run or scan the room first.</string>
     <string name="export_measurement">Measurement</string>
@@ -203,7 +204,7 @@
     <string name="paywall_err_signature">This key was not issued for this app.</string>
     <string name="paywall_err_device">This key belongs to another device.</string>
     <string name="paywall_err_expired">This key has expired.</string>
-    <string name="paywall_trial_button">Try Pro for 7 days</string>
+    <string name="paywall_trial_button">Try Pro for %1$d days</string>
     <string name="paywall_trial_active">Trial active, %1$d days left</string>
     <string name="paywall_trial_used">The trial has already been used.</string>
     <string name="paywall_active_title">Pro is active</string>

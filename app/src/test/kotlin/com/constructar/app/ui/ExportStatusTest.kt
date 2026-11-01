@@ -27,12 +27,14 @@ class ExportStatusTest {
         nothingToExport = "Aún no hay geometría 3D.",
     )
 
-    private fun report(requested: Int, produced: Int, written: Int) = ExportStatus.Report(
-        requested = requested,
-        produced = produced,
-        written = written,
-        folder = "ConstructAR_Bad_20260314-1015",
-    )
+    private fun report(requested: Int, produced: Int, written: Int, meshSkipped: Boolean = false) =
+        ExportStatus.Report(
+            requested = requested,
+            produced = produced,
+            written = written,
+            folder = "ConstructAR_Bad_20260314-1015",
+            meshSkipped = meshSkipped,
+        )
 
     @Test
     fun `everything asked for was written, and the folder is named`() {
@@ -60,6 +62,36 @@ class ExportStatusTest {
         val status = ExportStatus.of(report(requested = 2, produced = 0, written = 0), messages)
 
         assertEquals(ExportStatus.Failed(detail = messages.nothingToExport), status)
+    }
+
+    @Test
+    fun `a requested 3D model that no geometry could fill is not a plain success`() {
+        // Four switches on, three files in the folder: the missing one is the 3D model, because
+        // this project was measured by hand and holds no scan. Saying "saved 3 files" leaves the
+        // operator hunting for a GLB the app never could have written.
+        val status = ExportStatus.of(
+            report(requested = 4, produced = 3, written = 3, meshSkipped = true),
+            messages,
+        )
+
+        assertEquals(
+            ExportStatus.Meshless(saved = 3, expected = 4, folder = "ConstructAR_Bad_20260314-1015"),
+            status,
+        )
+    }
+
+    @Test
+    fun `a partial write outranks the missing model`() {
+        // One more file lost on top of the missing model: the write failure is the louder fact.
+        val status = ExportStatus.of(
+            report(requested = 4, produced = 3, written = 2, meshSkipped = true),
+            messages,
+        )
+
+        assertEquals(
+            ExportStatus.Partial(saved = 2, expected = 3, folder = "ConstructAR_Bad_20260314-1015"),
+            status,
+        )
     }
 
     @Test

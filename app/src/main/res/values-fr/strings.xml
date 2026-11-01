@@ -92,6 +92,7 @@
     <string name="export_success">%1$d fichiers enregistrés dans %2$s.</string>
     <string name="export_failed">Échec de l’export : %1$s</string>
     <string name="export_partial">Seuls %1$d fichiers sur %2$d ont été enregistrés dans %3$s.</string>
+    <string name="export_meshless">%1$d fichiers sur %2$d enregistrés dans %3$s. Ce projet n’a pas de scan 3D, GLB et PLY ont donc été ignorés.</string>
     <string name="export_nothing_selected">Choisis au moins un format de fichier.</string>
     <string name="export_nothing_to_export">Pas encore de géométrie 3D : mesure d’abord un tracé ou scanne la pièce.</string>
     <string name="export_measurement">Relevé</string>
@@ -203,7 +204,7 @@
     <string name="paywall_err_signature">Cette clé n’a pas été émise pour cette app.</string>
     <string name="paywall_err_device">Cette clé appartient à un autre appareil.</string>
     <string name="paywall_err_expired">Cette clé a expiré.</string>
-    <string name="paywall_trial_button">Essaie Pro pendant 7 jours</string>
+    <string name="paywall_trial_button">Essaie Pro pendant %1$d jours</string>
     <string name="paywall_trial_active">Essai actif, %1$d jours restants</string>
     <string name="paywall_trial_used">L’essai a déjà été utilisé.</string>
     <string name="paywall_active_title">Pro est activé</string>

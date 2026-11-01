@@ -152,6 +152,8 @@ fun ExportScreen(
         // Read on the main thread, before the IO work: "requested" is what the switches said at
         // the moment the operator pressed the button, not what they say when the write finishes.
         val requestedCount = listOf(includePdf, includeCsv, includeGlb, includePly).count { it }
+        // Captured with the switches, for the same reason: whether a 3D model was asked for.
+        val meshRequested = includeGlb || includePly
         scope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 runCatching {
@@ -200,19 +202,21 @@ fun ExportScreen(
                             file?.delete()
                         }
                     }
-                    Triple(written, artifacts.size, stem)
+                    ExportStatus.Report(
+                        requested = requestedCount,
+                        produced = artifacts.size,
+                        written = written,
+                        folder = stem,
+                        meshSkipped = meshRequested &&
+                            artifacts.none { it.fileName.endsWith(".glb") || it.fileName.endsWith(".ply") },
+                    )
                 }
             }
             busy = false
             status = outcome.fold(
-                onSuccess = { (written, produced, stem) ->
+                onSuccess = { report ->
                     ExportStatus.of(
-                        report = ExportStatus.Report(
-                            requested = requestedCount,
-                            produced = produced,
-                            written = written,
-                            folder = stem,
-                        ),
+                        report = report,
                         messages = ExportStatus.Messages(
                             folderUnreadable = context.getString(R.string.export_folder_inaccessible),
                             nothingSelected = context.getString(R.string.export_nothing_selected),
@@ -382,6 +386,12 @@ fun ExportScreen(
                     current.expected,
                     current.folder,
                 )
+                is ExportStatus.Meshless -> stringResource(
+                    R.string.export_meshless,
+                    current.saved,
+                    current.expected,
+                    current.folder,
+                )
                 is ExportStatus.Failed -> stringResource(R.string.export_failed, current.detail)
             }
             // A failure is not a success in another shade: it is red, like every other failure
@@ -391,6 +401,7 @@ fun ExportScreen(
             val tone = when (current) {
                 is ExportStatus.Saved -> SiteColors.accent
                 is ExportStatus.Partial -> SiteColors.warning
+                is ExportStatus.Meshless -> SiteColors.warning
                 is ExportStatus.Failed -> SiteColors.danger
             }
             Text(text, style = MaterialTheme.typography.bodyLarge, color = tone)
@@ -482,6 +493,17 @@ internal sealed interface ExportStatus {
     /** Some files made it and some did not: the operator must not walk away believing all did. */
     data class Partial(val saved: Int, val expected: Int, val folder: String) : ExportStatus
 
+    /**
+     * Every file that exists was written, but a format the operator ticked does not exist for
+     * this project: no run carries scan geometry, so there is no GLB and no PLY to write.
+     *
+     * This used to be reported as a plain success with a smaller number in it ("Saved 3 files")
+     * while four switches were on - the operator then goes looking for a 3D model that the app
+     * never had the geometry to produce. The switches stay where he left them; the sentence says
+     * why the folder is one file short.
+     */
+    data class Meshless(val saved: Int, val expected: Int, val folder: String) : ExportStatus
+
     data class Failed(val detail: String) : ExportStatus
 
     /**
@@ -492,7 +514,14 @@ internal sealed interface ExportStatus {
      * (mesh-only export of a room with no routable run and no scan), or everything was produced
      * and none of it could be written.
      */
-    data class Report(val requested: Int, val produced: Int, val written: Int, val folder: String)
+    data class Report(
+        val requested: Int,
+        val produced: Int,
+        val written: Int,
+        val folder: String,
+        // The operator asked for a 3D model, but the project holds no mesh to export.
+        val meshSkipped: Boolean = false,
+    )
 
     /** The three sentences, resolved at composition - never inside the export coroutine. */
     data class Messages(
@@ -523,6 +552,13 @@ internal sealed interface ExportStatus {
             report.written < report.produced -> Partial(
                 saved = report.written,
                 expected = report.produced,
+                folder = report.folder,
+            )
+            // Fewer files than switches on, and nothing failed: the missing ones are the 3D
+            // formats, and this project has no geometry for them.
+            report.meshSkipped && report.requested > report.produced -> Meshless(
+                saved = report.written,
+                expected = report.requested,
                 folder = report.folder,
             )
             else -> Saved(count = report.written, folder = report.folder)
