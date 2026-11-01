@@ -127,9 +127,12 @@ fun BackupCard(
                 uris.forEach { uri ->
                     val name = displayName(context, uri)
                     if (name.endsWith(".json", ignoreCase = true) || name.isEmpty()) {
-                        readText(context, uri)?.let { projectTexts += it }
+                        readText(context, uri, repository)?.let { projectTexts += it }
                     } else if (name.endsWith(".jpg", ignoreCase = true) || name.endsWith(".jpeg", ignoreCase = true)) {
-                        photoAttachments += name.substringBeforeLast('.').trim() to uri
+                        // The file name is the project id, and it ends up in a path: a picture
+                        // called "../../databases/x.jpg" is skipped, not copied somewhere else.
+                        val token = name.substringBeforeLast('.').trim()
+                        if (repository.isSafeToken(token)) photoAttachments += token to uri
                     }
                 }
                 projectTexts to photoAttachments
@@ -212,10 +215,13 @@ private fun displayName(context: android.content.Context, uri: Uri): String =
             }
     }.getOrNull().orEmpty()
 
-private fun readText(context: android.content.Context, uri: Uri): String? = runCatching {
-    context.contentResolver.openInputStream(uri)?.use { stream ->
-        stream.reader(Charsets.UTF_8).readText()
-    }
+/** Reads a picked file through the repository, which caps it at [ProjectRepository.MAX_PROJECT_BYTES]. */
+private fun readText(
+    context: android.content.Context,
+    uri: Uri,
+    repository: ProjectRepository,
+): String? = runCatching {
+    context.contentResolver.openInputStream(uri)?.use { stream -> repository.readProjectText(stream) }
 }.getOrNull()
 
 /**

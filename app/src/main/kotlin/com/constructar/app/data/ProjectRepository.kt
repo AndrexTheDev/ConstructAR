@@ -160,7 +160,11 @@ class ProjectRepository(private val context: Context) {
         val parsed = runCatching {
             json.decodeFromString(ProjectRecord.serializer(), text)
         }.getOrNull() ?: return@withContext null
-        val target = if (fileFor(parsed.id).exists()) {
+        // The id becomes a file name, and this text came from a file somebody handed over.
+        // An id of "../../databases/x" must never reach `File(directory, "$id.json")`, so an
+        // id that is not a plain token is replaced - the project is still imported, under a
+        // fresh identity, exactly like the duplicate case below.
+        val target = if (!isSafeToken(parsed.id) || fileFor(parsed.id).exists()) {
             parsed.copy(id = UUID.randomUUID().toString())
         } else {
             parsed
@@ -168,7 +172,43 @@ class ProjectRepository(private val context: Context) {
         if (save(target)) target else null
     }
 
+    /**
+     * Whether a stored name can be used as a file name.
+     *
+     * Ids and photo tokens both come from outside: a project id from a restored JSON file, a
+     * photo token from the *file name* of a picked picture. Both are appended to a directory
+     * path, so a value like `../databases/app` would write - or delete - outside the folder
+     * this repository owns. Letters, digits, dash and underscore only; no dots, no separators.
+     */
+    fun isSafeToken(value: String): Boolean =
+        value.isNotEmpty() && value.length <= 120 &&
+            value.all { it.isLetterOrDigit() || it == '-' || it == '_' }
+
+    /**
+     * Text of a picked project file, or `null` when it is too large to be one.
+     *
+     * A restore reads whatever the operator picked, and the picker accepts every MIME type
+     * (a `.json` file is reported as three different types depending on the file manager).
+     * Reading a 2 GB video into a `String` is an out-of-memory crash in the middle of a
+     * restore; a project with a scan summary is a few hundred kilobytes, so the cap is far
+     * above anything real and far below anything dangerous.
+     */
+    fun readProjectText(input: java.io.InputStream): String? = runCatching {
+        val buffer = java.io.ByteArrayOutputStream(64 * 1024)
+        val chunk = ByteArray(64 * 1024)
+        var total = 0
+        while (true) {
+            val read = input.read(chunk)
+            if (read <= 0) break
+            total += read
+            if (total > MAX_PROJECT_BYTES) return null
+            buffer.write(chunk, 0, read)
+        }
+        String(buffer.toByteArray(), Charsets.UTF_8)
+    }.getOrNull()
+
     suspend fun delete(id: String): Boolean = withContext(Dispatchers.IO) {
+        if (!isSafeToken(id)) return@withContext false
         // The site photo is `<id>.jpg`, an entry photo is `<id>__diary_<entry>.jpg`; deleting a
         // project must not leave either of them orphaned in private storage.
         photoDirectory.listFiles()
@@ -205,8 +245,9 @@ class ProjectRepository(private val context: Context) {
      */
     fun photoFileByName(token: String): File = File(photoDirectory, "$token.jpg")
 
-    /** Copies a picked picture into private storage under [token]. */
+    /** Copies a picked picture into private storage under [token]; refused for an unsafe one. */
     suspend fun savePhotoAs(token: String, source: Uri): Boolean = withContext(Dispatchers.IO) {
+        if (!isSafeToken(token)) return@withContext false
         runCatching {
             val target = photoFileByName(token)
             val copied = context.contentResolver.openInputStream(source)?.use { input ->
@@ -218,7 +259,8 @@ class ProjectRepository(private val context: Context) {
         }.getOrDefault(false)
     }
 
-    fun deletePhotoAs(token: String): Boolean = photoFileByName(token).delete()
+    fun deletePhotoAs(token: String): Boolean =
+        isSafeToken(token) && photoFileByName(token).delete()
 
     /**
      * Decodes a stored photo at a size fit for its purpose.
@@ -228,6 +270,7 @@ class ProjectRepository(private val context: Context) {
      */
     suspend fun loadPhotoAs(token: String, maxDimensionPx: Int = 640): Bitmap? =
         withContext(Dispatchers.IO) {
+            if (!isSafeToken(token)) return@withContext null
             decodeSampled(photoFileByName(token), maxDimensionPx)
         }
 
@@ -278,5 +321,8 @@ class ProjectRepository(private val context: Context) {
 
     companion object {
         private const val TAG = "ProjectRepository"
+
+        /** Generous for a project file, small enough that a wrong pick cannot exhaust the heap. */
+        const val MAX_PROJECT_BYTES: Int = 8 * 1024 * 1024
     }
 }

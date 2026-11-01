@@ -199,4 +199,49 @@ class ProjectRepositoryTest {
         assertEquals("room-1.json", entry.fileName)
         assertEquals(onDisk, entry.text)
     }
+
+    @Test
+    fun `an id in a restored file never becomes a path`(): Unit = runBlocking {
+        repository.save(room())
+        val original = repository.backupEntries().single().text
+        val hostile = original.replace("\"room-1\"", "\"../../escape\"")
+
+        val restored = assertNotNull(repository.importProject(hostile))
+
+        // The original stays, and the restored copy lands under a fresh, safe id.
+        assertEquals(2, repository.list().size)
+        assertEquals(1, projectsDirectory.listFiles()!!.count { it.name == "room-1.json" })
+        assertTrue(restored.id != "../../escape", "the hostile id was kept")
+        assertTrue(repository.isSafeToken(restored.id), "the stored id is not a plain token")
+        assertEquals(2, projectsDirectory.listFiles()!!.size)
+        assertFalse(File(context.filesDir, "escape.json").exists())
+        assertFalse(File(context.filesDir.parentFile!!, "escape.json").exists())
+    }
+
+    @Test
+    fun `only plain tokens are accepted as file names`() {
+        assertTrue(repository.isSafeToken("3f2a8c1e-9b4d-4f6a-8c2e-1d5b7a9c0e3f"))
+        assertTrue(repository.isSafeToken("room-1__diary_entry-1"))
+        for (hostile in listOf("", "../escape", "a/b", "a\\b", "a.b", "..", "x".repeat(121))) {
+            assertFalse(repository.isSafeToken(hostile), "$hostile was accepted")
+        }
+    }
+
+    @Test
+    fun `a picked photo whose name is a path is refused`(): Unit = runBlocking {
+        photoDirectory.mkdirs()
+        assertFalse(repository.savePhotoAs("../../escape", android.net.Uri.EMPTY))
+        assertFalse(repository.deletePhotoAs("../../projects/room-1"))
+        assertNull(repository.loadPhotoAs("../../escape"))
+        assertEquals(0, context.filesDir.walkTopDown().count { it.isFile })
+    }
+
+    @Test
+    fun `a picked file bigger than a project can be is refused`() {
+        val real = "{\"id\":\"room-1\"}".toByteArray()
+        assertEquals("{\"id\":\"room-1\"}", repository.readProjectText(real.inputStream()))
+
+        val tooBig = ByteArray(ProjectRepository.MAX_PROJECT_BYTES + 1) { ' '.code.toByte() }
+        assertNull(repository.readProjectText(tooBig.inputStream()), "an 8 MB project file is not a project")
+    }
 }
