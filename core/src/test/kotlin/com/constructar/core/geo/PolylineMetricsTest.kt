@@ -97,6 +97,31 @@ class PolylineMetricsTest {
     }
 
     @Test
+    fun `a raycast point marks the run as uncertain in the order list`() {
+        // 0.7 is below the depth tier (0.85), so the phone already tells the operator the weakest
+        // point of this run is 70 %. The order list used to draw its line at 0.5 and stay silent,
+        // which meant the paperwork was more optimistic than the screen (finding 47).
+        val raycast = listOf(
+            node(0f, 0f, 0f),
+            node(1f, 0f, 0f, HitSource.DIRECT_DEPTH_RAYCAST),
+            node(2f, 0f, 0f),
+        )
+        assertEquals(1, PolylineMetrics.measure(raycast, ConduitSpec.cable(16f)).lowConfidenceNodes)
+
+        // A depth point is exactly at the bar: measured, not questioned.
+        val depth = listOf(
+            node(0f, 0f, 0f),
+            node(1f, 0f, 0f, HitSource.AR_DEPTH_POINT),
+            node(2f, 0f, 0f),
+        )
+        assertEquals(0, PolylineMetrics.measure(depth, ConduitSpec.cable(16f)).lowConfidenceNodes)
+
+        // And a plane-run stays clean, which is the common case and must not become noise.
+        val plane = listOf(node(0f, 0f, 0f), node(1f, 0f, 0f), node(2f, 0f, 0f))
+        assertEquals(0, PolylineMetrics.measure(plane, ConduitSpec.cable(16f)).lowConfidenceNodes)
+    }
+
+    @Test
     fun `minimum bend radius scales with the conduit`() {
         val cable = PolylineMetrics.defaultBendRadius(ConduitSpec.cable(16f))
         val pipe = PolylineMetrics.defaultBendRadius(ConduitSpec.pipe(32f))

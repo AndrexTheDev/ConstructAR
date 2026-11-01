@@ -6,6 +6,7 @@
 
 package com.constructar.app.ui.ar
 
+import com.constructar.core.model.HitConfidence
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -19,6 +20,16 @@ import org.junit.Test
  * reported no confidence for say nothing at all.
  */
 class RunConfidenceTest {
+
+    @Test
+    fun `the HUD and the order list draw their line at the same number`() {
+        // Finding 47: the HUD warned below 0.85 while the order list flagged below 0.5, so a run
+        // measured off a raycast was questioned on the phone and passed as certain into the
+        // wholesaler's list. One constant, one bar.
+        assertEquals(HitConfidence.RUN_TRUSTED, RunConfidence.WEAK_BELOW)
+        // A raycast point (0.7) is exactly the case that used to fall between the two bars.
+        assertEquals(70, RunConfidence.weakPointPercent(nodeCount = 3, worstNodeConfidence = 0.7f))
+    }
 
     @Test
     fun `a run of surface hits says nothing`() {

@@ -82,7 +82,7 @@ data class RouteMetrics(
         get() = segments.count {
             it.hitSource == HitSource.FEATURE_POINT ||
                 it.hitSource == HitSource.MANUAL ||
-                it.confidence < HitConfidence.TRUSTED
+                it.confidence < HitConfidence.RUN_TRUSTED
         }
 }
 

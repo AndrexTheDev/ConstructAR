@@ -6,6 +6,7 @@
 
 package com.constructar.app.ui.ar
 
+import com.constructar.core.model.HitConfidence
 import kotlin.math.roundToInt
 
 /**
@@ -23,8 +24,13 @@ import kotlin.math.roundToInt
  */
 internal object RunConfidence {
 
-    /** Below this, at least one point is weaker than a depth hit: worth saying out loud. */
-    const val WEAK_BELOW: Float = 0.85f
+    /**
+     * Below this, at least one point is weaker than a depth hit: worth saying out loud.
+     *
+     * Shared with the order list through [HitConfidence.RUN_TRUSTED] - the same run must not be
+     * weak on the phone and fine on the order list (finding 47).
+     */
+    const val WEAK_BELOW: Float = HitConfidence.RUN_TRUSTED
 
     /**
      * The warning worth showing, as a percentage, or `null` when there is nothing to say.
