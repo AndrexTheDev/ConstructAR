@@ -111,6 +111,7 @@ abstract class LocaleScreenshotMatrix(private val localeTag: String) {
             onBack = {},
             onStartWork = {},
             onStopWork = {},
+            onDeleteSession = {},
             onAddDiary = {},
             onDeleteDiary = {},
             onAddDefect = { _, _, _ -> },

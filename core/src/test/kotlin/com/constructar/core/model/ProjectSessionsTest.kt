@@ -66,9 +66,10 @@ class ProjectSessionsTest {
     @Test
     fun `removing something that is not there changes nothing`() {
         val project = project(session("a", 0L, end = 1_000L))
+        val empty = project()
         // The same object, not a copy: a no-op must not dirty the project and bump its timestamp.
         assertSame(project, project.removeSession("does-not-exist"))
-        assertSame(project, project().removeSession("a"))
+        assertSame(empty, empty.removeSession("a"))
     }
 
     @Test
