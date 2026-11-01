@@ -322,4 +322,20 @@
     <string name="pdf_status_open">Ouvert</string>
     <string name="pdf_status_resolved">Résolu</string>
 
+    <string name="field_photo_add">Ajouter une photo</string>
+    <string name="field_photo_replace">Remplacer la photo</string>
+    <string name="project_costs_title">Ce que vaut le chantier</string>
+    <string name="project_costs_rate">Taux horaire (€)</string>
+    <string name="project_costs_material">Forfait matériel (€)</string>
+    <string name="project_costs_labour">Main-d\'œuvre</string>
+    <string name="project_costs_total">Total net</string>
+    <string name="firm_rate_title">Taux horaire de l\'entreprise</string>
+    <string name="firm_rate_label">Taux par heure (€)</string>
+    <string name="firm_rate_hint">Appliqué à chaque chantier sauf si le projet fixe son propre taux.</string>
+    <string name="pdf_section_costs">Coûts</string>
+    <string name="pdf_label_labour">Main-d\'œuvre</string>
+    <string name="pdf_label_material">Matériel</string>
+    <string name="pdf_label_net_total">Total net</string>
+    <string name="pdf_note_net">Montants nets, hors TVA. Le matériel est le forfait saisi sur site.</string>
+    <string name="pdf_section_photos">Documentation photo</string>
 </resources>

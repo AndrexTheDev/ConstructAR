@@ -42,6 +42,14 @@ data class PdfSection(
 )
 
 /**
+ * One documentation photo with its caption, printed in the protocol appendix.
+ *
+ * The bitmap is decoded and scaled by the caller: this writer must not know where a photo lives
+ * or how large the original is, only that it has to fit a 150 pt cell without being stretched.
+ */
+data class PdfPhoto(val caption: String, val bitmap: Bitmap)
+
+/**
  * Writes the on-site measurement protocol as a PDF.
  *
  * Contents (the order a foreman actually needs them):
@@ -93,6 +101,10 @@ class ProtocolPdfWriter(
          * time, diary, defects. Printed after the material table, before the signature page.
          */
         val sections: List<PdfSection> = emptyList(),
+        /** Documentation photos of diary entries and defects, printed as an appendix. */
+        val photos: List<PdfPhoto> = emptyList(),
+        /** Heading of the photo appendix, localised by the caller. */
+        val photosTitle: String = "",
         /**
          * The product badge, printed top-right on the first page.
          *
@@ -322,6 +334,55 @@ class ProtocolPdfWriter(
 
             drawFooter(page.canvas, pageNumber, content)
             document.finishPage(page)
+
+            // ── Photo appendix ──────────────────────────────────────────────────────────
+            // Two pictures per row, three rows per page: large enough to recognise the wall,
+            // small enough that a punch list with a dozen photos is still two pages.
+            if (content.photos.isNotEmpty()) {
+                pageNumber++
+                page = newPage(document, pageNumber)
+                var py = drawSectionTitle(page.canvas, content.photosTitle, MARGIN)
+                val cellWidth = (pageWidth - 2 * MARGIN - 12) / 2
+                val cellHeight = 150
+                var column = 0
+                for (photo in content.photos) {
+                    if (py + cellHeight + 26 > pageHeight - FOOTER_HEIGHT) {
+                        drawFooter(page.canvas, pageNumber, content)
+                        document.finishPage(page)
+                        pageNumber++
+                        page = newPage(document, pageNumber)
+                        py = drawSectionTitle(page.canvas, content.photosTitle, MARGIN)
+                        column = 0
+                    }
+                    val x = MARGIN + column * (cellWidth + 12)
+                    val scale = minOf(
+                        cellWidth.toFloat() / photo.bitmap.width.coerceAtLeast(1),
+                        cellHeight.toFloat() / photo.bitmap.height.coerceAtLeast(1),
+                    )
+                    val w = (photo.bitmap.width * scale).toInt().coerceAtLeast(1)
+                    val h = (photo.bitmap.height * scale).toInt().coerceAtLeast(1)
+                    page.canvas.drawBitmap(
+                        photo.bitmap,
+                        null,
+                        Rect(x, py, x + w, py + h),
+                        Paint(Paint.FILTER_BITMAP_FLAG),
+                    )
+                    page.canvas.drawText(
+                        ellipsize(photo.caption, cellWidth),
+                        x.toFloat(),
+                        (py + cellHeight + 12).toFloat(),
+                        subtitlePaint,
+                    )
+                    if (column == 1) {
+                        py += cellHeight + 26
+                        column = 0
+                    } else {
+                        column = 1
+                    }
+                }
+                drawFooter(page.canvas, pageNumber, content)
+                document.finishPage(page)
+            }
 
             content.signature?.let { signature ->
                 pageNumber += 1

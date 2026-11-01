@@ -322,4 +322,20 @@
     <string name="pdf_status_open">Abierto</string>
     <string name="pdf_status_resolved">Resuelto</string>
 
+    <string name="field_photo_add">Añadir foto</string>
+    <string name="field_photo_replace">Cambiar foto</string>
+    <string name="project_costs_title">Lo que vale el trabajo</string>
+    <string name="project_costs_rate">Precio por hora (€)</string>
+    <string name="project_costs_material">Material a tanto alzado (€)</string>
+    <string name="project_costs_labour">Mano de obra</string>
+    <string name="project_costs_total">Total neto</string>
+    <string name="firm_rate_title">Precio por hora de la empresa</string>
+    <string name="firm_rate_label">Precio por hora (€)</string>
+    <string name="firm_rate_hint">Se usa en todos los trabajos salvo que el proyecto fije su propio precio.</string>
+    <string name="pdf_section_costs">Costes</string>
+    <string name="pdf_label_labour">Mano de obra</string>
+    <string name="pdf_label_material">Material</string>
+    <string name="pdf_label_net_total">Total neto</string>
+    <string name="pdf_note_net">Importes netos, sin IVA. El material es el tanto alzado introducido en obra.</string>
+    <string name="pdf_section_photos">Documentación fotográfica</string>
 </resources>

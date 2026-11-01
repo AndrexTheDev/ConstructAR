@@ -37,6 +37,13 @@ data class DefectItem(
     val location: String = "",
     val severity: DefectSeverity = DefectSeverity.MEDIUM,
     val resolved: Boolean = false,
+    /**
+     * File token of the documentation photo (`<project>__defect_<id>`), or `null`.
+     *
+     * A token, not a path: the storage layout belongs to the app, and a project file that is
+     * copied to another phone must not carry an absolute path from this one.
+     */
+    val photo: String? = null,
 )
 
 /** Three levels, because a fifth is never used and a fourth is argued about. */
@@ -64,6 +71,8 @@ data class DiaryEntry(
     val id: String,
     val createdAtEpochMs: Long,
     val text: String,
+    /** File token of the documentation photo (`<project>__diary_<id>`), or `null`. */
+    val photo: String? = null,
 )
 
 /**

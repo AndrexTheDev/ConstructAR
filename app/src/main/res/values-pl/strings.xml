@@ -326,4 +326,20 @@
     <string name="pdf_status_open">Otwarta</string>
     <string name="pdf_status_resolved">Naprawiona</string>
 
+    <string name="field_photo_add">Dodaj zdjęcie</string>
+    <string name="field_photo_replace">Zmień zdjęcie</string>
+    <string name="project_costs_title">Wartość zlecenia</string>
+    <string name="project_costs_rate">Stawka godzinowa (€)</string>
+    <string name="project_costs_material">Ryczałt za materiał (€)</string>
+    <string name="project_costs_labour">Robocizna</string>
+    <string name="project_costs_total">Suma netto</string>
+    <string name="firm_rate_title">Stawka godzinowa firmy</string>
+    <string name="firm_rate_label">Stawka za godzinę (€)</string>
+    <string name="firm_rate_hint">Obowiązuje w każdym zleceniu, chyba że projekt ma własną stawkę.</string>
+    <string name="pdf_section_costs">Koszty</string>
+    <string name="pdf_label_labour">Robocizna</string>
+    <string name="pdf_label_material">Materiał</string>
+    <string name="pdf_label_net_total">Suma netto</string>
+    <string name="pdf_note_net">Kwoty netto, bez VAT. Materiał to ryczałt wpisany na budowie.</string>
+    <string name="pdf_section_photos">Dokumentacja zdjęciowa</string>
 </resources>

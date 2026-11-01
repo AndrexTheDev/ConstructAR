@@ -49,6 +49,7 @@ import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.licence.Entitlements
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.price.Pricing
 import com.constructar.core.units.LengthFormatter
 import com.constructar.export.ExportService
 import com.constructar.export.csv.MaterialCsvWriter
@@ -72,6 +73,10 @@ fun ExportScreen(
     entitlements: Entitlements,
     watermark: String,
     photo: android.graphics.Bitmap? = null,
+    /** Entry photos of the open project, by token - printed as the protocol appendix. */
+    fieldPhotos: Map<String, android.graphics.Bitmap> = emptyMap(),
+    /** Effective hourly rate of this project, already resolved against the firm default. */
+    hourlyRateCents: Int = Pricing.DEFAULT_HOURLY_RATE_CENTS,
     onBack: () -> Unit,
     onUpgrade: () -> Unit,
 ) {
@@ -124,8 +129,22 @@ fun ExportScreen(
         severityHigh = stringResource(R.string.severity_high),
         hoursMinutes = stringResource(R.string.hours_minutes),
         minutesOnly = stringResource(R.string.minutes_only),
+        costsTitle = stringResource(R.string.pdf_section_costs),
+        labourLabel = stringResource(R.string.pdf_label_labour),
+        materialLabel = stringResource(R.string.pdf_label_material),
+        netTotalLabel = stringResource(R.string.pdf_label_net_total),
+        netNote = stringResource(R.string.pdf_note_net),
+        photosTitle = stringResource(R.string.pdf_section_photos),
+        photoDiaryPrefix = stringResource(R.string.pdf_section_diary),
+        photoDefectPrefix = stringResource(R.string.pdf_section_defects),
     )
-    val siteFileSections = remember(project, siteFileTexts) { buildSiteFileSections(project, siteFileTexts) }
+    val siteFileSections = remember(project, siteFileTexts, hourlyRateCents) {
+        buildSiteFileSections(project, siteFileTexts) +
+            listOfNotNull(buildCostSection(project, hourlyRateCents, siteFileTexts))
+    }
+    val photoAppendix = remember(project, fieldPhotos, siteFileTexts) {
+        buildPhotoAppendix(project, fieldPhotos, siteFileTexts)
+    }
 
     val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -162,6 +181,8 @@ fun ExportScreen(
                             signatureCaption = signatureCaption,
                             labels = pdfLabels,
                             sections = siteFileSections,
+                            photos = photoAppendix,
+                            photosTitle = siteFileTexts.photosTitle,
                             logo = logo,
                         ),
                     )

@@ -322,4 +322,20 @@
     <string name="pdf_status_open">Aperto</string>
     <string name="pdf_status_resolved">Risolto</string>
 
+    <string name="field_photo_add">Aggiungi foto</string>
+    <string name="field_photo_replace">Sostituisci foto</string>
+    <string name="project_costs_title">Quanto vale il lavoro</string>
+    <string name="project_costs_rate">Tariffa oraria (€)</string>
+    <string name="project_costs_material">Materiale a corpo (€)</string>
+    <string name="project_costs_labour">Manodopera</string>
+    <string name="project_costs_total">Totale netto</string>
+    <string name="firm_rate_title">Tariffa oraria dell\'azienda</string>
+    <string name="firm_rate_label">Tariffa all\'ora (€)</string>
+    <string name="firm_rate_hint">Vale per ogni lavoro, salvo che il progetto imposti una tariffa propria.</string>
+    <string name="pdf_section_costs">Costi</string>
+    <string name="pdf_label_labour">Manodopera</string>
+    <string name="pdf_label_material">Materiale</string>
+    <string name="pdf_label_net_total">Totale netto</string>
+    <string name="pdf_note_net">Importi netti, IVA esclusa. Il materiale è il forfait inserito in cantiere.</string>
+    <string name="pdf_section_photos">Documentazione fotografica</string>
 </resources>

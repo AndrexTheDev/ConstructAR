@@ -148,6 +148,10 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onSaveCustomer = { name, address, phone ->
                                 viewModel.updateCustomer(name, address, phone)
                             },
+                            hourlyRateCents = viewModel.hourlyRateCents(project),
+                            onSavePricing = { rate, material ->
+                                viewModel.updatePricing(rate, material)
+                            },
                             photo = state.photo,
                             onPhoto = { uri -> viewModel.attachPhoto(uri) },
                             onDelete = {
@@ -190,6 +194,8 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             entitlements = state.entitlements,
                             watermark = stringResource(R.string.pdf_watermark),
                             photo = state.photo,
+                            fieldPhotos = state.fieldPhotos,
+                            hourlyRateCents = viewModel.hourlyRateCents(project),
                             onBack = { navController.popBackStack() },
                             onUpgrade = { navController.navigate(Routes.PAYWALL) },
                         )
@@ -206,6 +212,8 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             materialList = state.materialList,
                             wasteOverride = state.wasteOverride,
                             onWasteChange = { viewModel.setWasteOverride(it) },
+                            firmHourlyRateCents = state.firmHourlyRateCents,
+                            onHourlyRateChange = { viewModel.setFirmHourlyRate(it) },
                             onBack = { navController.popBackStack() },
                         )
                     } else {
@@ -228,6 +236,8 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             },
                             onToggleDefect = { id -> viewModel.toggleDefect(id) },
                             onDeleteDefect = { id -> viewModel.deleteDefect(id) },
+                            photoFor = { token -> state.fieldPhotos[token] },
+                            onAttachPhoto = { token, uri -> viewModel.attachFieldPhoto(token, uri) },
                         )
                     } else {
                         Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())
