@@ -19,19 +19,19 @@
     <string name="home_room_name">Raum- oder Bereichsname</string>
     <string name="home_create">Anlegen</string>
     <string name="home_cancel">Abbrechen</string>
-    <string name="home_empty">Noch keine Räume. Legen Sie einen an, um zu messen.</string>
+    <string name="home_empty">Noch keine Räume. Leg einen an, um zu messen.</string>
     <string name="home_offline_note">Läuft vollständig offline. Nichts verlässt dieses Gerät.</string>
     <string name="home_export">Export</string>
 
     <!-- AR measuring screen -->
-    <string name="scan_instruction">Bewegen Sie das Telefon langsam über Wände und Boden, um den Raum zu scannen.</string>
-    <string name="tracking_loss">Tracking verloren. Auf eine strukturierte Wand oder den Boden zielen und langsam bewegen.</string>
-    <string name="tracking_searching">Suche Merkmale. Bewegen Sie das Telefon langsam über die Fläche.</string>
-    <string name="tracking_limited">Tracking eingeschränkt. Langsamer bewegen.</string>
+    <string name="scan_instruction">Bewege das Telefon langsam über Wände und Boden, um den Raum zu scannen.</string>
+    <string name="tracking_loss">Tracking verloren. Ziele auf eine strukturierte Wand oder den Boden und bewege dich langsam.</string>
+    <string name="tracking_searching">Suche Merkmale. Bewege das Telefon langsam über die Fläche.</string>
+    <string name="tracking_limited">Tracking eingeschränkt. Bewege dich langsamer.</string>
     <string name="tracking_failure_reason">Tracking eingeschränkt: %1$s</string>
     <string name="tracking_thermal">Gerät warm. Netzaktualisierungen wurden zum Schutz des Akkus gedrosselt; Messungen sind nicht betroffen.</string>
-    <string name="depth_weak">Tiefensignal hier schwach (Glas, Spiegel oder dunkle Fläche). Näher gehen oder neu zielen.</string>
-    <string name="low_light_warning">Zu dunkel für zuverlässige Messung. Lampe einschalten.</string>
+    <string name="depth_weak">Tiefensignal hier schwach (Glas, Spiegel oder dunkle Fläche). Geh näher oder ziele neu.</string>
+    <string name="low_light_warning">Zu dunkel für zuverlässige Messung. Schalte die Lampe ein.</string>
     <string name="surface_wall">Wand</string>
     <string name="surface_floor">Boden</string>
     <string name="surface_ceiling">Decke</string>
@@ -52,16 +52,16 @@
     <string name="ar_scan">Raum scannen</string>
     <string name="ar_stop_scan">Scan stoppen</string>
     <string name="ar_closed_loop">geschlossen</string>
-    <string name="ar_no_surface">Keine Fläche gefunden. Auf Wand oder Boden zielen.</string>
+    <string name="ar_no_surface">Keine Fläche gefunden. Ziele auf Wand oder Boden.</string>
     <string name="ar_scan_progress">Raum %1$d %% · %2$d k Dreiecke</string>
     <string name="ar_scan_unavailable">Netz-Scan nicht verfügbar. Messen funktioniert weiterhin.</string>
     <string name="ar_session_failed">AR-Sitzung fehlgeschlagen: %1$s</string>
     <string name="ar_camera_permission">Zum Messen ist Kamerazugriff nötig. Die Kamera wird nur auf diesem Gerät genutzt.</string>
     <string name="ar_grant_permission">Kamerazugriff erlauben</string>
-    <string name="ar_unavailable_unsupported">Dieses Gerät unterstützt ARCore nicht. Nutzen Sie ein unterstütztes Telefon oder Tablet.</string>
-    <string name="ar_unavailable_needs_install">ARCore muss aktualisiert werden. Im Play Store installieren und ConstructAR neu öffnen.</string>
+    <string name="ar_unavailable_unsupported">Dieses Gerät unterstützt ARCore nicht. Nutze ein unterstütztes Telefon oder Tablet.</string>
+    <string name="ar_unavailable_needs_install">ARCore muss aktualisiert werden. Installiere sie im Play Store und öffne ConstructAR neu.</string>
     <string name="ar_unavailable_declined">Die ARCore-Installation wurde abgelehnt. Ohne sie ist Messen mit der Kamera nicht möglich.</string>
-    <string name="ar_unavailable_failure">AR konnte auf diesem Gerät nicht starten. App neu starten und erneut versuchen.</string>
+    <string name="ar_unavailable_failure">AR konnte auf diesem Gerät nicht starten. Starte die App neu und versuche es erneut.</string>
     <string name="ar_offline_badge">Offline</string>
 
     <!-- Export -->
@@ -91,11 +91,11 @@
     <string name="error_project_open">Das Projekt konnte nicht geöffnet werden.</string>
     <string name="error_project_save">Das Projekt konnte nicht gespeichert werden.</string>
     <string name="ar_close">Schließen</string>
-    <string name="export_folder_inaccessible">In den gewählten Ordner kann nicht geschrieben werden. Wählen Sie einen anderen.</string>
+    <string name="export_folder_inaccessible">In den gewählten Ordner kann nicht geschrieben werden. Wähle einen anderen.</string>
     <string name="tier_manual">Manuell</string>
-    <string name="route_warning_too_close">Zu nah am vorherigen Punkt. Mindestens 2 cm weiter gehen.</string>
-    <string name="route_warning_unpinned">Der Punkt konnte nicht verankert werden. Ruhig halten und erneut versuchen.</string>
-    <string name="route_warning_bend_radius">Der Biegeradius ist enger als dieses Profil erlaubt. Eckpunkt setzen oder Formteil verwenden.</string>
+    <string name="route_warning_too_close">Zu nah am vorherigen Punkt. Geh mindestens 2 cm weiter.</string>
+    <string name="route_warning_unpinned">Der Punkt konnte nicht verankert werden. Halte ruhig und versuche es erneut.</string>
+    <string name="route_warning_bend_radius">Der Biegeradius ist enger als dieses Profil erlaubt. Setze einen Eckpunkt oder verwende ein Formteil.</string>
 
     <!-- Counts -->
     <plurals name="home_runs">
@@ -135,14 +135,14 @@
     <string name="onboard_skip">Überspringen</string>
     <string name="help_title">Hilfe und Genauigkeit</string>
     <string name="help_how_title">So funktioniert es</string>
-    <string name="help_how_body">Raum scannen, Strecke Punkt für Punkt antippen, exportieren. Drei Schritte, je ein Bildschirm.</string>
+    <string name="help_how_body">Scanne den Raum, tippe die Strecke Punkt für Punkt an, exportiere. Drei Schritte, je ein Bildschirm.</string>
     <string name="help_accuracy_title">Wie genau ist es?</string>
     <string name="help_acc_plane">Ebene Wand, 1 bis 4 m, auf erkannter Fläche: ±2 cm</string>
     <string name="help_acc_depth">Bereiche nur mit Tiefe: ±6 cm</string>
     <string name="help_acc_angle">Winkel und Diagonalen: ±1 %</string>
     <string name="help_tips_title">Tipps für ein sauberes Aufmaß</string>
     <string name="help_tip_scan">Scanne jede Wand einmal, bevor du misst.</string>
-    <string name="help_tip_light">In dunklen Räumen die Lampe einschalten: Tracking braucht Kontrast.</string>
+    <string name="help_tip_light">Schalte in dunklen Räumen die Lampe ein: Tracking braucht Kontrast.</string>
     <string name="help_tip_angle">Halte das Telefon etwa 45° zur Fläche, die du antippst.</string>
     <string name="help_tip_anchor">Beginne und beende Strecken auf Ankern, nicht in der Luft: dann bleiben die Meter stehen.</string>
     <string name="help_offline_title">Funktioniert ohne Netz</string>
@@ -215,7 +215,7 @@
     <string name="materials_waste">plus %1$d %% Reserve</string>
     <string name="materials_order">%1$s bestellen</string>
     <string name="materials_total">Insgesamt zu bestellen</string>
-    <string name="materials_low_confidence">%1$d Strecken mit unsicherem Treffer - vor der Bestellung prüfen</string>
+    <string name="materials_low_confidence">%1$d Strecken mit unsicherem Treffer - prüfe vor der Bestellung</string>
     <string name="signature_title">Unterschrift des Kunden</string>
     <string name="signature_hint">Mit dem Finger unterschreiben - sie erscheint auf dem Protokoll.</string>
     <string name="signature_clear">Zurücksetzen</string>
@@ -242,7 +242,7 @@
     <string name="pdf_column_material">Material</string>
     <string name="pdf_column_waste">Reserve</string>
     <string name="pdf_column_order_meters">Bestellung (m)</string>
-    <string name="pdf_procurement_note">Bestelllängen enthalten die Reserve. Werte aus anker-verfeinerten Knotenpunkten - kritische Strecken vor dem Zuschnitt mit dem Maßband prüfen.</string>
+    <string name="pdf_procurement_note">Bestelllängen enthalten die Reserve. Werte aus anker-verfeinerten Knotenpunkten - prüfe kritische Strecken vor dem Zuschnitt mit dem Maßband.</string>
     <string name="pdf_footer">ConstructAR %1$s - auf dem Gerät erzeugt</string>
     <string name="pdf_page_label">Seite %1$d</string>
     <string name="backup_title">Sichern und wiederherstellen</string>
@@ -345,7 +345,7 @@
     <string name="paywall_err_untrusted">Diese Installation kann nicht bestätigt werden. Installiere die offizielle Version aus der Originalquelle und versuche es erneut.</string>
     <string name="licence_clock_rollback">Die Uhr des Geräts steht vor dem zuletzt gesehenen Datum. Stelle Datum und Uhrzeit richtig ein – Abo und Testphase werden am zuletzt bekannten Datum geprüft.</string>
     <string name="licence_integrity_failed">Diese Installation konnte nicht bestätigt werden, deshalb sind die Pro-Funktionen aus. Deine Projekte bleiben lesbar und exportierbar.</string>
-    <string name="licence_demo_key">Hinweis für den Entwickler: In diesem Build steckt noch der Demo-Prüfschlüssel. Vor dem ersten Verkauf ersetzen.</string>
+    <string name="licence_demo_key">Hinweis für den Entwickler: In diesem Build steckt noch der Demo-Prüfschlüssel. Ersetze ihn vor dem ersten Verkauf.</string>
     <string name="route_warning_loop_gap">Der Ring schließt nicht – setze den letzten Punkt auf den ersten</string>
     <string name="backup_held_back">%1$d Raum/Räume zurückgehalten – sie bleiben in deiner Sicherung; mit Pro werden alle importiert</string>
     <string name="route_warning_low_confidence">Dieser Punkt stammt aus Tiefendaten – tippe für einen sichereren Wert erneut auf die erkannte Wand</string>

@@ -104,6 +104,61 @@ REVIEWED_SITE: dict[str, set[str]] = {
 }
 
 
+# ---------------------------------------------------------------------------------------------
+# Who is the app talking to?
+#
+# All five translations speak to the tradesperson directly - "du", "tú", "tu", "tu", "ty" - which
+# is right for a tool held in one hand on a ladder. This check exists because that voice had
+# already broken on exactly the screens where somebody is reading an error and has to trust it:
+# the AR hints and the "this device cannot measure" messages had been written in the polite form
+# and never revisited, so one screen said "Bewegen Sie das Telefon" and the next said "Bewege das
+# Telefon". A formal marker in the app is a finding, not a style opinion.
+#
+# The landing page is its own surface and keeps its own decision: French marketing copy says
+# "vous" throughout, which is consistent within the page and therefore not a defect. Each surface
+# is held to the register it declares, so a *new* string that switches register - in the app or on
+# the page - is caught instead of waiting for somebody to notice.
+# ---------------------------------------------------------------------------------------------
+FORMAL = {
+    "de": re.compile(r"\b(Sie|Ihnen|Ihr|Ihre|Ihren|Ihrem|Ihrer|Ihres)\b"),
+    "es": re.compile(
+        r"\b(usted|ustedes)\b|"
+        r"\b(elija|elijan|muévase|acérquese|vuelva|reinicie|inténtelo|instálela|mantenga|"
+        r"reintente|avance|pulse|compruebe|guarde|seleccione|escriba|arrastre|deslice|"
+        r"Elija|Mueva|Muévase|Apunte|Avance|Encienda|Mantenga|Añada|Instálela|Reinicie|"
+        r"Acérquese|Vuelva|Use|Escriba|Seleccione|Pulse|Compruebe|Inténtelo|Guarde|Cree|"
+        r"Sujete|Recorra)\b"
+    ),
+    "fr": re.compile(
+        r"\b(vous|votre|vos|Veuillez)\b|"
+        r"\b(Créez|Déplacez|Rapprochez|Ajoutez|Vérifiez|Placez|Touchez|Scannez|Appuyez|"
+        r"Choisissez|Ouvrez|Réglez|Copiez|Envoyez|Supprimez|Activez|Utilisez|Essayez|Créez|"
+        r"Tenez|Faites|Mettez|Tournez|Visez|Restez|Payez|Allumez|Avancez|Ralentissez|"
+        r"Redémarrez|Remplacez|Installez)(-\w+)?\b"
+    ),
+    "it": re.compile(r"\b(Lei|Suo|Sua|Suoi|Sue)\b"),
+    "pl": re.compile(r"\b(Pan|Pani|Państwo|Państwa)\b"),
+}
+INFORMAL = {
+    "de": re.compile(r"\b(du|dein|deine|deinen|deinem|deiner|deines|dich|dir)\b"),
+    "es": re.compile(r"\b(tú|tu|tus)\b"),
+    "fr": re.compile(r"\b(tu|ton|ta|tes|toi)\b"),
+    "it": re.compile(r"\b(tu|tuo|tua|tuoi|tue)\b"),
+    "pl": re.compile(r"\b(ty|twój|twoja|twoje|twoi|ciebie|cię|tobie)\b"),
+}
+APP_REGISTER = {lang: "informal" for lang in LOCALES}
+SITE_REGISTER = {"de": "informal", "es": "informal", "fr": "formal", "it": "informal", "pl": "informal"}
+# A key whose only marker belongs to somebody else goes here, with the reason.
+APP_REGISTER_EXCEPTIONS: dict[str, set[str]] = {}
+SITE_REGISTER_EXCEPTIONS: dict[str, set[str]] = {
+    "de": {"cmp3them"},  # "auf deren Servern" - the other vendors, not the reader
+    "es": {"cmp3them"},  # "en sus servidores" - the other vendors
+    "fr": set(),
+    "it": set(),
+    "pl": set(),
+}
+
+
 def load(folder: str) -> dict[str, str]:
     values: dict[str, str] = {}
     root = ElementTree.parse(RES / folder / "strings.xml").getroot()
@@ -151,6 +206,50 @@ def check_site() -> None:
             print(f"  site {lang}: {len(content)} keys, {len(reviewed)} reviewed as shared")
 
 
+def check_register() -> None:
+    """One surface, one voice: catch a string written in the other address form."""
+    for lang, folder in LOCALES.items():
+        register = APP_REGISTER[lang]
+        wrong = FORMAL[lang] if register == "informal" else INFORMAL[lang]
+        for key, value in sorted(load(folder).items()):
+            if key in APP_REGISTER_EXCEPTIONS.get(lang, set()):
+                continue
+            match = wrong.search(value)
+            if match:
+                add(
+                    f"values-{lang}/strings.xml",
+                    f"`{key}` says {match.group(0)!r}; the app addresses the reader {register}ly "
+                    f"({value!r})",
+                )
+
+    sys.path.insert(0, str(ROOT / "tools"))
+    import build_site  # noqa: E402
+
+    for lang in LOCALES:
+        register = SITE_REGISTER[lang]
+        wrong = FORMAL[lang] if register == "informal" else INFORMAL[lang]
+        for key, value in sorted(build_site.CONTENT[lang].items()):
+            if key in SITE_REGISTER_EXCEPTIONS.get(lang, set()):
+                continue
+            match = wrong.search(value)
+            if match:
+                add(
+                    f"tools/site_translations.py [{lang}]",
+                    f"`{key}` says {match.group(0)!r}; the page addresses the reader {register}ly "
+                    f"in {lang} ({value!r})",
+                )
+    if VERBOSE:
+        print(f"  register: app {APP_REGISTER}, site {SITE_REGISTER}")
+
+
+def check_apostrophes() -> None:
+    """French and Italian write `’`; a backslash escape survives only because Android accepts it."""
+    for lang in ("fr", "it"):
+        text = (RES / LOCALES[lang] / "strings.xml").read_text(encoding="utf-8")
+        if "\\'" in text:
+            add(f"values-{lang}/strings.xml", "uses the escaped ASCII apostrophe instead of ’")
+
+
 def check_no_language_was_forgotten() -> None:
     """A locale whose file is a copy of English would pass every other check silently."""
     english = load("values")
@@ -169,6 +268,8 @@ def check_no_language_was_forgotten() -> None:
 def main() -> int:
     check_app()
     check_site()
+    check_register()
+    check_apostrophes()
     check_no_language_was_forgotten()
 
     if findings:
@@ -176,7 +277,10 @@ def main() -> int:
         for finding in findings:
             print(f"  - {finding}")
         return 1
-    print("i18n_audit: OK - six app locales and six site locales, nothing left in English")
+    print(
+        "i18n_audit: OK - six app locales and six site locales, nothing left in English, "
+        "one voice per surface"
+    )
     return 0
 
 
