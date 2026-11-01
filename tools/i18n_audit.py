@@ -20,6 +20,13 @@ Spanish, "FAQ" is all four, "Offline" is three of them. Those are listed once, p
 `REVIEWED_SAME_AS_ENGLISH` below with the reason in the comment — so adding a new allowlist
 entry is a decision somebody made, not a silencer. Everything else must differ.
 
+One rule is not about being the *same* as English but about being written in English:
+`file(s)`, `Datei(en)`, `cantiere/i`, `projekt(ów)` - a counted noun with its plural in
+brackets or after a slash. It cannot be right in any of the five target languages (German
+wants `1 Datei` / `2 Dateien`, Polish has four forms), so a string that does it is a finding in
+every locale, English included. `<plurals>` is the mechanism, `check_plural_shortcuts()` the
+rule.
+
 Usage:  python3 tools/i18n_audit.py [--verbose]
 Exit code 0 means "every string that should be translated is".
 """
@@ -41,6 +48,13 @@ LOCALES = {"de": "values-de", "es": "values-es", "fr": "values-fr", "it": "value
 # `%1$.2f m` carries no language at all and is not compared.
 WORD = re.compile(r"[A-Za-zÀ-ÿ]{3,}")
 PLACEHOLDER = re.compile(r"%\d+\$[sdf]|%[sdf]|%%")
+
+# A counted noun offered in two forms - `file(s)`, `Datei(en)`, `cantiere/i`, `projekt(ów)` -
+# is English plural syntax wearing a translation. German wants `1 Datei`/`2 Dateien`, Polish has
+# four forms, and the parenthetical tells the reader the translator gave up. `<plurals>`
+# exists; this pattern is what catches a string that fakes it.
+PLURAL_SHORTCUT = re.compile(r"\(\s*(?:s|e|es|en|i|ów)\s*\)")
+PLURAL_SLASH = re.compile(r"\b[A-Za-zÀ-ÿ]{4,}/(?:i|e|en|s|Räume|Räumen)\b")
 
 findings: list[str] = []
 
@@ -187,6 +201,25 @@ def check_app() -> None:
             print(f"  app {lang}: {len(translated)} strings, {len(reviewed)} reviewed as shared")
 
 
+def check_plural_shortcuts() -> None:
+    """No shipped sentence may fake a plural with brackets or a slash."""
+    for folder in ["values", *LOCALES.values()]:
+        root = ElementTree.parse(RES / folder / "strings.xml").getroot()
+        for node in root:
+            if node.tag != "string":
+                continue
+            text = node.text or ""
+            name = node.attrib.get("name", "?")
+            for pattern in (PLURAL_SHORTCUT, PLURAL_SLASH):
+                match = pattern.search(text)
+                if match:
+                    add(
+                        f"{folder}/strings.xml",
+                        f"`{name}` fakes a plural with {match.group(0)!r} - use <plurals> so the "
+                        f"count is right in every language",
+                    )
+
+
 def check_site() -> None:
     sys.path.insert(0, str(ROOT / "tools"))
     import build_site  # noqa: E402  (imported here so `--help` style runs stay cheap)
@@ -269,6 +302,7 @@ def main() -> int:
     check_app()
     check_site()
     check_register()
+    check_plural_shortcuts()
     check_apostrophes()
     check_no_language_was_forgotten()
 

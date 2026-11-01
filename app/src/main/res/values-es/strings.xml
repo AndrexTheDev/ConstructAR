@@ -377,8 +377,14 @@
     <string name="licence_integrity_failed">No se pudo confirmar esta instalación, así que las funciones Pro están desactivadas. Tus proyectos siguen siendo legibles y exportables.</string>
     <string name="licence_demo_key">Nota para el desarrollador: esta compilación aún lleva la clave de verificación de demostración. Sustitúyela antes de la primera venta.</string>
     <string name="route_warning_loop_gap">El anillo no cierra: coloca el último punto sobre el primero</string>
-    <string name="backup_held_back">%1$d proyecto(s) retenidos: siguen en tu copia; con Pro se importan todos</string>
-    <string name="backup_unreadable">No se pudieron leer %1$d archivo(s) de la selección: no son salas y siguen intactos en tu copia</string>
+    <plurals name="backup_held_back">
+        <item quantity="one">1 proyecto retenido: sigue en tu copia; con Pro se importa</item>
+        <item quantity="other">%1$d proyectos retenidos: siguen en tu copia; con Pro se importan todos</item>
+    </plurals>
+    <plurals name="backup_unreadable">
+        <item quantity="one">No se pudo leer 1 archivo de la selección: no es una sala y sigue intacto en tu copia</item>
+        <item quantity="other">No se pudieron leer %1$d archivos de la selección: no son salas y siguen intactos en tu copia</item>
+    </plurals>
     <string name="route_warning_low_confidence">Este punto viene de datos de profundidad: toca de nuevo la pared detectada para un valor más firme</string>
     <string name="route_warning_height_jump">Ese salto de altura es grande: ¿una subida al techo o un toque en el suelo? Deshazlo si fue un fallo</string>
 </resources>

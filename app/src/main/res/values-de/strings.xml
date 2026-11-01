@@ -377,8 +377,14 @@
     <string name="licence_integrity_failed">Diese Installation konnte nicht bestätigt werden, deshalb sind die Pro-Funktionen aus. Deine Projekte bleiben lesbar und exportierbar.</string>
     <string name="licence_demo_key">Hinweis für den Entwickler: In diesem Build steckt noch der Demo-Prüfschlüssel. Ersetze ihn vor dem ersten Verkauf.</string>
     <string name="route_warning_loop_gap">Der Ring schließt nicht – setze den letzten Punkt auf den ersten</string>
-    <string name="backup_held_back">%1$d Raum/Räume zurückgehalten – sie bleiben in deiner Sicherung; mit Pro werden alle importiert</string>
-    <string name="backup_unreadable">%1$d Datei(en) aus der Auswahl konnten nicht gelesen werden - sie sind keine Räume und bleiben unverändert in deiner Sicherung</string>
+    <plurals name="backup_held_back">
+        <item quantity="one">1 Raum zurückgehalten - er bleibt in deiner Sicherung; mit Pro wird er importiert</item>
+        <item quantity="other">%1$d Räume zurückgehalten - sie bleiben in deiner Sicherung; mit Pro werden alle importiert</item>
+    </plurals>
+    <plurals name="backup_unreadable">
+        <item quantity="one">1 Datei aus der Auswahl konnte nicht gelesen werden - sie ist kein Raum und bleibt unverändert in deiner Sicherung</item>
+        <item quantity="other">%1$d Dateien aus der Auswahl konnten nicht gelesen werden - sie sind keine Räume und bleiben unverändert in deiner Sicherung</item>
+    </plurals>
     <string name="route_warning_low_confidence">Dieser Punkt stammt aus Tiefendaten – tippe für einen sichereren Wert erneut auf die erkannte Wand</string>
     <string name="route_warning_height_jump">Das ist ein großer Höhensprung - eine Steigleitung zur Decke oder ein Fehltipp auf den Boden? Mach ihn rückgängig, wenn es ein Fehltipp war</string>
 </resources>

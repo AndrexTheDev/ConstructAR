@@ -377,8 +377,14 @@
     <string name="licence_integrity_failed">Cette installation n’a pas pu être confirmée, les fonctions Pro sont donc désactivées. Vos chantiers restent lisibles et exportables.</string>
     <string name="licence_demo_key">Note pour le développeur : cette version contient encore la clé de vérification de démonstration. Remplace-la avant la première vente.</string>
     <string name="route_warning_loop_gap">L’anneau ne se ferme pas - place le dernier point sur le premier</string>
-    <string name="backup_held_back">%1$d chantier(s) retenu(s) - ils restent dans ta sauvegarde ; Pro les importe tous</string>
-    <string name="backup_unreadable">%1$d fichier(s) de la sélection n’ont pas pu être lus : ce ne sont pas des pièces et ils restent intacts dans ta sauvegarde</string>
+    <plurals name="backup_held_back">
+        <item quantity="one">1 chantier retenu - il reste dans ta sauvegarde ; Pro l’importe</item>
+        <item quantity="other">%1$d chantiers retenus - ils restent dans ta sauvegarde ; Pro les importe tous</item>
+    </plurals>
+    <plurals name="backup_unreadable">
+        <item quantity="one">1 fichier de la sélection n’a pas pu être lu : ce n’est pas une pièce et il reste intact dans ta sauvegarde</item>
+        <item quantity="other">%1$d fichiers de la sélection n’ont pas pu être lus : ce ne sont pas des pièces et ils restent intacts dans ta sauvegarde</item>
+    </plurals>
     <string name="route_warning_low_confidence">Ce point vient des données de profondeur - touche à nouveau le mur détecté pour une valeur plus sûre</string>
     <string name="route_warning_height_jump">C’est un grand écart de hauteur : une montée au plafond ou un appui sur le sol ? Annule-le si c’était une erreur</string>
 </resources>

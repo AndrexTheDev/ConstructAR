@@ -30,6 +30,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
@@ -248,7 +249,7 @@ fun BackupCard(
                 // files are still in his zip, they were just not imported on this plan.
                 if (current is BackupOutcome.Restored && current.heldBack > 0) {
                     Text(
-                        text = stringResource(R.string.backup_held_back, current.heldBack),
+                        text = pluralStringResource(R.plurals.backup_held_back, current.heldBack, current.heldBack),
                         style = MaterialTheme.typography.bodySmall,
                         color = SiteColors.warning,
                     )
@@ -257,7 +258,7 @@ fun BackupCard(
                 // leaves the operator counting rooms in a backup he believes was fully restored.
                 if (current is BackupOutcome.Restored && current.unreadable > 0) {
                     Text(
-                        text = stringResource(R.string.backup_unreadable, current.unreadable),
+                        text = pluralStringResource(R.plurals.backup_unreadable, current.unreadable, current.unreadable),
                         style = MaterialTheme.typography.bodySmall,
                         color = SiteColors.danger,
                     )
