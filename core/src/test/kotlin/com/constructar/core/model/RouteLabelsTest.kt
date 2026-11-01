@@ -35,7 +35,7 @@ class RouteLabelsTest {
 
     @Test
     fun `the first run of a project is number one`() {
-        assertEquals("CABLE Cable Ø16 #1", RouteLabels.next(ConduitSpec.cable(16f, "Cable Ø16"), 0))
+        assertEquals("CABLE Ø 16 mm #1", RouteLabels.next(ConduitSpec.cable(16f, "Cable Ø16"), 0))
     }
 
     @Test
@@ -47,6 +47,6 @@ class RouteLabelsTest {
         val polish = RouteLabels.next(spec, 4)
 
         assertEquals(german, polish)
-        assertEquals("CABLE Cable Ø16 #5", german)
+        assertEquals("CABLE Ø 16 mm #5", german)
     }
 }
