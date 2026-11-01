@@ -88,7 +88,7 @@ class ProjectRepositoryTest {
     )
 
     @Test
-    fun `a room survives a save and a load`() = runBlocking {
+    fun `a room survives a save and a load`(): Unit = runBlocking {
         val room = room()
         assertTrue(repository.save(room))
 
@@ -106,7 +106,7 @@ class ProjectRepositoryTest {
     }
 
     @Test
-    fun `the list carries what the home screen shows`() = runBlocking {
+    fun `the list carries what the home screen shows`(): Unit = runBlocking {
         repository.save(room())
 
         val summary = repository.list().single()
@@ -118,14 +118,14 @@ class ProjectRepositoryTest {
     }
 
     @Test
-    fun `a blank room name falls back instead of producing an unnamed room`() = runBlocking {
+    fun `a blank room name falls back instead of producing an unnamed room`(): Unit = runBlocking {
         val created = repository.create(name = "   ", fallbackName = "Raum")
         assertEquals("Raum", created.name)
         assertTrue(repository.hasProject(created.id))
     }
 
     @Test
-    fun `restoring a backup of a room that is still on the phone keeps both`() = runBlocking {
+    fun `restoring a backup of a room that is still on the phone keeps both`(): Unit = runBlocking {
         val original = repository.save(room())
         assertTrue(original)
 
@@ -139,14 +139,14 @@ class ProjectRepositoryTest {
     }
 
     @Test
-    fun `text that is not a project is refused, and nothing is written`() = runBlocking {
+    fun `text that is not a project is refused, and nothing is written`(): Unit = runBlocking {
         assertNull(repository.importProject("{\"not\": \"a project\"}"))
         assertNull(repository.importProject(""))
         assertTrue(repository.list().isEmpty())
     }
 
     @Test
-    fun `a corrupt file is reported as unreadable but is never deleted`() = runBlocking {
+    fun `a corrupt file is reported as unreadable but is never deleted`(): Unit = runBlocking {
         repository.save(room())
         val file = File(projectsDirectory, "room-1.json")
         file.writeText("{ this is not json")
@@ -158,7 +158,7 @@ class ProjectRepositoryTest {
     }
 
     @Test
-    fun `a temporary file left behind by a kill is swept, the room is not`() = runBlocking {
+    fun `a temporary file left behind by a kill is swept, the room is not`(): Unit = runBlocking {
         repository.save(room())
         val stale = File(projectsDirectory, "room-2.json${SafeFiles.TEMPORARY_SUFFIX}")
         stale.writeText("half written")
@@ -170,7 +170,7 @@ class ProjectRepositoryTest {
     }
 
     @Test
-    fun `deleting a room deletes its photos and nothing else`() = runBlocking {
+    fun `deleting a room deletes its photos and nothing else`(): Unit = runBlocking {
         repository.save(room())
         repository.save(room().copy(id = "room-2", name = "Bad"))
         photoDirectory.mkdirs()
@@ -188,7 +188,7 @@ class ProjectRepositoryTest {
     }
 
     @Test
-    fun `the backup is a byte-for-byte copy of what the app wrote`() = runBlocking {
+    fun `the backup is a byte-for-byte copy of what the app wrote`(): Unit = runBlocking {
         repository.save(room())
         val onDisk = File(projectsDirectory, "room-1.json").readText()
 
