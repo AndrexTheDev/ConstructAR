@@ -367,8 +367,9 @@ class RouteSessionTest {
         val corner = session.state.value.nodes.last()
         assertEquals(0f, corner.position.x, 0f)
         assertEquals(0f, corner.position.z, 0f)
-        // 1 + 1 + 1, not 1 + 1 + 1.036: no stray segment, and no elbow ordered for it.
-        assertEquals(3f, session.state.value.lengthMeters, 1e-5f)
+        // 1 + 1 + √2: the diagonal to the corner, not the 3.703 m to a point 3.6 cm off it -
+        // and no 3.6 cm stub with two bends in the bill of materials.
+        assertEquals(3.4142137f, session.state.value.lengthMeters, 1e-5f)
     }
 
     @Test
@@ -421,7 +422,10 @@ class RouteSessionTest {
         // 1.1 cm from the first corner, 2.1 cm from the second: the nearer corner wins.
         assertTrue(session.addNode(hit(0.01f, 0f, 0.005f)))
         assertEquals(0f, session.state.value.nodes.last().position.x, 0f)
-        assertEquals(0.03f, session.state.value.nodes.last().position.z, 0f)
+        assertEquals(0f, session.state.value.nodes.last().position.z, 0f)
+        // 3 cm out and 3 cm back: 0.06 m, not the 0.0506 m a literal tap 1.1 cm off the corner
+        // would have measured - and, more to the point, not a stub segment anyone has to fit.
+        assertEquals(0.06f, session.state.value.lengthMeters, 1e-5f)
     }
 
     @Test
