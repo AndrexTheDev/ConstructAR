@@ -407,10 +407,11 @@ Known limitations, deliberately documented rather than hidden:
   defect), when French or Italian writes `\'` where every other string uses `’`, and
   `tools/consistency_audit.py` fails when the landing page and the app disagree on the three
   wallet addresses, the four prices, the six languages or the version.
-* **The temporary screenshot matrix** (`.github/workflows/screenshots.yml`) renders every screen
-  in all six languages on the JVM and every landing page in real Chromium at three viewports. It
-  lives in build output, is not part of the release gate, and is meant to be deleted after the
-  review — [docs/TESTING.md](docs/TESTING.md) says exactly what it touches.
+* **No screenshot matrix, on purpose.** One existed during the systematic beta test and was
+  deleted with it: a pipeline that renders screens nobody can compare against is coverage in
+  appearance only. Layout is a device-matrix item
+  ([docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)); the six locales are held by the
+  string gates above.
 
 The pre-release gate (device matrix, measurement verification against a laser, licensing,
 performance) is [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md). How each layer is run,

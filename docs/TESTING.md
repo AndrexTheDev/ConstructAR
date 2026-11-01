@@ -20,8 +20,7 @@ that is too expensive to run is a document, not a test.
 | 3. JVM unit tests | `gradle … testDebugUnitTest` | geometry, pricing, licences, storage (round trip, restore, corrupt file, stale temp files, delete), BOM arithmetic, formatting, routing warnings, hit stabilisation, the printed cost block, the exported file names in five languages, the PLY/GLB byte layout, and the WCAG contrast of every theme pair the UI draws text on |
 | 4. Host C++ tests | `g++ … tests/host_tests.cpp` | TSDF integration, Surface Nets, pose-graph closure — with `-Werror`, no NDK needed |
 | 5. Full build | `.github/workflows/android-build.yml` | `assembleDebug testDebugUnitTest` across five modules, warnings as errors, R8 on the release variant, the licence verifier surviving R8, the arm64 native library inside the APK |
-| 6. Screenshot matrix (temporary) | `.github/workflows/screenshots.yml` | every screen in all six languages renders on the JVM; every landing page renders in real Chromium at three viewports |
-| 7. Human review | a person, a tape measure | ±2 cm on a detected wall; whether a plumber understands the HUD |
+| 6. Human review | a person, a tape measure | ±2 cm on a detected wall; whether a plumber understands the HUD |
 
 ## Running it locally
 
@@ -31,27 +30,20 @@ python3 tools/build_site.py && python3 tools/seo_audit.py --verbose   # layer 2
 gradle assembleDebug testDebugUnitTest               # layers 3 and 5
 ```
 
-The screenshot matrix needs a browser and a JVM and is opt-in:
+## What no automated layer can prove
 
-```bash
-gradle :app:testDebugUnitTest --tests "com.constructar.app.screenshots.*" \
-  -Pconstructar.screenshots=true                     # 6 locales × 7 screens → app/build/screenshot-matrix
-npm install --no-save playwright && npx playwright install --with-deps chromium
-node tools/screenshots_site.mjs                      # 7 pages × 3 viewports → build/site-matrix
-```
+There is no screenshot matrix. It existed during the beta test to answer *"does this screen fit in
+Polish?"* without a device farm, and it was deleted when the review ended: its artifacts were never
+verifiable from inside the pipeline, so keeping a green job that renders pixels nobody looks at
+would have been the illusion of coverage rather than coverage. **Layout and touch behaviour are
+checked with a phone in a hand** (`docs/RELEASE_CHECKLIST.md`), and the six locales are held to
+their strings by the gates in layer 1 - the string that exists, is translated, and is measured
+against its own formatting rules, not the pixels around it.
 
-## The matrix is temporary, on purpose
-
-`docs/TESTING.md` will outlive it; the matrix will not. It exists to answer the question *"does
-this screen fit in Polish?"* without a device farm, and it writes into `build/`, which is never
-committed. When the review is over, delete `.github/workflows/screenshots.yml`,
-`tools/screenshots_site.mjs` and `app/src/test/kotlin/com/constructar/app/screenshots/` — no
-other file depends on them.
-
-It is deliberately **not** a golden-image test. A marketing page that fails CI because a headline
-grew by two words is a test that gets deleted within a month. What is asserted is structural:
-every screen renders text, no screen shows a raw resource key, every page has one `<h1>` and a
-description, no image is missing `alt`, and nothing scrolls sideways on a 390 px phone.
+What *is* asserted about the landing pages is structural and lives in `tools/seo_audit.py`: every
+page has exactly one `<h1>` and a description, no image is missing `alt`, every internal link and
+fragment resolves, and the six locales carry the same metadata. That is a gate a person can read and
+argue with; a golden image is not.
 
 ## What is *not* verified
 
@@ -80,9 +72,9 @@ coming back. The "guard" column is the reason to believe it stays fixed.
 | 5 | The Spanish `<title>` was 72 characters — truncated in a search result | `seo_audit.py` (20–70 window) | shortened to 52 | the same window, on all six pages |
 | 6 | A run measured on a plane the tracker itself rated below 0.5 was warned about on the AR screen but **not** flagged in the bill of materials: the BOM counted only "soft sources" (feature points, manual placement), so the warning died with the session and the soft measurement went into the order without a second look | a new unit test that expected the flag | one shared threshold, `HitConfidence.TRUSTED`, read by both the AR session and the BOM | `MaterialListTest` (three cases: soft source, untrusted plane, clean run) |
 | 7 | Missing `og:image:alt`, `twitter:image:alt`, a web app manifest, `color-scheme`, `sitemap` `<lastmod>`, `availability` on the offers and a `WebSite` node | manual metadata audit | all added by the generator | `seo_audit.py` checks each one, including that a declared icon size matches the file on disk |
-| 8 | The shipped-UI text gate flagged the screenshot fixtures, i.e. it was not scoped to shipped code | `verify_sources.py` itself | test sources are exempt, with the reason stated in the docstring | — |
+| 8 | The shipped-UI text gate flagged a test fixture, i.e. it was not scoped to shipped code | `verify_sources.py` itself | test sources are exempt, with the reason stated in the docstring | — |
 | 9 | The German price list said **"Lifetime"**, an English word, in both the app (`paywall_lifetime_title`) and the landing page (`plan_l`). Every other locale had translated it, which is what made the missing one visible | `tools/i18n_audit.py`, written for this round | "Lebenslang" in both places | the audit, with a reviewed allowlist of words that are genuinely the same in a language ("Export" is German, "Surface" is French) |
-| 10 | `docs/preview/theme.html` was a hand-drawn sketch of the theme that duplicated the palette a third time and was **published** to GitHub Pages, unlinked and unmaintained | review of the published tree | deleted; the screenshot matrix renders the real screens now | `tools/consistency_audit.py` compares the app palette with the site palette, so a third copy would be caught |
+| 10 | `docs/preview/theme.html` was a hand-drawn sketch of the theme that duplicated the palette a third time and was **published** to GitHub Pages, unlinked and unmaintained | review of the published tree | deleted; the app and the landing page carry the palette and nothing else does | `tools/consistency_audit.py` compares the app palette with the site palette, so a third copy would be caught |
 | 11 | CI reported a failed build as an annotation one line long: the workflow-command payload was cut at its first newline, which is why a real Gradle failure arrived as a deprecation warning | this round | the payload is joined into a single line, and the whole `FAILURE …` block plus the head of the log is reported | — |
 | 12 | Nothing tested the storage layer, which is where a room is actually lost. Writing the tests showed that the stale-`.tmp` sweep runs on the first *read*, not on construction — the behaviour is right (no file I/O on whatever thread builds the repository), but the claim was vague enough that the test had to say it out loud | `ProjectRepositoryTest`, new | the contract is stated in the test name and asserted where it happens | 9 Robolectric tests over a real filesystem |
 | 13 | The app changed address form between screens: the AR hints and the "this device cannot measure" messages were in the polite form (*Bewegen Sie das Telefon*, *Apunte a una pared*, *Déplacez le téléphone*) while onboarding, help, paywall and backup said *du/tú/tu* — and on one screen two route warnings contradicted each other (*Avance al menos 2 cm* next to *Mantén el pulso*) | a register sweep of all five locales, side by side | the app speaks informally everywhere: 20 German, 15 Spanish and 25 French strings rewritten, and German sentence-style hints converted from bare infinitives to *du* so the AR block reads as one voice. Button and HUD labels stay infinitives ("Raum scannen", "Jetzt messen") — that is a label style, not a sentence | `i18n_audit.py` holds each surface to a declared register and names the key and the offending word; the mutation test (one string put back to *Cree una*) fails the audit with `exit 1` |

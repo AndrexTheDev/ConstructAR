@@ -132,7 +132,7 @@ def check_reflection() -> None:
 def check_app_hardcoded_text() -> None:
     """No literal user-visible string in shipped UI code.
 
-    Test sources are exempt on purpose: a screenshot fixture and a unit-test expectation are
+    Test sources are exempt on purpose: a test fixture and a unit-test expectation are
     sample data, not something a user reads on a phone, and translating them would make the
     fixtures unreadable without making the app any more localised.
     """
