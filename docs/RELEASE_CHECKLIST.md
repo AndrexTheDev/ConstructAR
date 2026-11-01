@@ -24,6 +24,10 @@ Everything here is a gate before an APK reaches a site, in the order it should b
 
 ## 2. Licensing
 
+- [ ] `LicencePublicKey.PUBLIC_KEY_BASE64` is the **production** key, not `DEMO_KEY_BASE64`.
+      With the placeholder in place the app verifies licences no real signer ever produced, and
+      the Help screen shows the developer note. `python3 scripts/verify_sources.py` prints the
+      reminder on every run
 - [ ] `LICENSE` present and unmodified (All Rights Reserved — see `docs/LICENSING.md`)
 - [ ] Third-party attributions (`NOTICE` or the in-app licences screen) cover SceneView,
       Filament, ARCore and Depth Anything V2 Small, as Apache-2.0 requires

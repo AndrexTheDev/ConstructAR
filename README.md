@@ -400,9 +400,11 @@ Known limitations, deliberately documented rather than hidden:
   (declared size checked against the file), and a 404 that is `noindex` with absolute URLs only.
 * **Agreement gates**: `tools/i18n_audit.py` fails when a translated locale still carries the
   English string (with a reviewed allowlist for words that are genuinely the same — "Export" is
-  German, "Surface" is French), and `tools/consistency_audit.py` fails when the landing page and
-  the app disagree on the three wallet addresses, the four prices, the six languages or the
-  version.
+  German, "Surface" is French), when a surface mixes address forms (the app says *du/tú/tu*
+  throughout; the French page says *vous* throughout, which is its own decision and not a
+  defect), when French or Italian writes `\'` where every other string uses `’`, and
+  `tools/consistency_audit.py` fails when the landing page and the app disagree on the three
+  wallet addresses, the four prices, the six languages or the version.
 * **The temporary screenshot matrix** (`.github/workflows/screenshots.yml`) renders every screen
   in all six languages on the JVM and every landing page in real Chromium at three viewports. It
   lives in build output, is not part of the release gate, and is meant to be deleted after the
@@ -424,7 +426,7 @@ errors:
 |------|--------|
 | `scripts/verify_sources.py` (headers, reflection ban, i18n parity) | pass — 162 files |
 | `tools/seo_audit.py` (metadata, structured data, links, sitemap, manifest) | pass — 6 pages + 404 |
-| `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, no price or address drift |
+| `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
 | `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 210 tests in the app+core+ar-engine+export suites |

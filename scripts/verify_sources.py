@@ -76,6 +76,7 @@ FORBIDDEN_DEPENDENCY_MARKERS = [
 ]
 
 findings: list[str] = []
+notices: list[str] = []
 
 
 def add(path: Path, message: str) -> None:
@@ -302,6 +303,34 @@ def check_resource_xml() -> None:
                 add(path, f"unescaped apostrophe (line {number}): {line.strip()[:100]}")
 
 
+def check_licence_key() -> None:
+    """Not a failure, a reminder: the tree ships a demo key and only a human can swap it.
+
+    `LicencePublicKey.isDemoKey` is what shows the developer note on the Help screen, so the
+    placeholder is deliberate and visible. But a release cut with it in place would verify
+    licences that no real signer ever produced - so the release checklist asks for the swap, and
+    every verify run repeats it, because the CI log is where a release actually gets cut from.
+    """
+    key_file = (
+        ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "billing"
+        / "LicencePublicKey.kt"
+    )
+    if not key_file.exists():
+        return
+    text = key_file.read_text(encoding="utf-8")
+
+    def literal(name: str) -> str:
+        """The concatenated string literal assigned to `name`, or "" when there is none."""
+        match = re.search(rf"{name}\s*(?::\s*String\s*)?=\s*((?:\s*\"[^\"]*\"\s*\+?)+)", text)
+        return "".join(re.findall(r'"([^"]*)"', match.group(1))) if match else ""
+
+    shipped = literal("PUBLIC_KEY_BASE64")
+    if shipped and shipped == literal("DEMO_KEY_BASE64"):
+        notices.append(
+            "the licence key is still DEMO_KEY_BASE64 - replace it before publishing a release"
+        )
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -313,12 +342,16 @@ def main() -> int:
     check_manifest_hardening()
     check_kotlin_structure()
     check_resource_xml()
+    check_licence_key()
 
     if findings:
         print(f"verify_sources: {len(findings)} finding(s)\n")
         for finding in findings:
             print("  -", finding)
         return 1
+
+    for notice in notices:
+        print(f"verify_sources: notice - {notice}")
 
     if VERBOSE:
         print(f"verify_sources: {len(files)} files checked")
