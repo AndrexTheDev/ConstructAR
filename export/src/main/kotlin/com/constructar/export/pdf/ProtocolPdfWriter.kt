@@ -161,14 +161,24 @@ class ProtocolPdfWriter(
                 append(content.project.name)
                 if (content.project.siteName.isNotBlank()) append(" · ").append(content.project.siteName)
             }
-            page.canvas.drawText(subtitle, MARGIN.toFloat(), y.toFloat(), subtitlePaint)
+            page.canvas.drawText(
+                ellipsize(subtitle, pageWidth - 2 * MARGIN, subtitlePaint),
+                MARGIN.toFloat(),
+                y.toFloat(),
+                subtitlePaint,
+            )
             y += 16
             val metaLine = listOfNotNull(
                 content.generatedAtLabel.ifBlank { null },
                 content.operatorName.ifBlank { content.project.technician.ifBlank { null } },
                 content.labels.subtitle,
             ).joinToString("  ·  ")
-            page.canvas.drawText(metaLine, MARGIN.toFloat(), y.toFloat(), textPaint)
+            page.canvas.drawText(
+                ellipsize(metaLine, pageWidth - 2 * MARGIN, textPaint),
+                MARGIN.toFloat(),
+                y.toFloat(),
+                textPaint,
+            )
             y += 10
             page.canvas.drawLine(MARGIN.toFloat(), y.toFloat(), (pageWidth - MARGIN).toFloat(), y.toFloat(), rulePaint)
             y += 16
@@ -443,7 +453,12 @@ class ProtocolPdfWriter(
         for ((index, entry) in entries.withIndex()) {
             val x = MARGIN + column * columnWidth
             canvas.drawText(entry.first, x.toFloat(), y.toFloat(), subtitlePaint)
-            canvas.drawText(entry.second, (x + 110).toFloat(), y.toFloat(), textPaint)
+            canvas.drawText(
+                ellipsize(entry.second, pageWidth - MARGIN - (x + 110), textPaint),
+                (x + 110).toFloat(),
+                y.toFloat(),
+                textPaint,
+            )
             if (column == 1 || index == entries.lastIndex) y += 15
             column = (column + 1) % 2
         }
@@ -526,11 +541,20 @@ class ProtocolPdfWriter(
         )
     }
 
-    private fun ellipsize(value: String, maxWidth: Int): String {
-        if (textPaint.measureText(value) <= maxWidth) return value
-        var end = value.length
-        while (end > 1 && textPaint.measureText(value.substring(0, end) + "…") > maxWidth) end--
-        return value.substring(0, end) + "…"
+    /**
+     * [value] on one line, no wider than [maxWidth], measured with the paint that will draw it.
+     *
+     * The header used to call `drawText` directly, so a long room name ran past the margin and a
+     * name pasted with a line break printed a row of missing-glyph boxes - on the first page of
+     * the document the customer keeps. Table cells were already clamped; the text around them
+     * was not. See [PdfText].
+     */
+    private fun ellipsize(
+        value: String,
+        maxWidth: Int,
+        paint: Paint = textPaint,
+    ): String = PdfText.ellipsize(PdfText.singleLine(value), maxWidth.toFloat()) { text ->
+        paint.measureText(text)
     }
 
     private fun wrap(text: String, maxWidth: Int, paint: Paint): List<String> {
