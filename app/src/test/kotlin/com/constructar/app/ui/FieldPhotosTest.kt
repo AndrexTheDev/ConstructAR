@@ -111,7 +111,8 @@ class FieldPhotosTest {
     @Test
     fun `the screen budget keeps the photos that carry the claim`() {
         val many = project(
-            diary = (1..20).map { diary("e$it") },
+            // Newest first, the way the model stores the diary: e20 is the most recent entry.
+            diary = (20 downTo 1).map { diary("e$it") },
             defects = listOf(defect("d1", resolved = false), defect("d2", resolved = true)),
         )
         val shown = FieldPhotos.ordered(many).take(FieldPhotos.SCREEN_BUDGET)
