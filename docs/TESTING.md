@@ -93,6 +93,14 @@ again. Each line names what was read, not what was assumed.
   unreadable (finding 55) is still in the backup rather than silently dropped.
 * **A licence key pasted out of an e-mail.** `LicenceFormat.split` removes spaces, line breaks and
   carriage returns before parsing, so a key that wrapped over three lines still verifies.
+* **The appendix can always reach its eight photos.** `buildPhotoAppendix` takes the first eight
+  of the same order the field book uses, and the screen budget it reads from is twelve - larger, and
+  filled in that order - so a photo the page wants is never one the phone did not decode. Marking a
+  defect resolved re-sorts the order but not the map, which is a map: nothing is lost.
+* **Every other screen scrolls.** `ui/` was walked for `fillMaxSize` columns without
+  `verticalScroll` or `LazyColumn`: export, field book, help, materials, paywall and the room screen
+  all scroll, the home screen is a lazy list, and the AR screen is an overlay with no scrolling by
+  design. Onboarding was the single exception (finding 66).
 * **Free-plan promises on the landing pages.** "One room, unlimited routes, CSV and PDF with a
   watermark" was checked line by line against `Entitlements` (`FREE_PROJECTS = 1`,
   `maxRoutesPerProject = MAX_VALUE`, `canExportCsv`, `canExportPdf`, `pdfWatermark = !isPro`), and
