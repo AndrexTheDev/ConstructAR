@@ -6,6 +6,7 @@
 
 package com.constructar.app
 
+import com.constructar.app.ui.BackupOutcome
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -24,7 +25,7 @@ class RestorePlanTest {
     fun `a file that is not a project does not use up a free slot`() {
         val imported = mutableListOf<String>()
 
-        val (importedCount, heldBack) = restoreOutcome(1, listOf("garbage", "room")) { text ->
+        val counts = restoreOutcome(1, listOf("garbage", "room")) { text ->
             if (text == "room") {
                 imported += text
                 true
@@ -33,38 +34,75 @@ class RestorePlanTest {
             }
         }
 
-        assertEquals(1, importedCount)
-        assertEquals(1, heldBack)
+        assertEquals(1, counts.imported)
+        // The garbage file is not "held back for Pro": no plan can import it.
+        assertEquals(0, counts.heldBack)
+        assertEquals(1, counts.unreadable)
         assertEquals(listOf("room"), imported)
     }
 
     @Test
-    fun `files past the free slots are held back, not dropped`() {
-        val (importedCount, heldBack) = restoreOutcome(2, listOf("a", "b", "c", "d")) { true }
+    fun `a corrupt file is reported as unreadable, not as waiting for an upgrade`() {
+        // Two rooms and one truncated file, one free slot: the slot goes to the first room and
+        // the second is held back - and the truncated file must not be counted with it, because
+        // the card promises that buying Pro imports what was held back.
+        val counts = restoreOutcome(1, listOf("room", "corrupt", "room2")) { text ->
+            text.startsWith("room")
+        }
 
-        assertEquals(2, importedCount)
-        assertEquals(2, heldBack)
+        assertEquals(1, counts.imported)
+        assertEquals(1, counts.heldBack)
+        assertEquals(1, counts.unreadable)
+    }
+
+    @Test
+    fun `nothing readable and nothing held back is a failure, not a restore of zero`() {
+        val counts = restoreOutcome(5, listOf("garbage", "also garbage")) { false }
+
+        assertEquals(
+            BackupOutcome.Failed(detail = "no rooms"),
+            BackupOutcome.restored(
+                counts = BackupOutcome.RestoreCounts(
+                    imported = counts.imported,
+                    heldBack = counts.heldBack,
+                    unreadable = counts.unreadable,
+                ),
+                nothingImported = "no rooms",
+            ),
+        )
+    }
+
+    @Test
+    fun `files past the free slots are held back, not dropped`() {
+        val counts = restoreOutcome(2, listOf("a", "b", "c", "d")) { true }
+
+        assertEquals(2, counts.imported)
+        assertEquals(2, counts.heldBack)
+        assertEquals(0, counts.unreadable)
     }
 
     @Test
     fun `no free slot holds everything back and imports nothing`() {
         var attempts = 0
 
-        val (importedCount, heldBack) = restoreOutcome(0, listOf("a", "b")) {
+        val counts = restoreOutcome(0, listOf("a", "b")) {
             attempts++
             true
         }
 
-        assertEquals(0, importedCount)
-        assertEquals(2, heldBack)
+        assertEquals(0, counts.imported)
+        assertEquals(2, counts.heldBack)
+        // Never attempted, so never called unreadable either.
+        assertEquals(0, counts.unreadable)
         assertEquals(0, attempts)
     }
 
     @Test
     fun `an empty selection reports nothing either way`() {
-        val (importedCount, heldBack) = restoreOutcome(3, emptyList()) { true }
+        val counts = restoreOutcome(3, emptyList()) { true }
 
-        assertEquals(0, importedCount)
-        assertEquals(0, heldBack)
+        assertEquals(0, counts.imported)
+        assertEquals(0, counts.heldBack)
+        assertEquals(0, counts.unreadable)
     }
 }

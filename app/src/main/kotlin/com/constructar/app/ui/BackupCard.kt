@@ -63,7 +63,7 @@ fun BackupCard(
     onRestore: (
         texts: List<String>,
         photos: List<Pair<String, Uri>>,
-        done: (imported: Int, heldBack: Int) -> Unit,
+        done: (imported: Int, heldBack: Int, unreadable: Int) -> Unit,
     ) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -170,12 +170,15 @@ fun BackupCard(
                 busy = false
                 return@launch
             }
-            onRestore(texts, photos) { imported, heldBack ->
-                outcome = if (imported == 0 && heldBack == 0) {
-                    BackupOutcome.Failed(context.getString(R.string.backup_failed))
-                } else {
-                    BackupOutcome.Restored(imported, heldBack)
-                }
+            onRestore(texts, photos) { imported, heldBack, unreadable ->
+                outcome = BackupOutcome.restored(
+                    counts = BackupOutcome.RestoreCounts(
+                        imported = imported,
+                        heldBack = heldBack,
+                        unreadable = unreadable,
+                    ),
+                    nothingImported = context.getString(R.string.backup_failed),
+                )
                 busy = false
             }
         }
@@ -250,6 +253,15 @@ fun BackupCard(
                         color = SiteColors.warning,
                     )
                 }
+                // A file that is not a room is not waiting for an upgrade: saying nothing about it
+                // leaves the operator counting rooms in a backup he believes was fully restored.
+                if (current is BackupOutcome.Restored && current.unreadable > 0) {
+                    Text(
+                        text = stringResource(R.string.backup_unreadable, current.unreadable),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SiteColors.danger,
+                    )
+                }
             }
         }
     }
@@ -295,7 +307,19 @@ private const val ANY_MIME_TYPE: String = "*" + "/" + "*"
 internal sealed interface BackupOutcome {
     data class Saved(val projects: Int, val photos: Int, val photosSkipped: Int = 0) : BackupOutcome
 
-    data class Restored(val count: Int, val heldBack: Int = 0) : BackupOutcome
+    /**
+     * A restore that ran, with the two very different reasons a file can be missing from it.
+     *
+     * [heldBack] is the plan: the file is a room, the free slots are used up, upgrading imports it.
+     * [unreadable] is the file: it is not a room at all, and no upgrade will ever import it. One
+     * counter for both used to tell the operator "1 project held back, Pro imports all of them"
+     * about a file that Pro cannot read either.
+     */
+    data class Restored(
+        val count: Int,
+        val heldBack: Int = 0,
+        val unreadable: Int = 0,
+    ) : BackupOutcome
 
     data class Failed(val detail: String) : BackupOutcome
 
@@ -307,7 +331,29 @@ internal sealed interface BackupOutcome {
         val photosWritten: Int,
     )
 
+    /** What a restore attempt counts, as plain numbers (the view model owns the counting). */
+    data class RestoreCounts(val imported: Int, val heldBack: Int, val unreadable: Int)
+
     companion object {
+        /**
+         * What to tell the operator after a restore.
+         *
+         * Nothing imported and nothing held back is not a success with zeros in it: every picked
+         * file failed to parse, and the card used to answer with "0 projects restored" in the
+         * ordinary colour. A file the plan had no slot for is not a file the app could not read,
+         * which is why the two are counted apart.
+         */
+        fun restored(counts: RestoreCounts, nothingImported: String): BackupOutcome =
+            if (counts.imported == 0 && counts.heldBack == 0) {
+                Failed(detail = nothingImported)
+            } else {
+                Restored(
+                    count = counts.imported,
+                    heldBack = counts.heldBack,
+                    unreadable = counts.unreadable,
+                )
+            }
+
         fun of(report: Report, nothingToDo: String, folderUnreadable: String): BackupOutcome = when {
             report.available == 0 -> Failed(detail = nothingToDo)
             report.written == 0 -> Failed(detail = folderUnreadable)

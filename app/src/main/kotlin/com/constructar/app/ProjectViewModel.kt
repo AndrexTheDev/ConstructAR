@@ -604,7 +604,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun importBackup(
         texts: List<String>,
         photos: List<Pair<String, Uri>> = emptyList(),
-        onDone: (imported: Int, heldBack: Int) -> Unit = { _, _ -> },
+        onDone: (imported: Int, heldBack: Int, unreadable: Int) -> Unit = { _, _, _ -> },
     ) {
         viewModelScope.launch {
             // Restoring is a way to *create* projects, so it obeys the same plan as creating
@@ -618,7 +618,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             // new room, a fresh id when the old one was taken. A photo follows its room, never
             // the name it happened to have in the zip.
             val homes = HashMap<String, String>()
-            val (imported, heldBack) = restoreOutcome(room, texts) { text ->
+            val counts = restoreOutcome(room, texts) { text ->
                 val result = repository.importProjectDetailed(text)
                 if (result == null) {
                     false
@@ -645,7 +645,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
             }
-            onDone(imported, heldBack)
+            onDone(counts.imported, counts.heldBack, counts.unreadable)
         }
     }
 
@@ -677,19 +677,30 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
  * Pure on purpose - the count is the part that can be wrong, and it can be tested without an
  * Android context.
  */
+internal data class RestoreCounts(
+    val imported: Int,
+    /** Rooms the plan had no slot for: still in the zip, imported after upgrading. */
+    val heldBack: Int,
+    /** Files that are not a room at all: no upgrade will ever import them. */
+    val unreadable: Int,
+)
+
 internal inline fun restoreOutcome(
     slots: Int,
     texts: List<String>,
     import: (String) -> Boolean,
-): Pair<Int, Int> {
+): RestoreCounts {
     var imported = 0
     var heldBack = 0
+    var unreadable = 0
     for (text in texts) {
+        // Past the plan's slots nothing is attempted, so nothing is known about the file: it is
+        // held back, not unreadable.
         if (imported >= slots) {
             heldBack++
             continue
         }
-        if (import(text)) imported++ else heldBack++
+        if (import(text)) imported++ else unreadable++
     }
-    return imported to heldBack
+    return RestoreCounts(imported = imported, heldBack = heldBack, unreadable = unreadable)
 }

@@ -377,6 +377,7 @@
     <string name="licence_demo_key">Nota per lo sviluppatore: questa build contiene ancora la chiave di verifica demo. Sostituiscila prima della prima vendita.</string>
     <string name="route_warning_loop_gap">L’anello non si chiude: metti l’ultimo punto sul primo</string>
     <string name="backup_held_back">%1$d cantiere/i trattenuti: restano nel tuo backup; con Pro vengono importati tutti</string>
+    <string name="backup_unreadable">Non è stato possibile leggere %1$d file della selezione: non sono stanze e restano intatti nel tuo backup</string>
     <string name="route_warning_low_confidence">Questo punto proviene dai dati di profondità: tocca di nuovo la parete rilevata per un valore più solido</string>
     <string name="route_warning_height_jump">È un salto di quota notevole: una salita al soffitto o un tocco sul pavimento? Annullalo se è stato un errore</string>
 </resources>
