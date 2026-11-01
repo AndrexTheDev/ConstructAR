@@ -85,6 +85,8 @@
     <string name="export_ply">PLY (point cloud)</string>
     <string name="export_pdf_desc">PDF protocol (screenshot, lengths, bill of materials)</string>
     <string name="export_csv_desc">CSV material list (Excel-ready, semicolon separated)</string>
+    <string name="export_order_list">Order list</string>
+    <string name="export_order_list_desc">One line per conduit for the wholesaler: article, order length, clips, couplings.</string>
     <string name="export_glb_desc">GLB model for BIM (Revit / Navisworks / Blender)</string>
     <string name="export_ply_desc">PLY point cloud or mesh (CloudCompare, MeshLab)</string>
     <string name="export_choose_folder">Save to folder…</string>

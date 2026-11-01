@@ -85,6 +85,8 @@
     <string name="export_ply">PLY (chmura punktów)</string>
     <string name="export_pdf_desc">Protokół PDF (zrzut ekranu, długości, lista materiałów)</string>
     <string name="export_csv_desc">Lista materiałów CSV (gotowa dla Excela, średnik)</string>
+    <string name="export_order_list">Lista zamówienia</string>
+    <string name="export_order_list_desc">Jedna linia na typ przewodu dla hurtowni: artykuł, długość zamówienia, uchwyty, złączki.</string>
     <string name="export_glb_desc">Model GLB dla BIM (Revit / Navisworks / Blender)</string>
     <string name="export_ply_desc">Chmura punktów lub siatka PLY (CloudCompare, MeshLab)</string>
     <string name="export_choose_folder">Zapisz w folderze…</string>

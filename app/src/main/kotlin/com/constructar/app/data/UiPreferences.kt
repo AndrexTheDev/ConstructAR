@@ -33,7 +33,25 @@ class UiPreferences(context: Context) {
         preferences.edit().putBoolean(KEY_ONBOARDING, false).apply()
     }
 
+    /**
+     * The room the operator was in when the process died.
+     *
+     * Not the operator's data - the room itself is on disk - but the fact that he was standing in
+     * it. Android kills a backgrounded measuring tool without warning while he answers the phone,
+     * and coming back to a list of rooms when you were half-way through one is the kind of thing
+     * that makes a tool feel broken. Cleared when he closes the room, so a cold start goes home
+     * rather than back into last week's basement.
+     */
+    fun lastProjectId(): String? = preferences.getString(KEY_LAST_PROJECT, null)?.takeIf { it.isNotBlank() }
+
+    fun setLastProjectId(id: String?) {
+        preferences.edit().apply {
+            if (id.isNullOrBlank()) remove(KEY_LAST_PROJECT) else putString(KEY_LAST_PROJECT, id)
+        }.apply()
+    }
+
     private companion object {
         const val KEY_ONBOARDING = "onboarding_done"
+        const val KEY_LAST_PROJECT = "last_project_id"
     }
 }

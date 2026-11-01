@@ -81,10 +81,14 @@ fun BackupCard(
         scope.launch {
             outcome = withContext(Dispatchers.IO) {
                 runCatching {
-                    context.contentResolver.takePersistableUriPermission(
-                        uri,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-                    )
+                    // Best effort: a provider that cannot grant permanently must not end the
+                    // backup (see UriGrants).
+                    UriGrants.take {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                        )
+                    }
                     val root = DocumentFile.fromTreeUri(context, uri)
                         ?: error(context.getString(R.string.backup_failed))
                     // Asked before the folder is created: a backup of nothing used to leave an

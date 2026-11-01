@@ -105,6 +105,13 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
          * way to the viewfinder.
          */
         val pendingDraft: RouteDraft? = null,
+        /**
+         * True while a room that was open when the process died is waiting to be shown.
+         *
+         * The navigation host consumes it (see [consumeResume]) so that going home afterwards
+         * stays home instead of bouncing back into the room.
+         */
+        val resumeReady: Boolean = false,
     )
 
     private val mutableState = MutableStateFlow(UiState())
@@ -129,6 +136,36 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             firmHourlyRateCents = settings.hourlyRateCents() ?: Pricing.DEFAULT_HOURLY_RATE_CENTS,
         )
         refresh()
+        resumeLastProject()
+    }
+
+    /**
+     * Re-opens the room the process died in.
+     *
+     * The id is a preference, the room is a file: if the file is gone there is nothing to resume
+     * and the operator simply lands on his list. Deliberately silent - a message about a room he
+     * cannot see would be noise on cold start.
+     */
+    private fun resumeLastProject() {
+        val id = preferences.lastProjectId() ?: return
+        viewModelScope.launch {
+            val project = repository.load(id) ?: run {
+                preferences.setLastProjectId(null)
+                return@launch
+            }
+            mutableState.value = mutableState.value.copy(
+                openProject = project,
+                materialList = buildMaterialList(project),
+                photo = repository.loadPhoto(project.id),
+                fieldPhotos = loadFieldPhotos(project),
+                resumeReady = true,
+            )
+        }
+    }
+
+    /** The resumed room has been shown once; the next visit to the list must stay a visit. */
+    fun consumeResume() {
+        mutableState.value = mutableState.value.copy(resumeReady = false)
     }
 
     fun refresh() {
@@ -188,6 +225,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             // A blank name becomes the operator's own language's word for "room", not English.
             val fallback = getApplication<Application>().getString(R.string.home_default_room_name)
             val project = repository.create(name, siteName, fallbackName = fallback)
+            preferences.setLastProjectId(project.id)
             mutableState.value = mutableState.value.copy(openProject = project, lastError = null)
             refresh()
             onCreated(project)
@@ -202,6 +240,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 onOpened(null)
                 return@launch
             }
+            // The room the operator is standing in, for the next cold start (see
+            // `resumeLastProject`). Written after a successful load only: a room that cannot be
+            // opened is not one to come back to.
+            preferences.setLastProjectId(project.id)
             mutableState.value = mutableState.value.copy(
                 openProject = project,
                 materialList = buildMaterialList(project),
@@ -461,6 +503,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun deleteProject(id: String, onDeleted: () -> Unit = {}) {
         viewModelScope.launch {
             repository.delete(id)
+            if (preferences.lastProjectId() == id) preferences.setLastProjectId(null)
             if (mutableState.value.openProject?.id == id) {
                 mutableState.value = mutableState.value.copy(openProject = null, materialList = null, photo = null)
             }
@@ -497,11 +540,15 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun closeProject() {
+        // Closing a room is the operator saying he is done with it: the next cold start goes to
+        // the list, not back into this room.
+        preferences.setLastProjectId(null)
         mutableState.value = mutableState.value.copy(
             openProject = null,
             materialList = null,
             photo = null,
             fieldPhotos = emptyMap(),
+            resumeReady = false,
         )
     }
 

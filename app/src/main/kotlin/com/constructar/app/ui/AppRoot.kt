@@ -66,6 +66,17 @@ fun AppRoot(viewModel: ProjectViewModel) {
         UiMessage.PROJECT_LIMIT_REACHED -> stringResource(R.string.home_limit_title)
         null -> null
     }
+    // Quick resume: a room that was open when the process died is opened on top of the list, so
+    // the back arrow still leads somewhere. The flag is consumed here - not cleared in the view
+    // model - because a second navigation would undo the operator's "back".
+    LaunchedEffect(state.resumeReady, state.onboardingDone) {
+        if (!state.onboardingDone || !state.resumeReady) return@LaunchedEffect
+        if (navController.currentDestination?.route == Routes.HOME) {
+            navController.navigate(Routes.PROJECT)
+        }
+        viewModel.consumeResume()
+    }
+
     LaunchedEffect(state.lastError) {
         errorText?.let {
             snackbarHostState.showSnackbar(it)

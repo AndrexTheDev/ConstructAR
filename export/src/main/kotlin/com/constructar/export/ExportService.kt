@@ -62,6 +62,8 @@ class ExportService(
         val appVersion: String = "1.0",
         val includePdf: Boolean = true,
         val includeCsv: Boolean = true,
+        /** The one-line-per-article order list for the wholesaler, next to the full CSV. */
+        val includeOrderList: Boolean = false,
         val includeGlb: Boolean = true,
         val includePly: Boolean = true,
         /** Include the raw scan mesh (not just the runs) in the 3D exports. */
@@ -148,6 +150,19 @@ class ExportService(
                 mimeType = "text/csv",
                 byteSizeEstimate = csv.toByteArray(Charsets.UTF_8).size.toLong(),
                 write = { output -> output.write(csv.toByteArray(Charsets.UTF_8)) },
+            )
+        }
+
+        if (request.includeOrderList) {
+            val orderList = MaterialCsvWriter.writeOrderList(
+                materialList = request.materialList,
+                generatedAtLabel = timestampLabel,
+            )
+            artifacts += ExportArtifact(
+                fileName = "$stem-order.csv",
+                mimeType = "text/csv",
+                byteSizeEstimate = orderList.toByteArray(Charsets.UTF_8).size.toLong(),
+                write = { output -> output.write(orderList.toByteArray(Charsets.UTF_8)) },
             )
         }
 

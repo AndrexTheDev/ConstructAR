@@ -15,6 +15,7 @@ import com.constructar.core.model.ProjectRecord
 import com.constructar.core.model.RouteNodeRecord
 import com.constructar.core.model.SurfaceKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
@@ -90,5 +91,25 @@ class ExportServiceTest {
         assertEquals(listOf("csv", "glb", "pdf", "ply"), kinds)
         // Four formats, four distinct files in one folder: a collision would silently overwrite.
         assertEquals(artifacts.size, artifacts.map { it.fileName }.distinct().size)
+    }
+
+    @Test
+    fun `the order list is a file of its own, next to the full bill of materials`() {
+        val project = measuredProject()
+        val artifacts = service.build(request(project).copy(includeOrderList = true, includeGlb = false, includePly = false))
+
+        val names = artifacts.map { it.fileName }
+        // Two CSVs, two names: `-order` is the wholesaler's one-line-per-article list, and it must
+        // not collide with - or replace - the full list the operator keeps.
+        assertEquals(listOf("csv", "csv", "pdf"), artifacts.map { it.fileName.substringAfterLast('.') }.sorted())
+        assertTrue(names.toString(), names.any { it.endsWith("-order.csv") })
+        assertEquals(artifacts.size, names.distinct().size)
+
+        val order = artifacts.single { it.fileName.endsWith("-order.csv") }
+        val sink = ByteArrayOutputStream()
+        order.write(sink)
+        val text = String(sink.toByteArray(), Charsets.UTF_8)
+        assertTrue(text, text.contains("Article;Order length (m);"))
+        assertFalse("the order list carries no per-run detail", text.contains("Run;"))
     }
 }

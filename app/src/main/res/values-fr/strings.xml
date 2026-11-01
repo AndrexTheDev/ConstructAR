@@ -85,6 +85,8 @@
     <string name="export_ply">PLY (nuage de points)</string>
     <string name="export_pdf_desc">Procès-verbal PDF (capture, longueurs, liste de matériel)</string>
     <string name="export_csv_desc">Liste de matériel CSV (prête pour Excel, point-virgule)</string>
+    <string name="export_order_list">Liste de commande</string>
+    <string name="export_order_list_desc">Une ligne par type de conduit pour le grossiste : article, longueur à commander, colliers, raccords.</string>
     <string name="export_glb_desc">Modèle GLB pour le BIM (Revit / Navisworks / Blender)</string>
     <string name="export_ply_desc">Nuage de points ou maillage PLY (CloudCompare, MeshLab)</string>
     <string name="export_choose_folder">Enregistrer dans un dossier…</string>

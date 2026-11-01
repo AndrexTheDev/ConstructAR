@@ -111,6 +111,64 @@ object MaterialCsvWriter {
     }
 
     /**
+     * The order list: one line per conduit type, nothing else.
+     *
+     * The full bill of materials is a document the operator reads - summary, every column, a
+     * per-run breakdown. The wholesaler (or the shop's buyer) needs the other thing: article,
+     * how much of it to order, and the fittings that go with it. This writes exactly that, so
+     * nobody has to delete eleven columns before mailing it, and it is a separate file rather
+     * than another mode of the same one because both documents are wanted on the same job.
+     *
+     * Same separator, same dot decimals, same BOM and same formula guard as [write]: a second
+     * convention in the same folder is how a spreadsheet ends up half-readable.
+     */
+    fun writeOrderList(
+        materialList: MaterialList,
+        options: Options = Options(),
+        generatedAtLabel: String = "",
+    ): String {
+        val sb = StringBuilder(512)
+        if (options.includeBom) sb.append('\uFEFF')
+        val sep = options.separator
+
+        row(sb, sep, listOf("Project", materialList.projectName))
+        row(
+            sb, sep,
+            listOf("Order list", generatedAtLabel.ifBlank { materialList.generatedAtEpochMs.toString() }),
+        )
+        sb.append(lineEnding)
+        row(sb, sep, listOf("Article", "Order length (m)", "Clips", "Couplings", "Bends"))
+        for (line in materialList.lines) {
+            // The article is the procureable description; a spec without one falls back to the
+            // size label, exactly as the protocol's procurement table does.
+            row(
+                sb, sep,
+                listOf(
+                    line.spec.material.ifBlank { line.spec.sizeLabel },
+                    number(line.withWasteMeters),
+                    line.clipCount.toString(),
+                    line.couplingCount.toString(),
+                    (line.elbow90Count + line.elbow45Count + line.otherBendCount).toString(),
+                ),
+            )
+        }
+        if (!materialList.isEmpty) {
+            sb.append(lineEnding)
+            row(
+                sb, sep,
+                listOf(
+                    "Total",
+                    number(materialList.totalWithWasteMeters),
+                    materialList.totalClips.toString(),
+                    materialList.totalCouplings.toString(),
+                    materialList.totalElbows.toString(),
+                ),
+            )
+        }
+        return sb.toString()
+    }
+
+    /**
      * Field quoting per RFC 4180: double quotes, doubled internal quotes — plus a formula guard.
      *
      * A cell that begins `=`, `+`, `@`, a tab or a carriage return is a formula to Excel and

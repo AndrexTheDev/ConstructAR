@@ -75,7 +75,8 @@ Four screens, in the order of the job, and no screen that exists only to show of
    clips, couplings and bends the runs actually need. The person who drives to the wholesaler is
    standing in the room with this phone, not reading the PDF at a desk.
 4. **Measure → Export** — the AR viewfinder with its HUD, then the export screen, where the
-   operator picks a folder once and gets PDF, CSV and (with Pro) GLB/PLY. The customer can sign
+   operator picks a folder once and gets PDF, CSV (plus an optional one-line-per-article order
+   list for the wholesaler) and, with Pro, GLB/PLY. The customer can sign
    on the glass with a finger; the signature is rasterised black-on-white and written onto its
    own final page of the protocol, because a handover document without a signature is a note.
 
@@ -430,7 +431,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 347 tests in the app+core+ar-engine+export suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 356 tests in the app+core+ar-engine+export suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 44 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |

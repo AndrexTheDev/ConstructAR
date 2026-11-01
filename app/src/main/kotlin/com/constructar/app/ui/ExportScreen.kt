@@ -86,6 +86,9 @@ fun ExportScreen(
 
     var includePdf by remember { mutableStateOf(true) }
     var includeCsv by remember { mutableStateOf(true) }
+    // Off by default: the full CSV already carries the numbers, and the order list is for the
+    // wholesaler - a deliberate second file, not something to hand out by accident.
+    var includeOrderList by remember { mutableStateOf(false) }
     // A free build cannot write the BIM formats, so the switches start off rather than promise
     // a file that the licence check would refuse to produce.
     var includeGlb by remember(entitlements.isPro) { mutableStateOf(entitlements.canExportMesh) }
@@ -151,16 +154,21 @@ fun ExportScreen(
         busy = true
         // Read on the main thread, before the IO work: "requested" is what the switches said at
         // the moment the operator pressed the button, not what they say when the write finishes.
-        val requestedCount = listOf(includePdf, includeCsv, includeGlb, includePly).count { it }
+        val requestedCount =
+            listOf(includePdf, includeCsv, includeOrderList, includeGlb, includePly).count { it }
         // Captured with the switches, for the same reason: whether a 3D model was asked for.
         val meshRequested = includeGlb || includePly
         scope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 runCatching {
-                    context.contentResolver.takePersistableUriPermission(
-                        uri,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-                    )
+                    // Best effort: a provider that cannot grant permanently must not cost the
+                    // operator his protocol (see UriGrants).
+                    UriGrants.take {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                        )
+                    }
                     val root = DocumentFile.fromTreeUri(context, uri)
                         ?: error(context.getString(R.string.export_folder_inaccessible))
                     val stem = exportService.fileStem(project)
@@ -178,6 +186,7 @@ fun ExportScreen(
                             appVersion = appVersion,
                             includePdf = includePdf,
                             includeCsv = includeCsv,
+                            includeOrderList = includeOrderList,
                             includeGlb = includeGlb,
                             includePly = includePly,
                             watermark = if (entitlements.pdfWatermark) watermark else "",
@@ -304,6 +313,11 @@ fun ExportScreen(
             description = stringResource(R.string.export_csv_desc),
             checked = includeCsv,
         ) { includeCsv = it }
+        FormatRow(
+            label = stringResource(R.string.export_order_list),
+            description = stringResource(R.string.export_order_list_desc),
+            checked = includeOrderList,
+        ) { includeOrderList = it }
         if (entitlements.canExportMesh) {
             FormatRow(
                 label = stringResource(R.string.export_glb),
@@ -361,7 +375,7 @@ fun ExportScreen(
 
         // Every format switched off is not an export: the button stays disabled and says why,
         // rather than opening a picker that can only end in a sentence about the folder.
-        val anyFormat = includePdf || includeCsv || includeGlb || includePly
+        val anyFormat = includePdf || includeCsv || includeOrderList || includeGlb || includePly
         GloveButton(
             label = stringResource(if (busy) R.string.export_saving else R.string.export_choose_folder),
             icon = Icons.Default.CreateNewFolder,

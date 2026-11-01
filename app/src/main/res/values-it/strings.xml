@@ -85,6 +85,8 @@
     <string name="export_ply">PLY (nuvola di punti)</string>
     <string name="export_pdf_desc">Verbale PDF (screenshot, lunghezze, distinta materiali)</string>
     <string name="export_csv_desc">Distinta materiali CSV (pronta per Excel, punto e virgola)</string>
+    <string name="export_order_list">Lista d’ordine</string>
+    <string name="export_order_list_desc">Una riga per tipo di tubo per il grossista: articolo, lunghezza d’ordine, fascette, raccordi.</string>
     <string name="export_glb_desc">Modello GLB per il BIM (Revit / Navisworks / Blender)</string>
     <string name="export_ply_desc">Nuvola di punti o mesh PLY (CloudCompare, MeshLab)</string>
     <string name="export_choose_folder">Salva nella cartella…</string>

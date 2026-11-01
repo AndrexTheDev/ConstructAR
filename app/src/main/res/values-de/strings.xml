@@ -85,6 +85,8 @@
     <string name="export_ply">PLY (Punktwolke)</string>
     <string name="export_pdf_desc">PDF-Protokoll (Screenshot, Längen, Stückliste)</string>
     <string name="export_csv_desc">CSV-Materialliste (Excel-fertig, Semikolon)</string>
+    <string name="export_order_list">Bestellliste</string>
+    <string name="export_order_list_desc">Eine Zeile pro Leitungsart für den Großhandel: Artikel, Bestelllänge, Schellen, Kupplungen.</string>
     <string name="export_glb_desc">GLB-Modell für BIM (Revit / Navisworks / Blender)</string>
     <string name="export_ply_desc">PLY-Punktwolke oder Netz (CloudCompare, MeshLab)</string>
     <string name="export_choose_folder">In Ordner speichern…</string>
