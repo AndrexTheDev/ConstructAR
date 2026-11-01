@@ -429,6 +429,10 @@ private fun ProjectMetaLine(project: ProjectRepository.ProjectSummary) {
     } else {
         ""
     }
+    // What always fits: runs, metres, date. Everything else used to be appended here as well, in a
+    // single ellipsized line - so on a normal phone the string was cut off after the date and the
+    // site name, the defect count *and the running clock* were never shown at all. The one line on
+    // the home screen that says money is burning was the first thing the ellipsis ate.
     Text(
         text = buildString {
             append(runsText)
@@ -436,22 +440,41 @@ private fun ProjectMetaLine(project: ProjectRepository.ProjectSummary) {
             append(LengthFormatter.format(project.totalLengthMeters))
             append(" · ")
             append(updatedLabel)
-            if (project.siteName.isNotBlank()) {
-                append(" · ")
-                append(project.siteName)
-            }
-            if (project.workRunning) {
-                append(" · ")
-                append(runningText)
-            }
-            if (defectsText.isNotEmpty()) {
-                append(" · ")
-                append(defectsText)
-            }
         },
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
+    if (project.siteName.isNotBlank() || project.workRunning || defectsText.isNotEmpty()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+            if (project.siteName.isNotBlank()) {
+                Text(
+                    project.siteName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            if (project.workRunning) {
+                Text(
+                    runningText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Jamaica.Lime,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+            if (defectsText.isNotEmpty()) {
+                Text(
+                    defectsText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = SiteColors.warning,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+        }
+    }
 }
