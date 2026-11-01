@@ -59,7 +59,7 @@ class PdfTextTest {
             PdfText.singleLine("Bad\nOG\thinter der Heizung"),
         )
         assertEquals("Kueche", PdfText.singleLine("  Kueche  "))
-        assertEquals("ein zwei", PdfText.singleLine("ein\r\ntwo"))
+        assertEquals("ein two", PdfText.singleLine("ein\r\ntwo"))
     }
 
     @Test
