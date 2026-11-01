@@ -297,6 +297,10 @@
     <string name="field_time_running">Running since %1$s</string>
     <string name="field_time_overdue">Careful: the clock has been running for %1$s - did you forget to stop it?</string>
     <string name="field_time_delete">Delete this time record</string>
+    <string name="field_delete_title">Delete this?</string>
+    <string name="field_delete_session_body">%1$s - the hours come off the price and out of the protocol.</string>
+    <string name="field_delete_diary_body">%1$s - the note and its photo are gone.</string>
+    <string name="field_delete_defect_body">%1$s - the defect and its photo are gone; a protocol already handed over keeps it on paper.</string>
     <string name="field_time_total">Total</string>
     <string name="field_time_empty">No time recorded yet.</string>
     <string name="field_time_open">running</string>

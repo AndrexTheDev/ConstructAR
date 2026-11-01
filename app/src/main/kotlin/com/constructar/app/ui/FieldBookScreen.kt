@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -40,6 +41,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -97,6 +99,12 @@ fun FieldBookScreen(
     // A running clock has to move on its own; [rememberNowMs] is the one ticker every screen
     // showing a running total uses (see ClockTick.kt).
     val nowMs = rememberNowMs(running)
+
+    // Three rows on this screen delete recorded work - an hour that is on the invoice, a note, a
+    // defect with its photo - and every one of them was a single tap on a 40 dp icon. The run row
+    // learned to ask in this same round (finding 60); the field book is the other place where a
+    // glove and a scroll can take work away, so it asks too, and names what goes.
+    var pendingDelete by remember(project.id) { mutableStateOf<PendingDelete?>(null) }
 
     var diaryDraft by remember(project.id) { mutableStateOf("") }
     var defectTitle by remember(project.id) { mutableStateOf("") }
@@ -217,7 +225,13 @@ fun FieldBookScreen(
                     SessionRow(
                         session = session,
                         nowMs = nowMs,
-                        onDelete = { onDeleteSession(session.id) },
+                        onDelete = {
+                            pendingDelete = PendingDelete(
+                                kind = DeleteKind.SESSION,
+                                id = session.id,
+                                summary = sessionLabel(session, nowMs),
+                            )
+                        },
                     )
                 }
                 FieldTail(FieldLists.hiddenCount(project.sessions.size, FieldLists.SESSIONS_SHOWN))
@@ -257,7 +271,9 @@ fun FieldBookScreen(
                         entry = entry,
                         thumbnail = token?.let(photoFor),
                         onPhoto = { capture(PhotoTokens.forDiary(project.id, entry.id)) },
-                        onDelete = { onDeleteDiary(entry.id) },
+                        onDelete = {
+                            pendingDelete = PendingDelete(DeleteKind.DIARY, entry.id, entry.text)
+                        },
                     )
                 }
                 FieldTail(FieldLists.hiddenCount(project.diary.size, FieldLists.DIARY_SHOWN))
@@ -339,14 +355,56 @@ fun FieldBookScreen(
                         thumbnail = token?.let(photoFor),
                         onPhoto = { capture(PhotoTokens.forDefect(project.id, defect.id)) },
                         onToggle = { onToggleDefect(defect.id) },
-                        onDelete = { onDeleteDefect(defect.id) },
+                        onDelete = {
+                            pendingDelete = PendingDelete(DeleteKind.DEFECT, defect.id, defect.title)
+                        },
                     )
                 }
                 FieldTail(FieldLists.hiddenCount(project.defects.size, FieldLists.DEFECTS_SHOWN))
             }
         }
     }
+
+    pendingDelete?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text(stringResource(R.string.field_delete_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        when (pending.kind) {
+                            DeleteKind.SESSION -> R.string.field_delete_session_body
+                            DeleteKind.DIARY -> R.string.field_delete_diary_body
+                            DeleteKind.DEFECT -> R.string.field_delete_defect_body
+                        },
+                        pending.summary,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDelete = null
+                        when (pending.kind) {
+                            DeleteKind.SESSION -> onDeleteSession(pending.id)
+                            DeleteKind.DIARY -> onDeleteDiary(pending.id)
+                            DeleteKind.DEFECT -> onDeleteDefect(pending.id)
+                        }
+                    },
+                ) { Text(stringResource(R.string.action_delete), color = SiteColors.danger) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text(stringResource(R.string.home_cancel)) }
+            },
+        )
+    }
 }
+
+/** Which list a confirmed deletion belongs to. */
+private enum class DeleteKind { SESSION, DIARY, DEFECT }
+
+/** A delete waiting for its second tap, with the words the dialog needs to name it. */
+private data class PendingDelete(val kind: DeleteKind, val id: String, val summary: String)
 
 /**
  * What the list above is not showing.

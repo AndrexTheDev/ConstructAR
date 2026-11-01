@@ -301,6 +301,10 @@
     <string name="field_time_running">Trwa od %1$s</string>
     <string name="field_time_overdue">Uwaga: zegar działa już %1$s - zapomniałeś go zatrzymać?</string>
     <string name="field_time_delete">Usuń ten wpis czasu</string>
+    <string name="field_delete_title">Naprawdę usunąć?</string>
+    <string name="field_delete_session_body">%1$s - godziny wypadają z ceny i z protokołu.</string>
+    <string name="field_delete_diary_body">%1$s - notatka i jej zdjęcie znikają.</string>
+    <string name="field_delete_defect_body">%1$s - usterka i jej zdjęcie znikają; już przekazany protokół zachowuje ją na papierze.</string>
     <string name="field_time_total">Razem</string>
     <string name="field_time_empty">Nie zapisano jeszcze czasu.</string>
     <string name="field_time_open">trwa</string>

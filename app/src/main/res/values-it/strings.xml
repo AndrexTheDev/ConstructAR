@@ -297,6 +297,10 @@
     <string name="field_time_running">In corso dalle %1$s</string>
     <string name="field_time_overdue">Attenzione: il timer va avanti da %1$s - hai dimenticato di fermarlo?</string>
     <string name="field_time_delete">Elimina questa registrazione di tempo</string>
+    <string name="field_delete_title">Eliminare davvero?</string>
+    <string name="field_delete_session_body">%1$s: le ore escono dal prezzo e dal protocollo.</string>
+    <string name="field_delete_diary_body">%1$s: la nota e la sua foto spariscono.</string>
+    <string name="field_delete_defect_body">%1$s: il difetto e la sua foto spariscono; un protocollo già consegnato lo conserva su carta.</string>
     <string name="field_time_total">Totale</string>
     <string name="field_time_empty">Nessun tempo registrato.</string>
     <string name="field_time_open">in corso</string>

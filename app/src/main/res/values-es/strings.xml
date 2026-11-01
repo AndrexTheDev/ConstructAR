@@ -297,6 +297,10 @@
     <string name="field_time_running">En marcha desde las %1$s</string>
     <string name="field_time_overdue">Atención: el reloj lleva %1$s en marcha, ¿se te olvidó pararlo?</string>
     <string name="field_time_delete">Eliminar este registro de tiempo</string>
+    <string name="field_delete_title">¿Borrar de verdad?</string>
+    <string name="field_delete_session_body">%1$s: las horas salen del precio y del protocolo.</string>
+    <string name="field_delete_diary_body">%1$s: la nota y su foto desaparecen.</string>
+    <string name="field_delete_defect_body">%1$s: el defecto y su foto desaparecen; un protocolo ya entregado lo conserva en papel.</string>
     <string name="field_time_total">Total</string>
     <string name="field_time_empty">Todavía no hay horas registradas.</string>
     <string name="field_time_open">en curso</string>

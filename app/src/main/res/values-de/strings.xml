@@ -297,6 +297,10 @@
     <string name="field_time_running">Läuft seit %1$s</string>
     <string name="field_time_overdue">Achtung: die Uhr läuft seit %1$s - Stopp vergessen?</string>
     <string name="field_time_delete">Diesen Zeiteintrag löschen</string>
+    <string name="field_delete_title">Wirklich löschen?</string>
+    <string name="field_delete_session_body">%1$s - die Stunden fallen aus dem Preis und aus dem Protokoll.</string>
+    <string name="field_delete_diary_body">%1$s - der Eintrag und sein Foto sind weg.</string>
+    <string name="field_delete_defect_body">%1$s - der Mangel und sein Foto sind weg; ein schon übergebenes Protokoll behält ihn auf Papier.</string>
     <string name="field_time_total">Gesamt</string>
     <string name="field_time_empty">Noch keine Zeit erfasst.</string>
     <string name="field_time_open">läuft</string>

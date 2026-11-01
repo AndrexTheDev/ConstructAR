@@ -297,6 +297,10 @@
     <string name="field_time_running">En cours depuis %1$s</string>
     <string name="field_time_overdue">Attention : le chronomètre tourne depuis %1$s - as-tu oublié de l’arrêter ?</string>
     <string name="field_time_delete">Supprimer ce relevé de temps</string>
+    <string name="field_delete_title">Vraiment supprimer ?</string>
+    <string name="field_delete_session_body">%1$s - les heures sortent du prix et du protocole.</string>
+    <string name="field_delete_diary_body">%1$s - la note et sa photo disparaissent.</string>
+    <string name="field_delete_defect_body">%1$s - le défaut et sa photo disparaissent ; un protocole déjà remis le garde sur papier.</string>
     <string name="field_time_total">Total</string>
     <string name="field_time_empty">Aucun temps enregistré.</string>
     <string name="field_time_open">en cours</string>
