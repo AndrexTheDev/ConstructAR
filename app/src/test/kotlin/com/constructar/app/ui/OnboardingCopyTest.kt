@@ -54,8 +54,8 @@ class OnboardingCopyTest {
     fun `the slide that promises a 3D model names the plan that unlocks it`() {
         // The free plan cannot write a mesh; the sentence has to say so, in every language.
         assertTrue(
-            "the free plan is expected to be the one without the mesh formats",
             !Entitlements.FREE.isPro,
+            "the free plan is expected to be the one without the mesh formats",
         )
         locales.forEach { locale ->
             val slide = context(locale).getString(R.string.onboard_3_body, "PROBE")

@@ -50,6 +50,8 @@ import com.constructar.app.R
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.licence.Entitlements
 import com.constructar.core.bom.MaterialList
+import com.constructar.core.bom.MaterialListBuilder
+import com.constructar.core.bom.MaterialListOptions
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.price.Pricing
 import com.constructar.core.units.LengthFormatter
@@ -80,6 +82,8 @@ fun ExportScreen(
     fieldPhotos: Map<String, android.graphics.Bitmap> = emptyMap(),
     /** Effective hourly rate of this project, already resolved against the firm default. */
     hourlyRateCents: Int = Pricing.DEFAULT_HOURLY_RATE_CENTS,
+    /** The firm's waste factor, the one the material screen showed - `null` for the defaults. */
+    wasteOverride: Float? = null,
     onBack: () -> Unit,
     onUpgrade: () -> Unit,
 ) {
@@ -187,7 +191,7 @@ fun ExportScreen(
                     val artifacts = exportService.build(
                         ExportService.Request(
                             project = project,
-                            materialList = materialList ?: MaterialListBuilderFallback.build(project),
+                            materialList = exportMaterialList(project, materialList, wasteOverride),
                             routeMeshes = ExportService.routeMeshes(project),
                             screenshot = photo,
                             operatorName = operatorName,
@@ -629,14 +633,28 @@ internal sealed interface ExportStatus {
     }
 }
 
-/** Fallback when the view model has no cached list (e.g. deep link straight into Export). */
-private object MaterialListBuilderFallback {
-    fun build(project: ProjectRecord) = com.constructar.core.bom.MaterialListBuilder.build(project)
-}
+/**
+ * The bill of materials the exported files are written from.
+ *
+ * The cached list is the one the material screen showed, so it wins whenever it exists: the PDF,
+ * the CSV and the screen must never print two different jobs. The fallback exists for the path
+ * where there is no cached list (a deep link straight into Export), and it used to build with the
+ * *defaults* - so on a firm that had set its waste factor to 20 % the protocol and the order list
+ * quietly ordered at 7 %, the one place where a wrong number costs money twice: once in the
+ * customer's document, once in the wholesaler's order (finding 96).
+ */
+internal fun exportMaterialList(
+    project: ProjectRecord,
+    cached: MaterialList?,
+    wasteOverride: Float?,
+): MaterialList = cached ?: MaterialListBuilder.build(
+    project,
+    MaterialListOptions(wasteFactorOverride = wasteOverride),
+)
 
 /** Exposed for tests/diagnostics: the CSV the operator will get for this project. */
-fun previewCsv(project: ProjectRecord): String =
+fun previewCsv(project: ProjectRecord, wasteOverride: Float? = null): String =
     MaterialCsvWriter.write(
-        materialList = com.constructar.core.bom.MaterialListBuilder.build(project),
+        materialList = exportMaterialList(project, cached = null, wasteOverride = wasteOverride),
         options = MaterialCsvWriter.Options(includeBom = false),
     )

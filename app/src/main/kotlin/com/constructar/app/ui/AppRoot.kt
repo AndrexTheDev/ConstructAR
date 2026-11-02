@@ -218,6 +218,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             photo = state.photo,
                             fieldPhotos = state.fieldPhotos,
                             hourlyRateCents = viewModel.hourlyRateCents(project),
+                            wasteOverride = state.wasteOverride,
                             onBack = { navController.popBackStack() },
                             onUpgrade = { navController.navigate(Routes.PAYWALL) },
                         )
