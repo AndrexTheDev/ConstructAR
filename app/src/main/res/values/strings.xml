@@ -39,7 +39,7 @@
     <string name="routing_cable">Cable</string>
     <string name="routing_pipe">Pipe</string>
     <string name="routing_duct">Duct</string>
-    <string name="hud_length">%1$.2f m</string>
+    <string name="hud_length">%1$s m</string>
     <string name="tier_plane">Plane</string>
     <string name="tier_depth_point">Depth point</string>
     <string name="tier_direct_depth">Depth ray</string>
@@ -48,16 +48,28 @@
     <string name="ar_undo">Undo</string>
     <string name="ar_close_loop">Close loop</string>
     <string name="ar_finish">Finish run</string>
+    <string name="ar_leave_title">Leave this run?</string>
+    <string name="ar_leave_body">%1$s measured. Save it as a run, or discard it?</string>
+    <string name="ar_leave_save">Save as run</string>
+    <string name="ar_leave_discard">Discard</string>
+    <string name="draft_title">Unfinished measurement</string>
+    <string name="draft_body">%1$s, last saved at %2$s. Lengths and fittings are exact; the 3D position cannot be restored.</string>
+    <string name="draft_save">Save as route</string>
+    <string name="draft_discard">Discard</string>
     <string name="ar_torch">Torch</string>
     <string name="ar_scan">Scan room</string>
     <string name="ar_stop_scan">Stop scan</string>
     <string name="ar_closed_loop">closed loop</string>
+    <string name="ar_confidence_weak">Weakest point %1$d %% - tap it again to improve the run</string>
     <string name="ar_no_surface">No surface found. Aim at a wall or the floor.</string>
     <string name="ar_scan_progress">Room %1$d %% · %2$d k triangles</string>
     <string name="ar_scan_unavailable">Mesh scanning unavailable. Measuring still works.</string>
     <string name="ar_session_failed">AR session failed: %1$s</string>
+    <string name="ar_session_retry">Try again</string>
     <string name="ar_camera_permission">Camera access is required to measure. It is used only on this device.</string>
     <string name="ar_grant_permission">Grant camera access</string>
+    <string name="ar_camera_blocked">Camera access is switched off for this app. Open the app settings and allow the camera.</string>
+    <string name="ar_open_settings">Open settings</string>
     <string name="ar_unavailable_unsupported">This device does not support ARCore. Switch to a supported phone or tablet.</string>
     <string name="ar_unavailable_needs_install">ARCore needs an update. Install it from the Play Store, then reopen ConstructAR.</string>
     <string name="ar_unavailable_declined">The ARCore install was declined. It is required to measure with the camera.</string>
@@ -73,12 +85,18 @@
     <string name="export_ply">PLY (point cloud)</string>
     <string name="export_pdf_desc">PDF protocol (screenshot, lengths, bill of materials)</string>
     <string name="export_csv_desc">CSV material list (Excel-ready, semicolon separated)</string>
+    <string name="export_order_list">Order list</string>
+    <string name="export_order_list_desc">One line per conduit for the wholesaler: article, order length, clips, couplings.</string>
     <string name="export_glb_desc">GLB model for BIM (Revit / Navisworks / Blender)</string>
     <string name="export_ply_desc">PLY point cloud or mesh (CloudCompare, MeshLab)</string>
     <string name="export_choose_folder">Save to folder…</string>
     <string name="export_saving">Saving…</string>
     <string name="export_success">Saved %1$d files to %2$s.</string>
     <string name="export_failed">Export failed: %1$s</string>
+    <string name="export_partial">Only %1$d of %2$d files were saved in %3$s.</string>
+    <string name="export_meshless">%1$d of %2$d files saved in %3$s. No 3D scan in this project, so GLB and PLY were skipped.</string>
+    <string name="export_nothing_selected">Pick at least one file format.</string>
+    <string name="export_nothing_to_export">No 3D geometry yet: measure a run or scan the room first.</string>
     <string name="export_measurement">Measurement</string>
     <string name="export_runs_total">%1$d runs · %2$s total</string>
     <string name="export_order_length">Order length incl. waste: %1$s</string>
@@ -90,6 +108,7 @@
     <string name="home_default_room_name">Room</string>
     <string name="error_project_open">The project could not be opened.</string>
     <string name="error_project_save">The project could not be saved.</string>
+    <string name="error_photo_save">The photo could not be saved. Check the free storage on this phone.</string>
     <string name="ar_close">Close</string>
     <string name="export_folder_inaccessible">The selected folder cannot be written to. Pick another folder.</string>
     <string name="tier_manual">Manual</string>
@@ -101,6 +120,10 @@
     <plurals name="home_runs">
         <item quantity="one">%1$d run</item>
         <item quantity="other">%1$d runs</item>
+    </plurals>
+    <plurals name="home_unreadable">
+        <item quantity="one">1 project file could not be read. It was kept - restore it from a backup.</item>
+        <item quantity="other">%1$d project files could not be read. They were kept - restore them from a backup.</item>
     </plurals>
     <plurals name="ar_points">
         <item quantity="one">%1$d point</item>
@@ -184,9 +207,10 @@
     <string name="paywall_err_signature">This key was not issued for this app.</string>
     <string name="paywall_err_device">This key belongs to another device.</string>
     <string name="paywall_err_expired">This key has expired.</string>
-    <string name="paywall_trial_button">Try Pro for 7 days</string>
+    <string name="paywall_trial_button">Try Pro for %1$d days</string>
     <string name="paywall_trial_active">Trial active, %1$d days left</string>
     <string name="paywall_trial_used">The trial has already been used.</string>
+    <string name="paywall_trial_unavailable">The trial cannot be started on this phone. Buy a licence - it works offline, immediately.</string>
     <string name="paywall_active_title">Pro is active</string>
     <string name="paywall_active_until">Valid until %1$s</string>
     <string name="paywall_active_forever">Valid without limit</string>
@@ -205,6 +229,9 @@
     <string name="runs_title">Runs</string>
     <string name="run_detail">%1$s · %2$s</string>
     <string name="run_delete">Delete run</string>
+    <string name="run_delete_title">Delete this run?</string>
+    <string name="run_delete_body">%1$s, %2$s. It disappears from the bill of materials, the protocol and the 3D model. Nothing brings it back.</string>
+    <string name="run_recovered">Recovered after an interruption - lengths and fittings are exact, the 3D position is not</string>
     <string name="technician_title">Fitter on site</string>
     <string name="technician_hint">Name as it should appear on the protocol</string>
     <string name="materials_title">Materials and order</string>
@@ -243,15 +270,18 @@
     <string name="pdf_column_waste">Waste</string>
     <string name="pdf_column_order_meters">Order (m)</string>
     <string name="pdf_procurement_note">Order lengths include the site waste factor. Figures come from anchor-refined node positions; check critical runs with a tape measure before cutting.</string>
+    <string name="pdf_note_recovered">Recovered after an interruption - lengths and fittings are exact, the 3D position is not in the model: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - generated on device</string>
     <string name="pdf_page_label">Page %1$d</string>
     <string name="backup_title">Backup and restore</string>
     <string name="backup_note">Every project is one file in this app. Copy them into a folder of your choice - no cloud unless you pick one - and read them back on any phone.</string>
     <string name="backup_export">Back up all projects</string>
     <string name="backup_import">Restore projects</string>
-    <string name="backup_saved">%1$d projects copied</string>
+    <string name="backup_saved">%1$d projects and %2$d photos copied</string>
     <string name="backup_imported">%1$d projects restored</string>
     <string name="backup_failed">Backup failed - check the folder and try again.</string>
+    <string name="backup_nothing">Nothing to back up yet - create a project first.</string>
+    <string name="backup_photos_skipped">%1$d of %2$d photos could not be copied.</string>
     <string name="waste_title">Waste factor</string>
     <string name="waste_default">Default</string>
     <string name="waste_value">%1$d %%</string>
@@ -267,6 +297,12 @@
     <string name="field_time_start">Start work</string>
     <string name="field_time_stop">Stop work</string>
     <string name="field_time_running">Running since %1$s</string>
+    <string name="field_time_overdue">Careful: the clock has been running for %1$s - did you forget to stop it?</string>
+    <string name="field_time_delete">Delete this time record</string>
+    <string name="field_delete_title">Delete this?</string>
+    <string name="field_delete_session_body">%1$s - the hours come off the price and out of the protocol.</string>
+    <string name="field_delete_diary_body">%1$s - the note and its photo are gone.</string>
+    <string name="field_delete_defect_body">%1$s - the defect and its photo are gone; a protocol already handed over keeps it on paper.</string>
     <string name="field_time_total">Total</string>
     <string name="field_time_empty">No time recorded yet.</string>
     <string name="field_time_open">running</string>
@@ -284,6 +320,7 @@
     <string name="field_delete">Delete</string>
     <string name="field_open_count">%1$d open</string>
     <string name="field_resolved_count">%1$d resolved</string>
+    <string name="field_list_more">%1$d older entries are not shown here; the protocol prints them all.</string>
     <string name="severity_low">Minor</string>
     <string name="severity_medium">Important</string>
     <string name="severity_high">Critical</string>
@@ -319,13 +356,16 @@
     <string name="pdf_label_address">Address</string>
     <string name="pdf_label_phone">Phone</string>
     <string name="pdf_label_work_total">Working time</string>
+    <string name="pdf_note_open_session">The clock is still running (%1$s so far) - the total and the cost below include it up to the moment of this export.</string>
     <string name="pdf_status_open">Open</string>
     <string name="pdf_status_resolved">Resolved</string>
 
     <string name="field_photo_add">Add photo</string>
     <string name="field_photo_replace">Replace photo</string>
+    <string name="field_photo_on_file">Photo on file</string>
     <string name="project_costs_title">What the job is worth</string>
     <string name="project_costs_rate">Hourly rate (€)</string>
+    <string name="project_costs_invalid">No amount: write it like 48,00 or 48.00</string>
     <string name="project_costs_material">Material lump sum (€)</string>
     <string name="project_costs_labour">Labour</string>
     <string name="project_costs_total">Net total</string>
@@ -347,6 +387,14 @@
     <string name="licence_integrity_failed">This installation could not be confirmed, so Pro features are off. Your projects stay readable and exportable.</string>
     <string name="licence_demo_key">Developer note: this build still carries the demo verification key. Replace it before the first sale.</string>
     <string name="route_warning_loop_gap">The ring does not close - set the last point on the first one</string>
-    <string name="backup_held_back">%1$d project(s) held back - they stay in your backup; Pro imports all of them</string>
+    <plurals name="backup_held_back">
+        <item quantity="one">1 project held back - it stays in your backup; Pro imports it</item>
+        <item quantity="other">%1$d projects held back - they stay in your backup; Pro imports all of them</item>
+    </plurals>
+    <plurals name="backup_unreadable">
+        <item quantity="one">1 file in the selection could not be read - it is not a room and stays untouched in your backup</item>
+        <item quantity="other">%1$d files in the selection could not be read - they are not rooms and stay untouched in your backup</item>
+    </plurals>
     <string name="route_warning_low_confidence">This point came from depth data - tap the tracked wall again for a firmer value</string>
+    <string name="route_warning_height_jump">That is a big jump in height - a riser up to the ceiling, or a tap on the floor? Undo it if it was a mis-tap</string>
 </resources>

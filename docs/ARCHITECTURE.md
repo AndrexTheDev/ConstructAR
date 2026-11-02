@@ -139,6 +139,16 @@ rename). Routes store node positions, normals, the hit source and confidence —
 measured from soft hits is identifiable months later. The scan mesh is *not* persisted: it is
 10 MB of derived data, regenerated on demand, exported on request.
 
+A run that is still being measured is written as it grows
+(`filesDir/drafts/<project id>.json`, same atomic write, one file per project). It is not a
+project and never appears in a backup: it exists so that a process killed mid-measurement — a
+phone call, a low-memory device, a battery that gave up — costs the operator nothing. On the next
+start the AR screen offers the run back. What survives exactly is what the paperwork needs (the
+points, the conduit spec, whether the loop was closed); what cannot survive is the ARCore world
+origin, so the recovered route is marked `recovered`: it counts fully in the bill of materials
+and the protocol, and it is kept out of the 3D export and the AR preview, where its coordinates
+would be a length of conduit floating somewhere in the room.
+
 Schema version `1`; `ProjectMigrations` is the place for the next one.
 
 ---
@@ -177,11 +187,28 @@ translucent scan overlay) in its constructor — which runs from `onSceneReady`,
 thread. A frame then only reads a `ConcurrentHashMap`: no material is created, and no object is
 allocated, in the render loop.
 
+**Numbers in an exported document.** One policy, three cases. Lengths, quantities and the
+duration line use `Locale.ROOT`, so the same protocol prints `14.82 m`, `2 h 15 min` and
+`1 250` on every phone - a signed handover document must not change its digits because the
+device was set to another language, and formatting with the device locale once put
+Arabic-Indic digits (`٢ h ١٥ min`) into an English page. Money is the deliberate exception:
+`MoneyFormatter` follows the phone's convention (`1.250,00 €` in German) because the price is
+read by the customer, and it forces **euro** regardless of locale. Dates are two cases of
+their own: free-form labels (a diary line) follow the phone's `DateFormat`, while the fixed
+numeric day (`01.11.2026` in the project list and on the licence expiry) is pinned to
+`Locale.ROOT` - a `SimpleDateFormat` takes its *calendar* from the locale, so a Thai phone
+printed a licence expiring in 2569. The CSV is the third case:
+it is data for a spreadsheet, so it is always `.`-decimal with `;` separators, plus a UTF-8
+BOM for Excel - see `docs/TESTING.md` findings 28 and 30.
+
 **Localisation seam.** The engine modules contain no user-facing strings. `TrackingMonitor`
 publishes a `Guidance` code, `RouteSession` a `RouteWarning` code, the hit cascade a
 `SurfaceKind`/`HitSource`, `ArSessionController` an `ArReadiness` branch. `:app` maps each to
-`stringResource` in `ui/Labels.kt`, and every length is formatted by `LengthFormatter` or the
-`hud_length` resource. That is what makes six locales complete without the engines carrying a
+`stringResource` in `ui/Labels.kt`, and every length is formatted by `LengthFormatter` - where
+the resource carries the unit (`hud_length` is `%1$s m`), the digits arrive through
+`LengthFormatter.number()`, never through a `%f` format, because a `%f` resource takes its
+decimal mark from the device and put `12,50 m` beside `28.80 m` in one HUD column (finding 39).
+That is what makes six locales complete without the engines carrying a
 Context — and it keeps the engines unit-testable on the JVM.
 
 ---

@@ -19,19 +19,19 @@
     <string name="home_room_name">Raum- oder Bereichsname</string>
     <string name="home_create">Anlegen</string>
     <string name="home_cancel">Abbrechen</string>
-    <string name="home_empty">Noch keine Räume. Legen Sie einen an, um zu messen.</string>
+    <string name="home_empty">Noch keine Räume. Leg einen an, um zu messen.</string>
     <string name="home_offline_note">Läuft vollständig offline. Nichts verlässt dieses Gerät.</string>
     <string name="home_export">Export</string>
 
     <!-- AR measuring screen -->
-    <string name="scan_instruction">Bewegen Sie das Telefon langsam über Wände und Boden, um den Raum zu scannen.</string>
-    <string name="tracking_loss">Tracking verloren. Auf eine strukturierte Wand oder den Boden zielen und langsam bewegen.</string>
-    <string name="tracking_searching">Suche Merkmale. Bewegen Sie das Telefon langsam über die Fläche.</string>
-    <string name="tracking_limited">Tracking eingeschränkt. Langsamer bewegen.</string>
+    <string name="scan_instruction">Bewege das Telefon langsam über Wände und Boden, um den Raum zu scannen.</string>
+    <string name="tracking_loss">Tracking verloren. Ziele auf eine strukturierte Wand oder den Boden und bewege dich langsam.</string>
+    <string name="tracking_searching">Suche Merkmale. Bewege das Telefon langsam über die Fläche.</string>
+    <string name="tracking_limited">Tracking eingeschränkt. Bewege dich langsamer.</string>
     <string name="tracking_failure_reason">Tracking eingeschränkt: %1$s</string>
     <string name="tracking_thermal">Gerät warm. Netzaktualisierungen wurden zum Schutz des Akkus gedrosselt; Messungen sind nicht betroffen.</string>
-    <string name="depth_weak">Tiefensignal hier schwach (Glas, Spiegel oder dunkle Fläche). Näher gehen oder neu zielen.</string>
-    <string name="low_light_warning">Zu dunkel für zuverlässige Messung. Lampe einschalten.</string>
+    <string name="depth_weak">Tiefensignal hier schwach (Glas, Spiegel oder dunkle Fläche). Geh näher oder ziele neu.</string>
+    <string name="low_light_warning">Zu dunkel für zuverlässige Messung. Schalte die Lampe ein.</string>
     <string name="surface_wall">Wand</string>
     <string name="surface_floor">Boden</string>
     <string name="surface_ceiling">Decke</string>
@@ -39,7 +39,7 @@
     <string name="routing_cable">Kabel</string>
     <string name="routing_pipe">Rohr</string>
     <string name="routing_duct">Kanal</string>
-    <string name="hud_length">%1$.2f m</string>
+    <string name="hud_length">%1$s m</string>
     <string name="tier_plane">Ebene</string>
     <string name="tier_depth_point">Tiefenpunkt</string>
     <string name="tier_direct_depth">Tiefenstrahl</string>
@@ -48,20 +48,32 @@
     <string name="ar_undo">Zurück</string>
     <string name="ar_close_loop">Schließen</string>
     <string name="ar_finish">Trasse fertig</string>
+    <string name="ar_leave_title">Strecke verlassen?</string>
+    <string name="ar_leave_body">%1$s gemessen. Als Strecke speichern oder verwerfen?</string>
+    <string name="ar_leave_save">Als Strecke speichern</string>
+    <string name="ar_leave_discard">Verwerfen</string>
+    <string name="draft_title">Nicht beendete Messung</string>
+    <string name="draft_body">%1$s, zuletzt gespeichert um %2$s. Längen und Fittings stimmen; die 3D-Position lässt sich nicht wiederherstellen.</string>
+    <string name="draft_save">Als Strecke speichern</string>
+    <string name="draft_discard">Verwerfen</string>
     <string name="ar_torch">Lampe</string>
     <string name="ar_scan">Raum scannen</string>
     <string name="ar_stop_scan">Scan stoppen</string>
     <string name="ar_closed_loop">geschlossen</string>
-    <string name="ar_no_surface">Keine Fläche gefunden. Auf Wand oder Boden zielen.</string>
+    <string name="ar_confidence_weak">Schwächster Punkt %1$d %% - tippe ihn erneut an, um die Messung zu verbessern</string>
+    <string name="ar_no_surface">Keine Fläche gefunden. Ziele auf Wand oder Boden.</string>
     <string name="ar_scan_progress">Raum %1$d %% · %2$d k Dreiecke</string>
     <string name="ar_scan_unavailable">Netz-Scan nicht verfügbar. Messen funktioniert weiterhin.</string>
     <string name="ar_session_failed">AR-Sitzung fehlgeschlagen: %1$s</string>
+    <string name="ar_session_retry">Erneut versuchen</string>
     <string name="ar_camera_permission">Zum Messen ist Kamerazugriff nötig. Die Kamera wird nur auf diesem Gerät genutzt.</string>
     <string name="ar_grant_permission">Kamerazugriff erlauben</string>
-    <string name="ar_unavailable_unsupported">Dieses Gerät unterstützt ARCore nicht. Nutzen Sie ein unterstütztes Telefon oder Tablet.</string>
-    <string name="ar_unavailable_needs_install">ARCore muss aktualisiert werden. Im Play Store installieren und ConstructAR neu öffnen.</string>
+    <string name="ar_camera_blocked">Der Kamerazugriff ist für diese App ausgeschaltet. Öffne die App-Einstellungen und erlaube die Kamera.</string>
+    <string name="ar_open_settings">Einstellungen öffnen</string>
+    <string name="ar_unavailable_unsupported">Dieses Gerät unterstützt ARCore nicht. Nutze ein unterstütztes Telefon oder Tablet.</string>
+    <string name="ar_unavailable_needs_install">ARCore muss aktualisiert werden. Installiere sie im Play Store und öffne ConstructAR neu.</string>
     <string name="ar_unavailable_declined">Die ARCore-Installation wurde abgelehnt. Ohne sie ist Messen mit der Kamera nicht möglich.</string>
-    <string name="ar_unavailable_failure">AR konnte auf diesem Gerät nicht starten. App neu starten und erneut versuchen.</string>
+    <string name="ar_unavailable_failure">AR konnte auf diesem Gerät nicht starten. Starte die App neu und versuche es erneut.</string>
     <string name="ar_offline_badge">Offline</string>
 
     <!-- Export -->
@@ -73,12 +85,18 @@
     <string name="export_ply">PLY (Punktwolke)</string>
     <string name="export_pdf_desc">PDF-Protokoll (Screenshot, Längen, Stückliste)</string>
     <string name="export_csv_desc">CSV-Materialliste (Excel-fertig, Semikolon)</string>
+    <string name="export_order_list">Bestellliste</string>
+    <string name="export_order_list_desc">Eine Zeile pro Leitungsart für den Großhandel: Artikel, Bestelllänge, Schellen, Kupplungen.</string>
     <string name="export_glb_desc">GLB-Modell für BIM (Revit / Navisworks / Blender)</string>
     <string name="export_ply_desc">PLY-Punktwolke oder Netz (CloudCompare, MeshLab)</string>
     <string name="export_choose_folder">In Ordner speichern…</string>
     <string name="export_saving">Speichern…</string>
     <string name="export_success">%1$d Dateien in %2$s gespeichert.</string>
     <string name="export_failed">Export fehlgeschlagen: %1$s</string>
+    <string name="export_partial">Nur %1$d von %2$d Dateien wurden in %3$s gespeichert.</string>
+    <string name="export_meshless">%1$d von %2$d Dateien in %3$s gespeichert. Dieses Projekt hat keinen 3D-Scan, daher wurden GLB und PLY übersprungen.</string>
+    <string name="export_nothing_selected">Wähle mindestens ein Dateiformat.</string>
+    <string name="export_nothing_to_export">Noch keine 3D-Geometrie: miss zuerst eine Strecke oder scanne den Raum.</string>
     <string name="export_measurement">Aufmaß</string>
     <string name="export_runs_total">%1$d Trassen · %2$s gesamt</string>
     <string name="export_order_length">Bestelllänge inkl. Verschnitt: %1$s</string>
@@ -90,17 +108,22 @@
     <string name="home_default_room_name">Raum</string>
     <string name="error_project_open">Das Projekt konnte nicht geöffnet werden.</string>
     <string name="error_project_save">Das Projekt konnte nicht gespeichert werden.</string>
+    <string name="error_photo_save">Das Foto konnte nicht gespeichert werden. Prüfe den freien Speicher des Telefons.</string>
     <string name="ar_close">Schließen</string>
-    <string name="export_folder_inaccessible">In den gewählten Ordner kann nicht geschrieben werden. Wählen Sie einen anderen.</string>
+    <string name="export_folder_inaccessible">In den gewählten Ordner kann nicht geschrieben werden. Wähle einen anderen.</string>
     <string name="tier_manual">Manuell</string>
-    <string name="route_warning_too_close">Zu nah am vorherigen Punkt. Mindestens 2 cm weiter gehen.</string>
-    <string name="route_warning_unpinned">Der Punkt konnte nicht verankert werden. Ruhig halten und erneut versuchen.</string>
-    <string name="route_warning_bend_radius">Der Biegeradius ist enger als dieses Profil erlaubt. Eckpunkt setzen oder Formteil verwenden.</string>
+    <string name="route_warning_too_close">Zu nah am vorherigen Punkt. Geh mindestens 2 cm weiter.</string>
+    <string name="route_warning_unpinned">Der Punkt konnte nicht verankert werden. Halte ruhig und versuche es erneut.</string>
+    <string name="route_warning_bend_radius">Der Biegeradius ist enger als dieses Profil erlaubt. Setze einen Eckpunkt oder verwende ein Formteil.</string>
 
     <!-- Counts -->
     <plurals name="home_runs">
         <item quantity="one">%1$d Trasse</item>
         <item quantity="other">%1$d Trassen</item>
+    </plurals>
+    <plurals name="home_unreadable">
+        <item quantity="one">1 Projektdatei konnte nicht gelesen werden. Die Datei wurde behalten - spiele sie aus einer Sicherung zurück.</item>
+        <item quantity="other">%1$d Projektdateien konnten nicht gelesen werden. Die Dateien wurden behalten - spiele sie aus einer Sicherung zurück.</item>
     </plurals>
     <plurals name="ar_points">
         <item quantity="one">%1$d Punkt</item>
@@ -135,14 +158,14 @@
     <string name="onboard_skip">Überspringen</string>
     <string name="help_title">Hilfe und Genauigkeit</string>
     <string name="help_how_title">So funktioniert es</string>
-    <string name="help_how_body">Raum scannen, Strecke Punkt für Punkt antippen, exportieren. Drei Schritte, je ein Bildschirm.</string>
+    <string name="help_how_body">Scanne den Raum, tippe die Strecke Punkt für Punkt an, exportiere. Drei Schritte, je ein Bildschirm.</string>
     <string name="help_accuracy_title">Wie genau ist es?</string>
     <string name="help_acc_plane">Ebene Wand, 1 bis 4 m, auf erkannter Fläche: ±2 cm</string>
     <string name="help_acc_depth">Bereiche nur mit Tiefe: ±6 cm</string>
     <string name="help_acc_angle">Winkel und Diagonalen: ±1 %</string>
     <string name="help_tips_title">Tipps für ein sauberes Aufmaß</string>
     <string name="help_tip_scan">Scanne jede Wand einmal, bevor du misst.</string>
-    <string name="help_tip_light">In dunklen Räumen die Lampe einschalten: Tracking braucht Kontrast.</string>
+    <string name="help_tip_light">Schalte in dunklen Räumen die Lampe ein: Tracking braucht Kontrast.</string>
     <string name="help_tip_angle">Halte das Telefon etwa 45° zur Fläche, die du antippst.</string>
     <string name="help_tip_anchor">Beginne und beende Strecken auf Ankern, nicht in der Luft: dann bleiben die Meter stehen.</string>
     <string name="help_offline_title">Funktioniert ohne Netz</string>
@@ -184,9 +207,10 @@
     <string name="paywall_err_signature">Dieser Schlüssel wurde nicht für diese App ausgestellt.</string>
     <string name="paywall_err_device">Dieser Schlüssel gehört zu einem anderen Gerät.</string>
     <string name="paywall_err_expired">Dieser Schlüssel ist abgelaufen.</string>
-    <string name="paywall_trial_button">7 Tage Pro testen</string>
+    <string name="paywall_trial_button">%1$d Tage Pro testen</string>
     <string name="paywall_trial_active">Testversion aktiv, noch %1$d Tage</string>
     <string name="paywall_trial_used">Die Testversion wurde schon genutzt.</string>
+    <string name="paywall_trial_unavailable">Die Testversion lässt sich auf diesem Telefon nicht starten. Kauf eine Lizenz - sie funktioniert offline, sofort.</string>
     <string name="paywall_active_title">Pro ist aktiv</string>
     <string name="paywall_active_until">Gültig bis %1$s</string>
     <string name="paywall_active_forever">Unbegrenzt gültig</string>
@@ -205,6 +229,9 @@
     <string name="runs_title">Strecken</string>
     <string name="run_detail">%1$s · %2$s</string>
     <string name="run_delete">Strecke löschen</string>
+    <string name="run_delete_title">Diese Strecke löschen?</string>
+    <string name="run_delete_body">%1$s, %2$s. Die Strecke verschwindet aus der Materialliste, dem Protokoll und dem 3D-Modell. Zurückholen geht nicht.</string>
+    <string name="run_recovered">Nach einem Abbruch geborgen - Längen und Fittings stimmen, die 3D-Position nicht</string>
     <string name="technician_title">Monteur vor Ort</string>
     <string name="technician_hint">Name, wie er auf dem Protokoll stehen soll</string>
     <string name="materials_title">Material und Bestellung</string>
@@ -215,7 +242,7 @@
     <string name="materials_waste">plus %1$d %% Reserve</string>
     <string name="materials_order">%1$s bestellen</string>
     <string name="materials_total">Insgesamt zu bestellen</string>
-    <string name="materials_low_confidence">%1$d Strecken mit unsicherem Treffer - vor der Bestellung prüfen</string>
+    <string name="materials_low_confidence">%1$d Strecken mit unsicherem Treffer - prüfe vor der Bestellung</string>
     <string name="signature_title">Unterschrift des Kunden</string>
     <string name="signature_hint">Mit dem Finger unterschreiben - sie erscheint auf dem Protokoll.</string>
     <string name="signature_clear">Zurücksetzen</string>
@@ -242,16 +269,19 @@
     <string name="pdf_column_material">Material</string>
     <string name="pdf_column_waste">Reserve</string>
     <string name="pdf_column_order_meters">Bestellung (m)</string>
-    <string name="pdf_procurement_note">Bestelllängen enthalten die Reserve. Werte aus anker-verfeinerten Knotenpunkten - kritische Strecken vor dem Zuschnitt mit dem Maßband prüfen.</string>
+    <string name="pdf_procurement_note">Bestelllängen enthalten die Reserve. Werte aus anker-verfeinerten Knotenpunkten - prüfe kritische Strecken vor dem Zuschnitt mit dem Maßband.</string>
+    <string name="pdf_note_recovered">Nach einem Abbruch geborgen - Längen und Fittings stimmen, die 3D-Position fehlt im Modell: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - auf dem Gerät erzeugt</string>
     <string name="pdf_page_label">Seite %1$d</string>
     <string name="backup_title">Sichern und wiederherstellen</string>
     <string name="backup_note">Jedes Projekt ist eine Datei in dieser App. Kopiere sie in einen Ordner deiner Wahl - keine Cloud, außer du wählst eine - und lies sie auf jedem Telefon wieder ein.</string>
     <string name="backup_export">Alle Projekte sichern</string>
     <string name="backup_import">Projekte wiederherstellen</string>
-    <string name="backup_saved">%1$d Projekte gesichert</string>
+    <string name="backup_saved">%1$d Projekte und %2$d Fotos gesichert</string>
     <string name="backup_imported">%1$d Projekte wiederhergestellt</string>
     <string name="backup_failed">Sicherung fehlgeschlagen - prüfe den Ordner und versuche es erneut.</string>
+    <string name="backup_nothing">Noch nichts zu sichern - lege zuerst ein Projekt an.</string>
+    <string name="backup_photos_skipped">%1$d von %2$d Fotos konnten nicht kopiert werden.</string>
     <string name="waste_title">Reserve</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>
@@ -267,6 +297,12 @@
     <string name="field_time_start">Arbeit starten</string>
     <string name="field_time_stop">Arbeit stoppen</string>
     <string name="field_time_running">Läuft seit %1$s</string>
+    <string name="field_time_overdue">Achtung: die Uhr läuft seit %1$s - Stopp vergessen?</string>
+    <string name="field_time_delete">Diesen Zeiteintrag löschen</string>
+    <string name="field_delete_title">Wirklich löschen?</string>
+    <string name="field_delete_session_body">%1$s - die Stunden fallen aus dem Preis und aus dem Protokoll.</string>
+    <string name="field_delete_diary_body">%1$s - der Eintrag und sein Foto sind weg.</string>
+    <string name="field_delete_defect_body">%1$s - der Mangel und sein Foto sind weg; ein schon übergebenes Protokoll behält ihn auf Papier.</string>
     <string name="field_time_total">Gesamt</string>
     <string name="field_time_empty">Noch keine Zeit erfasst.</string>
     <string name="field_time_open">läuft</string>
@@ -284,6 +320,7 @@
     <string name="field_delete">Löschen</string>
     <string name="field_open_count">%1$d offen</string>
     <string name="field_resolved_count">%1$d erledigt</string>
+    <string name="field_list_more">%1$d ältere Einträge werden hier nicht angezeigt, sie stehen im Protokoll.</string>
     <string name="severity_low">Gering</string>
     <string name="severity_medium">Wichtig</string>
     <string name="severity_high">Kritisch</string>
@@ -319,13 +356,16 @@
     <string name="pdf_label_address">Adresse</string>
     <string name="pdf_label_phone">Telefon</string>
     <string name="pdf_label_work_total">Arbeitszeit gesamt</string>
+    <string name="pdf_note_open_session">Die Uhr läuft noch (%1$s bisher) - Summe und Kosten unten rechnen sie bis zu diesem Export mit.</string>
     <string name="pdf_status_open">Offen</string>
     <string name="pdf_status_resolved">Erledigt</string>
 
     <string name="field_photo_add">Foto aufnehmen</string>
     <string name="field_photo_replace">Foto ersetzen</string>
+    <string name="field_photo_on_file">Foto liegt vor</string>
     <string name="project_costs_title">Was der Auftrag wert ist</string>
     <string name="project_costs_rate">Stundensatz (€)</string>
+    <string name="project_costs_invalid">Kein Betrag - schreib ihn wie 48,00 oder 48.00</string>
     <string name="project_costs_material">Materialpauschale (€)</string>
     <string name="project_costs_labour">Arbeitslohn</string>
     <string name="project_costs_total">Summe netto</string>
@@ -345,8 +385,16 @@
     <string name="paywall_err_untrusted">Diese Installation kann nicht bestätigt werden. Installiere die offizielle Version aus der Originalquelle und versuche es erneut.</string>
     <string name="licence_clock_rollback">Die Uhr des Geräts steht vor dem zuletzt gesehenen Datum. Stelle Datum und Uhrzeit richtig ein – Abo und Testphase werden am zuletzt bekannten Datum geprüft.</string>
     <string name="licence_integrity_failed">Diese Installation konnte nicht bestätigt werden, deshalb sind die Pro-Funktionen aus. Deine Projekte bleiben lesbar und exportierbar.</string>
-    <string name="licence_demo_key">Hinweis für den Entwickler: In diesem Build steckt noch der Demo-Prüfschlüssel. Vor dem ersten Verkauf ersetzen.</string>
+    <string name="licence_demo_key">Hinweis für den Entwickler: In diesem Build steckt noch der Demo-Prüfschlüssel. Ersetze ihn vor dem ersten Verkauf.</string>
     <string name="route_warning_loop_gap">Der Ring schließt nicht – setze den letzten Punkt auf den ersten</string>
-    <string name="backup_held_back">%1$d Raum/Räume zurückgehalten – sie bleiben in deiner Sicherung; mit Pro werden alle importiert</string>
+    <plurals name="backup_held_back">
+        <item quantity="one">1 Raum zurückgehalten - er bleibt in deiner Sicherung; mit Pro wird er importiert</item>
+        <item quantity="other">%1$d Räume zurückgehalten - sie bleiben in deiner Sicherung; mit Pro werden alle importiert</item>
+    </plurals>
+    <plurals name="backup_unreadable">
+        <item quantity="one">1 Datei aus der Auswahl konnte nicht gelesen werden - sie ist kein Raum und bleibt unverändert in deiner Sicherung</item>
+        <item quantity="other">%1$d Dateien aus der Auswahl konnten nicht gelesen werden - sie sind keine Räume und bleiben unverändert in deiner Sicherung</item>
+    </plurals>
     <string name="route_warning_low_confidence">Dieser Punkt stammt aus Tiefendaten – tippe für einen sichereren Wert erneut auf die erkannte Wand</string>
+    <string name="route_warning_height_jump">Das ist ein großer Höhensprung - eine Steigleitung zur Decke oder ein Fehltipp auf den Boden? Mach ihn rückgängig, wenn es ein Fehltipp war</string>
 </resources>

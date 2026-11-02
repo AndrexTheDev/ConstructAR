@@ -58,7 +58,11 @@ html{scroll-behavior:smooth}
 body{
   margin:0; background:var(--ink); color:var(--chalk);
   font-family:"Inter","Segoe UI",Roboto,system-ui,-apple-system,sans-serif;
-  font-size:17px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  /* rem, not px: 17/16 of the reader's own base size. In px this line overrode the browser's
+     font-size preference, so the paragraphs - everything that inherits from body - stayed at
+     17 px while the headings (already rem) grew, which is the one combination that makes a
+     large-font reader give up on a page (finding 68). */
+  font-size:1.0625rem; line-height:1.6; -webkit-font-smoothing:antialiased;
 }
 img{max-width:100%; display:block}
 a{color:var(--lime); text-decoration:none}

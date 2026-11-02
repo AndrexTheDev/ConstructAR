@@ -19,6 +19,7 @@ import com.constructar.core.math.Vec3
 import com.constructar.export.csv.MaterialCsvWriter
 import com.constructar.export.ply.PlyWriter
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.ByteBuffer
@@ -70,6 +71,39 @@ class ExportTextFormatsTest {
     }
 
     @Test
+    fun `a cell a spreadsheet would evaluate is prefixed as text`() {
+        // A restored backup can carry any name: the cell must be data, not a formula.
+        assertEquals("'=1+1", MaterialCsvWriter.escape("=1+1"))
+        assertTrue(MaterialCsvWriter.escape("+1+1").startsWith("'"))
+        assertTrue(MaterialCsvWriter.escape("@SUM(A1)").startsWith("'"))
+        assertTrue(MaterialCsvWriter.escape("\tk").startsWith("'"))
+        // The guard survives the RFC 4180 quoting when the value also needs quotes.
+        assertEquals("\"'=A;B\"", MaterialCsvWriter.escape("=A;B"))
+    }
+
+    @Test
+    fun `a minus sign is guarded only when it is not a number`() {
+        // -5.00 is a value that must survive untouched; -2+3 is a formula.
+        assertEquals("-5.00", MaterialCsvWriter.escape("-5.00"))
+        assertTrue(MaterialCsvWriter.escape("-2+3").startsWith("'"))
+        assertEquals("", MaterialCsvWriter.escape(""))
+    }
+
+    @Test
+    fun `a hostile project name cannot become a formula in the list`() {
+        val project = sampleProject().copy(name = "=cmd|' /C calc'!A0")
+        val csv = MaterialCsvWriter.write(
+            MaterialListBuilder.build(project, nowMs = 0L),
+            MaterialCsvWriter.Options(includeBom = false),
+        )
+        assertTrue(csv.contains("'=cmd"))
+        // Nothing in the file may begin a line with an evaluating character.
+        csv.lineSequence().forEach { line ->
+            assertFalse("line starts a formula: $line", line.startsWith("=") || line.startsWith("@"))
+        }
+    }
+
+    @Test
     fun `ply ascii header and body agree on counts`() {
         val ply = PlyWriter.writeAscii(listOf(PlyWriter.PlyPart("tri", triangleMesh())))
         val lines = ply.lines()
@@ -99,6 +133,59 @@ class ExportTextFormatsTest {
         assertEquals("Keller-Raum-2", ExportService.slug("Keller / Raum: 2"))
         assertEquals("project", ExportService.slug("   "))
         assertTrue(ExportService.slug("A".repeat(200)).length <= 40)
+        assertEquals("project", ExportService.slug("///"))
+        assertEquals("Bad-Keller", ExportService.slug("Bad/Keller"))
+        // Nothing a path cannot hold survives, whatever an operator pasted in.
+        for (hostile in listOf("a\\b", "a:b", "a*b", "a?b", "a\"b", "a<b", "a>b", "a|b", "a\u0000b", "..\\..")) {
+            val stem = ExportService.slug(hostile)
+            assertTrue("$hostile -> $stem", stem.none { it in "/\\:*?\"<>|" })
+            assertTrue("$hostile -> $stem", stem.isNotBlank())
+        }
+    }
+
+    @Test
+    fun `a room keeps its own name in the file stem`() {
+        // The umlaut used to be deleted, not transliterated: "Küche" became "Kche", which is not
+        // a short name but a different one. Every locale of this app types letters like these.
+        assertEquals("Küche", ExportService.slug("Küche"))
+        assertEquals("Chantier-Château", ExportService.slug("Chantier Château"))
+        assertEquals("Baño-2", ExportService.slug("Baño (2)"))
+        assertEquals("Łazienka", ExportService.slug("Łazienka"))
+        assertEquals("Cucina-Öl-1", ExportService.slug("Cucina Öl 1"))
+        assertEquals("Café-1-OG", ExportService.slug("Café 1. OG"))
+        // A surrogate pair is never cut in half.
+        val emoji = ExportService.slug("A" + "🛠".repeat(40))
+        assertTrue(emoji.none { it.isHighSurrogate() && emoji.indexOf(it) == emoji.length - 1 })
+    }
+
+    @Test
+    fun `a ply run label is flattened into the header, not spliced into it`() {
+        val nasty = "tri\nelement vertex 999999\nend_header"
+        val ply = PlyWriter.writeAscii(listOf(PlyWriter.PlyPart(nasty, triangleMesh())))
+        val lines = ply.lines()
+        val diagnostic = lines.joinToString(" | ")
+        assertEquals(diagnostic, 1, lines.count { it == "element vertex 3" })
+        assertEquals(diagnostic, 1, lines.count { it == "element face 1" })
+        assertEquals(diagnostic, 1, lines.count { it == "end_header" })
+        assertEquals(diagnostic, 1, lines.count { it.startsWith("comment mesh ") })
+        assertTrue(diagnostic, lines.none { it == "element vertex 999999" })
+    }
+
+    @Test
+    fun `a ply comment is flattened into one header line`() {
+        val bytes = PlyWriter.writeBinaryLittleEndian(
+            parts = listOf(PlyWriter.PlyPart("tri", triangleMesh())),
+            comment = "scan\nelement vertex 999999",
+        )
+        val marker = "end_header\n".toByteArray()
+        val headerLength = indexOf(bytes, marker) + marker.size
+        assertTrue("end_header not found in ${String(bytes, Charsets.US_ASCII).take(200)}", headerLength >= marker.size)
+        val header = String(bytes, 0, headerLength, Charsets.US_ASCII).lines()
+        val diagnostic = header.joinToString(" | ")
+        assertEquals(diagnostic, 1, header.count { it.startsWith("comment ") })
+        assertTrue(diagnostic, header.none { it == "element vertex 999999" })
+        assertEquals(diagnostic, 1, header.count { it == "element vertex 3" })
+        assertEquals(diagnostic, 1, header.count { it == "end_header" })
     }
 
     private fun indexOf(haystack: ByteArray, needle: ByteArray): Int {

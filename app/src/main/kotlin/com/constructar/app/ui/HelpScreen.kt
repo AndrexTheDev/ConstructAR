@@ -64,7 +64,7 @@ fun HelpScreen(
     onRestore: (
         texts: List<String>,
         photos: List<Pair<String, android.net.Uri>>,
-        done: (imported: Int, heldBack: Int) -> Unit,
+        done: (imported: Int, heldBack: Int, unreadable: Int) -> Unit,
     ) -> Unit,
 ) {
     Column(

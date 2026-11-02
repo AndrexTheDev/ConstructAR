@@ -33,8 +33,8 @@ object PlyWriter {
         val builder = StringBuilder(1 shl 20)
         builder.append("ply\n")
         builder.append("format ascii 1.0\n")
-        builder.append("comment $comment\n")
-        parts.forEach { builder.append("comment mesh ${it.name}\n") }
+        builder.append("comment ${oneLine(comment)}\n")
+        parts.forEach { builder.append("comment mesh ${oneLine(it.name)}\n") }
         builder.append("element vertex $totalVertices\n")
         builder.append("property float x\n")
         builder.append("property float y\n")
@@ -78,7 +78,7 @@ object PlyWriter {
         val header = buildString {
             append("ply\n")
             append("format binary_little_endian 1.0\n")
-            append("comment $comment\n")
+            append("comment ${oneLine(comment)}\n")
             append("element vertex ${parts.sumOf { it.mesh.vertexCount }}\n")
             append("property float x\nproperty float y\nproperty float z\n")
             append("property float nx\nproperty float ny\nproperty float nz\n")
@@ -118,6 +118,17 @@ object PlyWriter {
         }
         return out.array()
     }
+
+    /**
+     * A PLY comment ends at the first newline, and a run label is user text.
+     *
+     * A label that carried a line break - pasted from a note, typed on a keyboard that inserted
+     * one - would end the `comment` and let the rest of the label be read as a header directive:
+     * `element vertex 999999` in the middle of a room name turns a valid file into one that
+     * crashes a viewer. Comments are therefore flattened, never escaped.
+     */
+    private fun oneLine(value: String): String =
+        value.replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').trim()
 
     private fun format(value: Float): String =
         if (value.isFinite()) String.format(Locale.ROOT, "%.5f", value) else "0.00000"

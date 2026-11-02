@@ -22,6 +22,10 @@ import java.util.Locale
  *    explicitly — the default locale would write `14,82` and break the column alignment.
  *
  * A UTF-8 BOM is prepended by default so Excel shows `Ø`/`mm²` correctly.
+ *
+ * Headers and trade names stay English, for the same reason as the decimal point: this file is
+ * data for a spreadsheet, not a document for the customer. The protocol (PDF) is the localised
+ * one — it carries all six languages, and it is the file that gets signed.
  */
 object MaterialCsvWriter {
 
@@ -106,10 +110,89 @@ object MaterialCsvWriter {
         return sb.toString()
     }
 
-    /** Field quoting per RFC 4180: double quotes, doubled internal quotes. */
+    /**
+     * The order list: one line per conduit type, nothing else.
+     *
+     * The full bill of materials is a document the operator reads - summary, every column, a
+     * per-run breakdown. The wholesaler (or the shop's buyer) needs the other thing: article,
+     * how much of it to order, and the fittings that go with it. This writes exactly that, so
+     * nobody has to delete eleven columns before mailing it, and it is a separate file rather
+     * than another mode of the same one because both documents are wanted on the same job.
+     *
+     * Same separator, same dot decimals, same BOM and same formula guard as [write]: a second
+     * convention in the same folder is how a spreadsheet ends up half-readable.
+     */
+    fun writeOrderList(
+        materialList: MaterialList,
+        options: Options = Options(),
+        generatedAtLabel: String = "",
+    ): String {
+        val sb = StringBuilder(512)
+        if (options.includeBom) sb.append('\uFEFF')
+        val sep = options.separator
+
+        row(sb, sep, listOf("Project", materialList.projectName))
+        row(
+            sb, sep,
+            listOf("Order list", generatedAtLabel.ifBlank { materialList.generatedAtEpochMs.toString() }),
+        )
+        sb.append(lineEnding)
+        row(sb, sep, listOf("Article", "Order length (m)", "Clips", "Couplings", "Bends"))
+        for (line in materialList.lines) {
+            // The article is the procureable description; a spec without one falls back to the
+            // size label, exactly as the protocol's procurement table does.
+            row(
+                sb, sep,
+                listOf(
+                    line.spec.material.ifBlank { line.spec.sizeLabel },
+                    number(line.withWasteMeters),
+                    line.clipCount.toString(),
+                    line.couplingCount.toString(),
+                    (line.elbow90Count + line.elbow45Count + line.otherBendCount).toString(),
+                ),
+            )
+        }
+        if (!materialList.isEmpty) {
+            sb.append(lineEnding)
+            row(
+                sb, sep,
+                listOf(
+                    "Total",
+                    number(materialList.totalWithWasteMeters),
+                    materialList.totalClips.toString(),
+                    materialList.totalCouplings.toString(),
+                    materialList.totalElbows.toString(),
+                ),
+            )
+        }
+        return sb.toString()
+    }
+
+    /**
+     * Field quoting per RFC 4180: double quotes, doubled internal quotes — plus a formula guard.
+     *
+     * A cell that begins `=`, `+`, `@`, a tab or a carriage return is a formula to Excel and
+     * LibreOffice, not text. The names in this file are the operator's own (a room, a conduit
+     * label) and they also arrive from **restored backups written by someone else**, so a project
+     * called `=HYPERLINK("http://…","Rechnung")` runs on the foreman's machine the moment he opens
+     * the list to order material. Quoting alone does not stop that — the quotes are stripped by
+     * the parser before the cell is evaluated — so the cell is additionally prefixed with an
+     * apostrophe, the spreadsheet's own "this is text" marker.
+     *
+     * A leading minus is only guarded when what follows is not a plain number: `-5.00` is a
+     * value, `-2+3+cmd|' /C calc'!A0` is a formula.
+     */
     fun escape(value: String, separator: Char = ';'): String {
-        val needsQuotes = value.any { it == separator || it == '"' || it == '\n' || it == '\r' }
-        return if (needsQuotes) "\"" + value.replace("\"", "\"\"") + "\"" else value
+        val guarded = if (needsFormulaGuard(value)) "'" + value else value
+        val needsQuotes = guarded.any { it == separator || it == '"' || it == '\n' || it == '\r' }
+        return if (needsQuotes) "\"" + guarded.replace("\"", "\"\"") + "\"" else guarded
+    }
+
+    /** Whether a spreadsheet would evaluate this cell instead of displaying it. */
+    internal fun needsFormulaGuard(value: String): Boolean = when (value.firstOrNull()) {
+        '=', '+', '@', '\t', '\r' -> true
+        '-' -> value.toDoubleOrNull() == null
+        else -> false
     }
 
     private fun row(sb: StringBuilder, separator: Char, values: List<String>) {

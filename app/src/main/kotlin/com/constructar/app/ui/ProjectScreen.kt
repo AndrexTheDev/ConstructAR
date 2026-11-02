@@ -62,7 +62,9 @@ import com.constructar.app.R
 import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.bom.MaterialList
+import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.model.WorkTime
 import com.constructar.core.price.MoneyFormatter
 import com.constructar.core.price.Pricing
 import com.constructar.core.units.LengthFormatter
@@ -98,6 +100,10 @@ fun ProjectScreen(
 ) {
     var renameOpen by remember { mutableStateOf(false) }
     var deleteOpen by remember { mutableStateOf(false) }
+    // Removing a run used to be one tap on a 48 dp icon next to the length - the most valuable
+    // thing on the screen (thirty taps of measuring) and the only destructive action on it that
+    // asked nothing. It asks now, and names what goes.
+    var routeToRemove by remember { mutableStateOf<ConduitRoute?>(null) }
     var nameDraft by remember(project.id) { mutableStateOf(project.name) }
     var notesDraft by remember(project.id) { mutableStateOf(project.notes) }
     var notesSaved by remember(project.id) { mutableStateOf(false) }
@@ -142,11 +148,19 @@ fun ProjectScreen(
             project.materialLumpSumCents.takeIf { it > 0L }?.let(Pricing::formatForInput) ?: "",
         )
     }
-    val parsedRate = Pricing.parseCents(rateDraft)?.toInt()?.takeIf { it > 0 }
-    val parsedMaterial = Pricing.parseCents(materialDraft) ?: 0L
+    // A typo is an error, not a zero: see PricingInput.
+    val rateInput = PricingInput.rate(rateDraft)
+    val materialInput = PricingInput.amount(materialDraft)
+    val parsedRate = rateInput.cents
+    val parsedMaterial = materialInput.cents
     val effectiveRate = parsedRate ?: hourlyRateCents
     val priceDirty = parsedRate != project.hourlyRateCents || parsedMaterial != project.materialLumpSumCents
-    val workMillis = remember(project.sessions, project.id) { project.totalWorkMillis() }
+    // The preview the operator reads while typing a rate. Not remembered: a running session makes
+    // this number grow, and the key that would have to invalidate it - the session list - does not
+    // change while a clock runs. [rememberNowMs] moves it on every half minute, exactly like the
+    // field book's total and unlike the frozen value this used to be.
+    val nowMs = rememberNowMs(WorkTime.isRunning(project.sessions))
+    val workMillis = project.totalWorkMillis(nowMs)
     val labourPreview = Pricing.labourCents(workMillis, effectiveRate)
     val totalPreview = Pricing.totalCents(labourPreview, parsedMaterial)
     val customerDirty = customerName != project.customerName ||
@@ -344,7 +358,11 @@ fun ProjectScreen(
                             route.spec.sizeLabel,
                         ),
                         length = LengthFormatter.format(route.polylineLengthMeters),
-                        onDelete = { onRemoveRoute(route.id) },
+                        // A run recovered after an interruption counts in every length and every
+                        // fitting, but its 3D geometry is not in the model. Saying so is the
+                        // difference between a documented limitation and a surprise in a viewer.
+                        badge = if (route.recovered) stringResource(R.string.run_recovered) else null,
+                        onDelete = { routeToRemove = route },
                     )
                 }
             }
@@ -441,6 +459,12 @@ fun ProjectScreen(
                     label = { Text(stringResource(R.string.project_costs_rate)) },
                     placeholder = { Text(Pricing.formatForInput(hourlyRateCents.toLong())) },
                     singleLine = true,
+                    isError = rateInput.invalid,
+                    supportingText = if (rateInput.invalid) {
+                        { Text(stringResource(R.string.project_costs_invalid)) }
+                    } else {
+                        null
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -449,6 +473,12 @@ fun ProjectScreen(
                     onValueChange = { materialDraft = it },
                     label = { Text(stringResource(R.string.project_costs_material)) },
                     singleLine = true,
+                    isError = materialInput.invalid,
+                    supportingText = if (materialInput.invalid) {
+                        { Text(stringResource(R.string.project_costs_invalid)) }
+                    } else {
+                        null
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -471,7 +501,8 @@ fun ProjectScreen(
                     label = stringResource(R.string.action_save),
                     icon = Icons.Default.Check,
                     tone = ActionTone.SECONDARY,
-                    enabled = priceDirty,
+                    // Nothing is saved while a field says it cannot read what was typed.
+                    enabled = priceDirty && !rateInput.invalid && !materialInput.invalid,
                     onClick = { onSavePricing(parsedRate, parsedMaterial) },
                 )
             }
@@ -571,6 +602,33 @@ fun ProjectScreen(
         )
     }
 
+    routeToRemove?.let { run ->
+        AlertDialog(
+            onDismissRequest = { routeToRemove = null },
+            title = { Text(stringResource(R.string.run_delete_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.run_delete_body,
+                        stringResource(R.string.run_detail, run.spec.label, run.spec.sizeLabel),
+                        LengthFormatter.format(run.polylineLengthMeters),
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        routeToRemove = null
+                        onRemoveRoute(run.id)
+                    },
+                ) { Text(stringResource(R.string.action_delete), color = SiteColors.danger) }
+            },
+            dismissButton = {
+                TextButton(onClick = { routeToRemove = null }) { Text(stringResource(R.string.home_cancel)) }
+            },
+        )
+    }
+
     if (deleteOpen) {
         AlertDialog(
             onDismissRequest = { deleteOpen = false },
@@ -613,7 +671,13 @@ private fun PriceLine(label: String, value: String, emphasis: Boolean = false) {
 }
 
 @Composable
-private fun RouteRow(kind: String, detail: String, length: String, onDelete: () -> Unit) {
+private fun RouteRow(
+    kind: String,
+    detail: String,
+    length: String,
+    badge: String? = null,
+    onDelete: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -630,6 +694,13 @@ private fun RouteRow(kind: String, detail: String, length: String, onDelete: () 
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            badge?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = SiteColors.warning,
+                )
+            }
         }
         Text(length, style = MaterialTheme.typography.titleSmall, color = SiteColors.gold)
         IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {

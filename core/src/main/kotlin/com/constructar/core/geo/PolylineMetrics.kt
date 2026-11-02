@@ -66,24 +66,21 @@ data class RouteMetrics(
     val clipCount: Int,
     val couplingCount: Int,
     val minimumConfidence: Float,
-) {
-    val segmentCount: Int get() = segments.size
-
     /**
      * Nodes that must be reviewed before the customer pays for them.
      *
      * Two ways to be soft: the hit came from a source that is a guess by design (a feature point
      * or a manual placement), or the surface confidence the tracker reported is below
-     * [HitConfidence.TRUSTED]. The second case used to be ignored
-     * here while the AR screen warned about it, so a run measured on a badly tracked plane
-     * reached the order list unflagged.
+     * [HitConfidence.RUN_TRUSTED] - the same bar the HUD questions a run at.
+     *
+     * Counted over the **nodes**, once each. Counting segments was wrong twice over: it used the
+     * lower bar of 0.5, so a raycast point (0.7) reached the order list unflagged, and a weak point
+     * between two segments was counted as two, because a segment carries its start node's source
+     * and the smaller of its two confidences (finding 47).
      */
-    val lowConfidenceNodes: Int
-        get() = segments.count {
-            it.hitSource == HitSource.FEATURE_POINT ||
-                it.hitSource == HitSource.MANUAL ||
-                it.confidence < HitConfidence.TRUSTED
-        }
+    val lowConfidenceNodes: Int,
+) {
+    val segmentCount: Int get() = segments.size
 }
 
 /**
@@ -175,7 +172,16 @@ object PolylineMetrics {
             }
         }.toFloat()
 
-        val clips = if (clipSpacingMeters <= 0f) 0 else ceil(total / clipSpacingMeters).toInt() + 1
+        // An open run is clipped at both ends, so it needs one more clip than it has gaps. A
+        // closed ring does not: the clip at the start *is* the clip at the end, and the run of
+        // 6 m at 0.6 m spacing needs exactly ten clips, not eleven. The extra clip used to be
+        // counted anyway, which put one fitting per ring on the order list.
+        val closedRing = closed && nodes.size > 2
+        val clips = if (clipSpacingMeters <= 0f) {
+            0
+        } else {
+            ceil(total / clipSpacingMeters).toInt() + if (closedRing) 0 else 1
+        }
         // One coupling per straight length limit exceeded: 3 m for ducts, 50 m cable pulls.
         val couplingLimit = if (spec.kind == com.constructar.core.model.ConduitKind.DUCT) 3f else 50f
         val couplings = if (total <= couplingLimit) 0 else ceil(total / couplingLimit).toInt() - 1
@@ -193,6 +199,11 @@ object PolylineMetrics {
             clipCount = clips,
             couplingCount = couplings,
             minimumConfidence = nodes.minOfOrNull { it.confidence } ?: 1f,
+            lowConfidenceNodes = nodes.count { node ->
+                node.hitSource == HitSource.FEATURE_POINT ||
+                    node.hitSource == HitSource.MANUAL ||
+                    node.confidence < HitConfidence.RUN_TRUSTED
+            },
         )
     }
 

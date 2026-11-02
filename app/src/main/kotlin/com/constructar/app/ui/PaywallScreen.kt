@@ -65,9 +65,7 @@ import com.constructar.core.licence.LicenceCheck
 import com.constructar.core.licence.Plan
 import com.constructar.core.licence.Product
 import java.text.NumberFormat
-import java.text.SimpleDateFormat
 import java.util.Currency
-import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
@@ -93,13 +91,14 @@ fun PaywallScreen(
     trialDaysLeft: Long,
     onBack: () -> Unit,
     onActivate: (String) -> LicenceCheck,
-    onStartTrial: () -> Unit,
+    /** `false` when the trial could not be started; the screen must not claim it did. */
+    onStartTrial: () -> Boolean,
 ) {
     val context = LocalContext.current
     var keyText by remember { mutableStateOf("") }
     var result by remember { mutableStateOf<LicenceCheck?>(null) }
     var copied by remember { mutableStateOf<String?>(null) }
-    var trialRequested by remember { mutableStateOf(false) }
+    var trialFailed by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -181,29 +180,41 @@ fun PaywallScreen(
         )
 
         // ── Trial ───────────────────────────────────────────────────────────────────
-        if (!entitlements.isPro) {
-            when {
-                trialRequested || (trialUsed && trialDaysLeft > 0) -> Text(
-                    stringResource(R.string.paywall_trial_active, trialDaysLeft),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Jamaica.Lime,
-                )
-                trialUsed -> Text(
-                    stringResource(R.string.paywall_trial_used),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                else -> GloveButton(
-                    label = stringResource(R.string.paywall_trial_button),
-                    icon = Icons.Default.Star,
-                    tone = ActionTone.SECONDARY,
-                    onClick = {
-                        trialRequested = true
-                        onStartTrial()
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+        // One question, one answer: the trial is running when the entitlements say so - the same
+        // value the plan chip and every export gate read. The screen used to answer it from
+        // `trialUsed && trialDaysLeft > 0`, which is a different computation: after a clock
+        // rollback the licence rules kill the trial while the day counter still reported days left,
+        // so the paywall promised an active trial on a build that granted none.
+        when (trialBlockOf(entitlements, failed = trialFailed, used = trialUsed)) {
+            TrialBlock.ACTIVE -> Text(
+                stringResource(R.string.paywall_trial_active, trialDaysLeft),
+                style = MaterialTheme.typography.bodyLarge,
+                color = Jamaica.Lime,
+            )
+            // The start can fail - the trial was used, the clock moved back, the build cannot be
+            // trusted - and the button used to switch to "trial active" *before* asking. Saying so
+            // is the difference between a dead button and a sentence the operator can act on.
+            TrialBlock.UNAVAILABLE -> Text(
+                stringResource(R.string.paywall_trial_unavailable),
+                style = MaterialTheme.typography.bodyMedium,
+                color = SiteColors.warning,
+            )
+            TrialBlock.USED -> Text(
+                stringResource(R.string.paywall_trial_used),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TrialBlock.OFFER -> GloveButton(
+                label = stringResource(
+                    R.string.paywall_trial_button,
+                    Entitlements.TRIAL_DAYS.toInt(),
+                ),
+                icon = Icons.Default.Star,
+                tone = ActionTone.SECONDARY,
+                onClick = { if (!onStartTrial()) trialFailed = true },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            TrialBlock.NONE -> Unit
         }
 
         // ── Crypto payment ──────────────────────────────────────────────────────────
@@ -475,13 +486,12 @@ private fun price(product: Product): String {
     return format.format(product.eur)
 }
 
-/** Epoch days are UTC by contract, so the displayed date has to be too. */
-private fun formatEpochDay(epochDay: Long): String {
-    val format = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-    return format.format(Date(epochDay * 86_400_000L))
-}
+/**
+ * Epoch days are UTC by contract, so the displayed date has to be too - and Gregorian, because a
+ * locale-built formatter would print the Thai Buddhist year on a Thai phone (`formatDayLabel`).
+ */
+private fun formatEpochDay(epochDay: Long): String =
+    formatDayLabel(epochDay * 86_400_000L, TimeZone.getTimeZone("UTC"))
 
 private fun copyToClipboard(context: Context, value: String) {
     val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
@@ -498,4 +508,24 @@ private fun openWallet(context: Context, uri: String) {
     runCatching {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)))
     }
+}
+
+/** What the trial block of the paywall shows. */
+internal enum class TrialBlock { NONE, OFFER, ACTIVE, UNAVAILABLE, USED }
+
+/**
+ * The one place that answers "what does the trial block say".
+ *
+ * `entitlements.isTrial` is the same value the plan chip shows and every export gate reads, so the
+ * paywall cannot claim a trial the rest of the app does not honour.
+ */
+internal fun trialBlockOf(entitlements: Entitlements, failed: Boolean, used: Boolean): TrialBlock = when {
+    // The trial is a *paid* plan (`Plan.TRIAL.isPaid`), so this branch has to come first: the block
+    // used to sit behind `if (!isPro)` and was therefore never shown to the one operator who wants
+    // to read it - the one with four days left and a decision to make.
+    entitlements.isTrial -> TrialBlock.ACTIVE
+    entitlements.isPro -> TrialBlock.NONE
+    failed -> TrialBlock.UNAVAILABLE
+    used -> TrialBlock.USED
+    else -> TrialBlock.OFFER
 }

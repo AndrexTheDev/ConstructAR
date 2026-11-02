@@ -18,6 +18,7 @@ and most expensive to discover in a 12-minute Gradle run:
   6. resource XML is well-formed, apostrophes escaped         (aapt2 break)
   7. Kotlin files have balanced brackets                      (truncation guard)
   8. no INTERNET permission and no cloud SDK markers           (offline guarantee)
+  9. no work-time total cached in `remember`                  (a clock must tick)
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -65,6 +66,26 @@ HARDCODED_UI_PATTERNS = [
     re.compile(r"\bstringResource\s*\(\s*\""),
 ]
 
+# A `remember` block that adds up work time: the key it is remembered on is the session list,
+# and that list does not change while a clock runs - so the value freezes at the moment the
+# screen opened (finding 59). Anything that totals a running clock has to be recomputed from
+# a clock that ticks (`ui/ClockTick.kt`).
+CACHED_CLOCK = re.compile(r"remember\s*\([^)]*\)\s*\{[^}]*totalWorkMillis\s*\(")
+
+# The AR overlay is the only surface that draws text over a *camera image*, so a transparency
+# written as a number there is text whose contrast nobody measures: it had drifted to 3.47:1 and
+# 2.81:1 against a white wall, and to 1.4:1 on the selected conduit chip (finding 69). Every
+# transparency lives in `HudStyle`, where `HudContrastTest` composites it over a white and a black
+# wall. A numeric alpha in the screen itself is a finding.
+AR_OVERLAY_SCREEN = "app/src/main/kotlin/com/constructar/app/ui/ar/ArMeasureScreen.kt"
+AR_LITERAL_ALPHA = re.compile(r"alpha\s*=\s*[0-9]*\.?[0-9]+f")
+
+# `repository.save(...)` returns whether the write landed - the phone may be full, the storage may
+# be read-only. A call whose result is thrown away is work lost without a word: the field photo
+# path reported "attached" for a file no room pointed at, and the copy failure before it was not
+# even shown (finding 72).
+DISCARDED_SAVE = re.compile(r"(?m)^\s*repository\.save\s*\(")
+
 R_REFERENCE = re.compile(r"\bR\s*\.\s*(string|plurals|array|drawable|xml|style)\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)")
 
 FORBIDDEN_PERMISSIONS = ["android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"]
@@ -76,6 +97,7 @@ FORBIDDEN_DEPENDENCY_MARKERS = [
 ]
 
 findings: list[str] = []
+notices: list[str] = []
 
 
 def add(path: Path, message: str) -> None:
@@ -131,7 +153,7 @@ def check_reflection() -> None:
 def check_app_hardcoded_text() -> None:
     """No literal user-visible string in shipped UI code.
 
-    Test sources are exempt on purpose: a screenshot fixture and a unit-test expectation are
+    Test sources are exempt on purpose: a test fixture and a unit-test expectation are
     sample data, not something a user reads on a phone, and translating them would make the
     fixtures unreadable without making the app any more localised.
     """
@@ -222,6 +244,42 @@ def check_offline_guarantees() -> None:
                 add(path, f"forbidden cloud dependency marker: {marker}")
 
 
+def check_cached_clock() -> None:
+    """A running total may not be remembered: it would freeze when the screen opened."""
+    for path in kotlin_sources("app"):
+        text = path.read_text(encoding="utf-8")
+        for match in CACHED_CLOCK.finditer(text):
+            line = text[: match.start()].count("\n") + 1
+            add(path, f"line {line}: a work-time total inside `remember` cannot move while a clock "
+                      f"runs - total it from rememberNowMs(...) instead")
+
+
+def check_discarded_saves() -> None:
+    """A save whose Boolean is discarded is a write nobody checks (finding 72)."""
+    for path in kotlin_sources("app"):
+        # Tests set state up and may ignore the answer; production code may not.
+        if "/src/test/" in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in DISCARDED_SAVE.finditer(text):
+            line = text[: match.start()].count("\n") + 1
+            add(path, f"line {line}: `repository.save(...)` returns whether the write landed - "
+                      f"bind it and report the failure instead of dropping it")
+
+
+def check_ar_alpha_literals() -> None:
+    """No transparency may be written as a number inside the AR screen (finding 69)."""
+    path = ROOT / AR_OVERLAY_SCREEN
+    if not path.exists():
+        add(path, "the AR overlay screen is missing")
+        return
+    text = path.read_text(encoding="utf-8")
+    for match in AR_LITERAL_ALPHA.finditer(text):
+        line = text[: match.start()].count("\n") + 1
+        add(path, f"line {line}: transparency over the camera must come from `HudStyle`, where "
+                  f"`HudContrastTest` can measure it - not from a number here")
+
+
 def check_manifest_hardening() -> None:
     """Rules that keep a release build from handing its own data to anyone with a cable.
 
@@ -257,13 +315,40 @@ def check_manifest_hardening() -> None:
 
 
 def strip_kotlin(text: str) -> str:
-    """Removes comments and string/char literals so structural counting is meaningful."""
-    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
-    text = re.sub(r"//[^\n]*", "", text)
+    """Removes comments and string/char literals so structural counting is meaningful.
+
+    Order matters and both orders are wrong on their own:
+
+      * comments first, and a literal like `"///"` becomes an unterminated string - the
+        remainder of the file shifts and the gate reports an unbalanced `}` in code that
+        compiles (this happened, in a test of `ExportService.slug`);
+      * literals first, and an apostrophe in a comment (`// don't`) opens a character literal
+        that never closes.
+
+    So: literals first, then comments, and the comment pass is a single character scan that
+    knows it is outside every literal by then. Raw strings are removed before normal ones, and
+    each removal collapses to `""`, which is why the bracket count still means something.
+    """
     text = re.sub(r'"""(?:.|\n)*?"""', '""', text)
     text = re.sub(r'"(?:\\.|[^"\\\n])*"', '""', text)
     text = re.sub(r"'(?:\\.|[^'\\\n])'", "''", text)
-    return text
+
+    out: list[str] = []
+    index = 0
+    length = len(text)
+    while index < length:
+        pair = text[index:index + 2]
+        if pair == "//":
+            newline = text.find("\n", index)
+            index = length if newline < 0 else newline
+            continue
+        if pair == "/*":
+            end_of_block = text.find("*/", index + 2)
+            index = length if end_of_block < 0 else end_of_block + 2
+            continue
+        out.append(text[index])
+        index += 1
+    return "".join(out)
 
 
 def check_kotlin_structure() -> None:
@@ -302,6 +387,34 @@ def check_resource_xml() -> None:
                 add(path, f"unescaped apostrophe (line {number}): {line.strip()[:100]}")
 
 
+def check_licence_key() -> None:
+    """Not a failure, a reminder: the tree ships a demo key and only a human can swap it.
+
+    `LicencePublicKey.isDemoKey` is what shows the developer note on the Help screen, so the
+    placeholder is deliberate and visible. But a release cut with it in place would verify
+    licences that no real signer ever produced - so the release checklist asks for the swap, and
+    every verify run repeats it, because the CI log is where a release actually gets cut from.
+    """
+    key_file = (
+        ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "billing"
+        / "LicencePublicKey.kt"
+    )
+    if not key_file.exists():
+        return
+    text = key_file.read_text(encoding="utf-8")
+
+    def literal(name: str) -> str:
+        """The concatenated string literal assigned to `name`, or "" when there is none."""
+        match = re.search(rf"{name}\s*(?::\s*String\s*)?=\s*((?:\s*\"[^\"]*\"\s*\+?)+)", text)
+        return "".join(re.findall(r'"([^"]*)"', match.group(1))) if match else ""
+
+    shipped = literal("PUBLIC_KEY_BASE64")
+    if shipped and shipped == literal("DEMO_KEY_BASE64"):
+        notices.append(
+            "the licence key is still DEMO_KEY_BASE64 - replace it before publishing a release"
+        )
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -310,15 +423,22 @@ def main() -> int:
     strings, plurals = check_locales()
     check_references(strings, plurals)
     check_offline_guarantees()
+    check_cached_clock()
+    check_ar_alpha_literals()
+    check_discarded_saves()
     check_manifest_hardening()
     check_kotlin_structure()
     check_resource_xml()
+    check_licence_key()
 
     if findings:
         print(f"verify_sources: {len(findings)} finding(s)\n")
         for finding in findings:
             print("  -", finding)
         return 1
+
+    for notice in notices:
+        print(f"verify_sources: notice - {notice}")
 
     if VERBOSE:
         print(f"verify_sources: {len(files)} files checked")

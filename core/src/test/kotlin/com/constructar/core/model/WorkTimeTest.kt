@@ -59,6 +59,21 @@ class WorkTimeTest {
     }
 
     @Test
+    fun `a clock that stepped backwards does not close a session before it began`() {
+        // Start at 09:00, the phone is corrected to 08:40 while the session runs. The stored end
+        // must not be earlier than the start: the protocol would otherwise show a run of work that
+        // ends before it begins, on a page the customer signs.
+        val start = 1_767_229_200_000L
+        val project = ProjectRecord.empty(id = "p", name = "Keller")
+            .startSession(session(start))
+            .stopSession(nowMs = start - 20 * WorkTime.MINUTE_MS)
+
+        val closed = project.sessions.single()
+        assertEquals(start, closed.endEpochMs)
+        assertEquals(0L, project.totalWorkMillis(nowMs = start))
+    }
+
+    @Test
     fun `a second start does not open a second clock`() {
         val project = ProjectRecord.empty(id = "p", name = "Keller")
             .startSession(session(0L))
@@ -72,6 +87,28 @@ class WorkTimeTest {
         val project = ProjectRecord.empty(id = "p", name = "Keller")
         assertEquals(project, project.stopSession(nowMs = 1L))
         assertNull(WorkTime.runningSession(project.sessions))
+    }
+
+    @Test
+    fun `a clock left running overnight is flagged, not billed quietly`() {
+        val start = 1_000L
+        val sessions = listOf(session(start))
+
+        // Eight hours in: a long shift, not a mistake.
+        assertNull(WorkTime.overdueSession(sessions, start + 8 * 3_600_000L))
+        // Twelve hours exactly is still a shift somebody may have worked.
+        assertNull(WorkTime.overdueSession(sessions, start + WorkTime.OVERDUE_SESSION_MS))
+        // One minute past it: the question is asked.
+        val overdue = WorkTime.overdueSession(sessions, start + WorkTime.OVERDUE_SESSION_MS + WorkTime.MINUTE_MS)
+        assertEquals(sessions.single(), overdue)
+    }
+
+    @Test
+    fun `a stopped session is never overdue, however long it was`() {
+        // A corrected, long shift is a fact; only a clock that is still running can be forgotten.
+        val sessions = listOf(session(0L, end = 20 * 3_600_000L))
+        assertNull(WorkTime.overdueSession(sessions, 40 * 3_600_000L))
+        assertNull(WorkTime.overdueSession(emptyList(), 40 * 3_600_000L))
     }
 
     @Test

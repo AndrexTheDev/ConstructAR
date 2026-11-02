@@ -30,6 +30,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
@@ -63,7 +64,7 @@ fun BackupCard(
     onRestore: (
         texts: List<String>,
         photos: List<Pair<String, Uri>>,
-        done: (imported: Int, heldBack: Int) -> Unit,
+        done: (imported: Int, heldBack: Int, unreadable: Int) -> Unit,
     ) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -71,6 +72,9 @@ fun BackupCard(
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var outcome by remember { mutableStateOf<BackupOutcome?>(null) }
+    // Resolved at composition: the copy loop must not depend on a resource lookup mid-write.
+    val nothingText = stringResource(R.string.backup_nothing)
+    val failedText = stringResource(R.string.backup_failed)
 
     val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -78,18 +82,26 @@ fun BackupCard(
         scope.launch {
             outcome = withContext(Dispatchers.IO) {
                 runCatching {
-                    context.contentResolver.takePersistableUriPermission(
-                        uri,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-                    )
+                    // Best effort: a provider that cannot grant permanently must not end the
+                    // backup (see UriGrants).
+                    UriGrants.take {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                        )
+                    }
                     val root = DocumentFile.fromTreeUri(context, uri)
                         ?: error(context.getString(R.string.backup_failed))
+                    // Asked before the folder is created: a backup of nothing used to leave an
+                    // empty `ConstructAR-backup-…` folder on the card and call it a success.
+                    val entries = repository.backupEntries()
+                    if (entries.isEmpty()) error(nothingText)
                     val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(Date())
                     val folder = root.findFile("ConstructAR-backup-$stamp")?.takeIf { it.isDirectory }
                         ?: root.createDirectory("ConstructAR-backup-$stamp")
                         ?: error(context.getString(R.string.backup_failed))
                     var written = 0
-                    repository.backupEntries().forEach { entry ->
+                    entries.forEach { entry ->
                         val file = folder.createFile("application/json", entry.fileName)
                         val output = file?.uri?.let { context.contentResolver.openOutputStream(it) }
                         if (output != null) {
@@ -100,18 +112,35 @@ fun BackupCard(
                         }
                     }
                     // Photos are part of the job: copy them next to the project files so a restore
-                    // on a new phone gets the documentation too, not just the metres.
-                    repository.photoFiles().forEach { photo ->
+                    // on a new phone gets the documentation too, not just the metres. They are
+                    // counted, because a backup that silently drops them is worse than one that
+                    // says it did.
+                    val photos = repository.photoFiles()
+                    var photosWritten = 0
+                    photos.forEach { photo ->
                         val file = folder.createFile("image/jpeg", photo.name)
                         val output = file?.uri?.let { context.contentResolver.openOutputStream(it) }
                         if (output != null) {
                             output.use { stream -> photo.inputStream().use { it.copyTo(stream) } }
+                            photosWritten++
                         } else {
                             file?.delete()
                         }
                     }
-                    BackupOutcome.Saved(written)
-                }.getOrElse { error -> BackupOutcome.Failed(error.message.orEmpty()) }
+                    BackupOutcome.of(
+                        report = BackupOutcome.Report(
+                            available = entries.size,
+                            written = written,
+                            photos = photos.size,
+                            photosWritten = photosWritten,
+                        ),
+                        nothingToDo = nothingText,
+                        folderUnreadable = failedText,
+                    )
+                }.getOrElse { error ->
+                    // Never "Backup failed: " with nothing after the colon.
+                    BackupOutcome.Failed(error.message?.takeIf { it.isNotBlank() } ?: failedText)
+                }
             }
             busy = false
         }
@@ -127,9 +156,12 @@ fun BackupCard(
                 uris.forEach { uri ->
                     val name = displayName(context, uri)
                     if (name.endsWith(".json", ignoreCase = true) || name.isEmpty()) {
-                        readText(context, uri)?.let { projectTexts += it }
+                        readText(context, uri, repository)?.let { projectTexts += it }
                     } else if (name.endsWith(".jpg", ignoreCase = true) || name.endsWith(".jpeg", ignoreCase = true)) {
-                        photoAttachments += name.substringBeforeLast('.').trim() to uri
+                        // The file name is the project id, and it ends up in a path: a picture
+                        // called "../../databases/x.jpg" is skipped, not copied somewhere else.
+                        val token = name.substringBeforeLast('.').trim()
+                        if (repository.isSafeToken(token)) photoAttachments += token to uri
                     }
                 }
                 projectTexts to photoAttachments
@@ -139,12 +171,15 @@ fun BackupCard(
                 busy = false
                 return@launch
             }
-            onRestore(texts, photos) { imported, heldBack ->
-                outcome = if (imported == 0 && heldBack == 0) {
-                    BackupOutcome.Failed(context.getString(R.string.backup_failed))
-                } else {
-                    BackupOutcome.Restored(imported, heldBack)
-                }
+            onRestore(texts, photos) { imported, heldBack, unreadable ->
+                outcome = BackupOutcome.restored(
+                    counts = BackupOutcome.RestoreCounts(
+                        imported = imported,
+                        heldBack = heldBack,
+                        unreadable = unreadable,
+                    ),
+                    nothingImported = context.getString(R.string.backup_failed),
+                )
                 busy = false
             }
         }
@@ -179,22 +214,53 @@ fun BackupCard(
             )
             outcome?.let { current ->
                 val text = when (current) {
-                    is BackupOutcome.Saved -> stringResource(R.string.backup_saved, current.count)
+                    is BackupOutcome.Saved -> stringResource(
+                        R.string.backup_saved,
+                        current.projects,
+                        current.photos,
+                    )
                     is BackupOutcome.Restored -> stringResource(R.string.backup_imported, current.count)
-                    is BackupOutcome.Failed -> stringResource(R.string.backup_failed)
+                    // The detail is the localised sentence that explains *this* failure: blaming
+                    // the folder for an empty app is the wrong advice.
+                    is BackupOutcome.Failed -> current.detail
                 }
+                val partial = current is BackupOutcome.Saved && current.photosSkipped > 0
                 Text(
                     text,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (current is BackupOutcome.Failed) SiteColors.danger else SiteColors.accent,
+                    color = when {
+                        current is BackupOutcome.Failed -> SiteColors.danger
+                        partial -> SiteColors.warning
+                        else -> SiteColors.accent
+                    },
                 )
+                if (current is BackupOutcome.Saved && current.photosSkipped > 0) {
+                    Text(
+                        text = stringResource(
+                            R.string.backup_photos_skipped,
+                            current.photosSkipped,
+                            current.photos,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SiteColors.warning,
+                    )
+                }
                 // Said plainly, because the operator has to be able to trust a restore: the
                 // files are still in his zip, they were just not imported on this plan.
                 if (current is BackupOutcome.Restored && current.heldBack > 0) {
                     Text(
-                        text = stringResource(R.string.backup_held_back, current.heldBack),
+                        text = pluralStringResource(R.plurals.backup_held_back, current.heldBack, current.heldBack),
                         style = MaterialTheme.typography.bodySmall,
                         color = SiteColors.warning,
+                    )
+                }
+                // A file that is not a room is not waiting for an upgrade: saying nothing about it
+                // leaves the operator counting rooms in a backup he believes was fully restored.
+                if (current is BackupOutcome.Restored && current.unreadable > 0) {
+                    Text(
+                        text = pluralStringResource(R.plurals.backup_unreadable, current.unreadable, current.unreadable),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SiteColors.danger,
                     )
                 }
             }
@@ -212,10 +278,13 @@ private fun displayName(context: android.content.Context, uri: Uri): String =
             }
     }.getOrNull().orEmpty()
 
-private fun readText(context: android.content.Context, uri: Uri): String? = runCatching {
-    context.contentResolver.openInputStream(uri)?.use { stream ->
-        stream.reader(Charsets.UTF_8).readText()
-    }
+/** Reads a picked file through the repository, which caps it at [ProjectRepository.MAX_PROJECT_BYTES]. */
+private fun readText(
+    context: android.content.Context,
+    uri: Uri,
+    repository: ProjectRepository,
+): String? = runCatching {
+    context.contentResolver.openInputStream(uri)?.use { stream -> repository.readProjectText(stream) }
 }.getOrNull()
 
 /**
@@ -228,9 +297,72 @@ private fun readText(context: android.content.Context, uri: Uri): String? = runC
  */
 private const val ANY_MIME_TYPE: String = "*" + "/" + "*"
 
-/** Kept as data so the sentences are rendered by Compose (and therefore localised). */
-private sealed interface BackupOutcome {
-    data class Saved(val count: Int) : BackupOutcome
-    data class Restored(val count: Int, val heldBack: Int = 0) : BackupOutcome
+/**
+ * Kept as data so the sentences are rendered by Compose (and therefore localised).
+ *
+ * The same lesson as the export screen (finding 28), in a second copy of the same code: a write
+ * loop that counts only its successes cannot tell "nothing exists", "nothing could be written"
+ * and "everything was written" apart. The backup card answered all three with the success colour
+ * and a number - `0 Projekte gesichert`.
+ */
+internal sealed interface BackupOutcome {
+    data class Saved(val projects: Int, val photos: Int, val photosSkipped: Int = 0) : BackupOutcome
+
+    /**
+     * A restore that ran, with the two very different reasons a file can be missing from it.
+     *
+     * [heldBack] is the plan: the file is a room, the free slots are used up, upgrading imports it.
+     * [unreadable] is the file: it is not a room at all, and no upgrade will ever import it. One
+     * counter for both used to tell the operator "1 project held back, Pro imports all of them"
+     * about a file that Pro cannot read either.
+     */
+    data class Restored(
+        val count: Int,
+        val heldBack: Int = 0,
+        val unreadable: Int = 0,
+    ) : BackupOutcome
+
     data class Failed(val detail: String) : BackupOutcome
+
+    /** What there was, what was written, and what could not be. */
+    data class Report(
+        val available: Int,
+        val written: Int,
+        val photos: Int,
+        val photosWritten: Int,
+    )
+
+    /** What a restore attempt counts, as plain numbers (the view model owns the counting). */
+    data class RestoreCounts(val imported: Int, val heldBack: Int, val unreadable: Int)
+
+    companion object {
+        /**
+         * What to tell the operator after a restore.
+         *
+         * Nothing imported and nothing held back is not a success with zeros in it: every picked
+         * file failed to parse, and the card used to answer with "0 projects restored" in the
+         * ordinary colour. A file the plan had no slot for is not a file the app could not read,
+         * which is why the two are counted apart.
+         */
+        fun restored(counts: RestoreCounts, nothingImported: String): BackupOutcome =
+            if (counts.imported == 0 && counts.heldBack == 0) {
+                Failed(detail = nothingImported)
+            } else {
+                Restored(
+                    count = counts.imported,
+                    heldBack = counts.heldBack,
+                    unreadable = counts.unreadable,
+                )
+            }
+
+        fun of(report: Report, nothingToDo: String, folderUnreadable: String): BackupOutcome = when {
+            report.available == 0 -> Failed(detail = nothingToDo)
+            report.written == 0 -> Failed(detail = folderUnreadable)
+            else -> Saved(
+                projects = report.written,
+                photos = report.photosWritten,
+                photosSkipped = report.photos - report.photosWritten,
+            )
+        }
+    }
 }

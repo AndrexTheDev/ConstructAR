@@ -109,7 +109,7 @@ class ProjectRepositoryTest {
     fun `the list carries what the home screen shows`(): Unit = runBlocking {
         repository.save(room())
 
-        val summary = repository.list().single()
+        val summary = repository.list().projects.single()
         assertEquals("room-1", summary.id)
         assertEquals("Küche", summary.name)
         assertEquals("Seilerweg 14", summary.siteName)
@@ -121,7 +121,7 @@ class ProjectRepositoryTest {
     fun `a blank room name falls back instead of producing an unnamed room`(): Unit = runBlocking {
         val created = repository.create(name = "   ", fallbackName = "Raum")
         assertEquals("Raum", created.name)
-        assertTrue(repository.hasProject(created.id))
+        assertNotNull(repository.load(created.id))
     }
 
     @Test
@@ -133,16 +133,56 @@ class ProjectRepositoryTest {
         val restored = assertNotNull(repository.importProject(backupText))
 
         assertTrue(restored.id != "room-1", "the restored copy must get a fresh id")
-        assertEquals(2, repository.list().size)
+        assertEquals(2, repository.list().projects.size)
         assertEquals("Küche", repository.load("room-1")?.name)
         assertEquals("Küche", repository.load(restored.id)?.name)
+    }
+
+    @Test
+    fun `a re-keyed restore reports the id the file carried`(): Unit = runBlocking {
+        // The room is still on the phone, so the restore stores a copy under a fresh id - and it
+        // has to say which id the *file* had, because that is the name its photo was saved under.
+        repository.save(room())
+        val backupText = repository.backupEntries().single().text
+
+        val restored = assertNotNull(repository.importProjectDetailed(backupText))
+
+        assertEquals("room-1", restored.originalId)
+        assertTrue(restored.project.id != "room-1", "the copy must get a fresh id")
+        assertEquals(restored.project.id, repository.list().projects.map { it.id }.firstOrNull { it != "room-1" })
+    }
+
+    @Test
+    fun `a restore onto an empty phone keeps the file's own id`(): Unit = runBlocking {
+        repository.save(room())
+        val backupText = repository.backupEntries().single().text
+        File(projectsDirectory, "room-1.json").delete()
+
+        val restored = assertNotNull(repository.importProjectDetailed(backupText))
+
+        // Nothing to collide with: the photo in the zip is named room-1 and stays correct.
+        assertEquals("room-1", restored.originalId)
+        assertEquals("room-1", restored.project.id)
+    }
+
+    @Test
+    fun `an empty file is unreadable, not an empty room`(): Unit = runBlocking {
+        // A write interrupted at the wrong moment can leave a zero-byte file; listing it as a
+        // room called "" would be worse than saying it could not be read.
+        repository.save(room())
+        File(projectsDirectory, "room-2.json").writeText("")
+
+        val listing = repository.list()
+
+        assertEquals(1, listing.projects.size)
+        assertEquals(1, listing.unreadable)
     }
 
     @Test
     fun `text that is not a project is refused, and nothing is written`(): Unit = runBlocking {
         assertNull(repository.importProject("{\"not\": \"a project\"}"))
         assertNull(repository.importProject(""))
-        assertTrue(repository.list().isEmpty())
+        assertTrue(repository.list().projects.isEmpty())
     }
 
     @Test
@@ -152,7 +192,9 @@ class ProjectRepositoryTest {
         file.writeText("{ this is not json")
 
         assertNull(repository.load("room-1"))
-        assertTrue(repository.list().isEmpty(), "an unreadable room cannot be listed")
+        val listing = repository.list()
+        assertTrue(listing.projects.isEmpty(), "an unreadable room cannot be listed")
+        assertEquals(1, listing.unreadable, "and it is counted, so the home screen can say so")
         assertTrue(file.exists(), "the bytes are the operator's only copy - keep them")
         assertTrue(file.readText().startsWith("{ this is not json"))
     }
@@ -198,5 +240,50 @@ class ProjectRepositoryTest {
         val entry = repository.backupEntries().single()
         assertEquals("room-1.json", entry.fileName)
         assertEquals(onDisk, entry.text)
+    }
+
+    @Test
+    fun `an id in a restored file never becomes a path`(): Unit = runBlocking {
+        repository.save(room())
+        val original = repository.backupEntries().single().text
+        val hostile = original.replace("\"room-1\"", "\"../../escape\"")
+
+        val restored = assertNotNull(repository.importProject(hostile))
+
+        // The original stays, and the restored copy lands under a fresh, safe id.
+        assertEquals(2, repository.list().projects.size)
+        assertEquals(1, projectsDirectory.listFiles()!!.count { it.name == "room-1.json" })
+        assertTrue(restored.id != "../../escape", "the hostile id was kept")
+        assertTrue(repository.isSafeToken(restored.id), "the stored id is not a plain token")
+        assertEquals(2, projectsDirectory.listFiles()!!.size)
+        assertFalse(File(context.filesDir, "escape.json").exists())
+        assertFalse(File(context.filesDir.parentFile!!, "escape.json").exists())
+    }
+
+    @Test
+    fun `only plain tokens are accepted as file names`() {
+        assertTrue(repository.isSafeToken("3f2a8c1e-9b4d-4f6a-8c2e-1d5b7a9c0e3f"))
+        assertTrue(repository.isSafeToken("room-1__diary_entry-1"))
+        for (hostile in listOf("", "../escape", "a/b", "a\\b", "a.b", "..", "x".repeat(121))) {
+            assertFalse(repository.isSafeToken(hostile), "$hostile was accepted")
+        }
+    }
+
+    @Test
+    fun `a picked photo whose name is a path is refused`(): Unit = runBlocking {
+        photoDirectory.mkdirs()
+        assertFalse(repository.savePhotoAs("../../escape", android.net.Uri.EMPTY))
+        assertFalse(repository.deletePhotoAs("../../projects/room-1"))
+        assertNull(repository.loadPhotoAs("../../escape"))
+        assertEquals(0, context.filesDir.walkTopDown().count { it.isFile })
+    }
+
+    @Test
+    fun `a picked file bigger than a project can be is refused`() {
+        val real = "{\"id\":\"room-1\"}".toByteArray()
+        assertEquals("{\"id\":\"room-1\"}", repository.readProjectText(real.inputStream()))
+
+        val tooBig = ByteArray(ProjectRepository.MAX_PROJECT_BYTES + 1) { ' '.code.toByte() }
+        assertNull(repository.readProjectText(tooBig.inputStream()), "an 8 MB project file is not a project")
     }
 }

@@ -63,9 +63,21 @@ fun AppRoot(viewModel: ProjectViewModel) {
     val errorText = when (state.lastError) {
         UiMessage.PROJECT_OPEN_FAILED -> stringResource(R.string.error_project_open)
         UiMessage.PROJECT_SAVE_FAILED -> stringResource(R.string.error_project_save)
+        UiMessage.PHOTO_SAVE_FAILED -> stringResource(R.string.error_photo_save)
         UiMessage.PROJECT_LIMIT_REACHED -> stringResource(R.string.home_limit_title)
         null -> null
     }
+    // Quick resume: a room that was open when the process died is opened on top of the list, so
+    // the back arrow still leads somewhere. The flag is consumed here - not cleared in the view
+    // model - because a second navigation would undo the operator's "back".
+    LaunchedEffect(state.resumeReady, state.onboardingDone) {
+        if (!state.onboardingDone || !state.resumeReady) return@LaunchedEffect
+        if (navController.currentDestination?.route == Routes.HOME) {
+            navController.navigate(Routes.PROJECT)
+        }
+        viewModel.consumeResume()
+    }
+
     LaunchedEffect(state.lastError) {
         errorText?.let {
             snackbarHostState.showSnackbar(it)
@@ -96,6 +108,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                 composable(Routes.HOME) {
                     HomeScreen(
                         projects = state.projects,
+                        unreadableProjects = state.unreadableProjects,
                         loading = state.loading,
                         entitlements = state.entitlements,
                         trialDaysLeft = state.trialDaysLeft,
@@ -173,12 +186,19 @@ fun AppRoot(viewModel: ProjectViewModel) {
                         )
                         LaunchedEffect(Unit) { navController.popBackStack() }
                     } else {
+                        // Read once per visit to the viewfinder: a draft only matters to the
+                        // screen that can offer it back.
+                        LaunchedEffect(project.id) { viewModel.loadDraft() }
                         ArMeasureScreen(
                             project = project,
                             onBack = { navController.popBackStack() },
                             onRouteFinished = { route -> viewModel.upsertRoute(route) },
                             onScanSummary = { summary -> viewModel.updateScanSummary(summary) },
                             onOpenExport = { navController.navigate(Routes.EXPORT) },
+                            draft = state.pendingDraft,
+                            onDraftChanged = { draft -> viewModel.saveDraft(draft) },
+                            onDraftRecovered = { draft -> viewModel.recoverDraft(draft) },
+                            onDraftDiscarded = { viewModel.discardDraft() },
                         )
                     }
                 }
@@ -229,6 +249,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onBack = { navController.popBackStack() },
                             onStartWork = { viewModel.startWorkSession() },
                             onStopWork = { viewModel.stopWorkSession() },
+                            onDeleteSession = { id -> viewModel.deleteWorkSession(id) },
                             onAddDiary = { text -> viewModel.addDiaryEntry(text) },
                             onDeleteDiary = { id -> viewModel.deleteDiaryEntry(id) },
                             onAddDefect = { title, location, severity ->
@@ -253,8 +274,11 @@ fun AppRoot(viewModel: ProjectViewModel) {
                         onBack = { navController.popBackStack() },
                         onActivate = { key -> viewModel.activateLicence(key) },
                         onStartTrial = {
-                            viewModel.startTrial()
-                            navController.popBackStack()
+                            // Only leave the paywall when the trial really started: the screen has
+                            // to stay if it did not, or it would announce a trial it never got.
+                            val started = viewModel.startTrial()
+                            if (started) navController.popBackStack()
+                            started
                         },
                     )
                 }

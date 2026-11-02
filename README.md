@@ -42,7 +42,8 @@ a 3D model for BIM — **without a single byte leaving the device**.
 | **A** | Live room scan → TSDF volume → Surface Nets mesh, drawn as a translucent overlay | `native-slam/src/main/cpp/tsdf`, `ar-engine/.../scan` | 2 cm voxels, 8 cm truncation, extraction throttled to **300 ms** |
 | **B** | Strict hit-test cascade: **plane polygon → `DepthPoint` → direct depth raycast → feature point** | `ar-engine/.../hit` | Each tier is strictly less trustworthy; a node inherits the reliability of its tier and the export flags soft ones |
 | **C** | Surface-normal aligned procedural geometry: tubes for cables/pipes, channels for ducts, Bézier/fillet smoothing at bends | `core/.../mesh`, `core/.../geo` | Normals come from the hit tier, then are blended along the run so a tube hugs a wall without twisting |
-| **D** | Polyline length `L = Σ‖Pᵢ − Pᵢ₊₁‖`, every node bound to an ARCore `Anchor`, live HUD label from the `hud_length` format (`%1$.2f m`, localised) | `ar-engine/.../route`, `core/.../geo/PolylineMetrics.kt`, `app/src/main/res/values*/strings.xml` | Measured on the **surface** points, never the offset centreline |
+| **D** | Polyline length `L = Σ‖Pᵢ − Pᵢ₊₁‖`, every node bound to an ARCore `Anchor`, live HUD label from the `hud_length` resource (`%1$s m`, the digits from `LengthFormatter`) | `ar-engine/.../route`, `core/.../geo/PolylineMetrics.kt`, `app/src/main/res/values*/strings.xml` | Measured on the **surface** points, never the offset centreline |
+| **D2** | Crosshair snapping: a tap - or the resting reticle, so the HUD already shows the committed length - within 4 cm of a corner the run already has **is** that corner | `ar-engine/.../route/RouteSession.kt` | Exact geometry and an exact fitting count when a run returns to a corner or closes a ring on its start; the last node is never a target, and a snap that would land inside the 2 cm spacing guard is refused |
 | **E** | Local export: PDF protocol, CSV material list, `.glb` (glTF 2.0 binary) and `.ply` | `export/` | Written through the Storage Access Framework; no media storage permission, no share-to-cloud |
 
 Plus: auto-torch with hysteresis, monocular depth (Depth Anything V2 Small) fused into the
@@ -74,7 +75,8 @@ Four screens, in the order of the job, and no screen that exists only to show of
    clips, couplings and bends the runs actually need. The person who drives to the wholesaler is
    standing in the room with this phone, not reading the PDF at a desk.
 4. **Measure → Export** — the AR viewfinder with its HUD, then the export screen, where the
-   operator picks a folder once and gets PDF, CSV and (with Pro) GLB/PLY. The customer can sign
+   operator picks a folder once and gets PDF, CSV (plus an optional one-line-per-article order
+   list for the wholesaler) and, with Pro, GLB/PLY. The customer can sign
    on the glass with a finger; the signature is rasterised black-on-white and written onto its
    own final page of the protocol, because a handover document without a signature is a note.
 
@@ -400,13 +402,16 @@ Known limitations, deliberately documented rather than hidden:
   (declared size checked against the file), and a 404 that is `noindex` with absolute URLs only.
 * **Agreement gates**: `tools/i18n_audit.py` fails when a translated locale still carries the
   English string (with a reviewed allowlist for words that are genuinely the same — "Export" is
-  German, "Surface" is French), and `tools/consistency_audit.py` fails when the landing page and
-  the app disagree on the three wallet addresses, the four prices, the six languages or the
-  version.
-* **The temporary screenshot matrix** (`.github/workflows/screenshots.yml`) renders every screen
-  in all six languages on the JVM and every landing page in real Chromium at three viewports. It
-  lives in build output, is not part of the release gate, and is meant to be deleted after the
-  review — [docs/TESTING.md](docs/TESTING.md) says exactly what it touches.
+  German, "Surface" is French), when a surface mixes address forms (the app says *du/tú/tu*
+  throughout; the French page says *vous* throughout, which is its own decision and not a
+  defect), when French or Italian writes `\'` where every other string uses `’`, and
+  `tools/consistency_audit.py` fails when the landing page and the app disagree on the three
+  wallet addresses, the four prices, the six languages or the version.
+* **No screenshot matrix, on purpose.** One existed during the systematic beta test and was
+  deleted with it: a pipeline that renders screens nobody can compare against is coverage in
+  appearance only. Layout is a device-matrix item
+  ([docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)); the six locales are held by the
+  string gates above.
 
 The pre-release gate (device matrix, measurement verification against a laser, licensing,
 performance) is [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md). How each layer is run,
@@ -424,10 +429,10 @@ errors:
 |------|--------|
 | `scripts/verify_sources.py` (headers, reflection ban, i18n parity) | pass — 162 files |
 | `tools/seo_audit.py` (metadata, structured data, links, sitemap, manifest) | pass — 6 pages + 404 |
-| `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, no price or address drift |
+| `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 210 tests in the app+core+ar-engine+export suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 396 tests in the app+core+ar-engine+export suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 44 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |

@@ -39,7 +39,7 @@
     <string name="routing_cable">Kabel</string>
     <string name="routing_pipe">Rura</string>
     <string name="routing_duct">Kanał</string>
-    <string name="hud_length">%1$.2f m</string>
+    <string name="hud_length">%1$s m</string>
     <string name="tier_plane">Płaszczyzna</string>
     <string name="tier_depth_point">Punkt głębi</string>
     <string name="tier_direct_depth">Promień głębi</string>
@@ -48,16 +48,28 @@
     <string name="ar_undo">Cofnij</string>
     <string name="ar_close_loop">Zamknij</string>
     <string name="ar_finish">Zakończ trasę</string>
+    <string name="ar_leave_title">Wyjść z trasy?</string>
+    <string name="ar_leave_body">Zmierzono %1$s. Zapisać jako trasę czy odrzucić?</string>
+    <string name="ar_leave_save">Zapisz jako trasę</string>
+    <string name="ar_leave_discard">Odrzuć</string>
+    <string name="draft_title">Nieukończony pomiar</string>
+    <string name="draft_body">%1$s, ostatni zapis o %2$s. Długości i kształtki są dokładne; pozycji 3D nie da się odtworzyć.</string>
+    <string name="draft_save">Zapisz jako trasę</string>
+    <string name="draft_discard">Odrzuć</string>
     <string name="ar_torch">Latarka</string>
     <string name="ar_scan">Skanuj pomieszczenie</string>
     <string name="ar_stop_scan">Zatrzymaj skan</string>
     <string name="ar_closed_loop">zamknięta</string>
+    <string name="ar_confidence_weak">Najsłabszy punkt %1$d %% - dotknij go ponownie, aby poprawić trasę</string>
     <string name="ar_no_surface">Nie znaleziono powierzchni. Wyceluj w ścianę lub podłogę.</string>
     <string name="ar_scan_progress">Pomieszczenie %1$d %% · %2$d tys. trójkątów</string>
     <string name="ar_scan_unavailable">Skanowanie siatki niedostępne. Pomiar nadal działa.</string>
     <string name="ar_session_failed">Sesja AR nie powiodła się: %1$s</string>
+    <string name="ar_session_retry">Spróbuj ponownie</string>
     <string name="ar_camera_permission">Do pomiaru potrzebny jest dostęp do aparatu. Jest używany tylko na tym urządzeniu.</string>
     <string name="ar_grant_permission">Zezwól na aparat</string>
+    <string name="ar_camera_blocked">Dostęp do aparatu jest wyłączony dla tej aplikacji. Otwórz ustawienia aplikacji i zezwól na aparat.</string>
+    <string name="ar_open_settings">Otwórz ustawienia</string>
     <string name="ar_unavailable_unsupported">To urządzenie nie obsługuje ARCore. Użyj zgodnego telefonu lub tabletu.</string>
     <string name="ar_unavailable_needs_install">ARCore wymaga aktualizacji. Zainstaluj ją ze Sklepu Play i otwórz ConstructAR ponownie.</string>
     <string name="ar_unavailable_declined">Instalacja ARCore została odrzucona. Jest konieczna do pomiaru aparatem.</string>
@@ -73,12 +85,18 @@
     <string name="export_ply">PLY (chmura punktów)</string>
     <string name="export_pdf_desc">Protokół PDF (zrzut ekranu, długości, lista materiałów)</string>
     <string name="export_csv_desc">Lista materiałów CSV (gotowa dla Excela, średnik)</string>
+    <string name="export_order_list">Lista zamówienia</string>
+    <string name="export_order_list_desc">Jedna linia na typ przewodu dla hurtowni: artykuł, długość zamówienia, uchwyty, złączki.</string>
     <string name="export_glb_desc">Model GLB dla BIM (Revit / Navisworks / Blender)</string>
     <string name="export_ply_desc">Chmura punktów lub siatka PLY (CloudCompare, MeshLab)</string>
     <string name="export_choose_folder">Zapisz w folderze…</string>
     <string name="export_saving">Zapisywanie…</string>
     <string name="export_success">Zapisano %1$d plików w %2$s.</string>
     <string name="export_failed">Eksport nie powiódł się: %1$s</string>
+    <string name="export_partial">Zapisano tylko %1$d z %2$d plików w %3$s.</string>
+    <string name="export_meshless">Zapisano %1$d z %2$d plików w %3$s. Ten projekt nie ma skanu 3D, więc pominięto GLB i PLY.</string>
+    <string name="export_nothing_selected">Wybierz co najmniej jeden format pliku.</string>
+    <string name="export_nothing_to_export">Nie ma jeszcze geometrii 3D: najpierw zmierz trasę albo zeskanuj pomieszczenie.</string>
     <string name="export_measurement">Pomiar</string>
     <string name="export_runs_total">%1$d tras · łącznie %2$s</string>
     <string name="export_order_length">Długość zamówienia z zapasem: %1$s</string>
@@ -90,6 +108,7 @@
     <string name="home_default_room_name">Pomieszczenie</string>
     <string name="error_project_open">Nie udało się otworzyć obiektu.</string>
     <string name="error_project_save">Nie udało się zapisać obiektu.</string>
+    <string name="error_photo_save">Nie udało się zapisać zdjęcia. Sprawdź wolne miejsce w telefonie.</string>
     <string name="ar_close">Zamknij</string>
     <string name="export_folder_inaccessible">Nie można zapisać w wybranym folderze. Wybierz inny folder.</string>
     <string name="tier_manual">Ręcznie</string>
@@ -103,6 +122,10 @@
         <item quantity="few">%1$d trasy</item>
         <item quantity="many">%1$d tras</item>
         <item quantity="other">%1$d trasy</item>
+    </plurals>
+    <plurals name="home_unreadable">
+        <item quantity="one">Nie udało się odczytać 1 pliku projektu. Został zachowany - przywróć go z kopii zapasowej.</item>
+        <item quantity="other">Nie udało się odczytać %1$d plików projektu. Zostały zachowane - przywróć je z kopii zapasowej.</item>
     </plurals>
     <plurals name="ar_points">
         <item quantity="one">%1$d punkt</item>
@@ -188,9 +211,10 @@
     <string name="paywall_err_signature">Ten klucz nie został wydany dla tej aplikacji.</string>
     <string name="paywall_err_device">Ten klucz należy do innego urządzenia.</string>
     <string name="paywall_err_expired">Ten klucz wygasł.</string>
-    <string name="paywall_trial_button">Wypróbuj Pro przez 7 dni</string>
+    <string name="paywall_trial_button">Wypróbuj Pro przez %1$d dni</string>
     <string name="paywall_trial_active">Próba aktywna, pozostało %1$d dni</string>
     <string name="paywall_trial_used">Próba została już wykorzystana.</string>
+    <string name="paywall_trial_unavailable">Wersji próbnej nie można uruchomić na tym telefonie. Kup licencję - działa offline, od razu.</string>
     <string name="paywall_active_title">Pro jest aktywne</string>
     <string name="paywall_active_until">Ważne do %1$s</string>
     <string name="paywall_active_forever">Ważne bezterminowo</string>
@@ -209,6 +233,9 @@
     <string name="runs_title">Trasy</string>
     <string name="run_detail">%1$s · %2$s</string>
     <string name="run_delete">Usuń trasę</string>
+    <string name="run_delete_title">Usunąć tę trasę?</string>
+    <string name="run_delete_body">%1$s, %2$s. Znika z listy materiałów, z protokołu i z modelu 3D. Nie da się jej przywrócić.</string>
+    <string name="run_recovered">Odzyskana po przerwaniu - długości i kształtki są dokładne, pozycja 3D nie</string>
     <string name="technician_title">Monter na budowie</string>
     <string name="technician_hint">Nazwisko tak, jak ma być w protokole</string>
     <string name="materials_title">Materiał i zamówienie</string>
@@ -247,15 +274,18 @@
     <string name="pdf_column_waste">Zapas</string>
     <string name="pdf_column_order_meters">Zamówienie (m)</string>
     <string name="pdf_procurement_note">Długości zamówienia zawierają zapas budowlany. Wartości z węzłów doprecyzowanych kotwicami - krytyczne trasy sprawdź miarą przed cięciem.</string>
+    <string name="pdf_note_recovered">Odzyskana po przerwaniu - długości i kształtki są dokładne, pozycji 3D nie ma w modelu: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - wygenerowano na urządzeniu</string>
     <string name="pdf_page_label">Strona %1$d</string>
     <string name="backup_title">Kopia i przywracanie</string>
     <string name="backup_note">Każdy projekt to jeden plik w tej aplikacji. Skopiuj je do wybranego folderu - bez chmury, chyba że sam ją wybierzesz - i wczytaj na dowolnym telefonie.</string>
     <string name="backup_export">Zrób kopię wszystkich projektów</string>
     <string name="backup_import">Przywróć projekty</string>
-    <string name="backup_saved">%1$d projektów skopiowano</string>
+    <string name="backup_saved">Skopiowano %1$d projektów i %2$d zdjęć</string>
     <string name="backup_imported">%1$d projektów przywrócono</string>
     <string name="backup_failed">Kopia nie powiodła się - sprawdź folder i spróbuj ponownie.</string>
+    <string name="backup_nothing">Nie ma jeszcze czego kopiować - najpierw utwórz projekt.</string>
+    <string name="backup_photos_skipped">Nie udało się skopiować %1$d z %2$d zdjęć.</string>
     <string name="waste_title">Zapas</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>
@@ -271,6 +301,12 @@
     <string name="field_time_start">Rozpocznij pracę</string>
     <string name="field_time_stop">Zakończ pracę</string>
     <string name="field_time_running">Trwa od %1$s</string>
+    <string name="field_time_overdue">Uwaga: zegar działa już %1$s - zapomniałeś go zatrzymać?</string>
+    <string name="field_time_delete">Usuń ten wpis czasu</string>
+    <string name="field_delete_title">Naprawdę usunąć?</string>
+    <string name="field_delete_session_body">%1$s - godziny wypadają z ceny i z protokołu.</string>
+    <string name="field_delete_diary_body">%1$s - notatka i jej zdjęcie znikają.</string>
+    <string name="field_delete_defect_body">%1$s - usterka i jej zdjęcie znikają; już przekazany protokół zachowuje ją na papierze.</string>
     <string name="field_time_total">Razem</string>
     <string name="field_time_empty">Nie zapisano jeszcze czasu.</string>
     <string name="field_time_open">trwa</string>
@@ -288,6 +324,7 @@
     <string name="field_delete">Usuń</string>
     <string name="field_open_count">%1$d otwartych</string>
     <string name="field_resolved_count">%1$d naprawionych</string>
+    <string name="field_list_more">%1$d starszych wpisów nie jest tu pokazanych; protokół zawiera je wszystkie.</string>
     <string name="severity_low">Drobna</string>
     <string name="severity_medium">Ważna</string>
     <string name="severity_high">Krytyczna</string>
@@ -323,13 +360,16 @@
     <string name="pdf_label_address">Adres</string>
     <string name="pdf_label_phone">Telefon</string>
     <string name="pdf_label_work_total">Czas łączny</string>
+    <string name="pdf_note_open_session">Zegar wciąż działa (dotąd %1$s) - suma i koszt liczą go do momentu tego eksportu.</string>
     <string name="pdf_status_open">Otwarta</string>
     <string name="pdf_status_resolved">Naprawiona</string>
 
     <string name="field_photo_add">Dodaj zdjęcie</string>
     <string name="field_photo_replace">Zmień zdjęcie</string>
+    <string name="field_photo_on_file">Zdjęcie już zapisane</string>
     <string name="project_costs_title">Wartość zlecenia</string>
     <string name="project_costs_rate">Stawka godzinowa (€)</string>
+    <string name="project_costs_invalid">To nie kwota - wpisz ją jak 48,00 lub 48.00</string>
     <string name="project_costs_material">Ryczałt za materiał (€)</string>
     <string name="project_costs_labour">Robocizna</string>
     <string name="project_costs_total">Suma netto</string>
@@ -351,6 +391,18 @@
     <string name="licence_integrity_failed">Nie udało się potwierdzić tej instalacji, więc funkcje Pro są wyłączone. Twoje projekty pozostają czytelne i można je eksportować.</string>
     <string name="licence_demo_key">Uwaga dla dewelopera: ta kompilacja nadal zawiera demonstracyjny klucz weryfikacji. Zastąp go przed pierwszą sprzedażą.</string>
     <string name="route_warning_loop_gap">Pierścień się nie zamyka – ustaw ostatni punkt na pierwszym</string>
-    <string name="backup_held_back">%1$d projekt(ów) wstrzymanych – pozostają w kopii zapasowej; Pro importuje wszystkie</string>
+    <plurals name="backup_held_back">
+        <item quantity="one">1 projekt wstrzymany - zostaje w kopii zapasowej; Pro go zaimportuje</item>
+        <item quantity="few">%1$d projekty wstrzymane - zostają w kopii zapasowej; Pro importuje je wszystkie</item>
+        <item quantity="many">%1$d projektów wstrzymanych - zostają w kopii zapasowej; Pro importuje je wszystkie</item>
+        <item quantity="other">%1$d projektu wstrzymanego - zostaje w kopii zapasowej; Pro go zaimportuje</item>
+    </plurals>
+    <plurals name="backup_unreadable">
+        <item quantity="one">Nie udało się odczytać 1 pliku z wyboru: to nie jest pomieszczenie i pozostaje nietknięte w kopii</item>
+        <item quantity="few">Nie udało się odczytać %1$d plików z wyboru: to nie są pomieszczenia i pozostają nietknięte w kopii</item>
+        <item quantity="many">Nie udało się odczytać %1$d plików z wyboru: to nie są pomieszczenia i pozostają nietknięte w kopii</item>
+        <item quantity="other">Nie udało się odczytać %1$d plików z wyboru: to nie są pomieszczenia i pozostają nietknięte w kopii</item>
+    </plurals>
     <string name="route_warning_low_confidence">Ten punkt pochodzi z danych głębi – dotknij ponownie wykrytej ściany, aby uzyskać pewniejszą wartość</string>
+    <string name="route_warning_height_jump">To duży skok wysokości: pion do sufitu czy przypadkowe dotknięcie podłogi? Cofnij, jeśli to był błąd</string>
 </resources>

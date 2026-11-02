@@ -52,6 +52,7 @@ import com.constructar.core.model.ProjectRecord
 import com.constructar.core.price.Pricing
 import com.constructar.core.units.LengthFormatter
 import com.constructar.export.ExportService
+import com.constructar.export.pdf.PdfSection
 import com.constructar.export.csv.MaterialCsvWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -86,6 +87,9 @@ fun ExportScreen(
 
     var includePdf by remember { mutableStateOf(true) }
     var includeCsv by remember { mutableStateOf(true) }
+    // Off by default: the full CSV already carries the numbers, and the order list is for the
+    // wholesaler - a deliberate second file, not something to hand out by accident.
+    var includeOrderList by remember { mutableStateOf(false) }
     // A free build cannot write the BIM formats, so the switches start off rather than promise
     // a file that the licence check would refuse to produce.
     var includeGlb by remember(entitlements.isPro) { mutableStateOf(entitlements.canExportMesh) }
@@ -117,6 +121,7 @@ fun ExportScreen(
         columnDuration = stringResource(R.string.pdf_column_duration),
         totalLabel = stringResource(R.string.pdf_label_work_total),
         runningLabel = stringResource(R.string.field_time_open),
+        openSessionNote = stringResource(R.string.pdf_note_open_session),
         diaryTitle = stringResource(R.string.pdf_section_diary),
         defectsTitle = stringResource(R.string.pdf_section_defects),
         columnDefect = stringResource(R.string.pdf_column_note),
@@ -138,10 +143,14 @@ fun ExportScreen(
         photoDiaryPrefix = stringResource(R.string.pdf_section_diary),
         photoDefectPrefix = stringResource(R.string.pdf_section_defects),
     )
-    val siteFileSections = remember(project, siteFileTexts, hourlyRateCents) {
+    // Built at the moment of the export, not at the moment the screen appeared: a session that
+    // is still open keeps counting, and a protocol whose time table is frozen at composition
+    // would print a total that is minutes or hours behind the phone - the same divergence
+    // between screen and paperwork that findings 39, 46 and 47 were about. The sections are a
+    // pure function of project + words + a clock, so recomputing them costs nothing.
+    fun sectionsNow(): List<PdfSection> =
         buildSiteFileSections(project, siteFileTexts) +
             listOfNotNull(buildCostSection(project, hourlyRateCents, siteFileTexts))
-    }
     val photoAppendix = remember(project, fieldPhotos, siteFileTexts) {
         buildPhotoAppendix(project, fieldPhotos, siteFileTexts)
     }
@@ -149,13 +158,23 @@ fun ExportScreen(
     val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         busy = true
+        // Read on the main thread, before the IO work: "requested" is what the switches said at
+        // the moment the operator pressed the button, not what they say when the write finishes.
+        val requestedCount =
+            listOf(includePdf, includeCsv, includeOrderList, includeGlb, includePly).count { it }
+        // Captured with the switches, for the same reason: whether a 3D model was asked for.
+        val meshRequested = includeGlb || includePly
         scope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 runCatching {
-                    context.contentResolver.takePersistableUriPermission(
-                        uri,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-                    )
+                    // Best effort: a provider that cannot grant permanently must not cost the
+                    // operator his protocol (see UriGrants).
+                    UriGrants.take {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                        )
+                    }
                     val root = DocumentFile.fromTreeUri(context, uri)
                         ?: error(context.getString(R.string.export_folder_inaccessible))
                     val stem = exportService.fileStem(project)
@@ -173,6 +192,7 @@ fun ExportScreen(
                             appVersion = appVersion,
                             includePdf = includePdf,
                             includeCsv = includeCsv,
+                            includeOrderList = includeOrderList,
                             includeGlb = includeGlb,
                             includePly = includePly,
                             watermark = if (entitlements.pdfWatermark) watermark else "",
@@ -180,7 +200,7 @@ fun ExportScreen(
                             signatureTitle = signatureTitle,
                             signatureCaption = signatureCaption,
                             labels = pdfLabels,
-                            sections = siteFileSections,
+                            sections = sectionsNow(),
                             photos = photoAppendix,
                             photosTitle = siteFileTexts.photosTitle,
                             logo = logo,
@@ -197,12 +217,28 @@ fun ExportScreen(
                             file?.delete()
                         }
                     }
-                    written to stem
+                    ExportStatus.Report(
+                        requested = requestedCount,
+                        produced = artifacts.size,
+                        written = written,
+                        folder = stem,
+                        meshSkipped = meshRequested &&
+                            artifacts.none { it.fileName.endsWith(".glb") || it.fileName.endsWith(".ply") },
+                    )
                 }
             }
             busy = false
             status = outcome.fold(
-                onSuccess = { (count, stem) -> ExportStatus.Saved(count = count, folder = stem) },
+                onSuccess = { report ->
+                    ExportStatus.of(
+                        report = report,
+                        messages = ExportStatus.Messages(
+                            folderUnreadable = context.getString(R.string.export_folder_inaccessible),
+                            nothingSelected = context.getString(R.string.export_nothing_selected),
+                            nothingToExport = context.getString(R.string.export_nothing_to_export),
+                        ),
+                    )
+                },
                 onFailure = { error -> ExportStatus.Failed(error.message ?: error.javaClass.simpleName) },
             )
         }
@@ -283,6 +319,11 @@ fun ExportScreen(
             description = stringResource(R.string.export_csv_desc),
             checked = includeCsv,
         ) { includeCsv = it }
+        FormatRow(
+            label = stringResource(R.string.export_order_list),
+            description = stringResource(R.string.export_order_list_desc),
+            checked = includeOrderList,
+        ) { includeOrderList = it }
         if (entitlements.canExportMesh) {
             FormatRow(
                 label = stringResource(R.string.export_glb),
@@ -338,20 +379,52 @@ fun ExportScreen(
             }
         }
 
+        // Every format switched off is not an export: the button stays disabled and says why,
+        // rather than opening a picker that can only end in a sentence about the folder.
+        val anyFormat = includePdf || includeCsv || includeOrderList || includeGlb || includePly
         GloveButton(
             label = stringResource(if (busy) R.string.export_saving else R.string.export_choose_folder),
             icon = Icons.Default.CreateNewFolder,
             onClick = { folderLauncher.launch(null) },
-            enabled = !busy,
+            enabled = !busy && anyFormat,
             modifier = Modifier.fillMaxWidth(),
         )
+        if (!anyFormat) {
+            Text(
+                stringResource(R.string.export_nothing_selected),
+                style = MaterialTheme.typography.bodyMedium,
+                color = SiteColors.warning,
+            )
+        }
 
         status?.let { current ->
             val text = when (current) {
                 is ExportStatus.Saved -> stringResource(R.string.export_success, current.count, current.folder)
+                is ExportStatus.Partial -> stringResource(
+                    R.string.export_partial,
+                    current.saved,
+                    current.expected,
+                    current.folder,
+                )
+                is ExportStatus.Meshless -> stringResource(
+                    R.string.export_meshless,
+                    current.saved,
+                    current.expected,
+                    current.folder,
+                )
                 is ExportStatus.Failed -> stringResource(R.string.export_failed, current.detail)
             }
-            Text(text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+            // A failure is not a success in another shade: it is red, like every other failure
+            // in this app (BackupCard does the same). It used to be drawn in the accent colour.
+            // A partial write is neither: it is the warning colour, because something *is* on
+            // the card but not everything the operator asked for.
+            val tone = when (current) {
+                is ExportStatus.Saved -> SiteColors.accent
+                is ExportStatus.Partial -> SiteColors.warning
+                is ExportStatus.Meshless -> SiteColors.warning
+                is ExportStatus.Failed -> SiteColors.danger
+            }
+            Text(text, style = MaterialTheme.typography.bodyLarge, color = tone)
         }
 
         // Ownership line: the operator always sees whose build this is.
@@ -434,9 +507,83 @@ private fun FormatRow(
  * Outcome of one export, kept as data so the sentence is rendered by Compose (and therefore
  * localised) instead of being formatted inside the IO coroutine.
  */
-private sealed interface ExportStatus {
+internal sealed interface ExportStatus {
     data class Saved(val count: Int, val folder: String) : ExportStatus
+
+    /** Some files made it and some did not: the operator must not walk away believing all did. */
+    data class Partial(val saved: Int, val expected: Int, val folder: String) : ExportStatus
+
+    /**
+     * Every file that exists was written, but a format the operator ticked does not exist for
+     * this project: no run carries scan geometry, so there is no GLB and no PLY to write.
+     *
+     * This used to be reported as a plain success with a smaller number in it ("Saved 3 files")
+     * while four switches were on - the operator then goes looking for a 3D model that the app
+     * never had the geometry to produce. The switches stay where he left them; the sentence says
+     * why the folder is one file short.
+     */
+    data class Meshless(val saved: Int, val expected: Int, val folder: String) : ExportStatus
+
     data class Failed(val detail: String) : ExportStatus
+
+    /**
+     * What the attempt asked for and what came of it.
+     *
+     * Three counts, because there are three different reasons for writing nothing and only one of
+     * them is a broken folder: nothing was *requested* (every switch off), nothing was *produced*
+     * (mesh-only export of a room with no routable run and no scan), or everything was produced
+     * and none of it could be written.
+     */
+    data class Report(
+        val requested: Int,
+        val produced: Int,
+        val written: Int,
+        val folder: String,
+        // The operator asked for a 3D model, but the project holds no mesh to export.
+        val meshSkipped: Boolean = false,
+    )
+
+    /** The three sentences, resolved at composition - never inside the export coroutine. */
+    data class Messages(
+        val folderUnreadable: String,
+        val nothingSelected: String,
+        val nothingToExport: String,
+    )
+
+    companion object {
+        /**
+         * What to tell the operator after an export attempt.
+         *
+         * Writing zero files is a failure, not a success with a zero in it. It is also the most
+         * likely failure there is: the folder picker hands back a tree the app may create
+         * directories in but not write into (a read-only SD card, a revoked grant, a provider
+         * that only supports directory creation). Every artifact's `openOutputStream` returns
+         * `null`, nothing is thrown, and the old code then reported "saved 0 files" in the
+         * success colour - on the screen whose entire job is to tell the operator whether his
+         * protocol exists.
+         *
+         * The order matters: blaming the folder for a request that asked for nothing is a wrong
+         * answer in a confident tone, and it is what the first version of this rule did.
+         */
+        fun of(report: Report, messages: Messages): ExportStatus = when {
+            report.requested == 0 -> Failed(detail = messages.nothingSelected)
+            report.produced == 0 -> Failed(detail = messages.nothingToExport)
+            report.written == 0 -> Failed(detail = messages.folderUnreadable)
+            report.written < report.produced -> Partial(
+                saved = report.written,
+                expected = report.produced,
+                folder = report.folder,
+            )
+            // Fewer files than switches on, and nothing failed: the missing ones are the 3D
+            // formats, and this project has no geometry for them.
+            report.meshSkipped && report.requested > report.produced -> Meshless(
+                saved = report.written,
+                expected = report.requested,
+                folder = report.folder,
+            )
+            else -> Saved(count = report.written, folder = report.folder)
+        }
+    }
 }
 
 /** Fallback when the view model has no cached list (e.g. deep link straight into Export). */

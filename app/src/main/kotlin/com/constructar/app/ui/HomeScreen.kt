@@ -60,9 +60,6 @@ import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.licence.Entitlements
 import com.constructar.core.units.LengthFormatter
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * The home screen: one job — get the operator back to work in one tap.
@@ -82,6 +79,12 @@ fun HomeScreen(
     onCreate: (String) -> Unit,
     onUpgrade: () -> Unit,
     onHelp: () -> Unit,
+    /**
+     * Project files in the app's folder that could not be read. They are kept - nothing here
+     * deletes a room it does not understand - so the list has to say they exist, or a damaged
+     * project looks exactly like a deleted one.
+     */
+    unreadableProjects: Int = 0,
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
@@ -110,6 +113,20 @@ fun HomeScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (unreadableProjects > 0) {
+                item {
+                    Text(
+                        text = pluralStringResource(
+                            R.plurals.home_unreadable,
+                            unreadableProjects,
+                            unreadableProjects,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SiteColors.warning,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
             if (loading) {
                 item { Spacer(Modifier.height(24.dp)) }
             } else if (mostRecent != null) {
@@ -401,7 +418,8 @@ private fun ProjectRow(project: ProjectRepository.ProjectSummary, onClick: () ->
 
 @Composable
 private fun ProjectMetaLine(project: ProjectRepository.ProjectSummary) {
-    val formatter = remember { SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()) }
+    // Gregorian and identical in all six languages: see `formatDayLabel`.
+    val updatedLabel = remember(project.updatedAtEpochMs) { formatDayLabel(project.updatedAtEpochMs) }
     // Resolved at composition: `pluralStringResource` is @Composable and must not be called
     // from inside `buildString`.
     val runsText = pluralStringResource(R.plurals.home_runs, project.routeCount, project.routeCount)
@@ -411,29 +429,52 @@ private fun ProjectMetaLine(project: ProjectRepository.ProjectSummary) {
     } else {
         ""
     }
+    // What always fits: runs, metres, date. Everything else used to be appended here as well, in a
+    // single ellipsized line - so on a normal phone the string was cut off after the date and the
+    // site name, the defect count *and the running clock* were never shown at all. The one line on
+    // the home screen that says money is burning was the first thing the ellipsis ate.
     Text(
         text = buildString {
             append(runsText)
             append(" · ")
             append(LengthFormatter.format(project.totalLengthMeters))
             append(" · ")
-            append(formatter.format(Date(project.updatedAtEpochMs)))
-            if (project.siteName.isNotBlank()) {
-                append(" · ")
-                append(project.siteName)
-            }
-            if (project.workRunning) {
-                append(" · ")
-                append(runningText)
-            }
-            if (defectsText.isNotEmpty()) {
-                append(" · ")
-                append(defectsText)
-            }
+            append(updatedLabel)
         },
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
+    if (project.siteName.isNotBlank() || project.workRunning || defectsText.isNotEmpty()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+            if (project.siteName.isNotBlank()) {
+                Text(
+                    project.siteName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            if (project.workRunning) {
+                Text(
+                    runningText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Jamaica.Lime,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+            if (defectsText.isNotEmpty()) {
+                Text(
+                    defectsText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = SiteColors.warning,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+        }
+    }
 }

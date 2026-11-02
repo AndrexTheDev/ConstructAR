@@ -53,8 +53,29 @@ enum class HitSource {
  * both read the threshold from here.
  */
 object HitConfidence {
-    /** Below this, a hit is reported to the operator and flagged in the paperwork. */
+
+    /**
+     * Below this a *single* point is not trusted at all: the tap is reported to the operator as it
+     * happens, and the run is questioned again on the way out.
+     *
+     * This is the per-tap gate (`RouteSession.MIN_TRUSTED_CONFIDENCE`), not the bar a finished run
+     * is judged by - see [RUN_TRUSTED].
+     */
     const val TRUSTED: Float = 0.5f
+
+    /**
+     * The bar a **finished run** is measured against, in AR and in the paperwork.
+     *
+     * Every tier of the hit cascade is at or above it except the raycast (0.7) and the feature
+     * point (0.4): 1.0 for a plane hit, 0.85 for a depth point. So a run whose weakest point is
+     * below 0.85 has at least one point the app trusts less than a depth measurement.
+     *
+     * One number for both places on purpose. The HUD warned below 0.85 while the order list only
+     * flagged a run below 0.5, so a run measured off a raycast was called out on the phone
+     * ("weakest point 70 % - tap it again") and reached the wholesaler's list unflagged: the
+     * paperwork was more optimistic than the screen the operator was looking at (finding 47).
+     */
+    const val RUN_TRUSTED: Float = 0.85f
 }
 
 /**
@@ -96,6 +117,18 @@ data class ConduitRoute(
     /** `true` when the operator closed the loop (rings / closed circuits). */
     val closedLoop: Boolean = false,
     val notes: String = "",
+    /**
+     * `true` when this run was recovered from a draft after the app was killed mid-measurement.
+     *
+     * Its **lengths, fitting counts and paperwork are exact** — they come from the recorded
+     * points — but its *coordinates* are not: an ARCore world origin does not survive the
+     * process, so the points are relative to a session that no longer exists. Therefore a
+     * recovered run is deliberately kept out of the 3D export and out of the AR preview
+     * (it would appear at a random place in the room) while counting fully in the bill of
+     * materials and the protocol. Losing a measurement to a crash is the one failure this app
+     * cannot accept; pretending the geometry is where it was would be the second.
+     */
+    val recovered: Boolean = false,
 ) {
     val points: List<Vec3> get() = nodes.map { it.position }
 

@@ -59,6 +59,16 @@ object PhotoTokens {
         PhotoKind.DEFECT -> token.substringAfter(SEPARATOR + DEFECT_MARK)
     }
 
+    /**
+     * The same photo, re-homed onto a project that was stored under another id.
+     *
+     * A restore re-keys a project whose id is already taken, so the photo's own name would point
+     * at the room that kept the old id - the copy would come back without it and the original
+     * would be overwritten by a picture of somebody else's wall.
+     */
+    fun withProject(token: String, projectId: String): String =
+        if (isRoom(token)) projectId else projectId + SEPARATOR + token.substringAfter(SEPARATOR)
+
     /** True for the room photo, which is stored as the bare project id. */
     fun isRoom(token: String): Boolean = kindOf(token) == PhotoKind.ROOM
 }

@@ -187,10 +187,40 @@ data class ProjectRecord(
         this
     } else {
         copy(
-            sessions = sessions.map { it.copy(endEpochMs = it.endEpochMs ?: nowMs) },
+            sessions = sessions.map {
+                // Never before the start. A phone whose clock stepped backwards while the session
+                // ran (an NTP correction after a dead spot, a manual change, an RTC that lost
+                // time) would otherwise print 09:00-08:40 in a document the customer signs, and
+                // an office has to reject that. The duration is no less true for it: a session
+                // whose end is not after its start already counts as zero minutes in `WorkTime`.
+                it.copy(endEpochMs = it.endEpochMs ?: maxOf(nowMs, it.startEpochMs))
+            },
             updatedAtEpochMs = System.currentTimeMillis(),
         )
     }
+
+    /**
+     * Drops one work session.
+     *
+     * Finding 44: a stopped session could not be corrected at all, and a running one could only
+     * be stopped *now*. Whoever came back the next morning to a clock he forgot to stop had one
+     * option left - delete the room and measure it again - because the 16 hours were already on
+     * the invoice line and in the protocol. Removing the session is the correction that costs the
+     * least: the room, the runs and the photos stay, and the price follows the times that are
+     * actually true.
+     *
+     * Removing the open session is deliberate and allowed: it is how a forgotten timer is
+     * cancelled without pretending the night was worked.
+     */
+    fun removeSession(sessionId: String): ProjectRecord =
+        if (sessions.none { it.id == sessionId }) {
+            this
+        } else {
+            copy(
+                sessions = sessions.filterNot { it.id == sessionId },
+                updatedAtEpochMs = System.currentTimeMillis(),
+            )
+        }
 
     companion object {
         /** Bump when the JSON shape changes; migrations live in `ProjectMigrations`. */

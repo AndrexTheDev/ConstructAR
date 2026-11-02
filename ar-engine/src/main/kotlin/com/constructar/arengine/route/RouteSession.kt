@@ -88,6 +88,15 @@ enum class RouteWarning {
      * is told, so he can re-tap where the wall is actually tracked.
      */
     LOW_CONFIDENCE,
+
+    /**
+     * The new point is more than [RouteSession.HEIGHT_JUMP_METERS] above or below the previous
+     * one: either a riser up to the ceiling, or the classic mis-tap that caught the floor or the
+     * ceiling instead of the wall. Accepted, because a riser is a real thing to measure - but
+     * flagged, because a mis-tap here adds a metre of cable nobody will install and an elbow on
+     * each end of it, and both of those end up on the customer's invoice.
+     */
+    HEIGHT_JUMP,
     ;
 
     val isPresent: Boolean get() = this != NONE
@@ -161,7 +170,16 @@ class RouteSession(
     @Synchronized
     fun setLivePoint(hit: SurfaceHit?) {
         val previous = livePoint
-        val node = hit?.toRouteNode(id = LIVE_NODE_ID)
+        // The reticle snaps to an existing corner exactly like a tap does, so the length under
+        // the crosshair is the length that will be committed and the preview line ends on the
+        // corner the operator is aiming at - he sees the snap before he commits it.
+        val raw = hit?.toRouteNode(id = LIVE_NODE_ID)
+        val target = raw?.let { cornerNear(mutableState.value.nodes, it.position) }
+        val node = when {
+            raw == null -> null
+            target == null -> raw
+            else -> raw.copy(position = target.position, normal = target.normal)
+        }
         livePoint = node
         if (previous?.position != node?.position && node != null) previewDirty = true
 
@@ -190,14 +208,30 @@ class RouteSession(
             mutableState.value = current.copy(warning = RouteWarning.TOO_CLOSE)
             return false
         }
-        val surfaceJump = previous != null && isSurfaceJump(previous, hit)
-        val anchor = anchorFactory.create(hit.point, hit.normal)
+        // A tap within a few centimetres of a corner the run already has *is* that corner.
+        // Without this, walking back to a corner to continue from it - or closing a ring on its
+        // own start - added a stray 3 cm segment with a bend at each end, and the bill of
+        // materials ordered two extra elbows for it. The last node is excluded: snapping onto it
+        // would create the zero-length segment the spacing guard exists to prevent.
+        val snapTarget = cornerNear(current.nodes, hit.point)
+        val placed = when {
+            snapTarget == null -> hit
+            previous != null && previous.position.distanceTo(snapTarget.position) < MIN_NODE_SPACING_METERS -> {
+                mutableState.value = current.copy(warning = RouteWarning.TOO_CLOSE)
+                return false
+            }
+            else -> hit.copy(point = snapTarget.position, normal = snapTarget.normal)
+        }
+        val surfaceJump = previous != null && isSurfaceJump(previous, placed)
+        val heightJump = previous != null &&
+            kotlin.math.abs(placed.point.y - previous.position.y) >= HEIGHT_JUMP_METERS
+        val anchor = anchorFactory.create(placed.point, placed.normal)
         if (anchor == null) {
             mutableState.value = current.copy(warning = RouteWarning.UNPINNED)
             return false
         }
         anchors[anchor.id] = anchor
-        val node = hit.toRouteNode(id = "node-${UUID.randomUUID()}", anchorId = anchor.id)
+        val node = placed.toRouteNode(id = "node-${UUID.randomUUID()}", anchorId = anchor.id)
         previewDirty = true
         // The segment under the reticle is now measured from *this* node, not the previous one.
         val liveDistance = livePoint?.position?.let { node.position.distanceTo(it) } ?: 0f
@@ -207,9 +241,12 @@ class RouteSession(
                 lastHit = null,
                 liveSegmentMeters = liveDistance,
                 warning = when {
-                    // The wall-thickness slip is the more dangerous of the two, so it wins.
+                    // The wall-thickness slip is the more dangerous of the three, so it wins.
                     surfaceJump -> RouteWarning.SURFACE_JUMP
-                    hit.confidence < MIN_TRUSTED_CONFIDENCE -> RouteWarning.LOW_CONFIDENCE
+                    // A metre of height between two taps is a riser or a mistake, and only the
+                    // operator can tell which - the app just refuses to stay quiet about it.
+                    heightJump -> RouteWarning.HEIGHT_JUMP
+                    placed.confidence < MIN_TRUSTED_CONFIDENCE -> RouteWarning.LOW_CONFIDENCE
                     else -> RouteWarning.NONE
                 },
             ),
@@ -217,13 +254,24 @@ class RouteSession(
         return true
     }
 
+    /**
+     * Removes the last node - the one-tap correction.
+     *
+     * A closed ring does **not** survive an undo. The closure is a decision about one particular
+     * chain of nodes - in practice the node just removed is the one that came back to the start -
+     * so carrying it over re-draws the closing segment between two corners the operator never
+     * measured, and it blanks the [RouteWarning.LOOP_TOO_WIDE] that [closeLoop] had raised if the
+     * old ends did not meet. Closing again is one tap, and that tap re-runs the gap check.
+     */
     @Synchronized
     fun undo(): RouteNodeRecord? {
         val current = mutableState.value
         val removed = current.nodes.lastOrNull() ?: return null
         removed.anchorId?.let { anchors.remove(it)?.detach() }
         previewDirty = true
-        mutableState.value = recompute(current.copy(nodes = current.nodes.dropLast(1), warning = RouteWarning.NONE))
+        mutableState.value = recompute(
+            current.copy(nodes = current.nodes.dropLast(1), closedLoop = false, warning = RouteWarning.NONE),
+        )
         return removed
     }
 
@@ -259,7 +307,7 @@ class RouteSession(
     @Synchronized
     fun closeLoop(): Boolean {
         val current = mutableState.value
-        if (current.nodes.size < 3) return false
+        if (current.nodes.size < MIN_LOOP_NODES) return false
         previewDirty = true
         val closing = !current.closedLoop
         val gap = if (closing) loopGap(current.nodes) else 0f
@@ -388,9 +436,32 @@ class RouteSession(
         return offset > SURFACE_JUMP_METERS
     }
 
+    /**
+     * The corner of [nodes] that a point at [position] means, or null when it means itself.
+     *
+     * The last node is never a candidate: snapping a tap onto the node just set would create the
+     * zero-length segment [MIN_NODE_SPACING_METERS] exists to prevent. Of several candidates the
+     * nearest wins, so a tight corner cannot pull a tap across the room.
+     */
+    private fun cornerNear(nodes: List<RouteNodeRecord>, position: Vec3): RouteNodeRecord? =
+        nodes.dropLast(1)
+            .map { node -> node to node.position.distanceTo(position) }
+            .filter { (_, distance) -> distance <= SNAP_TO_NODE_METERS }
+            .minByOrNull { (_, distance) -> distance }
+            ?.first
+
     companion object {
         /** Two taps closer than this are the same tap (fat fingers + gloves). */
         const val MIN_NODE_SPACING_METERS = 0.02f
+
+        /**
+         * A tap this close to a corner the run already has is that corner (see [addNode]).
+         *
+         * Sized for the reticle: the stabiliser keeps a committed point well inside 2 cm of where
+         * the operator aimed, and 4 cm is the smallest distance at which a "continue from that
+         * corner" tap is unambiguous on a phone held at arm's length.
+         */
+        const val SNAP_TO_NODE_METERS = 0.04f
 
         /** `dot >= 0.966` is within 15° — the surfaces are parallel for routing purposes. */
         private const val PARALLEL_COSINE = 0.966f
@@ -400,6 +471,18 @@ class RouteSession(
 
         /** A ring whose ends are further apart than this was closed by an unmeasured segment. */
         const val LOOP_TOLERANCE_METERS = 0.15f
+
+        /** Fewest nodes that can enclose anything - the same floor [closeLoop] enforces. */
+        const val MIN_LOOP_NODES = 3
+
+        /**
+         * A height difference between two consecutive taps that deserves a question.
+         *
+         * A riser from the worktop to the ceiling is about 1.1 m, and the same jump is what a
+         * mis-tap on the floor or the ceiling produces, so the app cannot decide - it asks. Below
+         * a metre nothing is ambiguous enough to interrupt a run in progress.
+         */
+        const val HEIGHT_JUMP_METERS = 1.0f
 
         /** Below this the node did not come from a detected plane; the operator is told. */
         /** Kept as the public name the AR tests use; the value lives in `:core`. */

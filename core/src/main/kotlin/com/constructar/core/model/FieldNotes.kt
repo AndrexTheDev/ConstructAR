@@ -94,12 +94,33 @@ object WorkTime {
     const val MINUTE_MS: Long = 60_000L
     private const val HOUR_MS: Long = 3_600_000L
 
+    /**
+     * A clock that has been running this long is worth a question, not a silent invoice line.
+     *
+     * A shift is eight hours and a long one is ten; twelve is where "I forgot to stop it" becomes
+     * more likely than "we worked twelve hours" - and the app prices by the minute, so a forgotten
+     * timer bills a night at 48 € an hour. Nothing is capped or guessed: the number stays, the
+     * operator is asked.
+     */
+    const val OVERDUE_SESSION_MS: Long = 12 * HOUR_MS
+
     /** `true` when a session is still open — the state the "stop work" button is shown in. */
     fun isRunning(sessions: List<WorkSession>): Boolean = sessions.any { it.endEpochMs == null }
 
     /** The open session, if any. Sessions are appended in order, so the last one wins. */
     fun runningSession(sessions: List<WorkSession>): WorkSession? =
         sessions.lastOrNull { it.endEpochMs == null }
+
+    /**
+     * The open session, when it has been running implausibly long, or `null`.
+     *
+     * Answered from the sessions and a clock, so it can be tested at a fixed instant and answered
+     * by both the field book and whatever writes the protocol.
+     */
+    fun overdueSession(sessions: List<WorkSession>, nowMs: Long): WorkSession? {
+        val running = runningSession(sessions) ?: return null
+        return if (sessionMillis(running, nowMs) > OVERDUE_SESSION_MS) running else null
+    }
 
     /** Duration of one session; an open one runs until [nowMs]. Never negative. */
     fun sessionMillis(session: WorkSession, nowMs: Long): Long =

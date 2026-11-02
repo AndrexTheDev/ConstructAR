@@ -13,6 +13,7 @@ import android.net.Uri
 import android.util.Log
 import com.constructar.core.io.SafeFiles
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.model.RouteDraft
 import com.constructar.core.model.WorkTime
 import com.constructar.core.model.ScanSummary
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +50,19 @@ class ProjectRepository(private val context: Context) {
         }
     }
 
+    /**
+     * Drafts of runs that are still being measured, one file per project.
+     *
+     * A separate directory from the projects on purpose: a draft is not a project and must never
+     * be listed as one, and a backup must not carry half a measurement as if it were a room.
+     */
+    private val draftDirectory: File by lazy {
+        File(context.filesDir, "drafts").apply {
+            mkdirs()
+            SafeFiles.clearStaleTemporaries(this)
+        }
+    }
+
     data class ProjectSummary(
         val id: String,
         val name: String,
@@ -62,12 +76,31 @@ class ProjectRepository(private val context: Context) {
         val workRunning: Boolean = false,
     )
 
-    /** Lists projects, newest first. Corrupt files are skipped, never fatal. */
-    suspend fun list(): List<ProjectSummary> = withContext(Dispatchers.IO) {
-        directory.listFiles { file -> file.extension == "json" }
-            ?.mapNotNull { readProject(it) }
-            ?.map { project ->
-                ProjectSummary(
+    /**
+     * What the folder holds: the rooms that can be read, and how many files could not.
+     *
+     * The count is the point. A file is kept when it cannot be parsed - nothing here ever deletes
+     * a room it does not understand - but until now it was simply *absent* from the list, so a
+     * damaged project looked exactly like a deleted one and the operator had no way to know that
+     * his data was still on the phone.
+     */
+    data class Listing(
+        val projects: List<ProjectSummary> = emptyList(),
+        /** Files in the projects folder that could not be read as a project. */
+        val unreadable: Int = 0,
+    )
+
+    /** Lists projects, newest first. Corrupt files are reported, never fatal. */
+    suspend fun list(): Listing = withContext(Dispatchers.IO) {
+        val files = directory.listFiles { file -> file.extension == "json" }.orEmpty()
+        val summaries = ArrayList<ProjectSummary>(files.size)
+        var unreadable = 0
+        for (file in files) {
+            val project = readProject(file)
+            if (project == null) {
+                unreadable++
+            } else {
+                summaries += ProjectSummary(
                     id = project.id,
                     name = project.name,
                     siteName = project.siteName,
@@ -78,8 +111,8 @@ class ProjectRepository(private val context: Context) {
                     workRunning = WorkTime.isRunning(project.sessions),
                 )
             }
-            ?.sortedByDescending { it.updatedAtEpochMs }
-            ?: emptyList()
+        }
+        Listing(projects = summaries.sortedByDescending { it.updatedAtEpochMs }, unreadable = unreadable)
     }
 
     suspend fun load(id: String): ProjectRecord? = withContext(Dispatchers.IO) {
@@ -146,8 +179,15 @@ class ProjectRepository(private val context: Context) {
         photoDirectory.listFiles()?.filter { it.isFile && it.length() > 0L }?.sortedBy { it.name }.orEmpty()
     }
 
-    /** Whether a project with [id] exists — used to re-attach a restored photo to its project. */
-    suspend fun hasProject(id: String): Boolean = withContext(Dispatchers.IO) { fileFor(id).exists() }
+    /**
+     * A restored project together with the id its file carried before any re-keying.
+     *
+     * The two ids differ exactly when the file's id was already taken - and that is the case in
+     * which the restore has to know, because the photo belongs to the project, not to the id: a
+     * re-keyed copy must take its photo with it instead of leaving it on the room that kept the
+     * old id.
+     */
+    data class ImportedProject(val originalId: String, val project: ProjectRecord)
 
     /**
      * Imports one project file.
@@ -156,25 +196,118 @@ class ProjectRepository(private val context: Context) {
      * backup onto a phone that still has the original must not destroy either copy.
      * Returns the stored project, or `null` when the text is not a project.
      */
-    suspend fun importProject(text: String): ProjectRecord? = withContext(Dispatchers.IO) {
-        val parsed = runCatching {
-            json.decodeFromString(ProjectRecord.serializer(), text)
-        }.getOrNull() ?: return@withContext null
-        val target = if (fileFor(parsed.id).exists()) {
+    suspend fun importProject(text: String): ProjectRecord? = importProjectDetailed(text)?.project
+
+    /**
+     * The room in [text], or `null` when the text is not one.
+     *
+     * Pure: nothing is written, no id is re-keyed, no file is touched. The restore uses it to tell
+     * "a room this plan had no slot for" from "not a room at all" *before* it decides which files
+     * it can even attempt - a file past the free slots is otherwise classified as held back for an
+     * upgrade it would never survive.
+     */
+    fun parseProject(text: String): ProjectRecord? = runCatching {
+        json.decodeFromString(ProjectRecord.serializer(), text)
+    }.getOrNull()
+
+    /** [importProject], also reporting the id the file carried before any re-keying. */
+    suspend fun importProjectDetailed(text: String): ImportedProject? = withContext(Dispatchers.IO) {
+        val parsed = parseProject(text) ?: return@withContext null
+        // The id becomes a file name, and this text came from a file somebody handed over.
+        // An id of "../../databases/x" must never reach `File(directory, "$id.json")`, so an
+        // id that is not a plain token is replaced - the project is still imported, under a
+        // fresh identity, exactly like the duplicate case below.
+        val target = if (!isSafeToken(parsed.id) || fileFor(parsed.id).exists()) {
             parsed.copy(id = UUID.randomUUID().toString())
         } else {
             parsed
         }
-        if (save(target)) target else null
+        if (save(target)) ImportedProject(originalId = parsed.id, project = target) else null
+    }
+
+    /**
+     * Whether a stored name can be used as a file name.
+     *
+     * Ids and photo tokens both come from outside: a project id from a restored JSON file, a
+     * photo token from the *file name* of a picked picture. Both are appended to a directory
+     * path, so a value like `../databases/app` would write - or delete - outside the folder
+     * this repository owns. Letters, digits, dash and underscore only; no dots, no separators.
+     */
+    fun isSafeToken(value: String): Boolean =
+        value.isNotEmpty() && value.length <= 120 &&
+            value.all { it.isLetterOrDigit() || it == '-' || it == '_' }
+
+    /**
+     * Text of a picked project file, or `null` when it is too large to be one.
+     *
+     * A restore reads whatever the operator picked, and the picker accepts every MIME type
+     * (a `.json` file is reported as three different types depending on the file manager).
+     * Reading a 2 GB video into a `String` is an out-of-memory crash in the middle of a
+     * restore; a project with a scan summary is a few hundred kilobytes, so the cap is far
+     * above anything real and far below anything dangerous.
+     */
+    fun readProjectText(input: java.io.InputStream): String? = runCatching {
+        val buffer = java.io.ByteArrayOutputStream(64 * 1024)
+        val chunk = ByteArray(64 * 1024)
+        var total = 0
+        while (true) {
+            val read = input.read(chunk)
+            if (read <= 0) break
+            total += read
+            if (total > MAX_PROJECT_BYTES) return null
+            buffer.write(chunk, 0, read)
+        }
+        String(buffer.toByteArray(), Charsets.UTF_8)
+    }.getOrNull()
+
+    // ── Drafts of runs in progress ──────────────────────────────────────────────────────────
+
+    /**
+     * Writes the run that is being measured, so a killed process does not take it.
+     *
+     * Called on every committed point, so the write has to be cheap and atomic - it is the same
+     * `SafeFiles.writeAtomically` path a project uses (temporary file, `fsync`, rename), which
+     * means a kill in the middle leaves the previous draft intact rather than a half-written one.
+     * A draft with fewer than two points is a mis-tap, not a measurement: it is deleted instead.
+     */
+    suspend fun saveDraft(draft: RouteDraft): Boolean = withContext(Dispatchers.IO) {
+        if (!isSafeToken(draft.projectId)) return@withContext false
+        if (!draft.isRecoverable) return@withContext deleteDraft(draft.projectId)
+        val text = runCatching {
+            json.encodeToString(RouteDraft.serializer(), draft)
+        }.getOrNull() ?: return@withContext false
+        SafeFiles.writeAtomically(draftFileFor(draft.projectId), text)
+    }
+
+    /** The stored draft for [projectId], or `null` when there is none (or it is unreadable). */
+    suspend fun loadDraft(projectId: String): RouteDraft? = withContext(Dispatchers.IO) {
+        if (!isSafeToken(projectId)) return@withContext null
+        val file = draftFileFor(projectId)
+        if (!file.isFile) return@withContext null
+        runCatching {
+            json.decodeFromString(RouteDraft.serializer(), file.readText())
+        }.getOrNull()?.takeIf { it.isRecoverable }
+    }
+
+    suspend fun deleteDraft(projectId: String): Boolean = withContext(Dispatchers.IO) {
+        if (!isSafeToken(projectId)) return@withContext false
+        val file = draftFileFor(projectId)
+        !file.exists() || file.delete()
     }
 
     suspend fun delete(id: String): Boolean = withContext(Dispatchers.IO) {
+        if (!isSafeToken(id)) return@withContext false
         // The site photo is `<id>.jpg`, an entry photo is `<id>__diary_<entry>.jpg`; deleting a
         // project must not leave either of them orphaned in private storage.
         photoDirectory.listFiles()
             ?.filter { it.name == "$id.jpg" || it.name.startsWith("${id}__") }
             ?.forEach { it.delete() }
-        fileFor(id).delete()
+        val removed = fileFor(id).delete()
+        // A draft belongs to exactly one project; deleting the room must not leave it behind to
+        // be offered again on the next start (with nothing to attach it to). The result of *that*
+        // delete is not the answer to "was the room deleted": with no draft it is `false`.
+        draftFileFor(id).delete()
+        removed
     }
 
     /** Merges a finished scan summary into the stored project. */
@@ -205,8 +338,9 @@ class ProjectRepository(private val context: Context) {
      */
     fun photoFileByName(token: String): File = File(photoDirectory, "$token.jpg")
 
-    /** Copies a picked picture into private storage under [token]. */
+    /** Copies a picked picture into private storage under [token]; refused for an unsafe one. */
     suspend fun savePhotoAs(token: String, source: Uri): Boolean = withContext(Dispatchers.IO) {
+        if (!isSafeToken(token)) return@withContext false
         runCatching {
             val target = photoFileByName(token)
             val copied = context.contentResolver.openInputStream(source)?.use { input ->
@@ -218,7 +352,8 @@ class ProjectRepository(private val context: Context) {
         }.getOrDefault(false)
     }
 
-    fun deletePhotoAs(token: String): Boolean = photoFileByName(token).delete()
+    fun deletePhotoAs(token: String): Boolean =
+        isSafeToken(token) && photoFileByName(token).delete()
 
     /**
      * Decodes a stored photo at a size fit for its purpose.
@@ -228,6 +363,7 @@ class ProjectRepository(private val context: Context) {
      */
     suspend fun loadPhotoAs(token: String, maxDimensionPx: Int = 640): Bitmap? =
         withContext(Dispatchers.IO) {
+            if (!isSafeToken(token)) return@withContext null
             decodeSampled(photoFileByName(token), maxDimensionPx)
         }
 
@@ -262,6 +398,8 @@ class ProjectRepository(private val context: Context) {
 
     private fun fileFor(id: String) = File(directory, "$id.json")
 
+    private fun draftFileFor(id: String) = File(draftDirectory, "$id.json")
+
     private val photoDirectory: File by lazy {
         File(context.filesDir, "photos").apply { mkdirs() }
     }
@@ -278,5 +416,8 @@ class ProjectRepository(private val context: Context) {
 
     companion object {
         private const val TAG = "ProjectRepository"
+
+        /** Generous for a project file, small enough that a wrong pick cannot exhaust the heap. */
+        const val MAX_PROJECT_BYTES: Int = 8 * 1024 * 1024
     }
 }

@@ -24,6 +24,10 @@ Everything here is a gate before an APK reaches a site, in the order it should b
 
 ## 2. Licensing
 
+- [ ] `LicencePublicKey.PUBLIC_KEY_BASE64` is the **production** key, not `DEMO_KEY_BASE64`.
+      With the placeholder in place the app verifies licences no real signer ever produced, and
+      the Help screen shows the developer note. `python3 scripts/verify_sources.py` prints the
+      reminder on every run
 - [ ] `LICENSE` present and unmodified (All Rights Reserved — see `docs/LICENSING.md`)
 - [ ] Third-party attributions (`NOTICE` or the in-app licences screen) cover SceneView,
       Filament, ARCore and Depth Anything V2 Small, as Apache-2.0 requires
@@ -42,13 +46,24 @@ Everything here is a gate before an APK reaches a site, in the order it should b
 | Plane-only (no Depth API) | cascade falls back to plane + feature point, messaging is honest |
 | Tablet | glove controls, layout, split-screen |
 
-- [ ] Camera permission denied → rationale → settings round trip works
+- [ ] Camera permission denied twice → the gate offers *open settings* instead of a dead
+      *grant* button, and granting there is noticed on return (no app restart needed)
 - [ ] ARCore not installed → install flow → back to the app
+- [ ] ARCore session failure (occupy the camera from another app) → full-screen message, no
+      live controls behind it; *try again* recovers, *save* keeps a run in progress
 - [ ] Airplane mode: scan, measure, export all work
 - [ ] Torch: supported device turns it on below 40 lux, off above 120 lux, no flicker
 - [ ] Tracking loss (cover the camera) → coaching text, recovery without losing the run
+- [ ] Back gesture and close button after ≥ 2 points → dialog offers save / discard / cancel;
+      back with the dialog open closes the dialog, not the screen
 - [ ] Thermal: 15-minute continuous scan without ANR, throttle mode visible in the HUD
+- [ ] Font scale set to 200 % (Settings → Display → Font size, largest) on a 640 dp-tall
+      phone: onboarding shows *next* and *skip*, and every screen can be scrolled to its
+      last button. Onboarding did not scroll until finding 66
 - [ ] Process death during a scan → project list intact, no half-written JSON
+- [ ] Kill the app mid-run (Developer options → *Don't keep activities*, or swipe it away
+      after 3+ points) → re-entering the AR screen offers the run back; *save* restores the
+      length and the fittings, *discard* removes the offer for good
 
 ## 4. Measurement verification (the one that matters)
 

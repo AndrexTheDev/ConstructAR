@@ -161,14 +161,24 @@ class ProtocolPdfWriter(
                 append(content.project.name)
                 if (content.project.siteName.isNotBlank()) append(" · ").append(content.project.siteName)
             }
-            page.canvas.drawText(subtitle, MARGIN.toFloat(), y.toFloat(), subtitlePaint)
+            page.canvas.drawText(
+                ellipsize(subtitle, pageWidth - 2 * MARGIN, subtitlePaint),
+                MARGIN.toFloat(),
+                y.toFloat(),
+                subtitlePaint,
+            )
             y += 16
             val metaLine = listOfNotNull(
                 content.generatedAtLabel.ifBlank { null },
                 content.operatorName.ifBlank { content.project.technician.ifBlank { null } },
                 content.labels.subtitle,
             ).joinToString("  ·  ")
-            page.canvas.drawText(metaLine, MARGIN.toFloat(), y.toFloat(), textPaint)
+            page.canvas.drawText(
+                ellipsize(metaLine, pageWidth - 2 * MARGIN, textPaint),
+                MARGIN.toFloat(),
+                y.toFloat(),
+                textPaint,
+            )
             y += 10
             page.canvas.drawLine(MARGIN.toFloat(), y.toFloat(), (pageWidth - MARGIN).toFloat(), y.toFloat(), rulePaint)
             y += 16
@@ -228,6 +238,15 @@ class ProtocolPdfWriter(
                         y = drawTableHeader(page.canvas, header, columns, y)
                     }
                     y = drawTableRow(page.canvas, routeRow(route), columns, y)
+                }
+                // A run that survived an interruption counts in every length, every fitting and
+                // the price - its coordinates belong to an ARCore session that no longer exists,
+                // so it is not in the GLB. The screen says so with a badge and the 3D export
+                // leaves it out; the protocol said nothing, so the office importing the model
+                // later found a run missing from it with no explanation anywhere in the file.
+                recoveredRunsNote(content.project.routes, content.labels.recoveredNote)?.let { note ->
+                    y += 6
+                    y = drawNote(page.canvas, note, y)
                 }
             }
 
@@ -443,7 +462,12 @@ class ProtocolPdfWriter(
         for ((index, entry) in entries.withIndex()) {
             val x = MARGIN + column * columnWidth
             canvas.drawText(entry.first, x.toFloat(), y.toFloat(), subtitlePaint)
-            canvas.drawText(entry.second, (x + 110).toFloat(), y.toFloat(), textPaint)
+            canvas.drawText(
+                ellipsize(entry.second, pageWidth - MARGIN - (x + 110), textPaint),
+                (x + 110).toFloat(),
+                y.toFloat(),
+                textPaint,
+            )
             if (column == 1 || index == entries.lastIndex) y += 15
             column = (column + 1) % 2
         }
@@ -470,13 +494,15 @@ class ProtocolPdfWriter(
         return y + 13
     }
 
-    private fun drawNote(canvas: Canvas, text: String, y: Int) {
+    /** Draws a grey note and returns the y the caller can continue from. */
+    private fun drawNote(canvas: Canvas, text: String, y: Int): Int {
         val paint = Paint(textPaint).apply { textSize = 8.5f; color = Color.DKGRAY }
         var lineY = y
         for (line in wrap(text, pageWidth - 2 * MARGIN, paint)) {
             canvas.drawText(line, MARGIN.toFloat(), lineY.toFloat(), paint)
             lineY += 11
         }
+        return lineY
     }
 
     /**
@@ -526,29 +552,32 @@ class ProtocolPdfWriter(
         )
     }
 
-    private fun ellipsize(value: String, maxWidth: Int): String {
-        if (textPaint.measureText(value) <= maxWidth) return value
-        var end = value.length
-        while (end > 1 && textPaint.measureText(value.substring(0, end) + "…") > maxWidth) end--
-        return value.substring(0, end) + "…"
+    /**
+     * [value] on one line, no wider than [maxWidth], measured with the paint that will draw it.
+     *
+     * The header used to call `drawText` directly, so a long room name ran past the margin and a
+     * name pasted with a line break printed a row of missing-glyph boxes - on the first page of
+     * the document the customer keeps. Table cells were already clamped; the text around them
+     * was not. See [PdfText].
+     */
+    private fun ellipsize(
+        value: String,
+        maxWidth: Int,
+        paint: Paint = textPaint,
+    ): String = PdfText.ellipsize(PdfText.singleLine(value), maxWidth.toFloat()) { text ->
+        paint.measureText(text)
     }
 
-    private fun wrap(text: String, maxWidth: Int, paint: Paint): List<String> {
-        val words = text.split(' ')
-        val lines = ArrayList<String>()
-        var current = StringBuilder()
-        for (word in words) {
-            val candidate = if (current.isEmpty()) word else "$current $word"
-            if (paint.measureText(candidate) <= maxWidth) {
-                current = StringBuilder(candidate)
-            } else {
-                if (current.isNotEmpty()) lines += current.toString()
-                current = StringBuilder(word)
-            }
-        }
-        if (current.isNotEmpty()) lines += current.toString()
-        return lines
-    }
+    /**
+     * Paragraph text as drawable lines.
+     *
+     * Delegated to [PdfText] because a diary entry is typed into a *multi-line* field: the old
+     * version split on spaces only, so the `\n` stayed inside a word and printed as a missing
+     * glyph in the middle of a site note. [PdfText.wrap] keeps the author's line breaks and
+     * ellipsises a single word that is wider than the column.
+     */
+    private fun wrap(text: String, maxWidth: Int, paint: Paint): List<String> =
+        PdfText.wrap(text, maxWidth.toFloat()) { value -> paint.measureText(value) }
 
     private fun format(meters: Float): String = String.format(Locale.ROOT, "%.2f", meters)
 
@@ -559,4 +588,16 @@ class ProtocolPdfWriter(
         private const val MARGIN = 36
         private const val FOOTER_HEIGHT = 32
     }
+}
+
+/**
+ * The line the runs table gets when part of the room could not be placed, or `null` when it could.
+ *
+ * Kept out of the drawing code so the wording can be tested without a `PdfDocument`: which runs are
+ * named, in which order, and that a job with nothing recovered prints nothing at all.
+ */
+internal fun recoveredRunsNote(routes: List<ConduitRoute>, template: String): String? {
+    val labels = routes.filter { it.recovered }.map { it.label }
+    if (labels.isEmpty()) return null
+    return String.format(Locale.ROOT, template, labels.joinToString(", "))
 }

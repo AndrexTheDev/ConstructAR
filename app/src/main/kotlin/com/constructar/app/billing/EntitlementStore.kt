@@ -46,7 +46,8 @@ import java.util.UUID
  *  * **The build is checked against itself** (`AppIntegrity`): a re-signed APK, or a release
  *    build with a debugger attached, gets no paid features — while the operator's own projects
  *    stay readable and exportable, because a licensing problem must never hold his measurements
- *    hostage.
+ *    hostage. A *valid licence* re-establishes trust in a re-signed build (`activationGate`),
+ *    which is what makes a legitimate key rotation survivable for the operator who paid.
  */
 class EntitlementStore(
     context: Context,
@@ -114,7 +115,7 @@ class EntitlementStore(
         val integrity = AppIntegrity.check(
             context = appContext,
             knownSignature = preferences.getString(KEY_SIGNATURE, null),
-            remember = { signature -> preferences.edit().putString(KEY_SIGNATURE, signature).apply() },
+            remember = { signature -> rememberSignature(signature) },
         )
 
         val decision = EntitlementRules.decide(
@@ -147,24 +148,37 @@ class EntitlementStore(
      * another phone, an expired subscription) instead of a generic "invalid".
      */
     fun activate(raw: String): LicenceCheck {
-        // Activating on a build that cannot vouch for itself would only move the problem: the
-        // key would verify today and be discarded at the next start anyway.
+        // The build's identity is checked *alongside* the key rather than before it: see
+        // `activationGate` for why a valid licence has to be able to adopt a rotated certificate
+        // (it is the documented way back in) and why a debugger never is.
         val integrity = AppIntegrity.check(
             context = appContext,
             knownSignature = preferences.getString(KEY_SIGNATURE, null),
-            remember = { signature -> preferences.edit().putString(KEY_SIGNATURE, signature).apply() },
+            remember = { signature -> rememberSignature(signature) },
         )
-        if (integrity.tampered) return LicenceCheck.UntrustedBuild
 
         val installation = installationId()
         val watermark = sealedLong(KEY_WATERMARK, KEY_WATERMARK_SEAL, installation, fallback = 0L)
         val verdict = ClockGuard.evaluate(LicenceVerifier.epochDay(clock()), watermark)
         val check = verifier.verify(raw, deviceTag, verdict.effectiveEpochDay)
+
+        when (activationGate(integrity, licenceValid = check is LicenceCheck.Valid)) {
+            ActivationGate.REFUSE -> return LicenceCheck.UntrustedBuild
+            ActivationGate.ADOPT_SIGNATURE -> integrity.signature?.let { rememberSignature(it) }
+            ActivationGate.ACCEPT -> Unit
+        }
+
         if (check is LicenceCheck.Valid) {
             preferences.edit().putString(KEY_LICENCE, raw.trim()).apply()
+            // Re-derives everything, including the integrity report, which now matches.
             refresh()
         }
         return check
+    }
+
+    /** Writes the certificate digest the paid features are conditioned on. */
+    private fun rememberSignature(signature: String) {
+        preferences.edit().putString(KEY_SIGNATURE, signature).apply()
     }
 
     /**

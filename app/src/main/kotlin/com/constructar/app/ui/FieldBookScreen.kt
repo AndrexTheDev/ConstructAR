@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -40,8 +41,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,7 +67,6 @@ import com.constructar.core.model.DiaryEntry
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.model.WorkSession
 import com.constructar.core.model.WorkTime
-import kotlinx.coroutines.delay
 
 /**
  * The site file: working time, the diary and the defect list, on one scrolling screen.
@@ -85,6 +85,7 @@ fun FieldBookScreen(
     onBack: () -> Unit,
     onStartWork: () -> Unit,
     onStopWork: () -> Unit,
+    onDeleteSession: (String) -> Unit,
     onAddDiary: (String) -> Unit,
     onDeleteDiary: (String) -> Unit,
     onAddDefect: (title: String, location: String, severity: DefectSeverity) -> Unit,
@@ -95,15 +96,15 @@ fun FieldBookScreen(
 ) {
     val running = WorkTime.isRunning(project.sessions)
 
-    // A running clock has to move on its own; half a minute is enough to keep "running since"
-    // honest without waking the screen every second on a phone whose battery is the shift.
-    var nowMs by remember(project.id) { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(running) {
-        while (running) {
-            nowMs = System.currentTimeMillis()
-            delay(30_000L)
-        }
-    }
+    // A running clock has to move on its own; [rememberNowMs] is the one ticker every screen
+    // showing a running total uses (see ClockTick.kt).
+    val nowMs = rememberNowMs(running)
+
+    // Three rows on this screen delete recorded work - an hour that is on the invoice, a note, a
+    // defect with its photo - and every one of them was a single tap on a 40 dp icon. The run row
+    // learned to ask in this same round (finding 60); the field book is the other place where a
+    // glove and a scroll can take work away, so it asks too, and names what goes.
+    var pendingDelete by remember(project.id) { mutableStateOf<PendingDelete?>(null) }
 
     var diaryDraft by remember(project.id) { mutableStateOf("") }
     var defectTitle by remember(project.id) { mutableStateOf("") }
@@ -190,6 +191,20 @@ fun FieldBookScreen(
                         color = Jamaica.Lime,
                     )
                 }
+                // A clock left running overnight bills the night at the hourly rate, and nothing
+                // else on this screen would say so. The number is not capped or guessed - the
+                // operator is asked, and can delete the session below (finding 44).
+                val overdue = WorkTime.overdueSession(project.sessions, nowMs)
+                if (overdue != null) {
+                    Text(
+                        stringResource(
+                            R.string.field_time_overdue,
+                            durationLabel(WorkTime.sessionMillis(overdue, nowMs)),
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SiteColors.warning,
+                    )
+                }
             }
             GloveButton(
                 label = stringResource(if (running) R.string.field_time_stop else R.string.field_time_start),
@@ -206,9 +221,19 @@ fun FieldBookScreen(
                 )
             } else {
                 // Newest first on screen; the JSON keeps them oldest first.
-                project.sessions.asReversed().take(12).forEach { session ->
-                    SessionRow(session = session, nowMs = nowMs)
+                project.sessions.asReversed().take(FieldLists.SESSIONS_SHOWN).forEach { session ->
+                    // Resolved here, in composition: `sessionLabel` needs string resources, and the
+                    // delete callback runs later, outside a composable context.
+                    val label = sessionLabel(session, nowMs)
+                    SessionRow(
+                        session = session,
+                        nowMs = nowMs,
+                        onDelete = {
+                            pendingDelete = PendingDelete(DeleteKind.SESSION, session.id, label)
+                        },
+                    )
                 }
+                FieldTail(FieldLists.hiddenCount(project.sessions.size, FieldLists.SESSIONS_SHOWN))
             }
         }
 
@@ -239,15 +264,19 @@ fun FieldBookScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                project.diary.take(20).forEach { entry ->
+                project.diary.take(FieldLists.DIARY_SHOWN).forEach { entry ->
                     val token = entry.photo
                     DiaryRow(
                         entry = entry,
                         thumbnail = token?.let(photoFor),
+                        hasPhoto = token != null,
                         onPhoto = { capture(PhotoTokens.forDiary(project.id, entry.id)) },
-                        onDelete = { onDeleteDiary(entry.id) },
+                        onDelete = {
+                            pendingDelete = PendingDelete(DeleteKind.DIARY, entry.id, entry.text)
+                        },
                     )
                 }
+                FieldTail(FieldLists.hiddenCount(project.diary.size, FieldLists.DIARY_SHOWN))
             }
         }
 
@@ -319,19 +348,81 @@ fun FieldBookScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                project.defects.take(20).forEach { defect ->
+                project.defects.take(FieldLists.DEFECTS_SHOWN).forEach { defect ->
                     val token = defect.photo
                     DefectRow(
                         defect = defect,
                         thumbnail = token?.let(photoFor),
+                        hasPhoto = token != null,
                         onPhoto = { capture(PhotoTokens.forDefect(project.id, defect.id)) },
                         onToggle = { onToggleDefect(defect.id) },
-                        onDelete = { onDeleteDefect(defect.id) },
+                        onDelete = {
+                            pendingDelete = PendingDelete(DeleteKind.DEFECT, defect.id, defect.title)
+                        },
                     )
                 }
+                FieldTail(FieldLists.hiddenCount(project.defects.size, FieldLists.DEFECTS_SHOWN))
             }
         }
     }
+
+    pendingDelete?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text(stringResource(R.string.field_delete_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        when (pending.kind) {
+                            DeleteKind.SESSION -> R.string.field_delete_session_body
+                            DeleteKind.DIARY -> R.string.field_delete_diary_body
+                            DeleteKind.DEFECT -> R.string.field_delete_defect_body
+                        },
+                        pending.summary,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDelete = null
+                        when (pending.kind) {
+                            DeleteKind.SESSION -> onDeleteSession(pending.id)
+                            DeleteKind.DIARY -> onDeleteDiary(pending.id)
+                            DeleteKind.DEFECT -> onDeleteDefect(pending.id)
+                        }
+                    },
+                ) { Text(stringResource(R.string.action_delete), color = SiteColors.danger) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text(stringResource(R.string.home_cancel)) }
+            },
+        )
+    }
+}
+
+/** Which list a confirmed deletion belongs to. */
+private enum class DeleteKind { SESSION, DIARY, DEFECT }
+
+/** A delete waiting for its second tap, with the words the dialog needs to name it. */
+private data class PendingDelete(val kind: DeleteKind, val id: String, val summary: String)
+
+/**
+ * What the list above is not showing.
+ *
+ * Nothing at all when the list fits, which is the normal case on a job that fits on a phone -
+ * the sentence only appears when there really are older rows in the file that this screen left
+ * out. They are printed in full in the protocol, so the line points there rather than inviting
+ * the operator to believe the app lost them.
+ */
+@Composable
+private fun FieldTail(hidden: Int) {
+    if (hidden <= 0) return
+    Text(
+        stringResource(R.string.field_list_more, hidden),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /** One card of the site file, so the three sections cannot drift apart visually. */
@@ -372,21 +463,35 @@ private fun sessionLabel(session: WorkSession, nowMs: Long): String {
 }
 
 @Composable
-private fun SessionRow(session: WorkSession, nowMs: Long) {
-    Text(
-        sessionLabel(session, nowMs),
-        style = MaterialTheme.typography.bodySmall,
-        color = if (session.endEpochMs == null) Jamaica.Lime else MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+private fun SessionRow(session: WorkSession, nowMs: Long, onDelete: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            sessionLabel(session, nowMs),
+            style = MaterialTheme.typography.bodySmall,
+            color = if (session.endEpochMs == null) Jamaica.Lime else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        // The only correction there is: a stopped clock could not be edited before finding 44,
+        // so a forgotten stop cost the operator the whole night's hours.
+        IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = stringResource(R.string.field_time_delete),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 @Composable
 private fun DiaryRow(
     entry: DiaryEntry,
     thumbnail: Bitmap?,
+    hasPhoto: Boolean,
     onPhoto: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val affordance = photoAffordance(hasPhoto = hasPhoto, loaded = thumbnail != null)
     Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f)) {
             Text(
@@ -395,9 +500,10 @@ private fun DiaryRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(entry.text, style = MaterialTheme.typography.bodyMedium)
-            if (thumbnail != null) {
-                Image(
-                    bitmap = thumbnail.asImageBitmap(),
+            when (affordance) {
+                PhotoAffordance.ADD -> Unit
+                PhotoAffordance.REPLACE -> Image(
+                    bitmap = requireNotNull(thumbnail).asImageBitmap(),
                     contentDescription = stringResource(R.string.photo_title),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -406,15 +512,27 @@ private fun DiaryRow(
                         .height(120.dp)
                         .clip(RoundedCornerShape(12.dp)),
                 )
+                // The photo exists and this screen did not decode it: say so, so the camera is
+                // read as "replace" and a tap cannot quietly overwrite a picture already taken.
+                PhotoAffordance.ON_FILE -> Text(
+                    stringResource(R.string.field_photo_on_file),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
             }
         }
         IconButton(onClick = onPhoto, modifier = Modifier.size(48.dp)) {
             Icon(
                 Icons.Default.PhotoCamera,
                 contentDescription = stringResource(
-                    if (thumbnail == null) R.string.field_photo_add else R.string.field_photo_replace,
+                    if (affordance == PhotoAffordance.ADD) R.string.field_photo_add else R.string.field_photo_replace,
                 ),
-                tint = if (thumbnail == null) MaterialTheme.colorScheme.onSurfaceVariant else Jamaica.Lime,
+                tint = if (affordance == PhotoAffordance.ADD) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    Jamaica.Lime
+                },
             )
         }
         IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
@@ -431,6 +549,7 @@ private fun DiaryRow(
 private fun DefectRow(
     defect: DefectItem,
     thumbnail: Bitmap?,
+    hasPhoto: Boolean,
     onPhoto: () -> Unit,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
@@ -442,6 +561,7 @@ private fun DefectRow(
         else -> Jamaica.Ash
     }
     val severity = severityLabel(defect.severity)
+    val affordance = photoAffordance(hasPhoto = hasPhoto, loaded = thumbnail != null)
     val resolvedLabel = stringResource(R.string.pdf_status_resolved)
     val detail = listOfNotNull(
         defect.location.takeIf { it.isNotBlank() },
@@ -467,9 +587,10 @@ private fun DefectRow(
                 },
             )
             Text(detail, style = MaterialTheme.typography.labelSmall, color = accent)
-            if (thumbnail != null) {
-                Image(
-                    bitmap = thumbnail.asImageBitmap(),
+            when (affordance) {
+                PhotoAffordance.ADD -> Unit
+                PhotoAffordance.REPLACE -> Image(
+                    bitmap = requireNotNull(thumbnail).asImageBitmap(),
                     contentDescription = stringResource(R.string.photo_title),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -478,15 +599,25 @@ private fun DefectRow(
                         .height(110.dp)
                         .clip(RoundedCornerShape(12.dp)),
                 )
+                PhotoAffordance.ON_FILE -> Text(
+                    stringResource(R.string.field_photo_on_file),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
             }
         }
         IconButton(onClick = onPhoto, modifier = Modifier.size(48.dp)) {
             Icon(
                 Icons.Default.PhotoCamera,
                 contentDescription = stringResource(
-                    if (thumbnail == null) R.string.field_photo_add else R.string.field_photo_replace,
+                    if (affordance == PhotoAffordance.ADD) R.string.field_photo_add else R.string.field_photo_replace,
                 ),
-                tint = if (thumbnail == null) MaterialTheme.colorScheme.onSurfaceVariant else Jamaica.Lime,
+                tint = if (affordance == PhotoAffordance.ADD) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    Jamaica.Lime
+                },
             )
         }
         IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {

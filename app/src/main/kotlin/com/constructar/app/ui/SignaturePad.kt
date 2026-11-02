@@ -77,6 +77,14 @@ class SignaturePadState {
         }
         val scaleX = width.toFloat() / source.width
         val scaleY = height.toFloat() / source.height
+        // The pad draws a dot for a one-point stroke, so the page has to: a customer who touches
+        // the glass instead of dragging signed something the app accepted and the protocol
+        // printed blank (finding 41). Same radius the pad uses, scaled to the page.
+        val dot = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.BLACK
+            style = android.graphics.Paint.Style.FILL
+        }
+        val dotRadius = (3f * ((scaleX + scaleY) * 0.5f)).coerceAtLeast(1f)
         strokes.forEach { stroke ->
             val path = android.graphics.Path()
             stroke.forEachIndexed { index, point ->
@@ -84,7 +92,13 @@ class SignaturePadState {
                 val y = point.y * scaleY
                 if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
             }
-            canvas.drawPath(path, paint)
+            if (stroke.size < 2) {
+                stroke.firstOrNull()?.let { point ->
+                    canvas.drawCircle(point.x * scaleX, point.y * scaleY, dotRadius, dot)
+                }
+            } else {
+                canvas.drawPath(path, paint)
+            }
         }
         return bitmap
     }

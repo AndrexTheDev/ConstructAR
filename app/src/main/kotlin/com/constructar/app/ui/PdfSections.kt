@@ -39,6 +39,8 @@ internal data class SiteFileTexts(
     val columnDuration: String,
     val totalLabel: String,
     val runningLabel: String,
+    /** Printed under the time table while a session is still open; `%1$s` is the duration. */
+    val openSessionNote: String,
     val diaryTitle: String,
     val defectsTitle: String,
     val columnDefect: String,
@@ -92,11 +94,19 @@ internal fun buildSiteFileSections(
             )
         }
         val total = duration(WorkTime.totalMillis(project.sessions, nowMs), texts)
+        // A clock left running is warned about on the phone (finding 44) and was silent here:
+        // the table says "running" in the end column and the total - and therefore the cost
+        // below it - keeps growing until the export happens. The operator sees the warning, the
+        // customer sees a number nobody explained, so the protocol says it too. Nothing is
+        // capped or guessed; the sentence only names what the arithmetic already did.
+        val open = WorkTime.runningSession(project.sessions)
         sections += PdfSection(
             title = texts.timesTitle,
             columns = listOf(texts.columnDate, texts.columnStart, texts.columnEnd, texts.columnDuration),
             columnWidths = columns(0.34f, 0.20f, 0.20f, 0.26f),
             rows = rows,
+            paragraphs = open?.let { listOf(String.format(Locale.ROOT, texts.openSessionNote, duration(WorkTime.sessionMillis(it, nowMs), texts))) }
+                ?: emptyList(),
             note = "${texts.totalLabel}: $total",
         )
     }
@@ -137,13 +147,26 @@ private fun defectRow(defect: DefectItem, texts: SiteFileTexts): List<String> = 
 )
 
 /** `2 h 15 min`, or `45 min` — the same split the site file shows on screen. */
-private fun duration(millis: Long, texts: SiteFileTexts): String {
+private fun duration(millis: Long, texts: SiteFileTexts): String =
+    durationText(millis, texts.hoursMinutes, texts.minutesOnly)
+
+/**
+ * The duration line of the time section.
+ *
+ * `Locale.ROOT`, like every other number in the document: `String.format(getDefault())` renders
+ * digits in the device's own shapes, so the same protocol printed on an Arabic-locale phone said
+ * `٢ h ١٥ min` next to `14.82 m` and `1.250,00 €`. A signed handover document must not change
+ * its digits because the phone was set to another language - and the six locales this app speaks
+ * all use Latin digits anyway, so nothing is lost. Money is the one deliberate exception (see
+ * `MoneyFormatter`: a price is read by the customer and follows the phone's convention).
+ */
+internal fun durationText(millis: Long, hoursTemplate: String, minutesTemplate: String): String {
     val hours = WorkTime.hours(millis)
     val minutes = WorkTime.minutes(millis)
     return if (hours > 0) {
-        String.format(Locale.getDefault(), texts.hoursMinutes, hours, minutes)
+        String.format(Locale.ROOT, hoursTemplate, hours, minutes)
     } else {
-        String.format(Locale.getDefault(), texts.minutesOnly, minutes)
+        String.format(Locale.ROOT, minutesTemplate, minutes)
     }
 }
 
@@ -206,20 +229,27 @@ internal fun buildPhotoAppendix(
     texts: SiteFileTexts,
 ): List<PdfPhoto> {
     if (photos.isEmpty()) return emptyList()
-    val diary = project.diary.mapNotNull { entry ->
-        val bitmap = entry.photo?.let(photos::get) ?: return@mapNotNull null
-        PdfPhoto(
-            caption = "%s %s".format(texts.photoDiaryPrefix, formatDateLabel(entry.createdAtEpochMs)),
-            bitmap = bitmap,
-        )
+    // The captions, keyed by token, so the page can follow the one order the field book uses -
+    // open defects first, because those are what the customer is asked to sign off as still
+    // outstanding, then the diary. Before finding 42 each list was appended in its own order and
+    // the cut at eight could drop the photo of every open defect for want of diary room.
+    val captions = HashMap<String, String>()
+    project.diary.forEach { entry ->
+        entry.photo?.let { token ->
+            captions.getOrPut(token) {
+                "%s %s".format(texts.photoDiaryPrefix, formatDateLabel(entry.createdAtEpochMs))
+            }
+        }
     }
-    val defects = project.defects.mapNotNull { defect ->
-        val bitmap = defect.photo?.let(photos::get) ?: return@mapNotNull null
-        PdfPhoto(
-            caption = "%s: %s".format(texts.photoDefectPrefix, defect.title),
-            bitmap = bitmap,
-        )
+    project.defects.forEach { defect ->
+        defect.photo?.let { token ->
+            captions[token] = "%s: %s".format(texts.photoDefectPrefix, defect.title)
+        }
     }
-    // Open defects first: those are what the customer is asked to sign off as still outstanding.
-    return (defects + diary).take(8)
+    return FieldPhotos.ordered(project)
+        .mapNotNull { token ->
+            val bitmap = photos[token] ?: return@mapNotNull null
+            PdfPhoto(caption = captions[token] ?: return@mapNotNull null, bitmap = bitmap)
+        }
+        .take(FieldPhotos.PDF_BUDGET)
 }

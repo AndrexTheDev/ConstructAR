@@ -46,6 +46,10 @@ data class PdfLabels(
     val procurementNote: String =
         "Order lengths include the site waste factor. Figures are computed from anchor-refined " +
             "node positions; verify critical runs with a tape measure before cutting.",
+    /** Printed under the runs table when part of the room could not be placed; `%1$s` = labels. */
+    val recoveredNote: String =
+        "Recovered after an interruption - lengths and fittings are exact, the 3D position is not " +
+            "in the model: %1\$s",
     val footer: String = "ConstructAR %1\$s - generated on device",
     val pageLabel: String = "Page %1\$d",
 )
