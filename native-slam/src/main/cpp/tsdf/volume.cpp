@@ -194,7 +194,15 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
         const int idx = (lz * kResolution + ly) * kResolution + lx;
 
         // Signed distance along the optical axis; positive in front of the surface.
-        const float sdf = frame.depthIsOpticalAxis ? (d - z) : (d - cam.length());
+        //
+        // `DepthFrameView` used to carry a `depthIsOpticalAxis` flag with a second branch here
+        // (`d - cam.length()`) for sources that hand out Euclidean range. Nothing ever set it -
+        // not the JNI, not the Kotlin pipeline - and it could not have worked if something had:
+        // the ray point above is built at *optical-axis* depth, so at the frame corner a 2 m
+        // range reading was compared against a 2.24 m point. Measured on a synthetic 30°-tilted
+        // plane, forcing it put the surface up to 8.8 cm off the true plane and threw away 87 %
+        // of it (finding 108). One convention, documented and tested: ARCore depth is z-depth.
+        const float sdf = d - z;
         const float clamped = clampf(sdf / trunc, -1.f, 1.f);
 
         const float oldWeight = static_cast<float>(block->weight[idx]);

@@ -66,13 +66,6 @@ struct DepthFrameView {
 
   int64_t timestampNs = 0;
 
-  /**
-   * ARCore reports raw depth as the perpendicular distance along the optical axis
-   * (z-depth). Kept as a flag because some depth sources hand out Euclidean range instead,
-   * and because the Kotlin side can flip it if a device ever disagrees.
-   */
-  bool depthIsOpticalAxis = true;
-
   bool isValid() const {
     return depth != nullptr && width > 0 && height > 0 && rowStrideElements >= width &&
            intrinsics.isValid() && cameraToWorld.isFinite();

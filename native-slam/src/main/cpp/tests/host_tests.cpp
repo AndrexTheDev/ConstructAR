@@ -267,6 +267,68 @@ void testFlatWall() {
   checkNear(maxX - minX, 2.56, 0.15, "wall width at 2 m (m)");
 }
 
+/**
+ * The depth convention, pinned by a surface that would bend if it were wrong.
+ *
+ * ARCore's depth image is a distance along the camera's optical axis (z-depth), and the
+ * integrator has to place the hit where that number says: `(px·z, py·z, −z)` with the signed
+ * distance measured *along the axis*. A fronto-parallel wall cannot tell the two conventions
+ * apart — every pixel has the same z and the same range — which is why this case uses a plane
+ * tilted 30° about Y, reconstructed from an analytic depth map. Reading the same numbers as
+ * Euclidean range instead bows such a surface by up to 8.8 cm and loses most of it (finding 108).
+ */
+void testTiltedPlane() {
+  section("TSDF + Surface Nets: 30°-tilted plane (depth convention)");
+  SyntheticCamera camera;
+  const Vec3 normal(0.5f, 0.f, 0.8660254f);  // unit, points back at the camera
+  const float offset = -2.0f;                 // normal · (point on the plane)
+
+  std::vector<uint16_t> depth(static_cast<size_t>(camera.width * camera.height), 0);
+  for (int v = 0; v < camera.height; ++v) {
+    for (int u = 0; u < camera.width; ++u) {
+      const float px = (static_cast<float>(u) + 0.5f - camera.cx) / camera.fx;
+      const float py = (static_cast<float>(v) + 0.5f - camera.cy) / camera.fy;
+      const float denominator = normal.x * px + normal.y * py - normal.z;
+      if (std::fabs(denominator) < 1e-6f) continue;
+      const float z = offset / denominator;
+      if (z < 0.2f || z > 5.5f) continue;
+      depth[static_cast<size_t>(v * camera.width + u)] = static_cast<uint16_t>(z * 1000.f);
+    }
+  }
+
+  TsdfConfig config;
+  config.voxelSize = 0.02f;
+  config.minConfidence = 0;
+  config.workerThreads = 1;
+  TsdfVolume volume(config);
+  volume.integrate(makeFrame(camera, depth, Mat4::identity()), 1);
+  const auto mesh = volume.extractMesh();
+
+  check(mesh.triangleCount() > 10000,
+        "tilted plane triangles (" + std::to_string(mesh.triangleCount()) + ")");
+
+  double maxPlaneError = 0.0;
+  int alignedNormals = 0;
+  bool reachesLeft = false;
+  bool reachesRight = false;
+  for (size_t i = 0; i < mesh.vertexCount(); ++i) {
+    const Vec3 p(mesh.positions[i * 3], mesh.positions[i * 3 + 1], mesh.positions[i * 3 + 2]);
+    const Vec3 n(mesh.normals[i * 3], mesh.normals[i * 3 + 1], mesh.normals[i * 3 + 2]);
+    maxPlaneError = std::max(maxPlaneError,
+                             std::fabs(static_cast<double>(normal.dot(p) - offset)));
+    if (std::fabs(n.dot(normal)) > 0.9f) ++alignedNormals;
+    if (p.x < -1.0f) reachesLeft = true;
+    if (p.x > 1.0f) reachesRight = true;
+  }
+  checkNear(maxPlaneError, 0.0, 0.02, "tilted plane: max distance from the true plane (m)");
+  check(alignedNormals > static_cast<int>(mesh.vertexCount()) * 9 / 10,
+        "tilted plane: normals follow the plane (" + std::to_string(alignedNormals) + "/" +
+            std::to_string(mesh.vertexCount()) + ")");
+  // The far edge of a 30° plane is 2.31 m away and the near edge 1.79 m, so a surface that
+  // spans the frame is what proves the whole tilted patch was reconstructed, not one band.
+  check(reachesLeft && reachesRight, "tilted plane spans the frame from x < -1 m to x > 1 m");
+}
+
 void testPoseGraphLoopClosure() {
   section("Pose graph: drift removal with a loop closure");
   // A square room walked with 13 keyframes (12 steps of 1 m, a 90° turn every third step).
@@ -414,6 +476,7 @@ int main() {
   testSe3();
   testSphereReconstruction();
   testFlatWall();
+  testTiltedPlane();
   testPoseGraphLoopClosure();
   testProximityDetector();
   testTriangleBudgetAndReset();
