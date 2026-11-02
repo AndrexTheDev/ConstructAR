@@ -93,7 +93,8 @@ internal fun buildSiteFileSections(
                 duration(WorkTime.sessionMillis(session, nowMs), texts),
             )
         }
-        val total = duration(WorkTime.totalMillis(project.sessions, nowMs), texts)
+        // The sum of the rows, not a truncated raw total: the column has to add up (finding 81).
+        val total = duration(WorkTime.billableMillis(project.sessions, nowMs), texts)
         // A clock left running is warned about on the phone (finding 44) and was silent here:
         // the table says "running" in the end column and the total - and therefore the cost
         // below it - keeps growing until the export happens. The operator sees the warning, the
@@ -197,7 +198,9 @@ internal fun buildCostSection(
     texts: SiteFileTexts,
     nowMs: Long = System.currentTimeMillis(),
 ): PdfSection? {
-    val workMillis = WorkTime.totalMillis(project.sessions, nowMs)
+    // The same quantity the time table totals: one row of time, one rounded duration, and the
+    // money multiplies exactly that (finding 81).
+    val workMillis = WorkTime.billableMillis(project.sessions, nowMs)
     val billedMinutes = WorkTime.billableMinutes(workMillis)
     val labour = Pricing.labourCents(workMillis, hourlyRateCents)
     val material = project.materialLumpSumCents

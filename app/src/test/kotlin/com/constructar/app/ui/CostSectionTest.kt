@@ -178,4 +178,45 @@ class CostSectionTest {
         requireNotNull(section)
         assertTrue(section.paragraphs.toString(), section.paragraphs.last().contains(MoneyFormatter.format(6_000)))
     }
+
+    @Test
+    fun `the labour line bills the minutes the time table adds up to`() {
+        // 2 h 07 min 42 s and a 40-second interruption. The rows print "2 h 07 min" and "0 min";
+        // a total truncated from the raw 2 h 08 min 22 s printed "2 h 08 min" and billed 102,40 €,
+        // one minute more than the column the customer adds up (finding 81).
+        val long = WorkSession(
+            id = "s1",
+            startEpochMs = 1_767_225_600_000L,
+            endEpochMs = 1_767_225_600_000L + 2 * 3_600_000L + 7 * 60_000L + 42_000L,
+        )
+        val brief = WorkSession(
+            id = "s2",
+            startEpochMs = 1_767_235_600_000L,
+            endEpochMs = 1_767_235_600_000L + 40_000L,
+        )
+
+        val section = buildCostSection(project(sessions = listOf(long, brief)), 4_800, texts())
+        requireNotNull(section)
+
+        val labour = section.paragraphs.first { it.startsWith("Arbeitslohn") }
+        assertTrue(labour, labour.contains("2 h 07 min"))
+        assertTrue(labour, !labour.contains("2 h 08 min"))
+        assertEquals(MoneyFormatter.format(10_160), section.paragraphs.last().substringAfter(": "))
+    }
+
+    @Test
+    fun `the time table's total is the sum of its rows`() {
+        // Three 59-second interruptions: every row prints "0 min", so the total must as well.
+        val briefs = (0 until 3).map { index ->
+            val start = 1_767_225_600_000L + index * 10_000L
+            WorkSession(id = "b$index", startEpochMs = start, endEpochMs = start + 59_000L)
+        }
+
+        val times = buildSiteFileSections(project(sessions = briefs), texts(), nowMs = 4_000_000_000_000L)
+            .single { it.title == "Arbeitszeit" }
+
+        assertEquals(3, times.rows.size)
+        assertTrue(times.rows.toString(), times.rows.all { it.last() == "0 min" })
+        assertEquals("Summe: 0 min", times.note)
+    }
 }

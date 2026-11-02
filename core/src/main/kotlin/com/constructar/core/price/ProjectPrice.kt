@@ -31,6 +31,10 @@ object Pricing {
      * to the rate - so the page adds up when a customer multiplies it himself (finding 76). The
      * remainder under a minute is not billed, exactly as it is not printed.
      *
+     * [workMillis] is the *summed* billable time of the job, i.e. `WorkTime.billableMillis`, not
+     * the raw total: the time table prints whole minutes per session, and the labour line has to
+     * multiply what those rows add up to (finding 81).
+     *
      * Rounded once, at the end: accumulating rounded minutes is how timesheets end up two euros
      * off the invoice.
      */

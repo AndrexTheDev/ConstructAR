@@ -161,7 +161,9 @@ fun ProjectScreen(
     // change while a clock runs. [rememberNowMs] moves it on every half minute, exactly like the
     // field book's total and unlike the frozen value this used to be.
     val nowMs = rememberNowMs(WorkTime.isRunning(project.sessions))
-    val workMillis = project.totalWorkMillis(nowMs)
+    // What the protocol will bill - the sessions' whole minutes added up - so the card on the
+    // phone and the document that leaves the site show the same money (finding 81).
+    val workMillis = WorkTime.billableMillis(project.sessions, nowMs)
     val labourPreview = Pricing.labourCents(workMillis, effectiveRate)
     val totalPreview = Pricing.totalCents(labourPreview, parsedMaterial)
     val customerDirty = customerName != project.customerName ||

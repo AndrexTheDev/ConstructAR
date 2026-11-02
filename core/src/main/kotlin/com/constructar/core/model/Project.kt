@@ -93,6 +93,13 @@ data class ProjectRecord(
         get() = defects.count { !it.resolved }
 
     /** Everything recorded on site, including a session that has not been stopped yet. */
+    /**
+     * Raw working time, milliseconds, nothing rounded - the truth about how long he was there.
+     *
+     * Not the number anything printed or billed uses: the protocol's table, its labour line and the
+     * room screen's preview all take `WorkTime.billableMillis`, which adds up the rounded session
+     * rows (finding 81). Anything that shows a duration to a human belongs there.
+     */
     fun totalWorkMillis(nowMs: Long = System.currentTimeMillis()): Long = WorkTime.totalMillis(sessions, nowMs)
     val totalLengthMeters: Float
         get() = routes.sumOf { it.polylineLengthMeters.toDouble() }.toFloat()

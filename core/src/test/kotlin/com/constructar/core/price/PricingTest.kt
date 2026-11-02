@@ -6,6 +6,8 @@
 
 package com.constructar.core.price
 
+import com.constructar.core.model.WorkSession
+import com.constructar.core.model.WorkTime
 import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -149,5 +151,20 @@ class PricingTest {
         val polish = MoneyFormatter.format(125_000L, Locale.forLanguageTag("pl-PL"))
         assertTrue(polish, polish.contains("€") || polish.contains("EUR"))
         assertTrue(polish, !polish.contains("zł"))
+    }
+
+    @Test
+    fun `the labour line bills what the session rows add up to`() {
+        // 2 h 07 min 42 s plus a 40-second interruption: the time table prints 127 min and 0 min,
+        // so the job is 127 minutes - 101,60 EUR at 48,00 - and not the 128 minutes (102,40 EUR)
+        // a total truncated from the raw milliseconds would bill (finding 81).
+        val sessions = listOf(
+            WorkSession(id = "s1", startEpochMs = 0L, endEpochMs = 2 * 3_600_000L + 7 * 60_000L + 42_000L),
+            WorkSession(id = "s2", startEpochMs = 10_000_000L, endEpochMs = 10_040_000L),
+        )
+
+        val billable = WorkTime.billableMillis(sessions, nowMs = 20_000_000L)
+        assertEquals(127 * 60_000L, billable)
+        assertEquals(10_160L, Pricing.labourCents(billable, rate))
     }
 }

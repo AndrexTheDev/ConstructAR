@@ -135,4 +135,27 @@ class WorkTimeTest {
         val sessions = listOf(closed, open)
         assertEquals(open, WorkTime.runningSession(sessions))
     }
+
+    @Test
+    fun `the time table's total is the sum of its rows`() {
+        // Three interruptions of 59 s each - the shape of a job that keeps walking in and out of a
+        // cellar. Each row prints "0 min", so the total has to print "0 min" too; it used to print
+        // "2 min" and the labour line billed those two minutes (finding 81).
+        val sessions = (0 until 3).map { session(it * 10_000L, end = it * 10_000L + 59_000L) }
+
+        assertEquals(0L, WorkTime.billableMinutes(sessions, nowMs = 10_000_000L))
+        assertEquals(0L, WorkTime.billableMillis(sessions, nowMs = 10_000_000L))
+    }
+
+    @Test
+    fun `a long session and a sub-minute one keep the long one's minutes`() {
+        // The same rule the other way round: a 40-second interruption must not round the job up
+        // from its printed 2 h 07 min to the 2 h 08 min a raw total would give.
+        val twoHoursAndChange = session(0L, end = 2 * 3_600_000L + 7 * WorkTime.MINUTE_MS + 42_000L)
+        val brief = session(10_000_000L, end = 10_000_000L + 40_000L)
+        val sessions = listOf(twoHoursAndChange, brief)
+
+        assertEquals(127L, WorkTime.billableMinutes(sessions, nowMs = 20_000_000L))
+        assertEquals(127 * WorkTime.MINUTE_MS, WorkTime.billableMillis(sessions, nowMs = 20_000_000L))
+    }
 }

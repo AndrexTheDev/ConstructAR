@@ -111,7 +111,8 @@ fun FieldBookScreen(
     var defectLocation by remember(project.id) { mutableStateOf("") }
     var defectSeverity by remember(project.id) { mutableStateOf(DefectSeverity.MEDIUM) }
 
-    val totalMillis = WorkTime.totalMillis(project.sessions, nowMs)
+    // The sum of the session rows below, so the big number and the list agree (finding 81).
+    val totalMillis = WorkTime.billableMillis(project.sessions, nowMs)
 
     // One camera launcher serves every entry: the pending token decides which diary line or
     // defect the picture ends up on. The camera app writes straight into our cache through the

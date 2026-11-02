@@ -141,6 +141,32 @@ object WorkTime {
      */
     fun billableMinutes(millis: Long): Long = millis.coerceAtLeast(0L) / MINUTE_MS
 
+    /**
+     * The job's whole minutes, **one row at a time** - the quantity the time table adds up to.
+     *
+     * The table in the protocol prints one row per session, and each row's duration is printed as
+     * whole minutes. A total truncated from the raw sum is therefore not the sum of the rows: three
+     * sessions of 59 s print "0 min" three times and a total of "2 min", and the labour line below
+     * billed those two minutes at 1,60 € - a page on which the customer's calculator disagrees with
+     * the invoice (finding 81).
+     *
+     * So the rounding happens per session, at the row, and the total is the sum of the rows. What
+     * that costs is at most 59 s per interruption, and the table says so on the row itself: an
+     * interruption that short is printed as what it bills, nothing.
+     */
+    fun billableMinutes(sessions: List<WorkSession>, nowMs: Long): Long =
+        sessions.sumOf { billableMinutes(sessionMillis(it, nowMs)) }
+
+    /**
+     * [billableMinutes] expressed in milliseconds.
+     *
+     * The bridge between the rows and the money: everything that prints a duration or bills labour
+     * takes this one number, so the table, the labour line and the screen preview cannot show three
+     * different jobs.
+     */
+    fun billableMillis(sessions: List<WorkSession>, nowMs: Long): Long =
+        billableMinutes(sessions, nowMs) * MINUTE_MS
+
     /** Whole hours of the [billableMinutes] quantity. */
     fun hours(millis: Long): Long = billableMinutes(millis) / 60L
 
