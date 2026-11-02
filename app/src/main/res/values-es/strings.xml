@@ -63,6 +63,7 @@
     <string name="ar_confidence_weak">Punto más débil %1$d %%: vuelve a tocarlo para mejorar el tramo</string>
     <string name="ar_no_surface">No se ha encontrado superficie. Apunta a una pared o al suelo.</string>
     <string name="ar_scan_progress">Estancia %1$d %% · %2$d k triángulos</string>
+    <string name="ar_scan_full">Límite de escaneo alcanzado: solo se ha captado parte de la sala. Tus tiradas cuentan igual.</string>
     <string name="ar_scan_unavailable">Escaneo de malla no disponible. La medición sigue funcionando.</string>
     <string name="ar_session_failed">Fallo de la sesión AR: %1$s</string>
     <string name="ar_session_retry">Reintentar</string>

@@ -63,6 +63,7 @@
     <string name="ar_confidence_weak">Punto più debole %1$d %%: toccalo di nuovo per migliorare la tratta</string>
     <string name="ar_no_surface">Nessuna superficie trovata. Inquadra una parete o il pavimento.</string>
     <string name="ar_scan_progress">Locale %1$d %% · %2$d k triangoli</string>
+    <string name="ar_scan_full">Limite di scansione raggiunto: è stata catturata solo una parte della stanza. Le tratte contano comunque.</string>
     <string name="ar_scan_unavailable">Scansione della mesh non disponibile. La misura funziona comunque.</string>
     <string name="ar_session_failed">Sessione AR non riuscita: %1$s</string>
     <string name="ar_session_retry">Riprova</string>

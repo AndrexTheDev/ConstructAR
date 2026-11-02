@@ -329,6 +329,16 @@ fun ArMeasureScreen(
     )
     val scanInstructionText = stringResource(R.string.scan_instruction)
     val scanUnavailableText = stringResource(R.string.ar_scan_unavailable)
+    // The volume budget is spent: the mesh has stopped growing and the gauge will not move again.
+    // Said out loud, because a stuck scan and a slow one look the same from the outside
+    // (finding 97).
+    val scanFullText = stringResource(R.string.ar_scan_full)
+    val hint = scanHint(
+        showScanner = showScanner,
+        ready = scanState.ready,
+        hitBlockBudget = scanState.hitBlockBudget,
+        meshVersion = scanState.meshVersion,
+    )
 
     Box(
         modifier = Modifier
@@ -522,11 +532,12 @@ fun ArMeasureScreen(
                 }
 
                 // Coaching: tracking verdict first, then the scan state.
-                val statusLine = guidanceText ?: when {
-                    !showScanner -> null
-                    !scanState.ready -> scanUnavailableText
-                    scanState.meshVersion == 0 -> scanInstructionText
-                    else -> scanProgressText
+                val statusLine = guidanceText ?: when (hint) {
+                    ScanHint.NONE -> null
+                    ScanHint.UNAVAILABLE -> scanUnavailableText
+                    ScanHint.FULL -> scanFullText
+                    ScanHint.INSTRUCTION -> scanInstructionText
+                    ScanHint.PROGRESS -> scanProgressText
                 }
                 statusLine?.let { line ->
                     Text(
@@ -534,6 +545,7 @@ fun ArMeasureScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = when {
                             warningText != null -> SiteColors.warning
+                            hint == ScanHint.FULL -> SiteColors.warning
                             tracking.quality == TrackingQuality.NOT_TRACKING -> SiteColors.danger
                             else -> HudStyle.text
                         },

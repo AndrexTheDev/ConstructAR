@@ -209,7 +209,15 @@ class TsdfVolume {
   mutable std::mutex integrationMutex_;
   std::atomic<size_t> blockCount_{0};
   uint32_t frameCounter_ = 0;
-  bool blockBudgetReported_ = false;
+  /**
+   * Set the first time a block is refused because `maxBlocks` is spent.
+   *
+   * Atomic, not a plain bool: `findOrCreateBlock` runs on every worker thread, and two threads
+   * hitting the budget at the same moment were writing the same flag without synchronisation - a
+   * data race under the C++ memory model, in the only signal that says the scan has stopped
+   * growing (finding 97).
+   */
+  std::atomic<bool> blockBudgetReported_{false};
 };
 
 }  // namespace constructar

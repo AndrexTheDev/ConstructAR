@@ -365,6 +365,33 @@ void testTriangleBudgetAndReset() {
   check(volume.extractMesh().empty(), "reset mesh is empty");
 }
 
+void testBlockBudget() {
+  section("Block budget: the volume stops growing and says so");
+  SyntheticCamera camera;
+  const auto depth = renderSphereDepth(camera, Vec3(0.f, 0.f, -2.f), 0.5f);
+  TsdfConfig config;
+  config.voxelSize = 0.01f;
+  config.minConfidence = 0;
+  config.maxBlocks = 4;
+  TsdfVolume volume(config);
+
+  const auto stats = volume.integrate(makeFrame(camera, depth, Mat4::identity()), 2);
+  // A sphere at 2 m needs far more than four blocks, so the budget is hit on the first frame.
+  check(stats.hitBlockBudget, "the budget is reported");
+  check(volume.blockCount() <= 4, "no block is allocated past the budget (" +
+                                      std::to_string(volume.blockCount()) + ")");
+
+  // A second frame must keep the flag - the scan is still full - and must not grow the volume.
+  const auto again = volume.integrate(makeFrame(camera, depth, Mat4::identity()), 2);
+  check(again.hitBlockBudget, "the flag survives the next frame");
+  check(volume.blockCount() <= 4, "the volume stays at the budget");
+
+  // Reset clears it, so a fresh scan can report honestly again.
+  volume.reset();
+  const auto afterReset = volume.integrate(makeFrame(camera, depth, Mat4::identity()), 2);
+  check(afterReset.hitBlockBudget, "after a reset the budget is hit again, not remembered");
+}
+
 void testInvalidInput() {
   section("Invalid input handling");
   TsdfConfig config;
@@ -390,6 +417,7 @@ int main() {
   testPoseGraphLoopClosure();
   testProximityDetector();
   testTriangleBudgetAndReset();
+  testBlockBudget();
   testInvalidInput();
 
   std::printf("\n%d checks, %d failures\n", g_checks, g_failures);

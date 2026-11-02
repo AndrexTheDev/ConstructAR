@@ -63,7 +63,7 @@ TsdfVolume::Block* TsdfVolume::findOrCreateBlock(int32_t bx, int32_t by, int32_t
   auto it = shard.index.find(key);
   if (it != shard.index.end()) return &shard.blocks[it->second];
   if (blockCount_.load(std::memory_order_relaxed) >= config_.maxBlocks) {
-    blockBudgetReported_ = true;
+    blockBudgetReported_.store(true, std::memory_order_relaxed);
     return nullptr;
   }
   shard.blocks.emplace_back();
@@ -247,7 +247,7 @@ IntegrationStats TsdfVolume::integrate(const DepthFrameView& frame, int pixelSte
   }
 
   stats.blocksTotal = static_cast<int>(blockCount());
-  stats.hitBlockBudget = blockBudgetReported_;
+  stats.hitBlockBudget = blockBudgetReported_.load(std::memory_order_relaxed);
   const auto finished = std::chrono::steady_clock::now();
   stats.milliseconds =
       std::chrono::duration_cast<std::chrono::microseconds>(finished - started).count() / 1000.0;
@@ -316,7 +316,7 @@ void TsdfVolume::reset() {
   }
   blockCount_.store(0, std::memory_order_relaxed);
   frameCounter_ = 0;
-  blockBudgetReported_ = false;
+  blockBudgetReported_.store(false, std::memory_order_relaxed);
 }
 
 }  // namespace constructar
