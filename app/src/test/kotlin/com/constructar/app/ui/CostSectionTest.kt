@@ -166,7 +166,8 @@ class CostSectionTest {
         requireNotNull(section)
         assertEquals(2, section.paragraphs.size)
         assertTrue(section.paragraphs.any { it.contains(MoneyFormatter.format(25_000)) })
-        assertTrue(section.paragraphs.none { it.contains("0 min") }, section.paragraphs.toString())
+        // org.junit's assertTrue takes the message first - the other order does not compile.
+        assertTrue(section.paragraphs.toString(), section.paragraphs.none { it.contains("0 min") })
         assertTrue(section.paragraphs.last().contains(MoneyFormatter.format(25_000)))
     }
 
