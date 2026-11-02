@@ -81,6 +81,25 @@ again. Each line names what was read, not what was assumed.
   paid format ticked.
 * **Storage reclaimed on delete.** `ProjectRepository.delete` removes the room's JSON, its draft and
   every photo whose name starts with `<id>__`, and the diary/defect delete paths remove their own
+* **Persistence, backup/restore and the licence path, round 14.** A project round-trips through
+  `ProjectRecord.serializer()` with `encodeDefaults = true` and `explicitNulls = false`, and every
+  field of `ProjectRecord`, `ConduitRoute`, `DiaryEntry`, `DefectItem` and `WorkSession` has a
+  reader somewhere in the app (checked field by field, the sweep that produced findings 113 and
+  114) - no `@Transient`, no persisted field the app forgets. `backupEntries` copies project files
+  byte for byte, which is why a room that no longer parses is still *in* the backup; the restore
+  asks "is this a room at all" before "has the plan a slot", re-keys a duplicate id through
+  `importProjectDetailed`, re-homes its photo with `PhotoTokens.withProject` so a photo never lands
+  on a room it did not come from, leaves the photos of held-back rooms untouched, and counts a
+  photo this phone refused (`photosFailed`). The card's own wording claims nothing the code does
+  not do - it says "every project is one file", not "everything is backed up", which is the honest
+  sentence while the firm's waste factor and hourly rate stay device settings. In the licence path,
+  expiry is enforced twice (in `LicenceVerifier` and again against the watermark day in
+  `TamperGuard`), `today == expiry` is still valid with `daysLeft == 0`, the trial rule
+  `day < start + 7` grants exactly seven days, `TRIAL` can never be minted into a licence, and a
+  pasted key tolerates the spaces and line breaks a mail client adds. The three wallet addresses
+  and the four prices agree between the Kotlin, `tools/build_site.py`, the six generated pages and
+  `docs/BILLING.md` - `tools/consistency_audit.py` reads all four and fails on one character of
+  drift. The one thing that *was* wrong on this surface is finding 115.
 * **The export/BOM/PDF numeric paths, round 13.** `MaterialCsvWriter` (RFC 4180 quoting on the
   separator, a doubled quote and a newline; the spreadsheet-formula guard with its leading-minus
   rule; CRLF; `.` decimals through `Locale.ROOT`; and every order-list row carrying exactly the
