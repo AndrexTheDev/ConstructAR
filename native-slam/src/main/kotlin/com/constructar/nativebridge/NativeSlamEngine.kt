@@ -178,6 +178,8 @@ class NativeSlamEngine private constructor(private val handle: Long) : AutoClose
     }
 
     // ── Pose graph (loop closure) ────────────────────────────────────────────────────────
+    // Not wired into the scan pipeline yet (finding 98): no keyframe reaches this graph, so the
+    // app measures on ARCore's own tracking. See docs/SETUP.md §5.2 before quoting a closure.
 
     fun resetPoseGraph() {
         if (handle != 0L) nativePoseGraphReset(handle)
@@ -201,7 +203,12 @@ class NativeSlamEngine private constructor(private val handle: Long) : AutoClose
         nativePoseGraphAddEdge(handle, from, to, measurement, rotationWeight, translationWeight, loopClosure)
     }
 
-    /** Runs the optimiser and returns the refreshed world poses. */
+    /**
+     * Runs the optimiser and returns the refreshed world poses.
+     *
+     * Not called by the scan pipeline yet (finding 98): the graph is empty in the shipped app,
+     * so this returns a report that carries no poses. See docs/SETUP.md §5.2.
+     */
     fun optimizePoseGraph(iterations: Int = 20): PoseGraphResult? {
         if (handle == 0L) return null
         val raw = nativePoseGraphOptimize(handle, iterations) ?: return null

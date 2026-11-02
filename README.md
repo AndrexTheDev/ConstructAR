@@ -317,8 +317,12 @@ Optional pieces (both are opt-in, the app works without them):
   `app/src/main/assets/models/` and set `constructar.depthModelAsset` if the name differs.
   Without it the app uses ARCore depth only.
 * **RTAB-Map** — set `constructar.rtabmap.dir=<path to RTAB-Map source>` in
-  `gradle.properties`; the CMake build then compiles the BSD-only bridge. Without it, the
-  built-in pose graph and proximity loop-closure proposer are used.
+  `gradle.properties`; the CMake build then compiles the BSD-only bridge. Note what is wired
+  today: the app measures on ARCore's own tracking. The pose graph, the proximity loop-closure
+  proposer and the bridge are built, host-tested and reachable through `NativeSlamEngine`, but
+  **nothing in `:app` or `:ar-engine` feeds them a keyframe yet**, so no closure is optimised -
+  the pose graph is *not yet driven by the scan pipeline* (finding 98), and
+  `verify_sources.py` refuses this file if it ever claims otherwise while that is still true.
 
 Full step-by-step setup — including how to convert the depth model and how to build RTAB-Map
 without non-free modules — is in **[docs/SETUP.md](docs/SETUP.md)**.
@@ -348,15 +352,17 @@ Known limitations, deliberately documented rather than hidden:
 * **Reflective and transparent surfaces** (windows, mirrors, polished steel) break both depth
   and tracking. The tracking monitor catches the *symptom* (depth confidence collapse) and
   coaches the operator; it cannot fix the physics.
-* **Drift.** With no loop closure, ARCore drift is ~1 % of travelled distance; the pose graph
-  redistributes a closure over the whole trajectory, so a 1.4 m closure error becomes ~0.1 m of
-  per-edge residual rather than a kink in the mesh.
+* **Drift.** ARCore drift is ~1 % of travelled distance and the shipped pipeline does not
+  correct it: the pose graph that would redistribute a closure over the whole trajectory is
+  host-tested but never fed (see *Optional pieces*), so a long run accumulates the error instead
+  of folding it back. Re-measure a run longer than ~8 m, or measure it as two runs from a shared
+  corner.
 
 ---
 
 ## Testing
 
-* **Native (C++) — 44 assertions, all green**, exercised with plain `g++` (no Android SDK):
+* **Native (C++) — 49 assertions, all green**, exercised with plain `g++` (no Android SDK):
   SE(3) exp/log round trip, TSDF integration on synthetic depth, sphere/wall reconstruction
   areas and extents, triangle budget, invalid input, pose-graph closure, proximity loop closure.
 * **JVM (`:core`)** — transform maths, plane fits and polygon containment, fillet smoothing,
@@ -394,7 +400,10 @@ Known limitations, deliberately documented rather than hidden:
   proven.
 * **Static gates**: `scripts/verify_sources.py` checks copyright headers, the reflection ban,
   hardcoded UI text in shipped code, string-resource references, locale parity, XML
-  well-formedness and the manifest hardening — without needing a JDK.
+  well-formedness and the manifest hardening — without needing a JDK. Two of its rules keep a
+  *claim* tied to the code: no document may describe a loop closure while nothing feeds the pose
+  graph (finding 98), and the native assertion count in this file must equal the call sites in
+  `host_tests.cpp` (finding 99).
 * **Site gate**: `tools/seo_audit.py` reads the *generated* landing pages and refuses a
   regression: canonical and the six `hreflang` pairs, title/description lengths, Open Graph and
   Twitter cards with a real image size, JSON-LD whose offers match the four real prices, every
@@ -427,14 +436,14 @@ errors:
 
 | Gate | Result |
 |------|--------|
-| `scripts/verify_sources.py` (headers, reflection ban, i18n parity) | pass — 162 files |
+| `scripts/verify_sources.py` (headers, reflection ban, i18n parity, no stale claim) | pass — every tracked source file |
 | `tools/seo_audit.py` (metadata, structured data, links, sitemap, manifest) | pass — 6 pages + 404 |
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
 | `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 467 tests in the app+core+ar-engine+export suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
-| Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 44 checks, 0 failures |
+| Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 49 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
 | APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |
 

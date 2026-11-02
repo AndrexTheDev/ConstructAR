@@ -23,6 +23,8 @@ and most expensive to discover in a 12-minute Gradle run:
  11. text the operator typed survives a rotation (finding 83)  (rememberSaveable, not remember)
  12. a money field is not keyed on the amount it writes (84)   (no re-formatting under the finger)
  13. every protocol states its expected error, in all six languages (88)
+ 14. no document promises a loop closure nothing feeds        (finding 98)
+ 15. the README's native assertion count equals the suite      (finding 99)
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -437,6 +439,103 @@ def check_pdf_accuracy_note() -> None:
                       "typed into the translation instead of coming from HitConfidence.RUN_TRUSTED")
 
 
+# ── findings 98/99: a claim has to match the code ────────────────────────────────────────────────
+
+NATIVE_SUITE = ROOT / "native-slam" / "src" / "main" / "cpp" / "tests" / "host_tests.cpp"
+UNWIRED_MARKER = "not yet driven by the scan pipeline"
+
+POSE_GRAPH_CALL = re.compile(
+    r"\.\s*(optimizePoseGraph|addPoseNode|addPoseEdge|loopClosureCandidates|resetPoseGraph)\s*\("
+)
+
+STALE_LOOP_CLAIMS = (
+    ("README.md", "proximity loop-closure proposer are used"),
+    ("docs/SETUP.md", "runs the optimiser and refreshes the node poses"),
+)
+
+
+def check_loop_closure_claim() -> None:
+    """A document may not promise a loop closure that nothing feeds (finding 98).
+
+    Three documents described the loop closure as present behaviour - README's *Optional pieces*
+    ("without RTAB-Map the built-in pose graph and proximity loop-closure proposer are used"),
+    README's drift bullet ("the pose graph redistributes a closure over the whole trajectory"),
+    and SETUP.md 5.2 ("runs the optimiser and refreshes the node poses") - while the truth was
+    that no line of `:app` or `:ar-engine` ever called `optimizePoseGraph`, `addPoseNode`,
+    `addPoseEdge` or `loopClosureCandidates`, and the JNI exposed no keyframe feed at all. The
+    pose graph, the proximity proposer and the RTAB-Map bridge were built and host-tested, and
+    nothing in the shipped app reached any of them: a room that was walked twice was never
+    folded back together, and the accuracy table's "~1 % drift" rested on a correction that
+    never ran.
+
+    The rule reads the truth from the code: if some non-test, non-bridge Kotlin file calls the
+    pose graph, the documents must stop carrying the marker; if nothing does, both documents
+    must carry it. Either direction fails, so wiring the graph forces the docs back and unwiring
+    it cannot be papered over.
+    """
+    documents = {
+        "README.md": ROOT / "README.md",
+        "docs/SETUP.md": ROOT / "docs" / "SETUP.md",
+    }
+    texts = {name: path.read_text(encoding="utf-8") for name, path in documents.items()}
+
+    drivers: list[str] = []
+    for path in kotlin_sources("app", "ar-engine", "native-slam"):
+        posix = path.as_posix()
+        if "/src/test/" in posix or "/nativebridge/" in posix:
+            continue
+        if POSE_GRAPH_CALL.search(path.read_text(encoding="utf-8")):
+            drivers.append(posix.replace(ROOT.as_posix() + "/", ""))
+
+    if drivers:
+        for name, text in texts.items():
+            if UNWIRED_MARKER in text:
+                add(documents[name], f"'{drivers[0]}' now drives the pose graph, but this text "
+                                     f"still says it is '{UNWIRED_MARKER}' - update the document "
+                                     f"and this rule (finding 98)")
+        return
+
+    for name, text in texts.items():
+        if UNWIRED_MARKER not in text:
+            add(documents[name], f"nothing outside the bridge calls the pose graph, so this text "
+                                 f"must say it is '{UNWIRED_MARKER}' - it otherwise promises a "
+                                 f"loop closure the app never runs (finding 98)")
+    for name, needle in STALE_LOOP_CLAIMS:
+        if needle in texts[name]:
+            add(documents[name], f"still claims '{needle}', and no code feeds that path "
+                                 f"(finding 98)")
+
+
+def check_native_assertion_count() -> None:
+    """The README's native assertion count must equal the suite (finding 99).
+
+    Two places in the README said "44 assertions" / "44 checks, 0 failures" long after the
+    host suite had grown to 49 (findings 93, 96 and 97 each added assertions), so the one number
+    a reader uses to judge the native layer was a stale copy of a fact the code owns. This rule
+    counts the `check(...)` / `checkNear(...)` call sites in `host_tests.cpp` - excluding the
+    `check` that `checkNear` makes on its own behalf - and requires both README figures to match
+    it. The suite is written without conditional checks, so the count of call sites is the count
+    of executed assertions; the CI run of the suite proves the runtime half.
+    """
+    readme = ROOT / "README.md"
+    text = readme.read_text(encoding="utf-8")
+    suite = NATIVE_SUITE.read_text(encoding="utf-8")
+    body = re.sub(r"void checkNear\(.*?\n\}\n", "", suite, flags=re.S)
+    call_sites = len(re.findall(r"\bcheck(?:Near)?\s*\(", body)) - 1  # the `void check(` line
+    claims = (
+        re.search(r"Native \(C\+\+\) — (\d+) assertions", text),
+        re.search(r"pass — (\d+) checks, 0 failures", text),
+    )
+    if any(match is None for match in claims):
+        add(readme, "the native assertion count has disappeared from the testing section - "
+                    "it is the only figure a reader has for the C++ layer (finding 99)")
+    claimed = sorted({int(match.group(1)) for match in claims if match is not None})
+    if claimed and claimed != [call_sites]:
+        figures = " and ".join(str(value) for value in claimed)
+        add(readme, f"claims {figures} native assertions, `host_tests.cpp` has {call_sites} "
+                    f"call sites - the count is a claim like any other (finding 99)")
+
+
 def check_draft_write_ordering() -> None:
     """Draft writes only inside `writeDraft`, which orders them (finding 74)."""
     for path in kotlin_sources("app"):
@@ -625,6 +724,8 @@ def main() -> int:
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
+    check_loop_closure_claim()
+    check_native_assertion_count()
     check_money_fields_are_not_rekeyed()
     check_manifest_hardening()
     check_kotlin_structure()

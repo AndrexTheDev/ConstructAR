@@ -184,16 +184,24 @@ constructar.rtabmap.dir=/absolute/path/to/rtabmap
 `native-slam/build.gradle.kts` forwards this as `-DCONSTRUCTAR_WITH_RTABMAP=ON
 -DRTABMAP_SOURCE_DIR=…` to CMake.
 
-### 5.2 What the bridge does
+### 5.2 What the bridge does — and what is wired today
 
-* adds keyframes (RGB feature descriptors + pose) at a spatial threshold;
-* asks RTAB-Map for loop-closure candidates, which are turned into `PoseGraph` edges with a
-  high weight **only** after a geometric consistency check (`ProximityLoopClosureDetector`
-  in the C++ layer, if RTAB-Map is absent);
-* runs the optimiser and refreshes the node poses.
+The C++ side is complete and host-tested:
 
-With RTAB-Map off, the built-in pose graph and proximity proposer are used — the app never
-depends on RTAB-Map being present.
+* `RtabMapBridge::processKeyframe` feeds one keyframe (RGB + pose) and returns the optimised
+  pose list, with a closure accepted only after a geometric consistency check;
+* `ProximityLoopClosureDetector` proposes a revisit by pose proximity (proposals only — a false
+  closure folds a room in half, so nothing is promoted silently);
+* `PoseGraph::optimize` redistributes a closure over the whole trajectory.
+
+**It is not yet driven from the app.** No line in `:app` or `:ar-engine` calls
+`optimizePoseGraph`, `addPoseNode`, `addPoseEdge` or `loopClosureCandidates`, and the JNI exposes
+no keyframe feed, so compiling RTAB-Map in changes nothing the operator sees: today the app
+measures on ARCore's own tracking and no closure is optimised. The loop closure is therefore
+**not yet driven by the scan pipeline** (finding 98), and `scripts/verify_sources.py` fails if
+this document claims the optimiser runs while it is still true. Wiring it is a real piece of
+work — keyframe extraction, a verified closure policy and a re-anchor of the measured nodes —
+not a build flag.
 
 ---
 

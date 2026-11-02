@@ -12,9 +12,12 @@
 //   * CMake option `CONSTRUCTAR_WITH_RTABMAP=ON` + `RTABMAP_SOURCE_DIR=...` compiles the
 //     real integration (see docs/SETUP.md §3 for the BSD-only build flags: `-DWITH_SURF=OFF
 //     -DWITH_OPENCV_NONFREE=OFF`, ORB/SIFT features only).
-//   * Without it, `isAvailable()` returns false and the app falls back to
-//     [ProximityLoopClosureDetector] + the pose graph, which still removes drift but cannot
-//     verify an appearance-based loop closure.
+//   * Without it, `isAvailable()` returns false, so the Kotlin side simply sees no back-end.
+//
+// Neither branch is driven yet (finding 98): nothing in `:app`/`:ar-engine` feeds a keyframe or
+// runs the optimiser, so the app measures on ARCore's own tracking and no closure is optimised.
+// What is below is the engine a wiring will use, not what the app runs today — see
+// docs/SETUP.md §5.2.
 //
 // Either way the Kotlin side talks to the same interface, so the AR pipeline never needs a
 // compile-time fork.
