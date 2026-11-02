@@ -7,6 +7,7 @@
 package com.constructar.app.ui
 
 import android.content.Intent
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -239,7 +240,12 @@ fun ExportScreen(
                         ),
                     )
                 },
-                onFailure = { error -> ExportStatus.Failed(error.message ?: error.javaClass.simpleName) },
+                // The operator gets a sentence, not `java.io.IOException: ... ENOSPC`. The
+                // exception itself goes to the log, where a bug report can find it.
+                onFailure = { error ->
+                    Log.w("ConstructAR", "export failed: ${error.javaClass.simpleName}", error)
+                    ExportStatus.Failed(context.getString(storageFailureOf(error).messageRes()))
+                },
             )
         }
     }

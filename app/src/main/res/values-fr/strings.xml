@@ -109,6 +109,9 @@
     <string name="error_project_open">Le chantier n’a pas pu être ouvert.</string>
     <string name="error_project_save">Le chantier n’a pas pu être enregistré.</string>
     <string name="error_photo_save">La photo n’a pas pu être enregistrée. Vérifie l’espace libre du téléphone.</string>
+    <string name="write_failed_space">Il n’y a pas assez d’espace libre sur ce téléphone. Libère de l’espace et réessaie.</string>
+    <string name="write_failed_not_writable">Impossible d’écrire dans ce dossier. Choisis un autre dossier.</string>
+    <string name="write_failed_other">Les fichiers n’ont pas pu être écrits. Choisis un autre dossier et réessaie.</string>
     <string name="ar_close">Fermer</string>
     <string name="export_folder_inaccessible">Impossible d’écrire dans le dossier choisi. Choisis un autre dossier.</string>
     <string name="tier_manual">Manuel</string>

@@ -109,6 +109,9 @@
     <string name="error_project_open">No se pudo abrir la obra.</string>
     <string name="error_project_save">No se pudo guardar la obra.</string>
     <string name="error_photo_save">No se pudo guardar la foto. Comprueba el espacio libre del teléfono.</string>
+    <string name="write_failed_space">No hay suficiente espacio libre en este teléfono. Libera espacio e inténtalo de nuevo.</string>
+    <string name="write_failed_not_writable">No se puede escribir en esta carpeta. Elige otra carpeta.</string>
+    <string name="write_failed_other">No se pudieron escribir los archivos. Elige otra carpeta e inténtalo de nuevo.</string>
     <string name="ar_close">Cerrar</string>
     <string name="export_folder_inaccessible">No se puede escribir en la carpeta elegida. Elige otra carpeta.</string>
     <string name="tier_manual">Manual</string>

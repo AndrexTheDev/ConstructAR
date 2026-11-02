@@ -395,6 +395,9 @@ fun ArMeasureScreen(
                     onFrame = { session, frame, width, height ->
                         controller.onFrame(session, frame, width, height)
                     },
+                    // Deliberate raw detail (`raw-detail`): ARCore's own sentence is the
+                    // diagnosis, and `ar_session_failed` exists to carry it - the operator pastes
+                    // it into a support mail. Everything else says why in his language.
                     onSessionFailed = { error ->
                         sessionError = error.message ?: error.javaClass.simpleName
                     },

@@ -7,6 +7,7 @@
 package com.constructar.app.ui
 
 import android.content.Intent
+import android.util.Log
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -138,8 +139,11 @@ fun BackupCard(
                         folderUnreadable = failedText,
                     )
                 }.getOrElse { error ->
-                    // Never "Backup failed: " with nothing after the colon.
-                    BackupOutcome.Failed(error.message?.takeIf { it.isNotBlank() } ?: failedText)
+                    // The provider's own words ("EACCES", "ENOSPC") are English and Java; the
+                    // operator needs the sentence that tells him what to do about them
+                    // (finding 73). This used to avoid a *blank* detail - the wrong problem.
+                    Log.w("ConstructAR", "backup failed: ${error.javaClass.simpleName}", error)
+                    BackupOutcome.Failed(context.getString(storageFailureOf(error).messageRes()))
                 }
             }
             busy = false

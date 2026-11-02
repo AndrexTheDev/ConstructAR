@@ -109,6 +109,9 @@
     <string name="error_project_open">Das Projekt konnte nicht geöffnet werden.</string>
     <string name="error_project_save">Das Projekt konnte nicht gespeichert werden.</string>
     <string name="error_photo_save">Das Foto konnte nicht gespeichert werden. Prüfe den freien Speicher des Telefons.</string>
+    <string name="write_failed_space">Auf diesem Telefon ist zu wenig Speicher frei. Gib Speicher frei und versuche es erneut.</string>
+    <string name="write_failed_not_writable">In diesen Ordner kann nicht geschrieben werden. Wähle einen anderen Ordner.</string>
+    <string name="write_failed_other">Die Dateien konnten nicht geschrieben werden. Wähle einen anderen Ordner und versuche es erneut.</string>
     <string name="ar_close">Schließen</string>
     <string name="export_folder_inaccessible">In den gewählten Ordner kann nicht geschrieben werden. Wähle einen anderen.</string>
     <string name="tier_manual">Manuell</string>

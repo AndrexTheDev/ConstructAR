@@ -86,6 +86,12 @@ AR_LITERAL_ALPHA = re.compile(r"alpha\s*=\s*[0-9]*\.?[0-9]+f")
 # even shown (finding 72).
 DISCARDED_SAVE = re.compile(r"(?m)^\s*repository\.save\s*\(")
 
+# A platform exception's `message` is English, Java and a POSIX error number - not a sentence for
+# an operator who reads German. The export and the backup printed it verbatim inside their own
+# error dialogs (finding 73); every failure now maps to a localised sentence. A call site that
+# really does want the raw text (ARCore's own diagnosis) says so in a comment above it.
+RAW_DETAIL = re.compile(r"\.message\s*(\?:|!!)")
+
 R_REFERENCE = re.compile(r"\bR\s*\.\s*(string|plurals|array|drawable|xml|style)\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)")
 
 FORBIDDEN_PERMISSIONS = ["android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"]
@@ -280,6 +286,22 @@ def check_ar_alpha_literals() -> None:
                   f"`HudContrastTest` can measure it - not from a number here")
 
 
+def check_raw_exception_messages() -> None:
+    """No platform exception text in a UI error dialog unless the site is marked deliberate."""
+    for path in kotlin_sources("app"):
+        if "/src/test/" in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        lines = text.splitlines()
+        for match in RAW_DETAIL.finditer(text):
+            index = text[: match.start()].count("\n")
+            context = "\n".join(lines[max(0, index - 6): index + 1])
+            if "raw-detail" in context:
+                continue
+            add(path, f"line {index + 1}: an exception's own message is English and unlocalised - "
+                      f"map the failure with `storageFailureOf` or mark the site `raw-detail`")
+
+
 def check_manifest_hardening() -> None:
     """Rules that keep a release build from handing its own data to anyone with a cable.
 
@@ -426,6 +448,7 @@ def main() -> int:
     check_cached_clock()
     check_ar_alpha_literals()
     check_discarded_saves()
+    check_raw_exception_messages()
     check_manifest_hardening()
     check_kotlin_structure()
     check_resource_xml()
