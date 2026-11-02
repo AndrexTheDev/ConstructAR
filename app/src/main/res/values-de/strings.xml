@@ -271,7 +271,6 @@
     <string name="pdf_label_clips">Schellen</string>
     <string name="pdf_label_couplings">Kupplungen</string>
     <string name="pdf_label_scanned_triangles">Gescannte Dreiecke</string>
-    <string name="pdf_label_ceiling_height">Deckenhöhe</string>
     <string name="pdf_column_label">Bezeichnung</string>
     <string name="pdf_column_type">Typ</string>
     <string name="pdf_column_net_meters">Netto (m)</string>

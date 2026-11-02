@@ -34,7 +34,6 @@ data class PdfLabels(
     val labelClips: String = "Clips",
     val labelCouplings: String = "Couplings",
     val labelScannedTriangles: String = "Scanned triangles",
-    val labelCeilingHeight: String = "Ceiling height",
     val columnLabel: String = "Label",
     val columnType: String = "Type",
     val columnNetMeters: String = "Net (m)",

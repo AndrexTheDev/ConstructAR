@@ -271,7 +271,6 @@
     <string name="pdf_label_clips">Colliers</string>
     <string name="pdf_label_couplings">Raccords</string>
     <string name="pdf_label_scanned_triangles">Triangles scannés</string>
-    <string name="pdf_label_ceiling_height">Hauteur sous plafond</string>
     <string name="pdf_column_label">Libellé</string>
     <string name="pdf_column_type">Type</string>
     <string name="pdf_column_net_meters">Net (m)</string>

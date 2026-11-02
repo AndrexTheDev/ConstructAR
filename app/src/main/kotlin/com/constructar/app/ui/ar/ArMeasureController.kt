@@ -236,7 +236,6 @@ class ArMeasureController(private val context: Context) {
             ambientLux = ambientLux,
             torchOn = torchOn.value,
             thermallyThrottled = pipeline.state.value.throttleMode == TsdfScanPipeline.ThrottleMode.THROTTLED,
-            scanCoverage = stats.usableRatio,
         )
         torchController?.onAmbientIntensity(ambientLux, batteryPercent())
     }
@@ -335,14 +334,11 @@ class ArMeasureController(private val context: Context) {
         sceneController = null
     }
 
-    /** Scan statistics for the protocol header and the BIM export. */
+    /** Scan statistics for the protocol header: two numbers, both measured (finding 103). */
     fun scanSummary(): ScanSummary {
         val state = pipeline.state.value
-        val bounds = pipeline.mesh.value?.bounds
-        return ScanSummary.fromBounds(bounds, tsdfConfig.voxelSizeMeters).copy(
-            meshVertexCount = state.vertexCount,
+        return ScanSummary(
             meshTriangleCount = state.triangleCount,
-            depthCoverage = tracking.status.value.scanCoverage,
             scanLimited = state.hitBlockBudget,
         )
     }

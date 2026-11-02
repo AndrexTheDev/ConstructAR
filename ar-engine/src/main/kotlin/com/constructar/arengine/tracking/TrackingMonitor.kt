@@ -66,13 +66,20 @@ data class TrackingStatus(
     /** Mean ARCore depth confidence in the centre third of the frame, 0..255. */
     val depthConfidence: Int = 0,
     val depthSupported: Boolean = false,
-    /** Ambient light estimate in lux (0 = unknown). */
-    val ambientLux: Float = 0f,
+    /**
+     * The light estimate says it is too dark to measure without the torch.
+     *
+     * A boolean rather than the lux value, because the raw estimate changes on every frame and
+     * the status is compared field by field to decide whether anything happened (finding 103):
+     * one changing float made every frame a "change", so a new [TrackingStatus] was allocated and
+     * published 30 times a second and the AR screen recomposed with it. This is the only fact the
+     * guidance takes from the light estimate; `TrackingMonitor.DARK_LUX` is applied once, where
+     * the frame arrives.
+     */
+    val dark: Boolean = false,
     val torchOn: Boolean = false,
     /** True when the device is thermally throttled — mesh extraction backs off. */
     val thermallyThrottled: Boolean = false,
-    /** 0..1 — share of the frame with usable depth; drives the "scan quality" gauge. */
-    val scanCoverage: Float = 0f,
     /** Localisable coaching code. */
     val guidance: Guidance = Guidance.NONE,
 ) {
@@ -96,8 +103,11 @@ data class TrackingStatus(
  *
  * Thresholds come from field experience with ARCore on construction sites:
  *  * mean depth confidence < 40 ⇒ the sensor is looking at glass, a mirror or a dark surface;
- *  * fewer than ~40 % usable depth pixels ⇒ not enough geometry to trust a depth hit;
  *  * < 15 lux ⇒ tracking will drift within seconds and the torch is needed.
+ *
+ * The two numbers are the ones the code acts on. A third bullet used to promise a "fewer than
+ * ~40 % usable depth pixels" rule, and no such rule existed: the ratio was computed, carried in
+ * the status and read by nothing (finding 103).
  *
  * Allocation: the steady state (nothing changed) allocates nothing — the incoming numbers are
  * compared field by field against the published status and the frame returns early. Only a
@@ -119,8 +129,10 @@ class TrackingMonitor {
         ambientLux: Float = 0f,
         torchOn: Boolean = false,
         thermallyThrottled: Boolean = false,
-        scanCoverage: Float = 0f,
     ) {
+        // Reduced once, here, so the published status holds a fact and not a measurement that
+        // moves every frame.
+        val dark = ambientLux > 0f && ambientLux < DARK_LUX
         val quality = when {
             tracking != TrackingQuality.GOOD -> tracking
             // Depth-supported devices get their confidence folded into the verdict: a "good"
@@ -131,7 +143,7 @@ class TrackingMonitor {
 
         if (quality == TrackingQuality.NOT_TRACKING) consecutiveLosses++ else consecutiveLosses = 0
 
-        val guidance = guidanceFor(quality, failureReason, depthConfidence, depthSupported, ambientLux, torchOn, thermallyThrottled)
+        val guidance = guidanceFor(quality, failureReason, depthConfidence, depthSupported, dark, torchOn, thermallyThrottled)
         val previous = mutableStatus.value
         // Compare first, allocate second: this runs at camera frame rate.
         if (previous.quality == quality &&
@@ -139,10 +151,9 @@ class TrackingMonitor {
             previous.failureDetail == failureReason &&
             previous.depthConfidence == depthConfidence &&
             previous.depthSupported == depthSupported &&
-            previous.ambientLux == ambientLux &&
+            previous.dark == dark &&
             previous.torchOn == torchOn &&
-            previous.thermallyThrottled == thermallyThrottled &&
-            previous.scanCoverage == scanCoverage
+            previous.thermallyThrottled == thermallyThrottled
         ) {
             return
         }
@@ -151,10 +162,9 @@ class TrackingMonitor {
             failureDetail = failureReason,
             depthConfidence = depthConfidence,
             depthSupported = depthSupported,
-            ambientLux = ambientLux,
+            dark = dark,
             torchOn = torchOn,
             thermallyThrottled = thermallyThrottled,
-            scanCoverage = scanCoverage,
             guidance = guidance,
         )
     }
@@ -172,7 +182,7 @@ class TrackingMonitor {
         failureReason: String?,
         depthConfidence: Int,
         depthSupported: Boolean,
-        ambientLux: Float,
+        dark: Boolean,
         torchOn: Boolean,
         thermallyThrottled: Boolean,
     ): Guidance = when {
@@ -181,7 +191,7 @@ class TrackingMonitor {
         failureReason != null -> Guidance.FAILURE_REASON
         thermallyThrottled -> Guidance.THERMAL
         depthSupported && depthConfidence in 1..CRITICAL_CONFIDENCE -> Guidance.WEAK_DEPTH
-        ambientLux > 0f && ambientLux < DARK_LUX && !torchOn -> Guidance.DARK
+        dark && !torchOn -> Guidance.DARK
         quality == TrackingQuality.LIMITED -> Guidance.LIMITED
         else -> Guidance.NONE
     }

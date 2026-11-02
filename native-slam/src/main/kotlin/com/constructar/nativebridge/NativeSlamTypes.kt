@@ -155,8 +155,6 @@ fun ScanMesh.toMeshBuilder(create: () -> MeshBuilder = { MeshBuilder(vertexCount
     return builder
 }
 
-/** Bounds helper for the scan summary (`ScanSummary.fromBounds`). */
-fun ScanMesh.toAabbOrNull(): Aabb? = mesh.bounds()
 
 /** Convenience: centroid of the reconstructed surface — used to aim the HUD camera. */
 fun ScanMesh.centroid(): Vec3 = bounds?.center ?: Vec3.ZERO

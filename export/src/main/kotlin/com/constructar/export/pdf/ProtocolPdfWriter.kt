@@ -216,18 +216,7 @@ class ProtocolPdfWriter(
             // ── Summary ─────────────────────────────────────────────────────────────────
             y = drawSectionTitle(page.canvas, content.labels.sectionSummary, y)
             val scan = content.project.scan
-            val summary = ArrayList<Pair<String, String>>()
-            summary += content.labels.labelRuns to content.project.routes.size.toString()
-            summary += content.labels.labelTotalLength to LengthFormatter.format(content.project.totalLengthMeters)
-            summary += content.labels.labelWithWaste to LengthFormatter.format(content.materialList.totalWithWasteMeters)
-            summary += content.labels.labelClips to content.materialList.totalClips.toString()
-            summary += content.labels.labelCouplings to content.materialList.totalCouplings.toString()
-            if (scan != null && scan.meshTriangleCount > 0) {
-                summary += content.labels.labelScannedTriangles to "%,d".format(Locale.ROOT, scan.meshTriangleCount)
-                if (scan.ceilingHeightMeters > 0f) {
-                    summary += content.labels.labelCeilingHeight to LengthFormatter.format(scan.ceilingHeightMeters)
-                }
-            }
+            val summary = summaryRows(content.project, content.materialList, content.labels)
             y = drawKeyValueGrid(page.canvas, summary, y)
 
             // A capture that hit the volume limit is a valid measurement of the runs it holds,
@@ -657,6 +646,34 @@ internal fun unbuildableRunsNote(labels: List<String>, template: String): String
  */
 internal fun accuracyNote(template: String, trusted: Float = HitConfidence.RUN_TRUSTED): String =
     String.format(Locale.ROOT, template, Math.round(trusted * 100f))
+
+/**
+ * The key/value rows of the protocol's summary, in the order they are drawn (finding 103).
+ *
+ * Out of the drawing code so the row set is a contract a test can hold, and so no row can be
+ * drawn from a field the app never fills: the summary used to include a "Ceiling height" row
+ * behind `ceilingHeightMeters > 0f`, and `ceilingHeightMeters` was filled by nothing - a row that
+ * could not appear, next to a model field that read as a measurement nobody had taken. Every row
+ * here is a number the app computed, and a room whose scan holds no triangles prints no triangle
+ * row rather than a zero.
+ */
+internal fun summaryRows(
+    project: ProjectRecord,
+    materialList: MaterialList,
+    labels: PdfLabels,
+): List<Pair<String, String>> {
+    val rows = ArrayList<Pair<String, String>>(6)
+    rows += labels.labelRuns to project.routes.size.toString()
+    rows += labels.labelTotalLength to LengthFormatter.format(project.totalLengthMeters)
+    rows += labels.labelWithWaste to LengthFormatter.format(materialList.totalWithWasteMeters)
+    rows += labels.labelClips to materialList.totalClips.toString()
+    rows += labels.labelCouplings to materialList.totalCouplings.toString()
+    val scan = project.scan
+    if (scan != null && scan.meshTriangleCount > 0) {
+        rows += labels.labelScannedTriangles to "%,d".format(Locale.ROOT, scan.meshTriangleCount)
+    }
+    return rows
+}
 
 /**
  * The line the summary gets when the volume ran out of blocks, or `null` when the whole capture

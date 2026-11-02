@@ -32,7 +32,6 @@ fun rememberPdfLabels(): PdfLabels = PdfLabels(
     labelClips = stringResource(R.string.pdf_label_clips),
     labelCouplings = stringResource(R.string.pdf_label_couplings),
     labelScannedTriangles = stringResource(R.string.pdf_label_scanned_triangles),
-    labelCeilingHeight = stringResource(R.string.pdf_label_ceiling_height),
     columnLabel = stringResource(R.string.pdf_column_label),
     columnType = stringResource(R.string.pdf_column_type),
     columnNetMeters = stringResource(R.string.pdf_column_net_meters),

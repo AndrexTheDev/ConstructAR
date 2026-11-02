@@ -30,6 +30,19 @@ class ScanSummaryTest {
     }
 
     @Test
+    fun `the summary carries only what the app measures`() {
+        val descriptor = ScanSummary.serializer().descriptor
+        val names = (0 until descriptor.elementsCount).map { descriptor.getElementName(it) }
+
+        assertEquals(
+            "a field here becomes a line in every project file and a possible row in the " +
+                "protocol; it has to arrive with a producer and a reader (finding 103)",
+            listOf("meshTriangleCount", "scanLimited"),
+            names,
+        )
+    }
+
+    @Test
     fun `a summary written before the flag existed loads as a whole room`() {
         val legacy = Json { ignoreUnknownKeys = true }
 

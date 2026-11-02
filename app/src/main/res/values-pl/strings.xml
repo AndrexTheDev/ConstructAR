@@ -277,7 +277,6 @@
     <string name="pdf_label_clips">Uchwyty</string>
     <string name="pdf_label_couplings">Złączki</string>
     <string name="pdf_label_scanned_triangles">Zeskanowane trójkąty</string>
-    <string name="pdf_label_ceiling_height">Wysokość pomieszczenia</string>
     <string name="pdf_column_label">Etykieta</string>
     <string name="pdf_column_type">Typ</string>
     <string name="pdf_column_net_meters">Netto (m)</string>

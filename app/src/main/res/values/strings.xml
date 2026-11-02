@@ -271,7 +271,6 @@
     <string name="pdf_label_clips">Clips</string>
     <string name="pdf_label_couplings">Couplings</string>
     <string name="pdf_label_scanned_triangles">Scanned triangles</string>
-    <string name="pdf_label_ceiling_height">Ceiling height</string>
     <string name="pdf_column_label">Label</string>
     <string name="pdf_column_type">Type</string>
     <string name="pdf_column_net_meters">Net (m)</string>

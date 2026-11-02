@@ -35,12 +35,18 @@ import java.nio.ByteBuffer
  */
 class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity = 3)) {
 
-    /** Reusable stats container — the UI reads the fields, no allocation per frame. */
+    /**
+     * Reusable stats container — the UI reads [meanConfidence], no allocation per frame.
+     *
+     * `usableRatio` used to sit here as "the share of the frame with usable depth". Nothing read
+     * it: it was passed into the tracking monitor as `scanCoverage`, stored in the status under a
+     * doc claiming it "drives the scan quality gauge", shown nowhere - and because it changes on
+     * every frame, it also defeated the monitor's compare-first guard (finding 103).
+     */
     data class Stats(
         val width: Int = 0,
         val height: Int = 0,
         val meanConfidence: Int = 0,
-        val usableRatio: Float = 0f,
         val validPixels: Int = 0,
         val bestDepthMeters: Float = 0f,
     )
@@ -202,12 +208,10 @@ class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity 
                 if (mm < nearest) nearest = mm.toFloat()
             }
         }
-        val sampled = ((width + step - 1) / step) * ((height + step - 1) / step)
         return Stats(
             width = width,
             height = height,
             meanConfidence = if (confidenceCount > 0) (confidenceSum / confidenceCount).toInt() else 0,
-            usableRatio = if (sampled > 0) valid.toFloat() / sampled else 0f,
             validPixels = valid,
             bestDepthMeters = if (nearest == Float.MAX_VALUE) 0f else nearest / 1000f,
         )

@@ -6,31 +6,27 @@
 
 package com.constructar.core.model
 
-import com.constructar.core.math.Aabb
 import kotlinx.serialization.Serializable
 
 /**
- * Statistics produced by the scan pipeline (TSDF in `:native-slam`) and attached to a
- * project for the protocol header and the BIM export metadata.
+ * What the scan pipeline (TSDF in `:native-slam`) measured, attached to a project for the
+ * protocol header.
+ *
+ * Deliberately two fields (finding 103). Everything here is written by
+ * `ArMeasureController.scanSummary()` when a run is finished and read by something that leaves
+ * the phone - the protocol's summary row and its partial-capture note, and the export screen.
+ * The model used to carry nine more: a vertex count, a floor area, a ceiling height, a bounding
+ * box, a voxel size, an accepted-loop-closure count, a pose-graph RMS and a derived volume. The
+ * scan filled **none** of them, so they travelled into every project file and every backup as
+ * zeros - a floor area of 0,00 m² and *0 accepted loop closures* reading as measurements the app
+ * had taken - and the protocol drew a "Ceiling height" row that could never print because
+ * nothing ever computed one. `ScanSummaryTest` pins this field list, so a new field has to
+ * arrive with a producer and a reader.
  */
 @Serializable
 data class ScanSummary(
-    val meshVertexCount: Int = 0,
+    /** Triangles the reconstructed mesh held when the run was finished. */
     val meshTriangleCount: Int = 0,
-    /** Horizon-normalised floor area in m² — "how much wall/ceiling we actually saw". */
-    val floorAreaSquareMeters: Float = 0f,
-    /** Free ceiling height derived from the floor/ceiling plane pair, metres. */
-    val ceilingHeightMeters: Float = 0f,
-    /** Bounding box of the reconstructed volume, metres (origin = AR world origin). */
-    val extentMin: List<Float> = emptyList(),
-    val extentMax: List<Float> = emptyList(),
-    val voxelSizeMeters: Float = 0f,
-    /** Loop closures accepted by the SLAM back-end during this scan. */
-    val loopClosures: Int = 0,
-    /** Final RMS residual of the pose-graph optimisation, metres. */
-    val poseGraphRmsMeters: Float = 0f,
-    /** Fraction of the depth buffer that passed the confidence filter, 0..1. */
-    val depthCoverage: Float = 0f,
     /**
      * True when the TSDF block budget was spent during this scan (finding 100).
      *
@@ -43,29 +39,7 @@ data class ScanSummary(
      * loads (see `ScanSummaryTest`).
      */
     val scanLimited: Boolean = false,
-) {
-    val volumeCubicMeters: Float
-        get() = if (extentMin.size == 3 && extentMax.size == 3) {
-            val dx = extentMax[0] - extentMin[0]
-            val dy = extentMax[1] - extentMin[1]
-            val dz = extentMax[2] - extentMin[2]
-            (dx * dy * dz).coerceAtLeast(0f)
-        } else {
-            0f
-        }
-
-    companion object {
-        fun fromBounds(bounds: Aabb?, voxelSizeMeters: Float): ScanSummary = if (bounds == null) {
-            ScanSummary(voxelSizeMeters = voxelSizeMeters)
-        } else {
-            ScanSummary(
-                extentMin = listOf(bounds.min.x, bounds.min.y, bounds.min.z),
-                extentMax = listOf(bounds.max.x, bounds.max.y, bounds.max.z),
-                voxelSizeMeters = voxelSizeMeters,
-            )
-        }
-    }
-}
+)
 
 /**
  * The on-device project: one room (or one zone) of one site.

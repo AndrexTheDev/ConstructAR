@@ -271,7 +271,6 @@
     <string name="pdf_label_clips">Fissaggi</string>
     <string name="pdf_label_couplings">Giunzioni</string>
     <string name="pdf_label_scanned_triangles">Triangoli scansionati</string>
-    <string name="pdf_label_ceiling_height">Altezza del soffitto</string>
     <string name="pdf_column_label">Etichetta</string>
     <string name="pdf_column_type">Tipo</string>
     <string name="pdf_column_net_meters">Netto (m)</string>

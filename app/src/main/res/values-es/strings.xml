@@ -271,7 +271,6 @@
     <string name="pdf_label_clips">Abrazaderas</string>
     <string name="pdf_label_couplings">Empalmes</string>
     <string name="pdf_label_scanned_triangles">Triángulos escaneados</string>
-    <string name="pdf_label_ceiling_height">Altura de techo</string>
     <string name="pdf_column_label">Etiqueta</string>
     <string name="pdf_column_type">Tipo</string>
     <string name="pdf_column_net_meters">Neto (m)</string>
