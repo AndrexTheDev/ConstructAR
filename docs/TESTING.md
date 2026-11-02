@@ -81,6 +81,25 @@ again. Each line names what was read, not what was assumed.
   paid format ticked.
 * **Storage reclaimed on delete.** `ProjectRepository.delete` removes the room's JSON, its draft and
   every photo whose name starts with `<id>__`, and the diary/defect delete paths remove their own
+* **Midnight, overnight shifts and zones, round 17.** Every time comparison in the tree was read
+  with one question: does this depend on a *calendar* fact or on an *elapsed* fact, and is it
+  computed as the one it is? `WorkTime.overdueSession` measures twelve hours of elapsed millis -
+  correct, because "the clock has been running for twelve hours" is a duration and a long summer
+  shift must not look overdue because the day was long. `WorkTime.sessionMillis` floors at zero, and
+  `ProjectRecord.stopSession` stores `maxOf(nowMs, startEpochMs)`, so a phone whose clock synced
+  backwards cannot store a session that ends before it starts - the inverted row finding 120 is
+  about, from the other direction. In the licence path every day is a **UTC** day
+  (`LicenceVerifier.epochDay` is `Math.floorDiv(ms, 86 400 000)`) and every reader agrees:
+  `EntitlementStore` writes and reads the same day four times over, `ClockGuard`'s watermark is the
+  same unit, and `PaywallScreen` formats the expiry back with `formatDayLabel(day * 86_400_000, UTC)`,
+  so the day a licence is displayed as valid until is the day it is enforced against - no local/UTC
+  mix anywhere in the path. The watermark is persisted on **every** `refresh()`, not only when a
+  trial starts, which is what makes it a high-water mark rather than a timestamp. The two stamps
+  that look like candidates on their own are already pinned: `BackupCard` builds
+  `ConstructAR-backup-yyyyMMdd-HHmm` with `Locale.ROOT` (a folder named in the Buddhist year would
+  have been finding 121 in a file name) and `LengthFormatter.formatTimestamp` takes its zone as a
+  parameter and formats `yyyy-MM-dd HH:mm` in `Locale.ROOT`. Sessions are printed in list order and
+  every writer appends to that list. What *was* wrong on this surface is findings 120 and 121.
 * **The documents against the code, round 16.** `docs/SETUP.md`'s toolchain table matches the
   tree exactly (JDK 21 targeting Java 17 bytecode, compileSdk 37, NDK 27.2.12479018, CMake 3.22.1,
   Gradle 9.6.0), and every paywall claim was checked against `Entitlements` rather than read as
