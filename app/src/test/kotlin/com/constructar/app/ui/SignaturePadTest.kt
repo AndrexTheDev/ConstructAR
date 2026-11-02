@@ -40,7 +40,9 @@ class SignaturePadTest {
     private fun pad(vararg strokes: List<Offset>): SignaturePadState {
         val state = SignaturePadState()
         state.surface = IntSize(1_000, 360)
-        state.strokes = strokes.toList()
+        // Through `commit`, the function both input paths use, so these rasters cover the way a
+        // signature actually arrives rather than a field set by hand (finding 82).
+        strokes.forEach { state.commit(it) }
         return state
     }
 

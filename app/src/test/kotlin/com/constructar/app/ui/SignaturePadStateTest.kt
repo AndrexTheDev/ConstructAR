@@ -69,4 +69,26 @@ class SignaturePadStateTest {
         state.surface = androidx.compose.ui.unit.IntSize(500, 500)
         assertEquals(Offset(0.2f, 0.2f), state.normalise(Offset(100f, 100f)))
     }
+    @Test
+    fun `a tap is committed as a one-point stroke`() {
+        // The pad has two input paths - a drag and a tap - and only the drag one existed, so a
+        // customer who touched the glass instead of dragging left an empty pad and an unsigned
+        // protocol (finding 82).
+        val state = SignaturePadState()
+        state.surface = androidx.compose.ui.unit.IntSize(1_000, 360)
+
+        state.commit(listOf(state.normalise(Offset(500f, 180f))))
+
+        assertTrue(!state.isEmpty)
+        assertEquals(listOf(listOf(Offset(0.5f, 0.5f))), state.strokes)
+    }
+
+    @Test
+    fun `a cancelled drag commits nothing`() {
+        // `onDragCancel` hands over an empty list; a cancelled touch must not leave a phantom dot.
+        val state = SignaturePadState()
+        state.commit(emptyList())
+        assertTrue(state.isEmpty)
+    }
+
 }

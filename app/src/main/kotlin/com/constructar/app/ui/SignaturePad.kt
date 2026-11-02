@@ -10,6 +10,7 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,6 +58,20 @@ class SignaturePadState {
     internal var surface by mutableStateOf(IntSize.Zero)
 
     val isEmpty: Boolean get() = strokes.isEmpty()
+
+    /**
+     * Commits a finished stroke - and a stroke of one point is a finished stroke.
+     *
+     * One function for both input paths, because the pad has two: a drag and a tap. The renderers
+     * have drawn a dot for a one-point stroke since finding 41, but the only path that produced
+     * strokes was `detectDragGestures`, which reports nothing until the finger has moved past the
+     * touch slop - so a customer who put a finger on the glass and lifted it again signed nothing,
+     * the pad stayed empty, and the protocol went out with no signature page at all (finding 82).
+     */
+    internal fun commit(points: List<Offset>) {
+        if (points.isEmpty()) return
+        strokes = strokes + listOf(points)
+    }
 
     fun clear() {
         strokes = emptyList()
@@ -186,14 +201,18 @@ fun SignaturePad(state: SignaturePadState, modifier: Modifier = Modifier) {
         modifier = modifier
             .background(Jamaica.Chalk, RoundedCornerShape(14.dp))
             .onSizeChanged { state.surface = it }
+            // A tap on its own, because a drag gesture reports nothing until the finger has moved
+            // past the touch slop: a hurried signature that starts with a touch and a lift was
+            // silently dropped (finding 82).
+            .pointerInput(Unit) {
+                detectTapGestures { offset -> state.commit(listOf(state.normalise(offset))) }
+            }
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragStart = { offset -> state.current = listOf(state.normalise(offset)) },
                     onDrag = { change, _ -> state.current = state.current + state.normalise(change.position) },
                     onDragEnd = {
-                        if (state.current.isNotEmpty()) {
-                            state.strokes = state.strokes + listOf(state.current)
-                        }
+                        state.commit(state.current)
                         state.current = emptyList()
                     },
                     onDragCancel = { state.current = emptyList() },

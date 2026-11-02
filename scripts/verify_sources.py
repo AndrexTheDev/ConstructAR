@@ -19,6 +19,7 @@ and most expensive to discover in a 12-minute Gradle run:
   7. Kotlin files have balanced brackets                      (truncation guard)
   8. no INTERNET permission and no cloud SDK markers           (offline guarantee)
   9. no work-time total cached in `remember`                  (a clock must tick)
+ 10. the signature pad keeps its tap handler (finding 82)      (a tap is a signature)
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -309,6 +310,28 @@ def check_raw_exception_messages() -> None:
                       f"map the failure with `storageFailureOf` or mark the site `raw-detail`")
 
 
+def check_signature_tap() -> None:
+    """The signature pad must accept a tap, not only a drag (finding 82).
+
+    `detectDragGestures` reports nothing until the touch has moved past the slop, and it was the
+    pad's only input path: the dot renderers existed for a one-point stroke that no gesture could
+    ever produce, so a customer who touched the glass left an empty pad and an unsigned protocol.
+    The tap handler is what makes those dots reachable, and a refactor that drops it would take the
+    whole guarantee with it - silently, because an empty pad is a legal state.
+    """
+    path = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" / "SignaturePad.kt"
+    if not path.exists():
+        add(path, "the signature pad is missing")
+        return
+    text = path.read_text(encoding="utf-8")
+    if "detectTapGestures" not in text:
+        add(path, "the pad has no `detectTapGestures`: a tap (a touch without a drag) would sign "
+                  "nothing, and the protocol would leave the site without a signature page")
+    if "state.commit(" not in text:
+        add(path, "the pad must commit strokes through `commit`, so the drag and the tap path "
+                  "cannot disagree about what counts as a finished stroke")
+
+
 def check_draft_write_ordering() -> None:
     """Draft writes only inside `writeDraft`, which orders them (finding 74)."""
     for path in kotlin_sources("app"):
@@ -494,6 +517,7 @@ def main() -> int:
     check_discarded_saves()
     check_raw_exception_messages()
     check_draft_write_ordering()
+    check_signature_tap()
     check_manifest_hardening()
     check_kotlin_structure()
     check_resource_xml()
