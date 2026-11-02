@@ -236,6 +236,8 @@
     <string name="project_measure">Misura ora</string>
     <string name="project_measure_again">Aggiungi un altro percorso</string>
     <string name="project_scan_missing">Non ancora scansionato: l’export 3D conterrà solo i percorsi.</string>
+    <string name="licences_title">Componenti di terze parti</string>
+    <string name="licences_intro">Questa app si basa su questi componenti open source. Le loro note di copyright sono riprodotte qui, come richiedono le licenze.</string>
     <string name="help_licence_title">Licenza</string>
     <string name="runs_title">Percorsi</string>
     <string name="run_detail">%1$s · %2$s</string>

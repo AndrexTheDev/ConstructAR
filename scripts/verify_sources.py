@@ -29,6 +29,8 @@ and most expensive to discover in a 12-minute Gradle run:
  17. a kotlin.test assertion is called value-first              (finding 101)
  18. no backticked name carries a Windows-hostile character     (finding 102)
  19. the README's Kotlin test count equals the suite            (finding 104)
+ 20. every component the checklist promises to attribute is     (finding 109)
+     in the app's notice list
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -151,9 +153,16 @@ def tracked_sources() -> list[Path]:
     return out
 
 
+# Verbatim third-party licence texts: adding our own header would corrupt the licence, so they are
+# the one place in the tree that legitimately has someone else's copyright line (finding 109).
+UNHEADERED_LICENCE_DIRS = {"licenses"}
+
+
 def check_headers(files: list[Path]) -> None:
     for path in files:
         if path.name in {"LICENSE"}:
+            continue
+        if path.parent.name in UNHEADERED_LICENCE_DIRS:
             continue
         try:
             text = path.read_text(encoding="utf-8")
@@ -582,6 +591,75 @@ def check_readme_test_count() -> None:
                     f"(finding 104)")
 
 
+CHECKLIST_ATTRIBUTIONS = re.compile(r'In-app "Licences" screen lists ([^.\n]+?)\s*$', re.M)
+NOTICES_SOURCE = (
+    ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" / "licence"
+    / "ThirdPartyNotices.kt"
+)
+LICENSING_DOC = ROOT / "docs" / "LICENSING.md"
+NOTICE_FILE = ROOT / "NOTICE"
+
+
+def check_licence_notices() -> None:
+    """Every component the release checklist promises to attribute must be in the app (finding 109).
+
+    Apache-2.0 §4 and BSD-3-Clause make the notice an obligation of *distribution*, and the
+    checklist has carried two items about it since the first release - while the app had no
+    licences section at all, so neither item could be ticked, and `docs/LICENSING.md` said the
+    attribution was "to be added before release". The names the checklist asks for are read out of
+    that document and looked for in the notice list the Help screen renders, so the promise and
+    the artefact cannot part company again. The other half - whether what is listed is what the
+    app links, and whether every licence may ship at all - is `ThirdPartyNoticesTest` in `:core`.
+    """
+    checklist = (ROOT / "docs" / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+    match = CHECKLIST_ATTRIBUTIONS.search(checklist)
+    if match is None:
+        add(
+            ROOT / "docs" / "RELEASE_CHECKLIST.md",
+            "the in-app licences item has disappeared from the checklist - it is the "
+            "only place that says which components must be attributed (finding 109)",
+        )
+        return
+    if not NOTICES_SOURCE.exists():
+        add(
+            NOTICES_SOURCE,
+            "the third-party notice list is gone, so the app attributes nothing while it ships "
+            "Apache-2.0 and BSD-3-Clause code (finding 109)",
+        )
+        return
+    source_text = NOTICES_SOURCE.read_text(encoding="utf-8")
+    source = source_text.lower()
+    for name in re.split(r",|\band\b", match.group(1)):
+        component = name.strip()
+        if component and component.lower() not in source:
+            add(
+                NOTICES_SOURCE,
+                f"{component} is named in docs/RELEASE_CHECKLIST.md but has no notice the app "
+                f"can show - the licence requires it (finding 109)",
+            )
+    # The app and the repository both carry the list, by hand. Hold them together: a component the
+    # APK attributes must appear in NOTICE too, and every licence text NOTICE points at must exist
+    # (Apache-2.0 §4(a) asks for a copy of the licence, not only its name).
+    if not NOTICE_FILE.exists():
+        add(NOTICE_FILE, "the repository has no NOTICE, so a source distribution attributes nothing (finding 109)")
+    else:
+        notice = NOTICE_FILE.read_text(encoding="utf-8")
+        for component in re.findall(r'name = "([^"]+)"', source_text):
+            if component not in notice:
+                add(NOTICE_FILE, f"{component} is attributed in the app but not in NOTICE - "
+                                 f"both lists are edited by hand (finding 109)")
+        for referenced in re.findall(r"licenses/([A-Za-z0-9.\-]+\.txt)", notice):
+            if not (ROOT / "licenses" / referenced).exists():
+                add(NOTICE_FILE, f"points at licenses/{referenced}, which does not exist (finding 109)")
+
+    if "to be added before release" in LICENSING_DOC.read_text(encoding="utf-8"):
+        add(
+            LICENSING_DOC,
+            "still says the attribution is 'to be added before release' although the app now "
+            "carries it - a document may not postpone what already exists (finding 109)",
+        )
+
+
 SCHEMA_VERSION_DECL = re.compile(r"val\s+schemaVersion\s*:\s*Int\s*=\s*SCHEMA_VERSION")
 
 
@@ -863,6 +941,7 @@ def main() -> int:
     check_loop_closure_claim()
     check_native_assertion_count()
     check_readme_test_count()
+    check_licence_notices()
     check_schema_version_is_read()
     check_assert_message_order()
     check_backticked_names()

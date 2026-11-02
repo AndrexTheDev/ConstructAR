@@ -242,6 +242,8 @@
     <string name="project_measure">Mierz teraz</string>
     <string name="project_measure_again">Dodaj kolejną trasę</string>
     <string name="project_scan_missing">Jeszcze nie zeskanowano: eksport 3D będzie zawierał tylko trasy.</string>
+    <string name="licences_title">Komponenty firm trzecich</string>
+    <string name="licences_intro">Ta aplikacja opiera się na tych komponentach open source. Ich informacje o prawach autorskich są tu powtórzone, zgodnie z wymogami licencji.</string>
     <string name="help_licence_title">Licencja</string>
     <string name="runs_title">Trasy</string>
     <string name="run_detail">%1$s · %2$s</string>

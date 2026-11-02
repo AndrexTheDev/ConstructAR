@@ -236,6 +236,8 @@
     <string name="project_measure">Measure now</string>
     <string name="project_measure_again">Add another run</string>
     <string name="project_scan_missing">Not scanned yet - the 3D export will only contain the runs.</string>
+    <string name="licences_title">Third-party components</string>
+    <string name="licences_intro">This app is built on these open-source components. Their copyright notices are reproduced here, as their licences require.</string>
     <string name="help_licence_title">Licence</string>
     <string name="runs_title">Runs</string>
     <string name="run_detail">%1$s · %2$s</string>

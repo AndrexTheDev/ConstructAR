@@ -236,6 +236,8 @@
     <string name="project_measure">Mesurer maintenant</string>
     <string name="project_measure_again">Ajouter un tracé</string>
     <string name="project_scan_missing">Pas encore scanné : l’export 3D ne contiendra que les tracés.</string>
+    <string name="licences_title">Composants tiers</string>
+    <string name="licences_intro">Cette application repose sur ces composants open source. Leurs mentions de copyright sont reproduites ici, comme leurs licences l’exigent.</string>
     <string name="help_licence_title">Licence</string>
     <string name="runs_title">Tracés</string>
     <string name="run_detail">%1$s · %2$s</string>

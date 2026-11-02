@@ -29,11 +29,12 @@ Everything here is a gate before an APK reaches a site, in the order it should b
       the Help screen shows the developer note. `python3 scripts/verify_sources.py` prints the
       reminder on every run
 - [ ] `LICENSE` present and unmodified (All Rights Reserved — see `docs/LICENSING.md`)
-- [ ] Third-party attributions (`NOTICE` or the in-app licences screen) cover SceneView,
-      Filament, ARCore and Depth Anything V2 Small, as Apache-2.0 requires
+- [ ] In-app "Licences" screen lists SceneView, Filament, ARCore, LiteRT, RTAB-Map, Depth Anything V2 Small
+      (Help → *Third-party components*, rendered from `:core` `ThirdPartyNotices`, mirrored in
+      `NOTICE` and reproduced in full under `licenses/`; `scripts/verify_sources.py` rule 20 checks
+      this line against both artefacts, as Apache-2.0 §4 and BSD-3-Clause require)
 - [ ] Depth model is **Small / Apache-2.0**, SHA-256 pinned in `MonocularDepthEstimator.Config`
 - [ ] RTAB-Map (if used) built with `OPENCV_ENABLE_NONFREE=OFF`; no SURF anywhere in `ldd`
-- [ ] In-app "Licences" screen lists SceneView, Filament, ARCore, LiteRT, RTAB-Map, DA V2
 - [ ] Google Play data-safety form: **no data collected, no data shared** (there is no
       `INTERNET` permission — say so explicitly)
 

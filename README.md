@@ -191,7 +191,10 @@ therefore fails the *build* if an API moved, instead of failing silently on a de
 ARCore (proprietary but free, ships in Google Play Services for AR), RTAB-Map compiled
 **without** OpenCV non-free / SURF (BSD-3-Clause, SIFT/ORB only), Depth Anything V2 **Small
 only** (Apache-2.0; Base/Large are CC-BY-NC and are refused by a checksum in
-`MonocularDepthEstimator`). See [docs/LICENSING.md](docs/LICENSING.md).
+`MonocularDepthEstimator`). The notices those licences require are shown in the app itself
+(**Help → Third-party components**), listed in [NOTICE](NOTICE) with the verbatim texts under
+`licenses/`, and cross-checked by `scripts/verify_sources.py` rule 20. See
+[docs/LICENSING.md](docs/LICENSING.md).
 
 ---
 
@@ -377,7 +380,8 @@ Known limitations, deliberately documented rather than hidden:
 * **JVM (`:core`)** — transform maths, plane fits and polygon containment, fillet smoothing,
   measurement, tube/duct mesh invariants, BOM aggregation, the working-time clock, the money
   arithmetic (`Pricing`: rounding, both decimal separators, thousand dots, euro forced on a
-  `pl-PL` phone) and the photo-token naming contract.
+  `pl-PL` phone), the photo-token naming contract and the third-party notice list the Help screen
+  shows (every linked component attributed, only fee-free licences).
 * **JVM (`:app`, Robolectric)** — the storage layer against a real filesystem: a room survives
   a save and a load, a blank name falls back, restoring a backup of a room that is still on the
   phone keeps both, text that is not a project is refused, a corrupt file is reported as
@@ -417,7 +421,9 @@ Known limitations, deliberately documented rather than hidden:
   *claim* tied to the code: no document may describe a loop closure while nothing feeds the pose
   graph (finding 98), the native assertion count in this file must equal the call sites in
   `host_tests.cpp` (finding 99), and a project file's `schemaVersion` must actually be compared
-  before a restore accepts it (finding 101).
+  before a restore accepts it (finding 101). A third holds a *document* to an *artefact*: every
+  component the release checklist promises to attribute must exist in `ThirdPartyNotices.ALL`
+  and in `NOTICE`, and any licence text `NOTICE` points at must be there (finding 109).
 * **Site gate**: `tools/seo_audit.py` reads the *generated* landing pages and refuses a
   regression: canonical and the six `hreflang` pairs, title/description lengths, Open Graph and
   Twitter cards with a real image size, JSON-LD whose offers match the four real prices, every
@@ -455,7 +461,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 488 tests in the app+core+ar-engine+export suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 492 tests in the app+core+ar-engine+export suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 53 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
@@ -491,7 +497,9 @@ reverse engineering are prohibited. Every source file carries the corresponding 
 (`SPDX-License-Identifier: LicenseRef-Proprietary`).
 
 Third-party components remain under their own licences (Apache-2.0 / BSD-3-Clause / ARCore SDK
-terms); see [docs/LICENSING.md](docs/LICENSING.md) for the inventory and obligations.
+terms) and keep their notices: [NOTICE](NOTICE) and `licenses/` reproduce them, and the app shows
+the same list on the Help screen. See [docs/LICENSING.md](docs/LICENSING.md) for the inventory and
+obligations.
 
 ---
 
