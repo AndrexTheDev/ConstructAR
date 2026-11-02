@@ -431,6 +431,17 @@ fun ExportScreen(
                 is ExportStatus.Failed -> SiteColors.danger
             }
             Text(text, style = MaterialTheme.typography.bodyLarge, color = tone)
+            // A partial write on a project with no buildable run is both things at once: files
+            // missing because the folder refused them, and the GLB/PLY missing because there was
+            // nothing to build them from. The count alone sends the operator hunting for the one
+            // file that never existed (finding 89).
+            if (current is ExportStatus.Partial && current.meshSkipped) {
+                Text(
+                    stringResource(R.string.export_meshless_note),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = SiteColors.warning,
+                )
+            }
         }
 
         // Ownership line: the operator always sees whose build this is.
@@ -516,8 +527,20 @@ private fun FormatRow(
 internal sealed interface ExportStatus {
     data class Saved(val count: Int, val folder: String) : ExportStatus
 
-    /** Some files made it and some did not: the operator must not walk away believing all did. */
-    data class Partial(val saved: Int, val expected: Int, val folder: String) : ExportStatus
+    /**
+     * Some files made it and some did not: the operator must not walk away believing all did.
+     *
+     * [meshSkipped] carries the second fact of the same attempt: the GLB and the PLY were never
+     * candidates, because no run in this project could be built into 3D geometry. Without it the
+     * caller told the operator "2 of 3 files" and stopped - so a man who had ticked four formats
+     * went looking for two missing files when only one write had actually failed (finding 89).
+     */
+    data class Partial(
+        val saved: Int,
+        val expected: Int,
+        val folder: String,
+        val meshSkipped: Boolean = false,
+    ) : ExportStatus
 
     /**
      * Every file that exists was written, but a format the operator ticked does not exist for
@@ -575,10 +598,13 @@ internal sealed interface ExportStatus {
             report.requested == 0 -> Failed(detail = messages.nothingSelected)
             report.produced == 0 -> Failed(detail = messages.nothingToExport)
             report.written == 0 -> Failed(detail = messages.folderUnreadable)
+            // The write failure is the louder fact, but it is not the whole report: the missing
+            // 3D files come with it, so the sentence beneath can say why (finding 89).
             report.written < report.produced -> Partial(
                 saved = report.written,
                 expected = report.produced,
                 folder = report.folder,
+                meshSkipped = report.meshSkipped && report.requested > report.produced,
             )
             // Fewer files than switches on, and nothing failed: the missing ones are the 3D
             // formats, and this project has no geometry for them.

@@ -81,15 +81,42 @@ class ExportStatusTest {
     }
 
     @Test
-    fun `a partial write outranks the missing model`() {
-        // One more file lost on top of the missing model: the write failure is the louder fact.
+    fun `a partial write outranks the missing model without forgetting it`() {
+        // One more file lost on top of the missing model: the write failure is the louder fact,
+        // but the missing GLB/PLY is still the second half of the report - the operator ticked
+        // four formats and only one file actually failed (finding 89).
         val status = ExportStatus.of(
             report(requested = 4, produced = 3, written = 2, meshSkipped = true),
             messages,
         )
 
         assertEquals(
-            ExportStatus.Partial(saved = 2, expected = 3, folder = "ConstructAR_Bad_20260314-1015"),
+            ExportStatus.Partial(
+                saved = 2,
+                expected = 3,
+                folder = "ConstructAR_Bad_20260314-1015",
+                meshSkipped = true,
+            ),
+            status,
+        )
+    }
+
+    @Test
+    fun `a partial write on a project with 3D geometry claims nothing about the model`() {
+        // Nothing was skipped here: three formats were asked for, three were built, one write
+        // failed. Saying the GLB or the PLY was missing would be a second wrong fact.
+        val status = ExportStatus.of(
+            report(requested = 3, produced = 3, written = 2, meshSkipped = false),
+            messages,
+        )
+
+        assertEquals(
+            ExportStatus.Partial(
+                saved = 2,
+                expected = 3,
+                folder = "ConstructAR_Bad_20260314-1015",
+                meshSkipped = false,
+            ),
             status,
         )
     }

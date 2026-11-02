@@ -94,7 +94,8 @@
     <string name="export_success">Se han guardado %1$d archivos en %2$s.</string>
     <string name="export_failed">Error al exportar: %1$s</string>
     <string name="export_partial">Solo se guardaron %1$d de %2$d archivos en %3$s.</string>
-    <string name="export_meshless">Se guardaron %1$d de %2$d archivos en %3$s. Este proyecto no tiene escaneo 3D, así que se omitieron GLB y PLY.</string>
+    <string name="export_meshless">Se guardaron %1$d de %2$d archivos en %3$s. Ninguna tirada se pudo convertir en geometría 3D, así que se omitieron GLB y PLY.</string>
+    <string name="export_meshless_note">GLB y PLY no están entre ellos: ninguna tirada se pudo convertir en geometría 3D.</string>
     <string name="export_nothing_selected">Elige al menos un formato de archivo.</string>
     <string name="export_nothing_to_export">Aún no hay geometría 3D: mide un tramo o escanea la sala primero.</string>
     <string name="export_measurement">Medición</string>

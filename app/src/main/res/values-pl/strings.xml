@@ -94,7 +94,8 @@
     <string name="export_success">Zapisano %1$d plików w %2$s.</string>
     <string name="export_failed">Eksport nie powiódł się: %1$s</string>
     <string name="export_partial">Zapisano tylko %1$d z %2$d plików w %3$s.</string>
-    <string name="export_meshless">Zapisano %1$d z %2$d plików w %3$s. Ten projekt nie ma skanu 3D, więc pominięto GLB i PLY.</string>
+    <string name="export_meshless">Zapisano %1$d z %2$d plików w %3$s. Żadnej trasy nie udało się zamienić na geometrię 3D, więc pominięto GLB i PLY.</string>
+    <string name="export_meshless_note">Nie ma wśród nich GLB ani PLY: żadnej trasy nie udało się zamienić na geometrię 3D.</string>
     <string name="export_nothing_selected">Wybierz co najmniej jeden format pliku.</string>
     <string name="export_nothing_to_export">Nie ma jeszcze geometrii 3D: najpierw zmierz trasę albo zeskanuj pomieszczenie.</string>
     <string name="export_measurement">Pomiar</string>
