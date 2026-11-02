@@ -108,6 +108,7 @@
     <string name="home_default_room_name">Raum</string>
     <string name="error_project_open">Das Projekt konnte nicht geöffnet werden.</string>
     <string name="error_project_save">Das Projekt konnte nicht gespeichert werden.</string>
+    <string name="error_photo_save">Das Foto konnte nicht gespeichert werden. Prüfe den freien Speicher des Telefons.</string>
     <string name="ar_close">Schließen</string>
     <string name="export_folder_inaccessible">In den gewählten Ordner kann nicht geschrieben werden. Wähle einen anderen.</string>
     <string name="tier_manual">Manuell</string>

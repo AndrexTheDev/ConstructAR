@@ -80,6 +80,12 @@ CACHED_CLOCK = re.compile(r"remember\s*\([^)]*\)\s*\{[^}]*totalWorkMillis\s*\(")
 AR_OVERLAY_SCREEN = "app/src/main/kotlin/com/constructar/app/ui/ar/ArMeasureScreen.kt"
 AR_LITERAL_ALPHA = re.compile(r"alpha\s*=\s*[0-9]*\.?[0-9]+f")
 
+# `repository.save(...)` returns whether the write landed - the phone may be full, the storage may
+# be read-only. A call whose result is thrown away is work lost without a word: the field photo
+# path reported "attached" for a file no room pointed at, and the copy failure before it was not
+# even shown (finding 72).
+DISCARDED_SAVE = re.compile(r"(?m)^\s*repository\.save\s*\(")
+
 R_REFERENCE = re.compile(r"\bR\s*\.\s*(string|plurals|array|drawable|xml|style)\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)")
 
 FORBIDDEN_PERMISSIONS = ["android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"]
@@ -248,6 +254,19 @@ def check_cached_clock() -> None:
                       f"runs - total it from rememberNowMs(...) instead")
 
 
+def check_discarded_saves() -> None:
+    """A save whose Boolean is discarded is a write nobody checks (finding 72)."""
+    for path in kotlin_sources("app"):
+        # Tests set state up and may ignore the answer; production code may not.
+        if "/src/test/" in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in DISCARDED_SAVE.finditer(text):
+            line = text[: match.start()].count("\n") + 1
+            add(path, f"line {line}: `repository.save(...)` returns whether the write landed - "
+                      f"bind it and report the failure instead of dropping it")
+
+
 def check_ar_alpha_literals() -> None:
     """No transparency may be written as a number inside the AR screen (finding 69)."""
     path = ROOT / AR_OVERLAY_SCREEN
@@ -406,6 +425,7 @@ def main() -> int:
     check_offline_guarantees()
     check_cached_clock()
     check_ar_alpha_literals()
+    check_discarded_saves()
     check_manifest_hardening()
     check_kotlin_structure()
     check_resource_xml()

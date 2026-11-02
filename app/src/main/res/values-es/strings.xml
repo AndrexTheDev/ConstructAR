@@ -108,6 +108,7 @@
     <string name="home_default_room_name">Estancia</string>
     <string name="error_project_open">No se pudo abrir la obra.</string>
     <string name="error_project_save">No se pudo guardar la obra.</string>
+    <string name="error_photo_save">No se pudo guardar la foto. Comprueba el espacio libre del teléfono.</string>
     <string name="ar_close">Cerrar</string>
     <string name="export_folder_inaccessible">No se puede escribir en la carpeta elegida. Elige otra carpeta.</string>
     <string name="tier_manual">Manual</string>

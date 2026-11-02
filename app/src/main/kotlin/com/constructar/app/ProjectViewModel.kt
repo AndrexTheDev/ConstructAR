@@ -57,6 +57,13 @@ enum class UiMessage {
     PROJECT_OPEN_FAILED,
     PROJECT_SAVE_FAILED,
 
+    /**
+     * A field photo could not be written to app storage - a full phone, usually. Its own code
+     * because the operator's next action differs: with the room save he retries, with this one he
+     * frees space first.
+     */
+    PHOTO_SAVE_FAILED,
+
     /** The free plan's single room is taken. The UI answers with the paywall, never a crash. */
     PROJECT_LIMIT_REACHED,
 }
@@ -481,7 +488,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val entryId = PhotoTokens.entryOf(token) ?: return
         val ownerId = PhotoTokens.projectOf(token)
         viewModelScope.launch {
+            // Both failure branches say so: the caller's callback was never wired, so a full
+            // phone swallowed the photograph without a word (finding 72).
             if (!repository.savePhotoAs(token, uri)) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PHOTO_SAVE_FAILED)
                 onDone(false)
                 return@launch
             }
@@ -505,9 +515,15 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 // wrong room, and saving *that* project would have carried the entry's token into
                 // a room that never had the entry.
                 is FieldPhotoTarget.OffScreen -> {
-                    repository.save(target.project)
+                    // The file is already on disk; if its room cannot be rewritten the entry keeps
+                    // no token and the copy is an orphan - reporting success here is exactly the
+                    // "attached" for a file nothing points at that finding 58 removed.
+                    val written = repository.save(target.project)
+                    if (!written) {
+                        mutableState.value = mutableState.value.copy(lastError = UiMessage.PHOTO_SAVE_FAILED)
+                    }
                     refresh()
-                    onDone(true)
+                    onDone(written)
                 }
                 FieldPhotoTarget.Gone -> {
                     repository.deletePhotoAs(token)

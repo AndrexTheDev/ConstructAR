@@ -108,6 +108,7 @@
     <string name="home_default_room_name">Locale</string>
     <string name="error_project_open">Impossibile aprire il cantiere.</string>
     <string name="error_project_save">Impossibile salvare il cantiere.</string>
+    <string name="error_photo_save">Impossibile salvare la foto. Controlla lo spazio libero del telefono.</string>
     <string name="ar_close">Chiudi</string>
     <string name="export_folder_inaccessible">Impossibile scrivere nella cartella scelta. Scegline un’altra.</string>
     <string name="tier_manual">Manuale</string>

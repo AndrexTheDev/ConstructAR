@@ -108,6 +108,7 @@
     <string name="home_default_room_name">Pomieszczenie</string>
     <string name="error_project_open">Nie udało się otworzyć obiektu.</string>
     <string name="error_project_save">Nie udało się zapisać obiektu.</string>
+    <string name="error_photo_save">Nie udało się zapisać zdjęcia. Sprawdź wolne miejsce w telefonie.</string>
     <string name="ar_close">Zamknij</string>
     <string name="export_folder_inaccessible">Nie można zapisać w wybranym folderze. Wybierz inny folder.</string>
     <string name="tier_manual">Ręcznie</string>

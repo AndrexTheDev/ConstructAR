@@ -63,6 +63,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
     val errorText = when (state.lastError) {
         UiMessage.PROJECT_OPEN_FAILED -> stringResource(R.string.error_project_open)
         UiMessage.PROJECT_SAVE_FAILED -> stringResource(R.string.error_project_save)
+        UiMessage.PHOTO_SAVE_FAILED -> stringResource(R.string.error_photo_save)
         UiMessage.PROJECT_LIMIT_REACHED -> stringResource(R.string.home_limit_title)
         null -> null
     }
