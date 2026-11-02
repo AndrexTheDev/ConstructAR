@@ -6,7 +6,9 @@
 
 package com.constructar.app.ui
 
+import com.constructar.core.model.DefectItem
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -36,6 +38,65 @@ class FieldListsTest {
         assertEquals(27, FieldLists.hiddenCount(total = 47, shown = FieldLists.DIARY_SHOWN))
         assertEquals(5, FieldLists.hiddenCount(total = 17, shown = FieldLists.SESSIONS_SHOWN))
     }
+
+    /**
+     * The cap must never hide a defect that is still open.
+     *
+     * The list is drawn in creation order, newest first, and resolving a defect does not move it,
+     * so a fortnight's punch list put the oldest - and still open - items *behind* twenty newer
+     * resolved ones: the counter said "10 open · 20 resolved" and every row drawn was resolved,
+     * while the photo budget (which sorts open first) showed the picture of a defect whose row was
+     * not there (finding 127).
+     */
+    @Test
+    fun `an open defect is drawn before a resolved one, however old it is`() {
+        val oldest = defect("a", createdAt = 1_000L, resolved = false)
+        val newer = (0 until 25).map { index ->
+            defect("r$index", createdAt = 2_000L + index, resolved = true)
+        }
+
+        val drawn = FieldLists.visibleDefects(listOf(oldest) + newer)
+
+        assertEquals(FieldLists.DEFECTS_SHOWN, drawn.size)
+        assertEquals(oldest.id, drawn.first().id)
+        assertTrue(drawn.toString(), drawn.first().resolved.not())
+    }
+
+    @Test
+    fun `both halves keep the newest first`() {
+        val defects = listOf(
+            defect("open-new", createdAt = 9L, resolved = false),
+            defect("open-old", createdAt = 3L, resolved = false),
+            defect("done-new", createdAt = 8L, resolved = true),
+            defect("done-old", createdAt = 2L, resolved = true),
+        )
+
+        val drawn = FieldLists.visibleDefects(defects)
+
+        assertEquals(listOf("open-new", "open-old", "done-new", "done-old"), drawn.map { it.id })
+    }
+
+    @Test
+    fun `a list that fits is drawn whole, and the tail count still matches`() {
+        val defects = listOf(
+            defect("a", createdAt = 3L, resolved = true),
+            defect("b", createdAt = 2L, resolved = false),
+        )
+
+        val drawn = FieldLists.visibleDefects(defects)
+
+        assertEquals(2, drawn.size)
+        assertEquals(0, FieldLists.hiddenCount(drawn.size, FieldLists.DEFECTS_SHOWN))
+        // Fifty defects on the job: twenty are drawn, thirty are named under the list.
+        assertEquals(30, FieldLists.hiddenCount(50, FieldLists.DEFECTS_SHOWN))
+    }
+
+    private fun defect(id: String, createdAt: Long, resolved: Boolean) = DefectItem(
+        id = id,
+        createdAtEpochMs = createdAt,
+        title = id,
+        resolved = resolved,
+    )
 
     @Test
     fun `the caps are the ones the screen draws`() {

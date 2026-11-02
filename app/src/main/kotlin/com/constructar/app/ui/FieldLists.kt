@@ -6,6 +6,8 @@
 
 package com.constructar.app.ui
 
+import com.constructar.core.model.DefectItem
+
 /**
  * How much of the site file a phone screen draws, and how much it does not.
  *
@@ -29,8 +31,27 @@ object FieldLists {
     /** Diary rows drawn at once. The protocol's appendix is the reader for the long tail. */
     const val DIARY_SHOWN: Int = 20
 
-    /** Defect rows drawn at once. An open defect is never sorted last, so the budget is safe. */
+    /** Defect rows drawn at once. */
     const val DEFECTS_SHOWN: Int = 20
+
+    /**
+     * The defect rows the screen draws: **every open one first**, then the resolved ones.
+     *
+     * The cap was applied to the stored order, which is creation order - newest first - and
+     * resolving a defect does not move it. A fortnight's punch list therefore ended with the
+     * oldest ten still open *behind* twenty newer resolved ones: the counter above the list said
+     * "10 open · 20 resolved" and every row drawn was resolved, while the appendix photo budget
+     * (which does sort open first) showed the photo of a defect whose row was not there. The one
+     * thing on this screen that costs the operator money is a defect he forgot to fix, so it is
+     * the one thing the cap must never hide (finding 127).
+     *
+     * Within each group the stored order is kept, so both halves stay newest first.
+     */
+    fun visibleDefects(defects: List<DefectItem>, shown: Int = DEFECTS_SHOWN): List<DefectItem> {
+        val open = defects.filterNot { it.resolved }
+        val resolved = defects.filter { it.resolved }
+        return (open + resolved).take(shown.coerceAtLeast(0))
+    }
 
     /**
      * Rows that exist but are not drawn: never negative, so a list shorter than its cap says

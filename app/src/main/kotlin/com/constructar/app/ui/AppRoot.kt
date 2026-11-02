@@ -261,7 +261,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onToggleDefect = { id -> viewModel.toggleDefect(id) },
                             onDeleteDefect = { id -> viewModel.deleteDefect(id) },
                             photoFor = { token -> state.fieldPhotos[token] },
-                            onAttachPhoto = { token, uri -> viewModel.attachFieldPhoto(token, uri) },
+                            onAttachPhoto = { token, uri, onDone -> viewModel.attachFieldPhoto(token, uri, onDone) },
                         )
                     } else {
                         Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())

@@ -93,7 +93,7 @@ fun FieldBookScreen(
     onToggleDefect: (String) -> Unit,
     onDeleteDefect: (String) -> Unit,
     photoFor: (String) -> Bitmap?,
-    onAttachPhoto: (token: String, uri: Uri) -> Unit,
+    onAttachPhoto: (token: String, uri: Uri, onDone: (Boolean) -> Unit) -> Unit,
 ) {
     val running = WorkTime.isRunning(project.sessions)
 
@@ -121,11 +121,19 @@ fun FieldBookScreen(
     // defect the picture ends up on. The camera app writes straight into our cache through the
     // FileProvider, so no storage permission and no copy of the operator's gallery is needed.
     val context = LocalContext.current
-    var pending by remember { mutableStateOf<Pair<String, Uri>?>(null) }
+    var pending by remember { mutableStateOf<Triple<String, Uri, java.io.File>?>(null) }
     val captureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
         val target = pending
         pending = null
-        if (captured && target != null) onAttachPhoto(target.first, target.second)
+        if (captured && target != null) {
+            // The cache copy goes as soon as it has been copied into private storage - and stays
+            // when that copy failed, because then it is the only picture there is (finding 128).
+            onAttachPhoto(target.first, target.second) { attached ->
+                if (CaptureFile.shouldDelete(captured = true, attached = attached)) target.third.delete()
+            }
+        } else {
+            target?.third?.delete()
+        }
     }
     val capture: (String) -> Unit = { token ->
         val directory = java.io.File(context.cacheDir, "capture").apply { mkdirs() }
@@ -135,7 +143,7 @@ fun FieldBookScreen(
             context.packageName + ".fileprovider",
             file,
         )
-        pending = token to uri
+        pending = Triple(token, uri, file)
         captureLauncher.launch(uri)
     }
 
@@ -352,7 +360,7 @@ fun FieldBookScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                project.defects.take(FieldLists.DEFECTS_SHOWN).forEach { defect ->
+                FieldLists.visibleDefects(project.defects).forEach { defect ->
                     val token = defect.photo
                     DefectRow(
                         defect = defect,

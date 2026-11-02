@@ -554,14 +554,19 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             when (val target = fieldPhotoTarget(token, entryId, open, stored)) {
                 is FieldPhotoTarget.OnScreen -> {
                     val thumbnail = repository.loadPhotoAs(token)
-                    mutate(target.project) { _ ->
+                    // `onDone` carries the *disk* answer, not the screen's: the row now shows the
+                    // picture either way, and the caller uses this flag to decide whether the
+                    // cache copy of the capture may go. Reporting `true` for a project that was
+                    // never written would delete the only copy of a photo nothing points at
+                    // (findings 72, 128).
+                    mutate(target.project) { saved ->
                         val photos = if (thumbnail != null) {
                             mutableState.value.fieldPhotos + (token to thumbnail)
                         } else {
                             mutableState.value.fieldPhotos
                         }
                         mutableState.value = mutableState.value.copy(fieldPhotos = photos)
-                        onDone(true)
+                        onDone(saved != null)
                     }
                 }
                 // Not the room the operator is looking at: write it where it belongs and let the
