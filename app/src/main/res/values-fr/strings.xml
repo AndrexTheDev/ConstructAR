@@ -408,6 +408,10 @@
         <item quantity="one">1 pièce n’a pas pu être enregistrée sur ce téléphone : le stockage est plein ou en lecture seule ; le fichier de ta sauvegarde reste intact</item>
         <item quantity="other">%1$d pièces n’ont pas pu être enregistrées sur ce téléphone : le stockage est plein ou en lecture seule ; les fichiers de ta sauvegarde restent intacts</item>
     </plurals>
+    <plurals name="backup_photos_failed">
+        <item quantity="one">1 photo d’une pièce restaurée n’a pas pu être enregistrée : le stockage est plein ou en lecture seule ; le fichier de ta sauvegarde reste intact</item>
+        <item quantity="other">%1$d photos de pièces restaurées n’ont pas pu être enregistrées : le stockage est plein ou en lecture seule ; les fichiers de ta sauvegarde restent intacts</item>
+    </plurals>
     <string name="route_warning_low_confidence">Ce point vient des données de profondeur - touche à nouveau le mur détecté pour une valeur plus sûre</string>
     <string name="route_warning_height_jump">C’est un grand écart de hauteur : une montée au plafond ou un appui sur le sol ? Annule-le si c’était une erreur</string>
 </resources>

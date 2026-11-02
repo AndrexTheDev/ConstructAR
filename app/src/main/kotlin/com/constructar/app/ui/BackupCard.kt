@@ -65,7 +65,7 @@ fun BackupCard(
     onRestore: (
         texts: List<String>,
         photos: List<Pair<String, Uri>>,
-        done: (imported: Int, heldBack: Int, unreadable: Int, notWritten: Int) -> Unit,
+        done: (com.constructar.app.RestoreCounts) -> Unit,
     ) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -175,13 +175,14 @@ fun BackupCard(
                 busy = false
                 return@launch
             }
-            onRestore(texts, photos) { imported, heldBack, unreadable, notWritten ->
+            onRestore(texts, photos) { counts ->
                 outcome = BackupOutcome.restored(
                     counts = BackupOutcome.RestoreCounts(
-                        imported = imported,
-                        heldBack = heldBack,
-                        unreadable = unreadable,
-                        notWritten = notWritten,
+                        imported = counts.imported,
+                        heldBack = counts.heldBack,
+                        unreadable = counts.unreadable,
+                        notWritten = counts.notWritten,
+                        photosFailed = counts.photosFailed,
                     ),
                     nothingImported = context.getString(R.string.backup_failed),
                     storageFailed = context.getString(R.string.backup_storage_failed),
@@ -289,6 +290,20 @@ fun BackupCard(
                         color = SiteColors.danger,
                     )
                 }
+                // The rooms are back and their pictures are not: said apart from the rooms,
+                // because the room is usable and the documentation the customer signed is not
+                // (finding 92).
+                if (current is BackupOutcome.Restored && current.photosFailed > 0) {
+                    Text(
+                        text = pluralStringResource(
+                            R.plurals.backup_photos_failed,
+                            current.photosFailed,
+                            current.photosFailed,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SiteColors.danger,
+                    )
+                }
                 if (current is BackupOutcome.Restored && current.unreadable > 0) {
                     Text(
                         text = pluralStringResource(R.plurals.backup_unreadable, current.unreadable, current.unreadable),
@@ -369,6 +384,13 @@ internal sealed interface BackupOutcome {
         val unreadable: Int = 0,
         /** Rooms that were read and could not be written: the phone's storage, not the file. */
         val notWritten: Int = 0,
+        /**
+         * Photos of restored rooms that this phone refused to write.
+         *
+         * The room is back and its picture is not - the one thing the site promises about a
+         * restore next to the metres (finding 92).
+         */
+        val photosFailed: Int = 0,
     ) : BackupOutcome
 
     data class Failed(val detail: String) : BackupOutcome
@@ -387,6 +409,7 @@ internal sealed interface BackupOutcome {
         val heldBack: Int,
         val unreadable: Int,
         val notWritten: Int = 0,
+        val photosFailed: Int = 0,
     )
 
     companion object {
@@ -415,6 +438,7 @@ internal sealed interface BackupOutcome {
                 heldBack = counts.heldBack,
                 unreadable = counts.unreadable,
                 notWritten = counts.notWritten,
+                photosFailed = counts.photosFailed,
             )
         }
 

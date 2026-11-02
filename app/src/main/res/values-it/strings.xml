@@ -408,6 +408,10 @@
         <item quantity="one">1 locale non è stato salvato su questo telefono: lo spazio è pieno o in sola lettura; il file della tua copia resta intatto</item>
         <item quantity="other">%1$d locali non sono stati salvati su questo telefono: lo spazio è pieno o in sola lettura; i file della tua copia restano intatti</item>
     </plurals>
+    <plurals name="backup_photos_failed">
+        <item quantity="one">1 foto di un locale ripristinato non è stata salvata: lo spazio è pieno o in sola lettura; il file della tua copia resta intatto</item>
+        <item quantity="other">%1$d foto di locali ripristinati non sono state salvate: lo spazio è pieno o in sola lettura; i file della tua copia restano intatti</item>
+    </plurals>
     <string name="route_warning_low_confidence">Questo punto proviene dai dati di profondità: tocca di nuovo la parete rilevata per un valore più solido</string>
     <string name="route_warning_height_jump">È un salto di quota notevole: una salita al soffitto o un tocco sul pavimento? Annullalo se è stato un errore</string>
 </resources>

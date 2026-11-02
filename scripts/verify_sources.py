@@ -88,7 +88,12 @@ AR_LITERAL_ALPHA = re.compile(r"alpha\s*=\s*[0-9]*\.?[0-9]+f")
 # be read-only. A call whose result is thrown away is work lost without a word: the field photo
 # path reported "attached" for a file no room pointed at, and the copy failure before it was not
 # even shown (finding 72).
-DISCARDED_SAVE = re.compile(r"(?m)^\s*repository\.save\s*\(")
+# A write on the repository that answers whether it landed: `save`, `savePhoto`, `savePhotoAs`,
+# `saveDraft`. The photo copy in `importBackup` was the one that got away - the rule knew only
+# `save(` (finding 92). The deletes are the same shape and are next.
+DISCARDED_SAVE = re.compile(
+    r"(?m)^[ \t]*repository\s*\.\s*save(?:Photo(?:As)?|Draft)?\s*\("
+)
 
 # A platform exception's `message` is English, Java and a POSIX error number - not a sentence for
 # an operator who reads German. The export and the backup printed it verbatim inside their own
@@ -272,15 +277,24 @@ def check_cached_clock() -> None:
 
 
 def check_discarded_saves() -> None:
-    """A save whose Boolean is discarded is a write nobody checks (finding 72)."""
+    """A save whose Boolean is discarded is a write nobody checks (finding 72).
+
+    One exemption: `writeDraft` is the single place a draft reaches the disk and it is
+    deliberately fire-and-forget - the operator is mid-run and there is no screen to report a lost
+    draft to. Its ordering is what protects the file, and `check_draft_write_ordering` owns that.
+    """
     for path in kotlin_sources("app"):
         # Tests set state up and may ignore the answer; production code may not.
         if "/src/test/" in path.as_posix():
             continue
         text = path.read_text(encoding="utf-8")
+        guard_start, guard_end = _function_span(text, "fun writeDraft(")
         for match in DISCARDED_SAVE.finditer(text):
+            if 0 <= guard_start <= match.start() < guard_end:
+                continue
             line = text[: match.start()].count("\n") + 1
-            add(path, f"line {line}: `repository.save(...)` returns whether the write landed - "
+            call = match.group(0).strip().splitlines()[-1].strip()
+            add(path, f"line {line}: `{call}` returns whether the write landed - "
                       f"bind it and report the failure instead of dropping it")
 
 

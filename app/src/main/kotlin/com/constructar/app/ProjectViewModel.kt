@@ -678,7 +678,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun importBackup(
         texts: List<String>,
         photos: List<Pair<String, Uri>> = emptyList(),
-        onDone: (imported: Int, heldBack: Int, unreadable: Int, notWritten: Int) -> Unit = { _, _, _, _ -> },
+        onDone: (RestoreCounts) -> Unit = { _ -> },
     ) {
         viewModelScope.launch {
             // Restoring is a way to *create* projects, so it obeys the same plan as creating
@@ -705,12 +705,11 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     true
                 }
             }
-            photos.forEach { (token, uri) ->
-                // `<project id>` for the room's own photo, `<project id>__diary_<entry>` for an
-                // entry photo: only a room this restore created gives the photo a home.
-                val home = homes[PhotoTokens.projectOf(token)] ?: return@forEach
-                repository.savePhotoAs(PhotoTokens.withProject(token, home), uri)
-            }
+            // `<project id>` for the room's own photo, `<project id>__diary_<entry>` for an
+            // entry photo: only a room this restore created gives the photo a home - and a copy
+            // that this phone refuses is counted, because the card used to say "restored" while
+            // the documentation was still missing (finding 92).
+            val photoRestore = restorePhotos(photos, homes, repository::savePhotoAs)
             refresh()
             mutableState.value.openProject?.let { open ->
                 val reloaded = repository.load(open.id)
@@ -723,7 +722,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
             }
-            onDone(counts.imported, counts.heldBack, counts.unreadable, counts.notWritten)
+            onDone(counts.copy(photosFailed = photoRestore.failed))
         }
     }
 
@@ -819,6 +818,16 @@ internal data class RestoreCounts(
      * file that is fine while the room was gone (finding 86).
      */
     val notWritten: Int,
+    /**
+     * Photos that belonged to a restored room and that this phone could not write.
+     *
+     * The copy was attempted and refused - a full or read-only storage - so the file is still in
+     * the operator's backup and the room in the app simply has no picture. The result of
+     * `savePhotoAs` used to be thrown away: the restore announced the rooms, the site page
+     * promised that restoring "brings the photos along", and the missing photograph was invisible
+     * on the one screen that could have said so (finding 92).
+     */
+    val photosFailed: Int = 0,
 )
 
 internal inline fun restoreOutcome(
@@ -855,4 +864,33 @@ internal inline fun restoreOutcome(
         unreadable = unreadable,
         notWritten = notWritten,
     )
+}
+
+/** How a restore's photos went: copies that landed, and copies this phone refused. */
+internal data class PhotoRestore(val restored: Int, val failed: Int)
+
+/**
+ * Copies every restored photo into its room, and counts what happened.
+ *
+ * A photo is matched to its room by the id in its token, never by the file name it had in the
+ * backup folder: a room that was imported under a fresh id (its old one was taken) must take its
+ * pictures with it. A photo whose room was held back - the plan had no slot for it - is neither
+ * restored nor counted as a failure: it is still in the backup, waiting for the same upgrade the
+ * room is waiting for.
+ *
+ * Kept as its own function, taking the copy as a lambda, so the three outcomes can be tested
+ * without a content resolver, a file or a phone (finding 92).
+ */
+internal suspend fun <T> restorePhotos(
+    photos: List<Pair<String, T>>,
+    homes: Map<String, String>,
+    save: suspend (token: String, photo: T) -> Boolean,
+): PhotoRestore {
+    var restored = 0
+    var failed = 0
+    for ((token, photo) in photos) {
+        val home = homes[PhotoTokens.projectOf(token)] ?: continue
+        if (save(PhotoTokens.withProject(token, home), photo)) restored++ else failed++
+    }
+    return PhotoRestore(restored = restored, failed = failed)
 }

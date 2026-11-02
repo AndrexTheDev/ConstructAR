@@ -408,6 +408,10 @@
         <item quantity="one">1 Raum konnte auf diesem Telefon nicht gespeichert werden - der Speicher ist voll oder gesperrt; die Datei in deiner Sicherung bleibt unberührt</item>
         <item quantity="other">%1$d Räume konnten auf diesem Telefon nicht gespeichert werden - der Speicher ist voll oder gesperrt; die Dateien in deiner Sicherung bleiben unberührt</item>
     </plurals>
+    <plurals name="backup_photos_failed">
+        <item quantity="one">1 Foto eines wiederhergestellten Raums konnte nicht geschrieben werden - der Speicher ist voll oder gesperrt; die Datei in deiner Sicherung bleibt unberührt</item>
+        <item quantity="other">%1$d Fotos wiederhergestellter Räume konnten nicht geschrieben werden - der Speicher ist voll oder gesperrt; die Dateien in deiner Sicherung bleiben unberührt</item>
+    </plurals>
     <string name="route_warning_low_confidence">Dieser Punkt stammt aus Tiefendaten – tippe für einen sichereren Wert erneut auf die erkannte Wand</string>
     <string name="route_warning_height_jump">Das ist ein großer Höhensprung - eine Steigleitung zur Decke oder ein Fehltipp auf den Boden? Mach ihn rückgängig, wenn es ein Fehltipp war</string>
 </resources>

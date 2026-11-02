@@ -408,6 +408,10 @@
         <item quantity="one">No se pudo guardar 1 sala en este teléfono: el almacenamiento está lleno o bloqueado; el archivo de tu copia sigue intacto</item>
         <item quantity="other">No se pudieron guardar %1$d salas en este teléfono: el almacenamiento está lleno o bloqueado; los archivos de tu copia siguen intactos</item>
     </plurals>
+    <plurals name="backup_photos_failed">
+        <item quantity="one">No se pudo guardar 1 foto de una sala restaurada: el almacenamiento está lleno o bloqueado; el archivo de tu copia sigue intacto</item>
+        <item quantity="other">No se pudieron guardar %1$d fotos de salas restauradas: el almacenamiento está lleno o bloqueado; los archivos de tu copia siguen intactos</item>
+    </plurals>
     <string name="route_warning_low_confidence">Este punto viene de datos de profundidad: toca de nuevo la pared detectada para un valor más firme</string>
     <string name="route_warning_height_jump">Ese salto de altura es grande: ¿una subida al techo o un toque en el suelo? Deshazlo si fue un fallo</string>
 </resources>

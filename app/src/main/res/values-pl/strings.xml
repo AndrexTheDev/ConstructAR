@@ -416,6 +416,12 @@
         <item quantity="one">Nie udało się zapisać 1 pomieszczenia na tym telefonie - pamięć jest pełna lub tylko do odczytu; plik w kopii pozostaje nietknięty</item>
         <item quantity="other">Nie udało się zapisać %1$d pomieszczeń na tym telefonie - pamięć jest pełna lub tylko do odczytu; pliki w kopii pozostają nietknięte</item>
     </plurals>
+    <plurals name="backup_photos_failed">
+        <item quantity="one">Nie udało się zapisać 1 zdjęcia przywróconego pomieszczenia - pamięć jest pełna lub tylko do odczytu; plik w kopii pozostaje nietknięty</item>
+        <item quantity="few">Nie udało się zapisać %1$d zdjęć przywróconych pomieszczeń - pamięć jest pełna lub tylko do odczytu; pliki w kopii pozostają nietknięte</item>
+        <item quantity="many">Nie udało się zapisać %1$d zdjęć przywróconych pomieszczeń - pamięć jest pełna lub tylko do odczytu; pliki w kopii pozostają nietknięte</item>
+        <item quantity="other">Nie udało się zapisać %1$d zdjęć przywróconych pomieszczeń - pamięć jest pełna lub tylko do odczytu; pliki w kopii pozostają nietknięte</item>
+    </plurals>
     <string name="route_warning_low_confidence">Ten punkt pochodzi z danych głębi – dotknij ponownie wykrytej ściany, aby uzyskać pewniejszą wartość</string>
     <string name="route_warning_height_jump">To duży skok wysokości: pion do sufitu czy przypadkowe dotknięcie podłogi? Cofnij, jeśli to był błąd</string>
 </resources>

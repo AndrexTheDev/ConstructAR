@@ -408,6 +408,10 @@
         <item quantity="one">1 room could not be saved on this phone - the storage is full or read-only; the file in your backup is untouched</item>
         <item quantity="other">%1$d rooms could not be saved on this phone - the storage is full or read-only; the files in your backup are untouched</item>
     </plurals>
+    <plurals name="backup_photos_failed">
+        <item quantity="one">1 photo of a restored room could not be written - the storage is full or read-only; the file in your backup is untouched</item>
+        <item quantity="other">%1$d photos of restored rooms could not be written - the storage is full or read-only; the files in your backup are untouched</item>
+    </plurals>
     <string name="route_warning_low_confidence">This point came from depth data - tap the tracked wall again for a firmer value</string>
     <string name="route_warning_height_jump">That is a big jump in height - a riser up to the ceiling, or a tap on the floor? Undo it if it was a mis-tap</string>
 </resources>
