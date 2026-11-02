@@ -107,7 +107,7 @@
     <string name="export_order_length">Longueur de commande avec chutes : %1$s</string>
     <string name="export_fittings">Colliers %1$d · manchons %2$d · coudes %3$d</string>
     <string name="export_room_scan">Scan de la pièce enregistré : %1$d k triangles - il va dans le protocole ; le modèle 3D contient les tracés</string>
-    <string name="export_room_scan_limited">Une partie seulement de la pièce a été capturée (limite de numérisation) : le modèle 3D est incomplet.</string>
+    <string name="export_room_scan_limited">Une partie seulement de la pièce a été capturée (limite de numérisation) : mesure ce qui manque avant de le transmettre.</string>
     <string name="export_offline_note">Les fichiers sont écrits dans le dossier choisi. Rien n’est téléversé ; l’export fonctionne en mode avion et au sous-sol.</string>
     <string name="export_about">%1$s %2$s · %3$s</string>
     <string name="project_none">Aucun chantier ouvert</string>
@@ -282,7 +282,7 @@
     <string name="pdf_column_order_meters">Commande (m)</string>
     <string name="pdf_procurement_note">Les longueurs de commande incluent la réserve de chantier. Valeurs issues de nœuds affinés par ancres ; vérifie les tracés critiques au mètre avant de couper.</string>
     <string name="pdf_note_accuracy">Précision attendue : 1-2 cm sur un mur plat entre 1 et 4 m, 3-6 cm là où seules les données de profondeur existent, environ 1 %% de la longueur sur une diagonale. La confiance est le point le plus faible d’un tracé - sous %1$d %%, il faut le revérifier.</string>
-    <string name="pdf_note_scan_limited">Limite de numérisation atteinte : le modèle 3D ne couvre qu’une partie de la pièce. Longueurs, raccords et prix ne sont pas affectés : il manque la géométrie hors du volume capturé.</string>
+    <string name="pdf_note_scan_limited">Limite de numérisation atteinte : une partie seulement de la pièce a été capturée. Les longueurs, les raccords et les prix de ce protocole sont mesurés et non affectés : les zones hors du volume capturé n’ont pas été mesurées et ne figurent pas dans ce protocole.</string>
     <string name="pdf_note_recovered">Récupéré après une interruption : longueurs et raccords exacts, la position 3D n’est pas dans le modèle : %1$s</string>
     <string name="pdf_note_unbuildable">Aucune géométrie 3D n’a pu être générée pour ces tracés : longueurs et raccords comptent quand même : %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - généré sur l’appareil</string>
@@ -419,8 +419,8 @@
         <item quantity="other">%1$d chantiers retenus - ils restent dans ta sauvegarde ; Pro les importe tous</item>
     </plurals>
     <plurals name="backup_unreadable">
-        <item quantity="one">1 fichier de la sélection n’a pas pu être lu : ce n’est pas une pièce et il reste intact dans ta sauvegarde</item>
-        <item quantity="other">%1$d fichiers de la sélection n’ont pas pu être lus : ce ne sont pas des pièces et ils restent intacts dans ta sauvegarde</item>
+        <item quantity="one">1 fichier de la sélection n’a pas pu être lu : ce n’est pas une pièce, ou il a été écrit par une version plus récente de ConstructAR ; il reste intact dans ta sauvegarde</item>
+        <item quantity="other">%1$d fichiers de la sélection n’ont pas pu être lus : ce ne sont pas des pièces, ou ils ont été écrits par une version plus récente de ConstructAR ; ils restent intacts dans ta sauvegarde</item>
     </plurals>
     <plurals name="backup_not_written">
         <item quantity="one">1 pièce n’a pas pu être enregistrée sur ce téléphone : le stockage est plein ou en lecture seule ; le fichier de ta sauvegarde reste intact</item>

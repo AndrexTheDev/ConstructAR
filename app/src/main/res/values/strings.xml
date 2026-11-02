@@ -107,7 +107,7 @@
     <string name="export_order_length">Order length incl. waste: %1$s</string>
     <string name="export_fittings">Clips %1$d · couplings %2$d · bends %3$d</string>
     <string name="export_room_scan">Room scan recorded: %1$d k triangles - in the protocol; the 3D model holds the runs</string>
-    <string name="export_room_scan_limited">Only part of the room was captured (scan limit) - the 3D model is incomplete.</string>
+    <string name="export_room_scan_limited">Only part of the room was captured (scan limit) - measure what is missing before you hand this over.</string>
     <string name="export_offline_note">Files are written to the folder you pick. Nothing is uploaded; export works in airplane mode and in a basement.</string>
     <string name="export_about">%1$s %2$s · %3$s</string>
     <string name="project_none">No project open</string>
@@ -282,7 +282,7 @@
     <string name="pdf_column_order_meters">Order (m)</string>
     <string name="pdf_procurement_note">Order lengths include the site waste factor. Figures come from anchor-refined node positions; check critical runs with a tape measure before cutting.</string>
     <string name="pdf_note_accuracy">Expected accuracy: 1-2 cm on a flat wall between 1 and 4 m, 3-6 cm where only depth data is available, about 1 %% of the length on a diagonal. Confidence is the weakest point of a run - below %1$d %% it needs a second look.</string>
-    <string name="pdf_note_scan_limited">Scan limit reached: the 3D model covers only part of the room. Lengths, fittings and prices are unaffected - what is missing is the geometry outside the captured volume.</string>
+    <string name="pdf_note_scan_limited">Scan limit reached: only part of the room was captured. The lengths, fittings and prices in this protocol are measured and unaffected - areas outside the captured volume were not measured and are not in this protocol.</string>
     <string name="pdf_note_recovered">Recovered after an interruption - lengths and fittings are exact, the 3D position is not in the model: %1$s</string>
     <string name="pdf_note_unbuildable">No 3D geometry could be built for these runs - their lengths and fittings are still counted: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - generated on device</string>
@@ -419,8 +419,8 @@
         <item quantity="other">%1$d projects held back - they stay in your backup; Pro imports all of them</item>
     </plurals>
     <plurals name="backup_unreadable">
-        <item quantity="one">1 file in the selection could not be read - it is not a room and stays untouched in your backup</item>
-        <item quantity="other">%1$d files in the selection could not be read - they are not rooms and stay untouched in your backup</item>
+        <item quantity="one">1 file in the selection could not be read - it is not a room, or it was written by a newer ConstructAR; it stays untouched in your backup</item>
+        <item quantity="other">%1$d files in the selection could not be read - they are not rooms, or they were written by a newer ConstructAR; they stay untouched in your backup</item>
     </plurals>
     <plurals name="backup_not_written">
         <item quantity="one">1 room could not be saved on this phone - the storage is full or read-only; the file in your backup is untouched</item>

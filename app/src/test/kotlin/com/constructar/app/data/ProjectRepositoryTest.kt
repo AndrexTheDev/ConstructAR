@@ -125,6 +125,26 @@ class ProjectRepositoryTest {
     }
 
     @Test
+    fun `a room written by a newer app is refused instead of half-read`(): Unit = runBlocking {
+        repository.save(room())
+        val text = repository.backupEntries().single().text
+        val newer = text.replace("\"schemaVersion\": 1", "\"schemaVersion\": 2")
+        assertTrue("the fixture must carry a bumped schema version", newer != text)
+
+        assertNull(repository.parseProject(newer), "a newer file must not be parsed")
+        assertNull(repository.importProject(newer), "a newer file must not be imported")
+        assertEquals(
+            1,
+            repository.list().projects.size,
+            "a refused file must leave the phone exactly as it was",
+        )
+
+        assertNotNull(repository.parseProject(text), "the same room at this version is readable")
+        assertNotNull(repository.importProject(text), "and still restorable")
+        assertEquals(2, repository.list().projects.size)
+    }
+
+    @Test
     fun `restoring a backup of a room that is still on the phone keeps both`(): Unit = runBlocking {
         val original = repository.save(room())
         assertTrue(original)

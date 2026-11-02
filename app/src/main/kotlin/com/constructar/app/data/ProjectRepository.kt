@@ -199,16 +199,29 @@ class ProjectRepository(private val context: Context) {
     suspend fun importProject(text: String): ProjectRecord? = importProjectDetailed(text)?.project
 
     /**
-     * The room in [text], or `null` when the text is not one.
+     * The room in [text], or `null` when this build cannot read it.
      *
      * Pure: nothing is written, no id is re-keyed, no file is touched. The restore uses it to tell
      * "a room this plan had no slot for" from "not a room at all" *before* it decides which files
      * it can even attempt - a file past the free slots is otherwise classified as held back for an
      * upgrade it would never survive.
+     *
+     * A file written by a **newer** ConstructAR is refused (finding 101). `schemaVersion` has been
+     * in every project file since the first release and no line of the app ever compared it: the
+     * parser ignores unknown keys, so a room backed up by a newer phone was accepted with
+     * everything that version had added - a diary entry, a photo reference, a defect - silently
+     * dropped, and the operator saw a room that had "restored" while part of the job was gone.
+     * Refusing leaves the file untouched in his backup, and the restore's sentence now names the
+     * cause. Files from *older* versions are still accepted: they only lack keys this build
+     * defaults. The repository's own files are read by [readProject] and never version-checked, so
+     * installing an older build does not hide the rooms already on the phone.
      */
-    fun parseProject(text: String): ProjectRecord? = runCatching {
-        json.decodeFromString(ProjectRecord.serializer(), text)
-    }.getOrNull()
+    fun parseProject(text: String): ProjectRecord? {
+        val record = runCatching {
+            json.decodeFromString(ProjectRecord.serializer(), text)
+        }.getOrNull() ?: return null
+        return if (record.schemaVersion > ProjectRecord.SCHEMA_VERSION) null else record
+    }
 
     /** [importProject], also reporting the id the file carried before any re-keying. */
     suspend fun importProjectDetailed(text: String): ImportedProject? = withContext(Dispatchers.IO) {

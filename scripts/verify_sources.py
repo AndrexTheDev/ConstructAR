@@ -25,6 +25,7 @@ and most expensive to discover in a 12-minute Gradle run:
  13. every protocol states its expected error, in all six languages (88)
  14. no document promises a loop closure nothing feeds        (finding 98)
  15. the README's native assertion count equals the suite      (finding 99)
+ 16. the project schema version is actually compared            (finding 101)
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -541,6 +542,38 @@ def check_native_assertion_count() -> None:
                     f"call sites - the count is a claim like any other (finding 99)")
 
 
+SCHEMA_VERSION_DECL = re.compile(r"val\s+schemaVersion\s*:\s*Int\s*=\s*SCHEMA_VERSION")
+
+
+def check_schema_version_is_read() -> None:
+    """A persisted schema version that nothing compares protects nothing (finding 101).
+
+    Every project file has carried `schemaVersion` since the first release, and no line of the app
+    ever looked at it. The parser ignores unknown keys, so a room backed up by a newer ConstructAR
+    was accepted while everything that version had added - a diary entry, a photo reference, a
+    defect - was dropped: the operator saw a room that had "restored" with part of the job gone,
+    and the file in his backup was the only complete copy left. The restore now refuses a newer
+    file, and this rule keeps the comparison from disappearing again: a model that declares the
+    version needs a reader that compares it against the constant, not against a literal.
+    """
+    declared: list[Path] = []
+    readers: list[Path] = []
+    for path in kotlin_sources("app", "ar-engine", "core", "export"):
+        if "/src/test/" in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if SCHEMA_VERSION_DECL.search(text):
+            declared.append(path)
+            continue
+        if "schemaVersion" in text and "SCHEMA_VERSION" in text:
+            readers.append(path)
+    if declared and not readers:
+        add(declared[0], "the project file carries `schemaVersion` and no file compares it against "
+                         "`SCHEMA_VERSION` - a backup from a newer app would be parsed with its "
+                         "unknown keys dropped, which is data loss reported as a successful "
+                         "restore (finding 101)")
+
+
 def check_draft_write_ordering() -> None:
     """Draft writes only inside `writeDraft`, which orders them (finding 74)."""
     for path in kotlin_sources("app"):
@@ -731,6 +764,7 @@ def main() -> int:
     check_pdf_accuracy_note()
     check_loop_closure_claim()
     check_native_assertion_count()
+    check_schema_version_is_read()
     check_money_fields_are_not_rekeyed()
     check_manifest_hardening()
     check_kotlin_structure()

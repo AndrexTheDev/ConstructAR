@@ -107,7 +107,7 @@
     <string name="export_order_length">Longitud de pedido con merma: %1$s</string>
     <string name="export_fittings">Abrazaderas %1$d · manguitos %2$d · curvas %3$d</string>
     <string name="export_room_scan">Escáner de sala registrado: %1$d k triángulos - va en el protocolo; el modelo 3D contiene las tiradas</string>
-    <string name="export_room_scan_limited">Solo se capturó parte de la estancia (límite de escaneo): el modelo 3D está incompleto.</string>
+    <string name="export_room_scan_limited">Solo se capturó parte de la estancia (límite de escaneo): mide lo que falta antes de entregarlo.</string>
     <string name="export_offline_note">Los archivos se escriben en la carpeta elegida. No se sube nada; la exportación funciona en modo avión y en un sótano.</string>
     <string name="export_about">%1$s %2$s · %3$s</string>
     <string name="project_none">No hay ninguna obra abierta</string>
@@ -282,7 +282,7 @@
     <string name="pdf_column_order_meters">Pedido (m)</string>
     <string name="pdf_procurement_note">Las longitudes de pedido incluyen la reserva de obra. Valores de nodos refinados con anclas; comprueba los tramos críticos con cinta antes de cortar.</string>
     <string name="pdf_note_accuracy">Precisión esperada: 1-2 cm en una pared plana entre 1 y 4 m, 3-6 cm donde solo hay datos de profundidad, cerca del 1 %% de la longitud en diagonal. La confianza es el punto más débil de una tirada - por debajo del %1$d %% conviene revisarla.</string>
-    <string name="pdf_note_scan_limited">Límite de escaneo alcanzado: el modelo 3D solo cubre parte de la estancia. Las longitudes, los accesorios y los precios no se ven afectados: falta la geometría fuera del volumen capturado.</string>
+    <string name="pdf_note_scan_limited">Límite de escaneo alcanzado: solo se capturó parte de la estancia. Las longitudes, los accesorios y los precios de este protocolo están medidos y no se ven afectados: las zonas fuera del volumen capturado no se midieron y no aparecen en este protocolo.</string>
     <string name="pdf_note_recovered">Recuperado tras una interrupción: longitudes y accesorios son exactos, la posición 3D no está en el modelo: %1$s</string>
     <string name="pdf_note_unbuildable">No se pudo generar geometría 3D para estas tiradas: longitudes y accesorios siguen contando: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - generado en el dispositivo</string>
@@ -419,8 +419,8 @@
         <item quantity="other">%1$d proyectos retenidos: siguen en tu copia; con Pro se importan todos</item>
     </plurals>
     <plurals name="backup_unreadable">
-        <item quantity="one">No se pudo leer 1 archivo de la selección: no es una sala y sigue intacto en tu copia</item>
-        <item quantity="other">No se pudieron leer %1$d archivos de la selección: no son salas y siguen intactos en tu copia</item>
+        <item quantity="one">No se pudo leer 1 archivo de la selección: no es una estancia o lo escribió una versión más reciente de ConstructAR; sigue intacto en tu copia</item>
+        <item quantity="other">No se pudieron leer %1$d archivos de la selección: no son estancias o los escribió una versión más reciente de ConstructAR; siguen intactos en tu copia</item>
     </plurals>
     <plurals name="backup_not_written">
         <item quantity="one">No se pudo guardar 1 sala en este teléfono: el almacenamiento está lleno o bloqueado; el archivo de tu copia sigue intacto</item>

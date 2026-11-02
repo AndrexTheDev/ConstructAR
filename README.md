@@ -404,8 +404,9 @@ Known limitations, deliberately documented rather than hidden:
   hardcoded UI text in shipped code, string-resource references, locale parity, XML
   well-formedness and the manifest hardening — without needing a JDK. Two of its rules keep a
   *claim* tied to the code: no document may describe a loop closure while nothing feeds the pose
-  graph (finding 98), and the native assertion count in this file must equal the call sites in
-  `host_tests.cpp` (finding 99).
+  graph (finding 98), the native assertion count in this file must equal the call sites in
+  `host_tests.cpp` (finding 99), and a project file's `schemaVersion` must actually be compared
+  before a restore accepts it (finding 101).
 * **Site gate**: `tools/seo_audit.py` reads the *generated* landing pages and refuses a
   regression: canonical and the six `hreflang` pairs, title/description lengths, Open Graph and
   Twitter cards with a real image size, JSON-LD whose offers match the four real prices, every
@@ -443,7 +444,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 472 tests in the app+core+ar-engine+export suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 473 tests in the app+core+ar-engine+export suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 49 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
