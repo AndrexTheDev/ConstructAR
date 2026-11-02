@@ -95,7 +95,7 @@ internal fun buildSiteFileSections(
     if (project.sessions.isNotEmpty()) {
         val rows = project.sessions.map { session ->
             listOf(
-                formatDateLabel(session.startEpochMs),
+                formatDayLabel(session.startEpochMs),
                 formatTimeLabel(session.startEpochMs),
                 endCell(session, texts),
                 duration(WorkTime.sessionMillis(session, nowMs), texts),
@@ -145,7 +145,7 @@ internal fun buildSiteFileSections(
 }
 
 private fun defectRow(defect: DefectItem, texts: SiteFileTexts): List<String> = listOf(
-    formatDateLabel(defect.createdAtEpochMs),
+    formatDayLabel(defect.createdAtEpochMs),
     if (defect.location.isBlank()) defect.title else "${defect.title} · ${defect.location}",
     when (defect.severity) {
         DefectSeverity.LOW -> texts.severityLow
@@ -271,7 +271,7 @@ internal fun buildPhotoAppendix(
     project.diary.forEach { entry ->
         entry.photo?.let { token ->
             captions.getOrPut(token) {
-                "%s %s".format(texts.photoDiaryPrefix, formatDateLabel(entry.createdAtEpochMs))
+                "%s %s".format(texts.photoDiaryPrefix, formatDayLabel(entry.createdAtEpochMs))
             }
         }
     }

@@ -13,31 +13,35 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * Timestamps the way the operator's phone writes them.
+ * Timestamps the way the operator's phone writes them - the clock, not the calendar.
  *
- * The *labels* here go through [DateFormat] with the device's own locale and 12/24-hour
- * convention, so a Polish phone prints `31.10.2026, 14:05` and an American one `10/31/26, 2:05 PM`
- * without a single format string in the resources. `java.time` is off the table: minSdk is 24.
+ * Two rules, deliberately different from each other:
  *
- * The one exception is [formatDayLabel], the fixed numeric day: it is a field, not prose, so it
- * is pinned to Gregorian Latin digits (see its own note - the device locale also chooses the
- * *calendar*, and a Thai phone would otherwise print the Buddhist year).
+ *  * a **clock time** follows the device's 12/24-hour convention (`14:05` or `2:05 PM`), because
+ *    that is how the operator already reads a watch, and the app never overrules a phone setting
+ *    the owner chose;
+ *  * a **date** is pinned to Gregorian Latin digits, `12.05.2026`, on every surface ([formatDayLabel]).
+ *
+ * The date is pinned because the locale also chooses the *calendar* and the *month names*: on a
+ * Thai phone `DateFormat.getDateInstance` prints the Buddhist year, so the protocol's date column
+ * read `12 พ.ค. 2569` - 543 years in the future, in a document the customer signs - and on a Polish
+ * phone it read `12 maj 2026` in an otherwise English protocol. The home screen and the paywall
+ * were already pinned; the field book and the site file were not, so the same day appeared twice in
+ * two formats one tap apart (finding 121).
+ *
+ * `java.time` is off the table: minSdk is 24.
  *
  * Used by the site file and by the protocol, so a diary entry reads the same on screen and on
  * the page the customer signs.
  */
 
-/** Date only, medium style: `31 Oct 2026`. */
-internal fun formatDateLabel(epochMs: Long): String =
-    DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(epochMs))
-
-/** Time only, short style: `14:05` or `2:05 PM`. */
+/** Time only, short style: `14:05` or `2:05 PM` - the device's own 12/24-hour convention. */
 internal fun formatTimeLabel(epochMs: Long): String =
     DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(epochMs))
 
-/** Date and time, short style — one diary line. */
+/** A day and a clock time on one diary line: `12.05.2026, 14:05`. */
 internal fun formatDateTimeLabel(epochMs: Long): String =
-    DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(epochMs))
+    formatDayLabel(epochMs) + ", " + formatTimeLabel(epochMs)
 
 /**
  * The fixed numeric day label, `01.11.2026`.

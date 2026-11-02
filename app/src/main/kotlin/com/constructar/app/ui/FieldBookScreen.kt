@@ -470,7 +470,7 @@ private fun sessionLabel(session: WorkSession, nowMs: Long): String {
             time
         }
     } ?: stringResource(R.string.field_time_open)
-    return formatDateLabel(session.startEpochMs) + " · " +
+    return formatDayLabel(session.startEpochMs) + " · " +
         stringResource(R.string.field_time_range, start, end) + " · " +
         durationLabel(WorkTime.sessionMillis(session, nowMs))
 }
