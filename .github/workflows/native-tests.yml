@@ -45,9 +45,9 @@ jobs:
       # The optional RTAB-Map branch, compiled in the configuration the app would use. No
       # RTAB-Map checkout is available here, so the translation unit is built against
       # `tests/rtabmap-stubs` - headers that mirror the API of the RTAB-Map version
-      # CMakeLists.txt pins (`core/include/...`, `SensorData` with an odometry pose). This is a
-      # shape check, not a link: it is what proves the branch still compiles, which it did not
-      # for as long as the includes sat inside `namespace constructar` (finding 107).
+      # CMakeLists.txt pins (`rtabmap/core/Rtabmap.h`, `SensorData` with an odometry pose). This
+      # is a shape check, not a link: it is what proves the branch still compiles, which it did
+      # not for as long as the includes sat inside `namespace constructar` (finding 107).
       - name: Compile the RTAB-Map branch against stub headers
         run: |
           ${{ matrix.compiler }} -std=c++20 ${{ matrix.optimisation }} -Wall -Wextra -Werror \
@@ -55,3 +55,10 @@ jobs:
             -I native-slam/src/main/cpp \
             -I native-slam/src/main/cpp/tests/rtabmap-stubs \
             -c native-slam/src/main/cpp/slam/rtabmap_bridge.cpp -o /tmp/rtabmap_bridge.o
+
+      # Switching the back-end on is a question about paths, not about code: the guard has to
+      # accept the layout upstream actually has, and the archives have to be found where the
+      # documented build puts them. No checkout exists here, so the probe runs in script mode
+      # against fake trees - `cmake` alone, no NDK, no compiler (finding 110).
+      - name: Check the RTAB-Map layout probe
+        run: cmake -P native-slam/src/main/cpp/tests/rtabmap-layout-check.cmake

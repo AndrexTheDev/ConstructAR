@@ -10,8 +10,8 @@
 // time* on purpose:
 //
 //   * CMake option `CONSTRUCTAR_WITH_RTABMAP=ON` + `RTABMAP_SOURCE_DIR=...` compiles the
-//     real integration (see docs/SETUP.md §3 for the BSD-only build flags: `-DWITH_SURF=OFF
-//     -DWITH_OPENCV_NONFREE=OFF`, ORB/SIFT features only).
+//     real integration (see docs/SETUP.md §5.1 for the BSD-only recipe: OpenCV built with
+//     `-DOPENCV_ENABLE_NONFREE=OFF`, so only SIFT/ORB/BRISK are available).
 //   * Without it, `isAvailable()` returns false, so the Kotlin side simply sees no back-end.
 //
 // Neither branch is driven yet (finding 98): nothing in `:app`/`:ar-engine` feeds a keyframe or

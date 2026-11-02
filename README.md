@@ -409,7 +409,11 @@ Known limitations, deliberately documented rather than hidden:
 * **Instrumented tests** would need a physical ARCore device; none are included, and nothing in
   this repository claims to have run on one.
 * **CI**: `.github/workflows/native-tests.yml` builds and runs the native suite with both `g++`
-  and `clang++` at `-O1`/`-O2` with `-Werror`, on every push that touches the C++ core.
+  and `clang++` at `-O1`/`-O2` with `-Werror`, on every push that touches the C++ core. It also
+  compiles the optional RTAB-Map branch against stub headers and runs
+  `cmake -P native-slam/src/main/cpp/tests/rtabmap-layout-check.cmake` — six checks on where a
+  real checkout keeps its headers and archives, without an NDK, because that switch had never
+  once been satisfied by the documented build (finding 110).
 * **CI**: `.github/workflows/android-build.yml` runs `gradle assembleDebug testDebugUnitTest`
   (warnings are errors), asserts `libconstructar_slam.so` is inside the arm64 APK, and uploads
   the test reports. That workflow — not a local machine — is where the "it compiles" claim is
@@ -464,6 +468,7 @@ errors:
 | `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 492 tests in the app+core+ar-engine+export suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 53 checks, 0 failures |
+| RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
 | APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |
 

@@ -11,7 +11,7 @@
 #
 # Two build flavours:
 #   * default                    — self-contained (no external C++ dependencies at all)
-#   * CONSTRUCTAR_WITH_RTABMAP   — links a BSD-only RTAB-Map build (see docs/SETUP.md §3)
+#   * CONSTRUCTAR_WITH_RTABMAP   — links a BSD-only RTAB-Map build (see docs/SETUP.md §5.1)
 cmake_minimum_required(VERSION 3.22.1)
 project(constructar_slam LANGUAGES CXX)
 
@@ -78,22 +78,30 @@ target_link_libraries(constructar_slam
 )
 
 if(CONSTRUCTAR_WITH_RTABMAP)
-  if(NOT RTABMAP_SOURCE_DIR OR NOT EXISTS "${RTABMAP_SOURCE_DIR}/core/include/rtabmap/core/Rtabmap.h")
+  # The layout is detected rather than assumed (finding 110): upstream keeps the headers in
+  # `corelib/include`, not `core/include`, and the archives are in `build/bin` only for an
+  # in-source build - the recipe in docs/SETUP.md builds out of source. The probe lives in
+  # `cmake/rtabmap_layout.cmake` and is exercised by `tests/rtabmap-layout-check.cmake`, which
+  # runs without an NDK.
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rtabmap_layout.cmake")
+  constructar_locate_rtabmap("${RTABMAP_SOURCE_DIR}"
+      CONSTRUCTAR_RTABMAP_INCLUDE CONSTRUCTAR_RTABMAP_LIBDIR CONSTRUCTAR_RTABMAP_PROBLEM)
+  if(CONSTRUCTAR_RTABMAP_PROBLEM)
     message(FATAL_ERROR
-        "CONSTRUCTAR_WITH_RTABMAP=ON requires -DRTABMAP_SOURCE_DIR=<rtabmap checkout>. "
-        "See docs/SETUP.md §3 for the BSD-only build recipe.")
+        "CONSTRUCTAR_WITH_RTABMAP=ON: ${CONSTRUCTAR_RTABMAP_PROBLEM} "
+        "See docs/SETUP.md 5.1 for the BSD-only build recipe.")
   endif()
   message(STATUS "ConstructAR: building with RTAB-Map from ${RTABMAP_SOURCE_DIR}")
   target_compile_definitions(constructar_slam PRIVATE CONSTRUCTAR_WITH_RTABMAP=1)
   target_include_directories(constructar_slam PRIVATE
-      "${RTABMAP_SOURCE_DIR}/core/include"
+      "${CONSTRUCTAR_RTABMAP_INCLUDE}"
       "${RTABMAP_SOURCE_DIR}/utilite/include"
   )
-  # RTAB-Map itself is built as a static library by the developer (docs/SETUP.md §3) so this
+  # RTAB-Map itself is built as a static library by the developer (docs/SETUP.md 5.1) so this
   # link stays explicit and auditable:
   target_link_libraries(constructar_slam
-      "${RTABMAP_SOURCE_DIR}/build/bin/librtabmap_core.a"
-      "${RTABMAP_SOURCE_DIR}/build/bin/librtabmap_utilite.a"
+      "${CONSTRUCTAR_RTABMAP_LIBDIR}/librtabmap_core.a"
+      "${CONSTRUCTAR_RTABMAP_LIBDIR}/librtabmap_utilite.a"
       opencv_core opencv_imgproc opencv_features2d
   )
 endif()

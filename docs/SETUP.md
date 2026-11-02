@@ -184,6 +184,15 @@ constructar.rtabmap.dir=/absolute/path/to/rtabmap
 `native-slam/build.gradle.kts` forwards this as `-DCONSTRUCTAR_WITH_RTABMAP=ON
 -DRTABMAP_SOURCE_DIR=…` to CMake.
 
+CMake finds the checkout's headers and archives instead of assuming one layout: upstream keeps
+them in `corelib/include`, an in-source build writes `build/bin/librtabmap_core.a`, and the
+`-B rtabmap-build` above writes `rtabmap-build/bin/` next to the checkout. All three are
+recognised (`native-slam/src/main/cpp/cmake/rtabmap_layout.cmake`); if none matches, the configure
+step stops and names every path it looked for, so a typo is one line of output rather than a wall
+of missing-header errors. That probe is itself tested by
+`cmake -P native-slam/src/main/cpp/tests/rtabmap-layout-check.cmake` (fake trees, no NDK), which
+`native-tests` runs on every push.
+
 ### 5.2 What the bridge does — and what is wired today
 
 The C++ side is complete, and the optional branch is **compiled** by the `native-tests` job on
