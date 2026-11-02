@@ -33,6 +33,8 @@ and most expensive to discover in a 12-minute Gradle run:
      in the app's notice list
  21. a field shared between the main and render threads is       (finding 118)
      declared `@Volatile`
+ 22. the two figures PERFORMANCE.md derives from a knob are      (finding 119)
+     recomputed from that knob
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -41,6 +43,7 @@ Usage:  python3 scripts/verify_sources.py [--verbose]
 
 from __future__ import annotations
 
+import math
 import re
 import sys
 import xml.etree.ElementTree as ElementTree
@@ -804,6 +807,63 @@ def check_cross_thread_fields() -> None:
             add(path, f"`{field}` is shared across threads ({why}) and must be `@Volatile`")
 
 
+def _source_text(relative: str) -> str:
+    return (ROOT / relative).read_text(encoding="utf-8")
+
+
+def _first_number(pattern: str, text: str) -> float | None:
+    match = re.search(pattern, text)
+    if match is None:
+        return None
+    return float(match.group(1).replace(" ", "").replace("_", ""))
+
+
+def check_performance_numbers() -> None:
+    """The figures `docs/PERFORMANCE.md` derives from a knob are recomputed (finding 119).
+
+    A tuning table is only worth reading if its numbers follow from the values next to them. Two
+    did not: the block budget was quoted as "≈ 2 048 m³ of mapped volume at 2 cm", which is what
+    160 000 blocks came to at an older, larger budget (500 000), and the integration stride was
+    quoted as "~21 k rays" for 640×480 at a step of 3, where the loop - which steps both axes -
+    makes 214 × 160 = 34 240. Both numbers are arithmetic, so both are checked here against the
+    sources that own the inputs: `TsdfVolume::integrate` steps rows and columns, `kResolution` and
+    `maxBlocks` live in `volume.hpp`, and the default voxel size lives in `NativeSlamTypes.kt`.
+    """
+    doc = _source_text("docs/PERFORMANCE.md")
+    volume_hpp = _source_text("native-slam/src/main/cpp/tsdf/volume.hpp")
+    types_kt = _source_text("native-slam/src/main/kotlin/com/constructar/nativebridge/NativeSlamTypes.kt")
+
+    blocks = _first_number(r"size_t maxBlocks = (\d+);", volume_hpp)
+    resolution = _first_number(r"static constexpr int kResolution = (\d+);", volume_hpp)
+    voxel = _first_number(r"val voxelSizeMeters: Float = ([0-9.]+)f", types_kt)
+    if blocks is None or resolution is None or voxel is None:
+        add(ROOT / "scripts/verify_sources.py",
+            "the TSDF constants are no longer where rule 22 reads them")
+        return
+
+    cubic_meters = blocks * resolution ** 3 * voxel ** 3
+    quoted = _first_number(r"≈ (\d[\d ]*) m³ of mapped volume", doc)
+    if quoted is None:
+        add(ROOT / "docs/PERFORMANCE.md",
+            "the block-budget row no longer states a mapped volume - rule 22 cannot check it")
+    elif abs(quoted - cubic_meters) / cubic_meters > 0.05:
+        add(ROOT / "docs/PERFORMANCE.md",
+            f"the block budget is quoted as {quoted:.0f} m³, but {blocks:.0f} blocks of "
+            f"{resolution:.0f}³ voxels at {voxel:.3f} m are {cubic_meters:.0f} m³")
+
+    step = _first_number(r"Linear cost; (\d+) keeps 640×480", doc)
+    rays = _first_number(r"keeps 640×480 at ~(\d[\d ]*) k rays", doc)
+    if step is None or rays is None:
+        add(ROOT / "docs/PERFORMANCE.md",
+            "the pixelStep row no longer states the step and the ray count together")
+    else:
+        expected = math.ceil(640 / step) * math.ceil(480 / step) / 1000.0
+        if abs(rays - expected) / expected > 0.10:
+            add(ROOT / "docs/PERFORMANCE.md",
+                f"640×480 at a step of {step:.0f} is {expected:.0f} k rays (both axes are "
+                f"stepped), not the {rays:.0f} k quoted")
+
+
 def check_draft_write_ordering() -> None:
     """Draft writes only inside `writeDraft`, which orders them (finding 74)."""
     for path in kotlin_sources("app"):
@@ -990,6 +1050,7 @@ def main() -> int:
     check_raw_exception_messages()
     check_draft_write_ordering()
     check_cross_thread_fields()
+    check_performance_numbers()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
