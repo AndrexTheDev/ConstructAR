@@ -161,7 +161,7 @@
     <string name="onboard_2_title">Dibuja el recorrido</string>
     <string name="onboard_2_body">Toca punto por punto en la pared. Cada metro se mide y las abrazaderas se cuentan.</string>
     <string name="onboard_3_title">Entrega el protocolo</string>
-    <string name="onboard_3_body">PDF, CSV y un modelo 3D se guardan en la carpeta que elijas. Sin nube y sin cobertura.</string>
+    <string name="onboard_3_body">PDF, CSV y, con %1$s, un modelo 3D se guardan en la carpeta que elijas. Sin nube y sin cobertura.</string>
     <string name="onboard_next">Siguiente</string>
     <string name="onboard_start">Empezar a medir</string>
     <string name="onboard_skip">Omitir</string>

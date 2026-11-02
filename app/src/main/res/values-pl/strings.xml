@@ -167,7 +167,7 @@
     <string name="onboard_2_title">Narysuj trasę</string>
     <string name="onboard_2_body">Dotknij punkt po punkcie wzdłuż ściany. Każdy metr jest mierzony, a uchwyty liczone.</string>
     <string name="onboard_3_title">Przekaż protokół</string>
-    <string name="onboard_3_body">PDF, CSV i model 3D trafiają do wybranego folderu. Bez chmury i bez sieci.</string>
+    <string name="onboard_3_body">PDF, CSV i - z %1$s - model 3D trafiają do wybranego folderu. Bez chmury i bez sieci.</string>
     <string name="onboard_next">Dalej</string>
     <string name="onboard_start">Zacznij mierzyć</string>
     <string name="onboard_skip">Pomiń</string>

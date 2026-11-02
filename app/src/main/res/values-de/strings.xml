@@ -161,7 +161,7 @@
     <string name="onboard_2_title">Strecke zeichnen</string>
     <string name="onboard_2_body">Tippe Punkt für Punkt an die Wand. Jeder Meter wird gemessen, die Schellen mitgezählt.</string>
     <string name="onboard_3_title">Protokoll übergeben</string>
-    <string name="onboard_3_body">PDF, CSV und ein 3D-Modell landen direkt in dem Ordner, den du wählst. Ohne Cloud, ohne Netz.</string>
+    <string name="onboard_3_body">PDF, CSV und - mit %1$s - ein 3D-Modell landen direkt in dem Ordner, den du wählst. Ohne Cloud, ohne Netz.</string>
     <string name="onboard_next">Weiter</string>
     <string name="onboard_start">Jetzt messen</string>
     <string name="onboard_skip">Überspringen</string>

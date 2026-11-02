@@ -97,7 +97,14 @@ fun OnboardingScreen(onDone: () -> Unit) {
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            text = stringResource(bodies[step]),
+            // The 3D formats are a Pro feature (see `Entitlements.canExportMesh`), so the last
+            // slide names the plan instead of promising them to everybody in the first thirty
+            // seconds of the app (finding 95).
+            text = if (step == bodies.lastIndex) {
+                stringResource(R.string.onboard_3_body, stringResource(R.string.plan_pro))
+            } else {
+                stringResource(bodies[step])
+            },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

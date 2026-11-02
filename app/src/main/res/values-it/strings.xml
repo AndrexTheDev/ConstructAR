@@ -161,7 +161,7 @@
     <string name="onboard_2_title">Traccia il percorso</string>
     <string name="onboard_2_body">Tocca punto per punto lungo la parete. Ogni metro è misurato e i fissaggi contati.</string>
     <string name="onboard_3_title">Consegna il protocollo</string>
-    <string name="onboard_3_body">PDF, CSV e modello 3D finiscono nella cartella che scegli. Senza cloud, senza rete.</string>
+    <string name="onboard_3_body">PDF, CSV e - con %1$s - il modello 3D finiscono nella cartella che scegli. Senza cloud, senza rete.</string>
     <string name="onboard_next">Avanti</string>
     <string name="onboard_start">Inizia a misurare</string>
     <string name="onboard_skip">Salta</string>

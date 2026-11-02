@@ -161,7 +161,7 @@
     <string name="onboard_2_title">Trace le tracé</string>
     <string name="onboard_2_body">Touche point par point le long du mur. Chaque mètre est mesuré et les colliers comptés.</string>
     <string name="onboard_3_title">Remets le protocole</string>
-    <string name="onboard_3_body">PDF, CSV et modèle 3D sont écrits dans le dossier choisi. Sans cloud, sans réseau.</string>
+    <string name="onboard_3_body">PDF, CSV et - avec %1$s - le modèle 3D sont écrits dans le dossier choisi. Sans cloud, sans réseau.</string>
     <string name="onboard_next">Suivant</string>
     <string name="onboard_start">Commencer à mesurer</string>
     <string name="onboard_skip">Passer</string>

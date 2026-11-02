@@ -161,7 +161,7 @@
     <string name="onboard_2_title">Draw the run</string>
     <string name="onboard_2_body">Tap point by point along the wall. Every metre is measured and the clips are counted.</string>
     <string name="onboard_3_title">Hand over the protocol</string>
-    <string name="onboard_3_body">PDF, CSV and a 3D model, written straight into a folder you pick. No cloud, no signal.</string>
+    <string name="onboard_3_body">PDF, CSV and - with %1$s - a 3D model, written straight into a folder you pick. No cloud, no signal.</string>
     <string name="onboard_next">Next</string>
     <string name="onboard_start">Start measuring</string>
     <string name="onboard_skip">Skip</string>
