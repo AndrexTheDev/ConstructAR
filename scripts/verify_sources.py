@@ -555,8 +555,10 @@ def check_native_assertion_count() -> None:
 
 
 TEST_ANNOTATION = re.compile(r"^\s*@(?:[\w.]+\.)?Test\b", re.M)
-KOTLIN_SUITE_CLAIM = re.compile(r"pass — (\d+) tests in the app\+core\+ar-engine\+export suites")
-KOTLIN_SUITE_MODULES = ("app", "core", "ar-engine", "export")
+KOTLIN_SUITE_CLAIM = re.compile(
+    r"pass — (\d+) tests in the app\+core\+ar-engine\+export\+native-slam suites"
+)
+KOTLIN_SUITE_MODULES = ("app", "core", "ar-engine", "export", "native-slam")
 
 
 def check_readme_test_count() -> None:
@@ -566,9 +568,12 @@ def check_readme_test_count() -> None:
     and the number has been carried forward from round to round instead. It is a claim about a
     tree anyone can count: the test sources hold 479 `@Test` methods while the README said 482,
     and no command in the repository could tell you which of the two was right. A number nobody
-    can reproduce is a number that drifts, so the count of annotated test methods in the four
-    JVM modules is compared with the figure the README publishes - the CI run of
-    `testDebugUnitTest` proves the runtime half, this proves the arithmetic.
+    can reproduce is a number that drifts, so the count of annotated test methods in every
+    module with a `src/test` tree is compared with the figure the README publishes - the CI run of
+    `testDebugUnitTest` proves the runtime half, this proves the arithmetic. `:native-slam` joined
+    the list with finding 112: its `PoseGraphResult` parsing is JVM-testable even though the rest
+    of the module is native, and a module with tests that no count covers is a module whose tests
+    can be deleted silently.
     """
     readme = ROOT / "README.md"
     text = readme.read_text(encoding="utf-8")

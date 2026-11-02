@@ -393,6 +393,9 @@ Known limitations, deliberately documented rather than hidden:
 * **JVM (`:app`)** — the printed cost block: no block without time or material, labour +
   material = net total through the same formatter the PDF uses, a running session billed to now,
   a project rate overriding the firm's.
+* **JVM (`:native-slam`)** — the pose-graph report as it crosses the JNI bridge: the
+  optimiser's convergence verdict is carried across instead of being re-derived from the two
+  costs, and the pose block is read past that flag rather than from it.
 * **JVM (`:ar-engine`, `:export`)** — hit cascade priority and rejection reasons, metric depth
   calibration (including "refuses to fit on noise"), routing/anchor behaviour, GLB/PLY/CSV
   structural validation, the protocol's note for a capture that hit the scan limit, the rows of
@@ -466,7 +469,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 492 tests in the app+core+ar-engine+export suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 496 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 58 checks, 0 failures |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |
