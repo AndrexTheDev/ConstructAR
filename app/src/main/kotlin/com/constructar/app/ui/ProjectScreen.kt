@@ -92,7 +92,7 @@ fun ProjectScreen(
     onFieldBook: () -> Unit,
     onSaveCustomer: (name: String, address: String, phone: String) -> Unit,
     /** Effective rate for this job - the project's own, or the firm default behind it. */
-    hourlyRateCents: Int,
+    firmHourlyRateCents: Int,
     onSavePricing: (hourlyRateCents: Int?, materialLumpSumCents: Long) -> Unit,
     photo: Bitmap?,
     onPhoto: (Uri) -> Unit,
@@ -149,12 +149,13 @@ fun ProjectScreen(
         )
     }
     // A typo is an error, not a zero: see PricingInput.
-    val rateInput = PricingInput.rate(rateDraft)
+    // A blank field means "bill at the firm's rate" - which is not the override the field was
+    // pre-filled with, so the fallback cannot be the effective rate (finding 75).
+    val rate = ratePreview(project, rateDraft, firmHourlyRateCents)
     val materialInput = PricingInput.amount(materialDraft)
-    val parsedRate = rateInput.cents
     val parsedMaterial = materialInput.cents
-    val effectiveRate = parsedRate ?: hourlyRateCents
-    val priceDirty = parsedRate != project.hourlyRateCents || parsedMaterial != project.materialLumpSumCents
+    val effectiveRate = rate.effectiveCents
+    val priceDirty = rate.dirty || parsedMaterial != project.materialLumpSumCents
     // The preview the operator reads while typing a rate. Not remembered: a running session makes
     // this number grow, and the key that would have to invalidate it - the session list - does not
     // change while a clock runs. [rememberNowMs] moves it on every half minute, exactly like the
@@ -457,10 +458,10 @@ fun ProjectScreen(
                     value = rateDraft,
                     onValueChange = { rateDraft = it },
                     label = { Text(stringResource(R.string.project_costs_rate)) },
-                    placeholder = { Text(Pricing.formatForInput(hourlyRateCents.toLong())) },
+                    placeholder = { Text(Pricing.formatForInput(firmHourlyRateCents.toLong())) },
                     singleLine = true,
-                    isError = rateInput.invalid,
-                    supportingText = if (rateInput.invalid) {
+                    isError = rate.invalid,
+                    supportingText = if (rate.invalid) {
                         { Text(stringResource(R.string.project_costs_invalid)) }
                     } else {
                         null
@@ -502,8 +503,8 @@ fun ProjectScreen(
                     icon = Icons.Default.Check,
                     tone = ActionTone.SECONDARY,
                     // Nothing is saved while a field says it cannot read what was typed.
-                    enabled = priceDirty && !rateInput.invalid && !materialInput.invalid,
-                    onClick = { onSavePricing(parsedRate, parsedMaterial) },
+                    enabled = priceDirty && !rate.invalid && !materialInput.invalid,
+                    onClick = { onSavePricing(rate.typedCents, parsedMaterial) },
                 )
             }
         }

@@ -161,7 +161,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onSaveCustomer = { name, address, phone ->
                                 viewModel.updateCustomer(name, address, phone)
                             },
-                            hourlyRateCents = viewModel.hourlyRateCents(project),
+                            firmHourlyRateCents = state.firmHourlyRateCents,
                             onSavePricing = { rate, material ->
                                 viewModel.updatePricing(rate, material)
                             },
