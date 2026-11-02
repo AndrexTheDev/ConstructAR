@@ -181,8 +181,8 @@ class CostSectionTest {
 
     @Test
     fun `the labour line bills the minutes the time table adds up to`() {
-        // 2 h 07 min 42 s and a 40-second interruption. The rows print "2 h 07 min" and "0 min";
-        // a total truncated from the raw 2 h 08 min 22 s printed "2 h 08 min" and billed 102,40 €,
+        // 2 h 7 min 42 s and a 40-second interruption. The rows print "2 h 7 min" and "0 min";
+        // a total truncated from the raw 2 h 8 min 22 s printed "2 h 8 min" and billed 102,40 €,
         // one minute more than the column the customer adds up (finding 81).
         val long = WorkSession(
             id = "s1",
@@ -199,8 +199,8 @@ class CostSectionTest {
         requireNotNull(section)
 
         val labour = section.paragraphs.first { it.startsWith("Arbeitslohn") }
-        assertTrue(labour, labour.contains("2 h 07 min"))
-        assertTrue(labour, !labour.contains("2 h 08 min"))
+        assertTrue(labour, labour.contains("2 h 7 min"))
+        assertTrue(labour, !labour.contains("2 h 8 min"))
         assertEquals(MoneyFormatter.format(10_160), section.paragraphs.last().substringAfter(": "))
     }
 

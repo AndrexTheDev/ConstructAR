@@ -50,7 +50,7 @@ class WorkTimeTest {
 
     @Test
     fun `the billed quantity is the whole minutes the page prints`() {
-        // 2 h 07 min 42 s is printed as "2 h 07 min" and priced as 127 minutes - the same number,
+        // 2 h 7 min 42 s is printed as "2 h 7 min" and priced as 127 minutes - the same number,
         // so a customer with a calculator reaches the total that is on the page.
         val millis = 2 * 3_600_000L + 7 * WorkTime.MINUTE_MS + 42_000L
         assertEquals(127L, WorkTime.billableMinutes(millis))
@@ -150,7 +150,7 @@ class WorkTimeTest {
     @Test
     fun `a long session and a sub-minute one keep the long one's minutes`() {
         // The same rule the other way round: a 40-second interruption must not round the job up
-        // from its printed 2 h 07 min to the 2 h 08 min a raw total would give.
+        // from its printed 2 h 7 min to the 2 h 8 min a raw total would give.
         val twoHoursAndChange = session(0L, end = 2 * 3_600_000L + 7 * WorkTime.MINUTE_MS + 42_000L)
         val brief = session(10_000_000L, end = 10_000_000L + 40_000L)
         val sessions = listOf(twoHoursAndChange, brief)

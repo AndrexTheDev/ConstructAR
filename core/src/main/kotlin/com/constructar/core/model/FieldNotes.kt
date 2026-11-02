@@ -133,9 +133,9 @@ object WorkTime {
     /**
      * The quantity a timesheet can print and a customer can multiply: whole minutes, rounded down.
      *
-     * The protocol prints "2 h 07 min" and a rate, and the customer multiplies those two numbers
+     * The protocol prints "2 h 7 min" and a rate, and the customer multiplies those two numbers
      * by hand. As long as labour was computed from the raw milliseconds, that multiplication did
-     * not give the total on the page - 2 h 07 min 42 s at 48 €/h was billed 101,98 € where the page
+     * not give the total on the page - 2 h 7 min 42 s at 48 €/h was billed 101,98 € where the page
      * suggested 101,60 € (finding 76). So the remainder is dropped here, once, and both the printed
      * duration and the money come from this number.
      */
@@ -170,6 +170,6 @@ object WorkTime {
     /** Whole hours of the [billableMinutes] quantity. */
     fun hours(millis: Long): Long = billableMinutes(millis) / 60L
 
-    /** Whole minutes after the hours are taken out — 2 h 07 min, never "127 min". */
+    /** Whole minutes after the hours are taken out — 2 h 7 min, never "127 min". */
     fun minutes(millis: Long): Long = billableMinutes(millis) % 60L
 }
