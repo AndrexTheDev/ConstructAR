@@ -88,9 +88,20 @@ object MaterialListBuilder {
 
         for (route in project.routes) {
             if (!route.isRoutable) continue
-            val metrics = com.constructar.core.geo.PolylineMetrics.measure(route)
-            if (!options.includeLowConfidenceRuns && metrics.lowConfidenceNodes > 0) continue
             val spec = route.spec
+            // Both overrides go into the measurement, not just into the line arithmetic below:
+            // `clipSpacingMetersOverride` used to be documented, offered on this data class and
+            // read by nobody, so every job was clipped at the family default (0.6 m cable,
+            // 0.9 m pipe, 0.5 m duct) however the caller asked for it - the fittings are the
+            // most numerous article on the order sheet (finding 113).
+            val metrics = com.constructar.core.geo.PolylineMetrics.measure(
+                route = route,
+                wasteFactor = options.wasteFactorOverride
+                    ?: com.constructar.core.geo.PolylineMetrics.defaultWasteFactor(spec),
+                clipSpacingMeters = options.clipSpacingMetersOverride
+                    ?: com.constructar.core.geo.PolylineMetrics.defaultClipSpacing(spec),
+            )
+            if (!options.includeLowConfidenceRuns && metrics.lowConfidenceNodes > 0) continue
             groups.getOrPut(spec.bomKey) { mutableListOf() }.add(spec to metrics)
         }
 

@@ -182,6 +182,55 @@ class MaterialListTest {
         assertTrue(MaterialListBuilder.build(project(orphan), nowMs = 0L).isEmpty)
     }
 
+    /**
+     * Clip spacing is the difference between a plausible order sheet and a real one: a 6 m run
+     * needs 12 clips at the 0.6 m cable default, 8 at 0.9 m and 14 at 0.5 m. The counts below are
+     * the documented formula (`ceil(length / spacing) + 1` for an open run) evaluated at the
+     * defaults, so a change to either number has to be deliberate.
+     */
+    @Test
+    fun `clips are counted at the default spacing of each family`() {
+        val cableLine = MaterialListBuilder.build(project(route("a", cable, 6.1f)), nowMs = 0L).lines.single()
+        assertEquals(12, cableLine.clipCount, "cable at 0.6 m: ceil(6.1 / 0.6) + 1")
+
+        val pipeLine = MaterialListBuilder.build(project(route("a", pipe, 6.1f)), nowMs = 0L).lines.single()
+        assertEquals(8, pipeLine.clipCount, "pipe at 0.9 m: ceil(6.1 / 0.9) + 1")
+    }
+
+    /**
+     * The clip-spacing override is part of the public options and documented as "when null, each
+     * conduit family uses its own default" - which promises that a value *is* used. Until finding
+     * 113 the builder never forwarded it, so every job was clipped at the family default however
+     * the caller asked, and the order list carried the wrong number of the article the buyer
+     * orders most of.
+     */
+    @Test
+    fun `a clip spacing override reaches the clip count and nothing else`() {
+        val list = MaterialListBuilder.build(
+            project(route("a", cable, 6.1f)),
+            MaterialListOptions(clipSpacingMetersOverride = 1.0f),
+            nowMs = 0L,
+        )
+        val line = list.lines.single()
+        assertEquals(8, line.clipCount, "cable at 1.0 m: ceil(6.1 / 1.0) + 1")
+        // The override changes fittings, not metres: the length and the waste line stay put.
+        assertEquals(6.1f, line.totalMeters, 1e-3f)
+        val defaultLine = MaterialListBuilder.build(project(route("a", cable, 6.1f)), nowMs = 0L).lines.single()
+        assertEquals(defaultLine.withWasteMeters, line.withWasteMeters, 1e-3f)
+        assertEquals(defaultLine.totalMeters, line.totalMeters, 1e-3f)
+    }
+
+    @Test
+    fun `a zero clip spacing counts no clips instead of dividing by zero`() {
+        val line = MaterialListBuilder.build(
+            project(route("a", cable, 6.1f)),
+            MaterialListOptions(clipSpacingMetersOverride = 0f),
+            nowMs = 0L,
+        ).lines.single()
+        assertEquals(0, line.clipCount)
+        assertEquals(6.1f, line.totalMeters, 1e-3f)
+    }
+
     @Test
     fun `the totals are the sums of the lines`() {
         val list = MaterialListBuilder.build(
