@@ -129,7 +129,7 @@ class ProjectRepositoryTest {
         repository.save(room())
         val text = repository.backupEntries().single().text
         val newer = text.replace("\"schemaVersion\": 1", "\"schemaVersion\": 2")
-        assertTrue("the fixture must carry a bumped schema version", newer != text)
+        assertTrue(newer != text, "the fixture must carry a bumped schema version")
 
         assertNull(repository.parseProject(newer), "a newer file must not be parsed")
         assertNull(repository.importProject(newer), "a newer file must not be imported")

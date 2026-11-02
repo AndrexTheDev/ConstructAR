@@ -26,6 +26,7 @@ and most expensive to discover in a 12-minute Gradle run:
  14. no document promises a loop closure nothing feeds        (finding 98)
  15. the README's native assertion count equals the suite      (finding 99)
  16. the project schema version is actually compared            (finding 101)
+ 17. a kotlin.test assertion is called value-first              (finding 101)
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -574,6 +575,36 @@ def check_schema_version_is_read() -> None:
                          "restore (finding 101)")
 
 
+# `kotlin.test` takes the value first, `org.junit.Assert` takes the message first. The mix-up
+# compiles in neither order, and the round trip through CI to find out is six minutes.
+KOTLIN_TEST_MESSAGE_FIRST = re.compile(r"assert(?:True|False)\(\s*\"(?:[^\"\\]|\\.)*\"\s*,")
+
+
+def check_assert_message_order() -> None:
+    """A `kotlin.test` assertion must be called value-first (findings 95, 101).
+
+    `org.junit.Assert.assertFalse("message", condition)` is the order most Java-adjacent code
+    uses; `kotlin.test.assertFalse(condition, "message")` is the other one. A file that imports
+    one and is written in the style of the other does not compile - it cost a red `android-build`
+    on finding 95 and another one on finding 101 - and both times the only way to find out was a
+    six-minute CI round trip, because no Kotlin compiler runs on the workstation here.
+
+    The rule fires only in files that import `kotlin.test`, and only when a string literal is
+    followed by a comma, so `assertTrue("abc".length == 3)` stays legal.
+    """
+    for path in kotlin_sources("app", "ar-engine", "core", "export", "native-slam"):
+        if "/src/test/" not in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "import kotlin.test." not in text:
+            continue
+        for match in KOTLIN_TEST_MESSAGE_FIRST.finditer(text):
+            line = text[: match.start()].count("\n") + 1
+            add(path, f"line {line}: a kotlin.test assertion with the message first - kotlin.test "
+                      f"takes the value first (org.junit takes the message first), and the "
+                      f"mix-up only shows up as a red build (finding 101)")
+
+
 def check_draft_write_ordering() -> None:
     """Draft writes only inside `writeDraft`, which orders them (finding 74)."""
     for path in kotlin_sources("app"):
@@ -765,6 +796,7 @@ def main() -> int:
     check_loop_closure_claim()
     check_native_assertion_count()
     check_schema_version_is_read()
+    check_assert_message_order()
     check_money_fields_are_not_rekeyed()
     check_manifest_hardening()
     check_kotlin_structure()
