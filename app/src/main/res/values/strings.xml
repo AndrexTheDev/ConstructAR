@@ -109,6 +109,8 @@
     <string name="home_default_room_name">Room</string>
     <string name="error_project_open">The project could not be opened.</string>
     <string name="error_project_save">The project could not be saved.</string>
+    <string name="error_project_delete">The room could not be deleted. The file is still on this phone - check the storage and try again.</string>
+    <string name="error_photo_delete">The photo could not be deleted. It stays on this phone and in the next backup.</string>
     <string name="error_photo_save">The photo could not be saved. Check the free storage on this phone.</string>
     <string name="write_failed_space">Not enough free storage on this phone. Free some space and try again.</string>
     <string name="write_failed_not_writable">This folder cannot be written to. Pick another folder.</string>

@@ -109,6 +109,8 @@
     <string name="home_default_room_name">Raum</string>
     <string name="error_project_open">Das Projekt konnte nicht geöffnet werden.</string>
     <string name="error_project_save">Das Projekt konnte nicht gespeichert werden.</string>
+    <string name="error_project_delete">Der Raum konnte nicht gelöscht werden. Die Datei liegt noch auf diesem Telefon - prüfe den Speicher und versuche es erneut.</string>
+    <string name="error_photo_delete">Das Foto konnte nicht gelöscht werden. Es bleibt auf diesem Telefon und in der nächsten Sicherung.</string>
     <string name="error_photo_save">Das Foto konnte nicht gespeichert werden. Prüfe den freien Speicher des Telefons.</string>
     <string name="write_failed_space">Auf diesem Telefon ist zu wenig Speicher frei. Gib Speicher frei und versuche es erneut.</string>
     <string name="write_failed_not_writable">In diesen Ordner kann nicht geschrieben werden. Wähle einen anderen Ordner.</string>

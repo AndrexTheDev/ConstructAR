@@ -109,6 +109,8 @@
     <string name="home_default_room_name">Pomieszczenie</string>
     <string name="error_project_open">Nie udało się otworzyć obiektu.</string>
     <string name="error_project_save">Nie udało się zapisać obiektu.</string>
+    <string name="error_project_delete">Nie udało się usunąć pomieszczenia. Plik nadal jest na tym telefonie - sprawdź pamięć i spróbuj ponownie.</string>
+    <string name="error_photo_delete">Nie udało się usunąć zdjęcia. Zostaje na tym telefonie i w następnej kopii.</string>
     <string name="error_photo_save">Nie udało się zapisać zdjęcia. Sprawdź wolne miejsce w telefonie.</string>
     <string name="write_failed_space">Za mało wolnego miejsca w tym telefonie. Zwolnij miejsce i spróbuj ponownie.</string>
     <string name="write_failed_not_writable">Nie można zapisać w tym folderze. Wybierz inny folder.</string>

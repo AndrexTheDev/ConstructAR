@@ -41,9 +41,9 @@ class PhotoAppendixNoteTest {
 
     @Test
     fun `a job with more photos than the page says so, with both counts`() {
-        val note = photoAppendixNote(shown = 8, total = 20, template = template)
+        val note = photoAppendixNote(shown = 8, total = 20, template = template)!!
 
-        assertTrue("the printed count must be named: $note", note!!.contains("8"))
+        assertTrue("the printed count must be named: $note", note.contains("8"))
         assertTrue("the job's count must be named: $note", note.contains("20"))
         assertTrue("and where the others are: $note", note.contains("in the app"))
     }

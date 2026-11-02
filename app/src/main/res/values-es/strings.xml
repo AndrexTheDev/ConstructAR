@@ -109,6 +109,8 @@
     <string name="home_default_room_name">Estancia</string>
     <string name="error_project_open">No se pudo abrir la obra.</string>
     <string name="error_project_save">No se pudo guardar la obra.</string>
+    <string name="error_project_delete">No se pudo borrar la sala. El archivo sigue en este teléfono: revisa el almacenamiento e inténtalo de nuevo.</string>
+    <string name="error_photo_delete">No se pudo borrar la foto. Sigue en este teléfono y en la próxima copia.</string>
     <string name="error_photo_save">No se pudo guardar la foto. Comprueba el espacio libre del teléfono.</string>
     <string name="write_failed_space">No hay suficiente espacio libre en este teléfono. Libera espacio e inténtalo de nuevo.</string>
     <string name="write_failed_not_writable">No se puede escribir en esta carpeta. Elige otra carpeta.</string>

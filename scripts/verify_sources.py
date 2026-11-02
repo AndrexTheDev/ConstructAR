@@ -88,11 +88,12 @@ AR_LITERAL_ALPHA = re.compile(r"alpha\s*=\s*[0-9]*\.?[0-9]+f")
 # be read-only. A call whose result is thrown away is work lost without a word: the field photo
 # path reported "attached" for a file no room pointed at, and the copy failure before it was not
 # even shown (finding 72).
-# A write on the repository that answers whether it landed: `save`, `savePhoto`, `savePhotoAs`,
-# `saveDraft`. The photo copy in `importBackup` was the one that got away - the rule knew only
-# `save(` (finding 92). The deletes are the same shape and are next.
+# A write on the repository that answers whether it landed - `save`, `savePhoto`, `savePhotoAs`,
+# `saveDraft`, and the deletes. The photo copy in `importBackup` was the one that got away: the
+# rule knew only `save(` (finding 92), and the three deletes whose answer nobody read were found
+# by widening it (finding 93).
 DISCARDED_SAVE = re.compile(
-    r"(?m)^[ \t]*repository\s*\.\s*save(?:Photo(?:As)?|Draft)?\s*\("
+    r"(?m)^[ \t]*repository\s*\.\s*(?:save(?:Photo(?:As)?|Draft)?|delete(?:Photo(?:As)?|Draft)?)\s*\("
 )
 
 # A platform exception's `message` is English, Java and a POSIX error number - not a sentence for

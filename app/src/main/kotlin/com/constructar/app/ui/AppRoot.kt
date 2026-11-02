@@ -65,6 +65,8 @@ fun AppRoot(viewModel: ProjectViewModel) {
         UiMessage.PROJECT_SAVE_FAILED -> stringResource(R.string.error_project_save)
         UiMessage.PHOTO_SAVE_FAILED -> stringResource(R.string.error_photo_save)
         UiMessage.PROJECT_LIMIT_REACHED -> stringResource(R.string.home_limit_title)
+        UiMessage.PROJECT_DELETE_FAILED -> stringResource(R.string.error_project_delete)
+        UiMessage.PHOTO_DELETE_FAILED -> stringResource(R.string.error_photo_delete)
         null -> null
     }
     // Quick resume: a room that was open when the process died is opened on top of the list, so

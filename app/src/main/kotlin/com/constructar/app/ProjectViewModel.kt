@@ -69,6 +69,24 @@ enum class UiMessage {
 
     /** The free plan's single room is taken. The UI answers with the paywall, never a crash. */
     PROJECT_LIMIT_REACHED,
+
+    /**
+     * A room could not be removed from storage - a read-only or revoked folder.
+     *
+     * `repository.delete(id)` answers whether the file is gone, and the answer was dropped: the
+     * screen cleared the open room and told the caller it was deleted, the next `refresh()` read
+     * the folder and listed the room again, and the operator deleted it a second time (finding 93).
+     */
+    PROJECT_DELETE_FAILED,
+
+    /**
+     * A photo file could not be removed: the defect or room it belonged to is gone, the picture
+     * is not.
+     *
+     * That is not cosmetic - the file goes into the next backup and stays on the phone after the
+     * customer's documentation was deliberately deleted (finding 93).
+     */
+    PHOTO_DELETE_FAILED,
 }
 
 class ProjectViewModel(application: Application) : AndroidViewModel(application) {
@@ -414,7 +432,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun deleteDiaryEntry(entryId: String) {
         val project = mutableState.value.openProject ?: return
         project.diary.firstOrNull { it.id == entryId }?.photo?.let { token ->
-            repository.deletePhotoAs(token)
+            // Same as the defect path: the entry goes, the file may not (finding 93).
+            if (!repository.deletePhotoAs(token)) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PHOTO_DELETE_FAILED)
+            }
             mutableState.value = mutableState.value.copy(fieldPhotos = mutableState.value.fieldPhotos - token)
         }
         mutate(project.removeDiaryEntry(entryId))
@@ -451,7 +472,11 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun deleteDefect(defectId: String) {
         val project = mutableState.value.openProject ?: return
         project.defects.firstOrNull { it.id == defectId }?.photo?.let { token ->
-            repository.deletePhotoAs(token)
+            // The defect goes either way; the picture is a file, and a file this phone refuses to
+            // delete stays in the folder and in the next backup (finding 93).
+            if (!repository.deletePhotoAs(token)) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PHOTO_DELETE_FAILED)
+            }
             mutableState.value = mutableState.value.copy(fieldPhotos = mutableState.value.fieldPhotos - token)
         }
         mutate(project.removeDefect(defectId))
@@ -555,7 +580,11 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     onDone(written)
                 }
                 FieldPhotoTarget.Gone -> {
-                    repository.deletePhotoAs(token)
+                    // The room is gone, so the copy just made has to go too; if the phone refuses,
+                    // the file stays as an orphan and the operator is told (finding 93).
+                    if (!repository.deletePhotoAs(token)) {
+                        mutableState.value = mutableState.value.copy(lastError = UiMessage.PHOTO_DELETE_FAILED)
+                    }
                     onDone(false)
                 }
             }
@@ -576,7 +605,13 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     fun deleteProject(id: String, onDeleted: () -> Unit = {}) {
         viewModelScope.launch {
-            repository.delete(id)
+            // Asked, not assumed: on a read-only or revoked folder the file is still there, and
+            // the room reappears on the next refresh while the caller has already been told it was
+            // deleted (finding 93).
+            if (!repository.delete(id)) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_DELETE_FAILED)
+                return@launch
+            }
             if (preferences.lastProjectId() == id) preferences.setLastProjectId(null)
             if (mutableState.value.openProject?.id == id) {
                 mutableState.value = mutableState.value.copy(openProject = null, materialList = null, photo = null)
@@ -803,7 +838,14 @@ internal fun fieldPhotoTarget(
  * Pure on purpose - the count is the part that can be wrong, and it can be tested without an
  * Android context.
  */
-internal data class RestoreCounts(
+/**
+ * What one restore attempt did, room by room and photo by photo.
+ *
+ * Public, not `internal`: it travels through `importBackup`'s callback into `BackupCard`, and
+ * Kotlin refuses to expose an internal type from a public function - the compiler said so on CI
+ * when finding 92 first landed.
+ */
+data class RestoreCounts(
     val imported: Int,
     /** Rooms the plan had no slot for: still in the zip, imported after upgrading. */
     val heldBack: Int,
