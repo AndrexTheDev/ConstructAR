@@ -50,6 +50,15 @@ data class PdfLabels(
     val recoveredNote: String =
         "Recovered after an interruption - lengths and fittings are exact, the 3D position is not " +
             "in the model: %1\$s",
+    /**
+     * Printed under the runs table when a run is priced but could not be swept; `%1$s` = labels.
+     *
+     * The sibling of [recoveredNote], for the other way a run stays out of the GLB: not lost
+     * coordinates, but a spec or a node path the mesh generator refuses to build from.
+     */
+    val unbuildableNote: String =
+        "No 3D geometry could be built for these runs - their lengths and fittings are still " +
+            "counted: %1\$s",
     val footer: String = "ConstructAR %1\$s - generated on device",
     val pageLabel: String = "Page %1\$d",
 )

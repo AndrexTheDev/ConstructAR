@@ -8,6 +8,7 @@ package com.constructar.export
 
 import com.constructar.core.bom.MaterialListBuilder
 import com.constructar.core.math.Vec3
+import com.constructar.core.model.ConduitKind
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.HitSource
@@ -48,6 +49,23 @@ class ExportServiceTest {
         )
         return ProjectRecord.empty("p2", "Neubau", 0L).copy(routes = listOf(route))
     }
+
+    private fun route(
+        label: String,
+        spec: ConduitSpec,
+        lengthMeters: Float,
+        recovered: Boolean = false,
+    ) = ConduitRoute(
+        id = label,
+        label = label,
+        spec = spec,
+        nodes = listOf(
+            RouteNodeRecord("$label-a", Vec3(0f, 0f, 0f), Vec3(0f, 0f, 1f), SurfaceKind.WALL, HitSource.PLANE_POLYGON),
+            RouteNodeRecord("$label-b", Vec3(lengthMeters, 0f, 0f), Vec3(0f, 0f, 1f), SurfaceKind.WALL, HitSource.PLANE_POLYGON),
+        ),
+        createdAtEpochMs = 0L,
+        recovered = recovered,
+    )
 
     private fun request(project: ProjectRecord) = ExportService.Request(
         project = project,
@@ -111,5 +129,51 @@ class ExportServiceTest {
         val text = String(sink.toByteArray(), Charsets.UTF_8)
         assertTrue(text, text.contains("Article;Order length (m);"))
         assertFalse("the order list carries no per-run detail", text.contains("Run;"))
+    }
+
+    /**
+     * A `List<Pair<String, MeshData>>` could only say what *is* in the model, so a run whose mesh
+     * refused to build simply vanished from the GLB while the protocol and the price still listed it
+     * (finding 80). The result type now names those runs.
+     */
+    @Test
+    fun `a run that cannot be swept is named, not dropped in silence`() {
+        // `ConduitSpec` only requires dimensions to be non-negative, so a project record that came
+        // through a migration - or a hand-edited one - can carry a round conduit of 0 mm, and the
+        // tube sweep refuses to build a radius of zero.
+        val lostDiameter = ConduitSpec(kind = ConduitKind.CABLE, label = "Kabel unbekannt")
+        val project = ProjectRecord.empty("p3", "Neubau", 0L).copy(
+            routes = listOf(route("Flur", ConduitSpec.cable(16f), 2.5f), route("Keller", lostDiameter, 4f)),
+        )
+
+        val meshes = ExportService.routeMeshes(project)
+
+        assertEquals(listOf("Flur"), meshes.parts.map { it.first })
+        assertEquals(listOf("Keller"), meshes.unbuildable)
+    }
+
+    @Test
+    fun `a run whose two nodes collapsed onto one point is named as well`() {
+        val collapsed = route("Bad", ConduitSpec.cable(16f), 0f)
+        val project = ProjectRecord.empty("p4", "Neubau", 0L).copy(routes = listOf(collapsed))
+
+        val meshes = ExportService.routeMeshes(project)
+
+        assertTrue("nothing can be swept from one point", meshes.parts.isEmpty())
+        assertEquals(listOf("Bad"), meshes.unbuildable)
+    }
+
+    @Test
+    fun `a recovered run is explained by its own note, not blamed on the mesh builder`() {
+        val project = ProjectRecord.empty("p5", "Neubau", 0L).copy(
+            routes = listOf(route("Alt", ConduitSpec.cable(16f), 2.5f, recovered = true)),
+        )
+
+        val meshes = ExportService.routeMeshes(project)
+
+        assertTrue(meshes.parts.isEmpty())
+        // Two different sentences for two different causes: a recovered run's geometry was never
+        // meant to be in the model, and printing it under "geometry failed" would be a lie.
+        assertTrue("recovered runs have their own note", meshes.unbuildable.isEmpty())
     }
 }

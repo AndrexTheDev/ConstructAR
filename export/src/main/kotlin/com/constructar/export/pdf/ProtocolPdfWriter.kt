@@ -97,6 +97,11 @@ class ProtocolPdfWriter(
         /** All visible text, localised by the caller. See [PdfLabels]. */
         val labels: PdfLabels = PdfLabels(),
         /**
+         * Labels of runs that are in the paperwork but not in the 3D model because no geometry
+         * could be built for them; the export side knows them, the project record does not.
+         */
+        val unbuildableRuns: List<String> = emptyList(),
+        /**
          * The site file, already localised and formatted by the caller: customer block, working
          * time, diary, defects. Printed after the material table, before the signature page.
          */
@@ -245,6 +250,12 @@ class ProtocolPdfWriter(
                 // leaves it out; the protocol said nothing, so the office importing the model
                 // later found a run missing from it with no explanation anywhere in the file.
                 recoveredRunsNote(content.project.routes, content.labels.recoveredNote)?.let { note ->
+                    y += 6
+                    y = drawNote(page.canvas, note, y)
+                }
+                // The other reason a run is missing from the model: its geometry could not be
+                // built at all (finding 80).
+                unbuildableRunsNote(content.unbuildableRuns, content.labels.unbuildableNote)?.let { note ->
                     y += 6
                     y = drawNote(page.canvas, note, y)
                 }
@@ -596,8 +607,20 @@ class ProtocolPdfWriter(
  * Kept out of the drawing code so the wording can be tested without a `PdfDocument`: which runs are
  * named, in which order, and that a job with nothing recovered prints nothing at all.
  */
-internal fun recoveredRunsNote(routes: List<ConduitRoute>, template: String): String? {
-    val labels = routes.filter { it.recovered }.map { it.label }
+internal fun recoveredRunsNote(routes: List<ConduitRoute>, template: String): String? =
+    namedRunsNote(routes.filter { it.recovered }.map { it.label }, template)
+
+/**
+ * The same sentence for the runs whose geometry could not be built.
+ *
+ * Unlike [recoveredRunsNote] the list cannot be derived from the routes - a run carries no "this
+ * one failed to sweep" flag, and it should not: the failure depends on the machine and the version
+ * that built the mesh. The caller that built the meshes hands the labels over.
+ */
+internal fun unbuildableRunsNote(labels: List<String>, template: String): String? =
+    namedRunsNote(labels, template)
+
+private fun namedRunsNote(labels: List<String>, template: String): String? {
     if (labels.isEmpty()) return null
     return String.format(Locale.ROOT, template, labels.joinToString(", "))
 }

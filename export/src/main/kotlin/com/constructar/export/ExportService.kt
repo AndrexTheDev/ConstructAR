@@ -50,11 +50,25 @@ class ExportService(
         val write: (OutputStream) -> Unit,
     )
 
+    /**
+     * The 3D geometry of a project: the meshes that could be built, and the runs that could not.
+     *
+     * The two halves travel together on purpose. A `List<Pair<String, MeshData>>` could only say
+     * "these are the runs in the model"; it could not say which runs of the same project are
+     * missing from it, and that silence is exactly what finding 80 was about.
+     */
+    data class RouteMeshes(
+        /** Label → mesh, in the order the runs table prints them. */
+        val parts: List<Pair<String, MeshData>> = emptyList(),
+        /** Labels of runs that are measured and priced but have no geometry. */
+        val unbuildable: List<String> = emptyList(),
+    )
+
     data class Request(
         val project: ProjectRecord,
         val materialList: MaterialList,
         /** Geometry of every route, already generated (world space, metres). */
-        val routeMeshes: List<Pair<String, MeshData>> = emptyList(),
+        val routeMeshes: RouteMeshes = RouteMeshes(),
         /** The TSDF room scan, if the operator scanned one. */
         val scanMesh: MeshData? = null,
         val screenshot: Bitmap? = null,
@@ -97,7 +111,10 @@ class ExportService(
         return "ConstructAR_${slug(project.name)}_$stamp"
     }
 
-    /** Builds every requested artifact. Never throws for a missing mesh: it just omits it. */
+    /**
+     * Builds every requested artifact. Never throws for a missing mesh: it just omits it - and
+     * says so in the protocol, through [Request.routeMeshes]'s `unbuildable` labels.
+     */
     fun build(request: Request): List<ExportArtifact> {
         val stamp = clock()
         val stem = fileStem(request.project, stamp)
@@ -124,6 +141,7 @@ class ExportService(
                             signatureTitle = request.signatureTitle,
                             signatureCaption = request.signatureCaption,
                             labels = request.labels,
+                            unbuildableRuns = request.routeMeshes.unbuildable,
                             sections = request.sections,
                             photos = request.photos,
                             photosTitle = request.photosTitle,
@@ -167,7 +185,7 @@ class ExportService(
         }
 
         val parts = buildList {
-            request.routeMeshes.forEach { (label, mesh) ->
+            request.routeMeshes.parts.forEach { (label, mesh) ->
                 if (!mesh.isEmpty) {
                     add(GlbWriter.GlbPart(label, mesh, colourFor(label, request.project)))
                 }
@@ -270,17 +288,45 @@ class ExportService(
             project.routes.firstOrNull { it.label == label || it.spec.label == label }?.spec?.colorArgb
                 ?: 0xFFFF6B00.toInt()
 
-        /** Convenience for callers that only need geometry: builds every route mesh. */
-        fun routeMeshes(project: ProjectRecord): List<Pair<String, MeshData>> =
-            project.routes.mapNotNull { route ->
-                if (!route.isRoutable) return@mapNotNull null
+        /**
+         * Geometry for every run that has some — and the names of the runs that have none.
+         *
+         * A run can be measurable and still produce no geometry. A conduit spec whose diameter was
+         * lost (a migrated or hand-edited project record: `ConduitSpec` only requires dimensions to
+         * be *non-negative*, so 0 mm survives deserialisation) makes the tube sweep refuse to build;
+         * two nodes that anchor refinement pulled onto the same point make the smoother refuse. The
+         * earlier version swallowed both in `runCatching { … }.getOrNull()`, so the protocol listed
+         * the run, the GLB did not contain it, and nothing in the bundle said why (finding 80). Now
+         * the run is named, next to the recovered runs, in the same sentence that already explains a
+         * run that is in the paperwork but not in the model.
+         */
+        fun routeMeshes(project: ProjectRecord): RouteMeshes {
+            val parts = ArrayList<Pair<String, MeshData>>(project.routes.size)
+            val unbuildable = ArrayList<String>(0)
+            for (route in project.routes) {
+                if (!route.isRoutable) continue
                 // A recovered run's node coordinates are relative to an ARCore session that no
                 // longer exists: its lengths belong in the paperwork, its geometry does not
                 // belong in the room. Emitting it would put a floating length of conduit into
-                // every BIM viewer. See `ConduitRoute.recovered`.
-                if (route.recovered) return@mapNotNull null
-                runCatching { route.label to RouteGeometry.build(route).mesh }.getOrNull()
+                // every BIM viewer. See `ConduitRoute.recovered` — and the note that names it.
+                if (route.recovered) continue
+                // Deliberately `try`/`catch (Exception)`, not `runCatching`: the latter also
+                // swallows `OutOfMemoryError` and would hand back a model that is silently short a
+                // run because the phone ran out of memory building it.
+                val mesh = try {
+                    RouteGeometry.build(route).mesh
+                } catch (failure: Exception) {
+                    unbuildable += route.label
+                    continue
+                }
+                if (mesh.isEmpty) {
+                    unbuildable += route.label
+                    continue
+                }
+                parts += route.label to mesh
             }
+            return RouteMeshes(parts = parts, unbuildable = unbuildable)
+        }
 
         /**
          * Identity transform. Exported meshes are already in world space (Y-up, metres), so

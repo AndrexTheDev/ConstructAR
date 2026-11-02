@@ -60,4 +60,13 @@ class RecoveredNoteTest {
 
         assertEquals("Recovered after an interruption: CABLE 16 #2, EMPTY 20 #2", note)
     }
+
+    @Test
+    fun `a run without geometry is named by the same rule`() {
+        assertNull(unbuildableRunsNote(emptyList(), template))
+        assertEquals(
+            "Not in the model: CABLE 16 #2, EMPTY 20 #1",
+            unbuildableRunsNote(listOf("CABLE 16 #2", "EMPTY 20 #1"), "Not in the model: %1\$s"),
+        )
+    }
 }
