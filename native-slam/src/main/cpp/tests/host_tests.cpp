@@ -427,6 +427,71 @@ void testTriangleBudgetAndReset() {
   check(volume.extractMesh().empty(), "reset mesh is empty");
 }
 
+/**
+ * Free-space carving: a ghost has to go, and the surface that is really there has to stay.
+ *
+ * `TsdfConfig::carveFreeSpace` marks everything between the camera and the truncation band as
+ * outside, which is what removes furniture that has been scanned and then moved. It was
+ * documented as a switch "the UI exposes" - no screen offers it, nothing calls it, no test
+ * covered it - and when it was finally exercised it made ghosts *worse*: it sampled free space
+ * every fourth voxel, so the voxels between two samples kept their old inside value and a 1 m
+ * plane seen once and then cleared produced 9 218 vertices within 5 cm of itself, against 2 961
+ * for not carving at all (finding 111).
+ *
+ * This is the case that decides it: scan a plane at 1 m once, look at empty space at 2 m six
+ * times more, then count what is left within 5 cm of the 1 m plane.
+ */
+void testCarveFreeSpace() {
+  section("Free-space carving: ghost removal, surface intact");
+  SyntheticCamera camera;
+
+  auto countNearPlane = [&camera](const TsdfVolume& volume, float planeZ) {
+    const auto mesh = volume.extractMesh();
+    int near = 0;
+    for (size_t i = 0; i < mesh.vertexCount(); ++i) {
+      if (std::fabs(mesh.positions[i * 3 + 2] - planeZ) < 0.05f) ++near;
+    }
+    return near;
+  };
+
+  const std::vector<uint16_t> near = std::vector<uint16_t>(
+      static_cast<size_t>(camera.width * camera.height), static_cast<uint16_t>(1000));
+  const std::vector<uint16_t> far = std::vector<uint16_t>(
+      static_cast<size_t>(camera.width * camera.height), static_cast<uint16_t>(2000));
+
+  TsdfConfig off;
+  off.voxelSize = 0.02f;
+  off.minConfidence = 0;
+  off.workerThreads = 1;
+  TsdfVolume plain(off);
+  plain.integrate(makeFrame(camera, near, Mat4::identity()), 2);
+  for (int i = 0; i < 6; ++i) plain.integrate(makeFrame(camera, far, Mat4::identity()), 2);
+  const int ghostWithoutCarving = countNearPlane(plain, -1.0f);
+  const int wallWithoutCarving = countNearPlane(plain, -2.0f);
+
+  TsdfConfig on = off;
+  on.carveFreeSpace = true;
+  TsdfVolume carving(on);
+  carving.integrate(makeFrame(camera, near, Mat4::identity()), 2);
+  for (int i = 0; i < 6; ++i) carving.integrate(makeFrame(camera, far, Mat4::identity()), 2);
+  const int ghostWithCarving = countNearPlane(carving, -1.0f);
+  const int wallWithCarving = countNearPlane(carving, -2.0f);
+
+  // Without carving the ghost is plainly there - otherwise the rest of the test proves nothing.
+  check(ghostWithoutCarving > 2000,
+        "the ghost survives when carving is off (" + std::to_string(ghostWithoutCarving) + ")");
+  check(ghostWithCarving < 20,
+        "carving removes the ghost (" + std::to_string(ghostWithCarving) + " vertices left)");
+  // The real surface is not sacrificed: same count, within the quantisation of one scan.
+  check(wallWithoutCarving > 10000, "the real wall is there for both volumes");
+  checkNear(static_cast<double>(wallWithCarving), static_cast<double>(wallWithoutCarving),
+            static_cast<double>(wallWithoutCarving) * 0.01, "carving does not eat the real surface");
+  // Carving must not allocate: only blocks that already hold observations can hold a ghost.
+  check(carving.blockCount() <= plain.blockCount(),
+        "carving allocates no new block (" + std::to_string(carving.blockCount()) + " vs " +
+            std::to_string(plain.blockCount()) + ")");
+}
+
 void testBlockBudget() {
   section("Block budget: the volume stops growing and says so");
   SyntheticCamera camera;
@@ -477,6 +542,7 @@ int main() {
   testSphereReconstruction();
   testFlatWall();
   testTiltedPlane();
+  testCarveFreeSpace();
   testPoseGraphLoopClosure();
   testProximityDetector();
   testTriangleBudgetAndReset();

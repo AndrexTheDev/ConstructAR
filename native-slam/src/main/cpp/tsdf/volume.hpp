@@ -86,14 +86,22 @@ struct TsdfConfig {
   /** Per-voxel weight cap; keeps a static surface from freezing out new observations. */
   float maxWeight = 64.f;
   /**
-   * Also mark observed free space (camera → truncation band) as "outside". Removes ghosts
-   * of furniture that has been moved, at a steep cost: measured on a 640×480 frame it takes
-   * integration from ~21 ms to ~133 ms (desktop, 3 threads). Off by default; the UI exposes
-   * it as an explicit "ghost removal (slower)" switch for a final clean-up pass.
+   * Also mark observed free space (camera → truncation band) as "outside", which removes the
+   * ghosts of furniture that has been moved since it was scanned.
+   *
+   * Off by default and meant as a one-shot clean-up pass, not a scanning mode: measured on a
+   * 320×240 frame (single worker, desktop, `pixelStep = 2`) integration goes from 7.3 ms to
+   * 55.9 ms, because the pass visits every voxel along every ray rather than only the truncation
+   * band. A coarser stride would be cheaper and is wrong: it writes a lattice of free voxels and
+   * leaves the voxels between two samples with their old inside value, so a ghost turns into a
+   * comb of extra iso-surfaces (finding 111 - a 1 m plane seen once and then cleared produced
+   * three times as much geometry as leaving it alone). Only existing, observed voxels are
+   * touched, so carving never allocates a block.
+   *
+   * Nothing sets it yet: `nativeCreate` does not take it and no screen offers it, so this is an
+   * engine capability, not a shipped control.
    */
   bool carveFreeSpace = false;
-  /** Coarse stride (in voxels) used while carving free space. */
-  int freeSpaceStrideVoxels = 4;
   /** Upper bound on allocated blocks — a safety valve, not a working limit. */
   size_t maxBlocks = 160000;
   /** Integration worker threads; 0 ⇒ hardware_concurrency − 1 (at least 1). */
@@ -190,7 +198,10 @@ class TsdfVolume {
   static int shardFor(int64_t key);
 
   Block* findOrCreateBlock(int32_t bx, int32_t by, int32_t bz);
+  /** Existing block, or null. Read-only, for the gather paths. */
   const Block* findBlock(int32_t bx, int32_t by, int32_t bz) const;
+  /** Existing block, or null - never allocates. The carving pass needs to write into it. */
+  Block* findBlockMutable(int32_t bx, int32_t by, int32_t bz);
 
   void integrateRows(const DepthFrameView& frame, int pixelStep, int rowBegin, int rowEnd,
                      IntegrationStats& stats);

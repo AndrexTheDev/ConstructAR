@@ -373,10 +373,11 @@ Known limitations, deliberately documented rather than hidden:
 
 ## Testing
 
-* **Native (C++) — 53 assertions, all green**, exercised with plain `g++` (no Android SDK):
+* **Native (C++) — 58 assertions, all green**, exercised with plain `g++` (no Android SDK):
   SE(3) exp/log round trip, TSDF integration on synthetic depth, sphere/wall reconstruction
-  areas and extents, a 30°-tilted plane (which pins the depth convention), triangle budget,
-  invalid input, pose-graph closure, proximity loop closure.
+  areas and extents, a 30°-tilted plane (which pins the depth convention), free-space carving
+  (a ghost disappears, the real wall does not), triangle budget, invalid input, pose-graph
+  closure, proximity loop closure.
 * **JVM (`:core`)** — transform maths, plane fits and polygon containment, fillet smoothing,
   measurement, tube/duct mesh invariants, BOM aggregation, the working-time clock, the money
   arithmetic (`Pricing`: rounding, both decimal separators, thousand dots, euro forced on a
@@ -467,7 +468,7 @@ errors:
 | `:ar-engine` unit tests | pass |
 | `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 492 tests in the app+core+ar-engine+export suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
-| Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 53 checks, 0 failures |
+| Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 58 checks, 0 failures |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
 | APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |

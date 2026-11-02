@@ -88,6 +88,15 @@ const TsdfVolume::Block* TsdfVolume::findBlock(int32_t bx, int32_t by, int32_t b
   return &shard.blocks[it->second];
 }
 
+TsdfVolume::Block* TsdfVolume::findBlockMutable(int32_t bx, int32_t by, int32_t bz) {
+  const int64_t key = blockKey(bx, by, bz);
+  Shard& shard = *shards_[shardFor(key)];
+  std::lock_guard<std::mutex> lock(shard.mutex);
+  auto it = shard.index.find(key);
+  if (it == shard.index.end()) return nullptr;
+  return &shard.blocks[it->second];
+}
+
 void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int rowBegin, int rowEnd,
                                IntegrationStats& stats) {
   const float vs = config_.voxelSize;
@@ -136,11 +145,14 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
       const float zStart = std::max(minDepth, d - trunc);
       const float zEnd = d + trunc;
 
-      // Coarse free-space pass: everything between the camera and the truncation band is
-      // known to be empty. Two voxels of stride keeps this cheaper than the surface band.
+      // Free-space pass: everything between the camera and the truncation band is known to be
+      // empty. Sampled one voxel at a time - a coarser stride writes a *lattice* of free voxels
+      // and leaves the voxels between two samples with their old (inside) value, which turns a
+      // ghost into a comb of extra iso-surfaces instead of removing it (finding 111: with a
+      // four-voxel stride a 1 m plane seen once and then cleared produced 9 218 vertices within
+      // 5 cm of it, three times the 2 961 of not carving at all).
       if (config_.carveFreeSpace) {
-        const float stride = vs * static_cast<float>(std::max(1, config_.freeSpaceStrideVoxels));
-        for (float zFree = minDepth; zFree < zStart; zFree += stride) {
+        for (float zFree = minDepth; zFree < zStart; zFree += vs) {
           const Vec3 cam(px * zFree, py * zFree, -zFree);
           const Vec3 world = cameraToWorld.transformPoint(cam);
           const int32_t ix = static_cast<int32_t>(std::floor(world.x / vs));
@@ -149,18 +161,19 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
           const int32_t bx = floorDiv(ix, kResolution);
           const int32_t by = floorDiv(iy, kResolution);
           const int32_t bz = floorDiv(iz, kResolution);
-          Block* block = findOrCreateBlock(bx, by, bz);
+          // Only *existing* blocks can hold a ghost, and only a voxel that was ever observed
+          // (weight > 0) can be a surface. Allocating a block here instead - the earlier
+          // behaviour - spent 40 % of the voxels in the volume on empty air: 444 blocks for a
+          // single wall became 1 196 and every later gather walked them (finding 111).
+          Block* block = findBlockMutable(bx, by, bz);
           if (!block) continue;
-          if (block->lastFrame != frameCounter_) {
-            block->lastFrame = frameCounter_;
-            ++allocated;
-          }
           const int idx = ((iz - bz * kResolution) * kResolution + (iy - by * kResolution)) * kResolution +
                           (ix - bx * kResolution);
           const float oldWeight = static_cast<float>(block->weight[idx]);
+          if (oldWeight <= 0.f) continue;
           const float newWeight = std::min(oldWeight + 1.f, maxWeight);
           // Free space is fully outside: sdf = +1 in normalised units.
-          block->sdf[idx] = oldWeight > 0.f ? (block->sdf[idx] * oldWeight + 1.f) / newWeight : 1.f;
+          block->sdf[idx] = (block->sdf[idx] * oldWeight + 1.f) / newWeight;
           block->weight[idx] = static_cast<uint16_t>(std::min(newWeight, 65535.f));
           ++updates;
         }

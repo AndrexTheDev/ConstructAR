@@ -259,7 +259,7 @@ proves the pin compiles.
 |---------|-------|-----|
 | `UnsatisfiedLinkError: libconstructar_slam.so` | ABI not built (e.g. an x86 emulator) | The app detects it (`NativeSlamEngine.isAvailable == false`) and disables scanning; add `x86_64` to `abiFilters` or use a real device |
 | Black AR view, `CameraNotAvailableException` | Another app holds the camera | `ArSessionController.resume()` retries once after 250 ms; otherwise the UI says "camera unavailable" |
-| Scan looks holey at silhouettes | Free-space carving is off by default (it triples integration cost) | Enable `TsdfConfig.carveFreeSpace` for a final clean-up pass, or rescan from a second angle |
+| Scan looks holey at silhouettes | Free-space carving is off by default (it costs ~7.7× integration: 7.3 → 55.9 ms per 320×240 frame) | Enable `TsdfConfig.carveFreeSpace` for a final clean-up pass, or rescan from a second angle |
 | Mesh is shifted after a relocalisation | Anchors were recreated from the persisted node positions | Nothing folds the trajectory back yet - the app does not run a loop closure (finding 98) - so finish the run and re-measure it, or scan again; the protocol flags low-confidence runs |
 | Depth hits land behind the surface | Stale depth frame used for the raycast | Must not happen: `TsdfScanPipeline` only recycles a snapshot when a newer one replaces it |
 | Torch does nothing | Device reports `FlashMode.TORCH` unsupported, or the front camera is in use | SceneView silently downgrades the typed `flashMode`; `TorchController` keeps the button state honest |
