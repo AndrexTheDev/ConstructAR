@@ -49,6 +49,23 @@ class WorkTimeTest {
     }
 
     @Test
+    fun `the billed quantity is the whole minutes the page prints`() {
+        // 2 h 07 min 42 s is printed as "2 h 07 min" and priced as 127 minutes - the same number,
+        // so a customer with a calculator reaches the total that is on the page.
+        val millis = 2 * 3_600_000L + 7 * WorkTime.MINUTE_MS + 42_000L
+        assertEquals(127L, WorkTime.billableMinutes(millis))
+        assertEquals(2L, WorkTime.billableMinutes(millis) / 60L)
+        assertEquals(7L, WorkTime.billableMinutes(millis) % 60L)
+    }
+
+    @Test
+    fun `a remainder under a minute is not a minute`() {
+        assertEquals(0L, WorkTime.billableMinutes(59_999L))
+        assertEquals(1L, WorkTime.billableMinutes(60_000L))
+        assertEquals(0L, WorkTime.billableMinutes(-5_000L))
+    }
+
+    @Test
     fun `stopping the clock closes the open session and keeps the closed ones`() {
         val project = ProjectRecord.empty(id = "p", name = "Keller")
             .startSession(session(0L))

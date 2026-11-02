@@ -47,6 +47,20 @@ class PricingTest {
     }
 
     @Test
+    fun `the duration printed on the page times the rate is the labour line`() {
+        // The customer multiplies what he can read: 127 minutes at 48,00 €/h = 101,60 €.
+        val millis = 2 * 3_600_000L + 7 * 60_000L + 42_000L
+        assertEquals(10_160L, Pricing.labourCents(millis, rate))
+        assertEquals(10_160L, Pricing.labourCents(127 * 60_000L, rate))
+    }
+
+    @Test
+    fun `a remainder under a minute is billed as nothing, because it is printed as nothing`() {
+        assertEquals(0L, Pricing.labourCents(59_999L, rate))
+        assertEquals(80L, Pricing.labourCents(60_000L, rate))
+    }
+
+    @Test
     fun `no time or no rate means no labour`() {
         assertEquals(0L, Pricing.labourCents(0L, rate))
         assertEquals(0L, Pricing.labourCents(-5_000L, rate))
