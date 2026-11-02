@@ -159,4 +159,50 @@ class OrderListCsvTest {
         // 3 x 90°, 3 x 45°, 5 of unknown angle - summed per article, never merged.
         assertEquals(listOf("3", "3", "5"), total.takeLast(3))
     }
+
+    @Test
+    fun `an uncertain hit under the order list is named, not hidden`() {
+        // The screen says it, the bill of materials has a column for it and the protocol flags
+        // the run - but the order list, the document that turns a measurement into money at the
+        // wholesaler's counter, said nothing (finding 105).
+        val csv = MaterialCsvWriter.writeOrderList(
+            listOfLines(line(elbow90 = 2, elbow45 = 0, other = 0).copy(lowConfidenceRuns = 3)),
+            MaterialCsvWriter.Options(includeBom = false),
+        )
+
+        val rows = csv.trim().split("\r\n")
+        val note = rows.last()
+        assertTrue("the note must be the last row, under the total: $note", note.startsWith("Note;"))
+        assertTrue("it names how many runs are affected: $note", note.contains("uncertain hit: 3"))
+        assertTrue(
+            "and it stays below the total, so a reader of the seven columns is unaffected",
+            rows.indexOfFirst { it.startsWith("Total;") } < rows.lastIndex,
+        )
+    }
+
+    @Test
+    fun `an order list built only from measured hits carries no note`() {
+        val csv = MaterialCsvWriter.writeOrderList(
+            listOfLines(line(elbow90 = 1, elbow45 = 1, other = 1)),
+            MaterialCsvWriter.Options(includeBom = false),
+        )
+
+        // The absence of the note is a claim too: an operator who does not see it has to be able
+        // to trust that every length on the sheet was measured.
+        assertFalse(csv, csv.contains("Note;"))
+    }
+
+    @Test
+    fun `the note counts every conduit on the order`() {
+        val csv = MaterialCsvWriter.writeOrderList(
+            listOfLines(
+                line(elbow90 = 0, elbow45 = 0, other = 0).copy(lowConfidenceRuns = 2),
+                line(elbow90 = 0, elbow45 = 0, other = 0).copy(lowConfidenceRuns = 1),
+            ),
+            MaterialCsvWriter.Options(includeBom = false),
+        )
+
+        val note = csv.trim().split("\r\n").last()
+        assertTrue("both articles are counted, not just the first: $note", note.contains("uncertain hit: 3"))
+    }
 }
