@@ -70,6 +70,15 @@ data class RouteMetrics(
     val bends: List<BendAngle>,
     val bendDeductionMeters: Float,
     val withWasteMeters: Float,
+    /**
+     * Corners the chain actually turns at.
+     *
+     * Not `bends.size`: [bendAngles] classifies every interior node, and one that is within 5° of
+     * straight is a `STRAIGHT` entry because the smoothing path and the diagnostics want the whole
+     * row of corners. Counting those as bends put "Bends: 4" on a straight pull of six taps along
+     * one wall, on the document the customer signs, while the same report's procurement table
+     * ordered not a single elbow (finding 116).
+     */
     val bendCount: Int,
     val elbow90Count: Int,
     val elbow45Count: Int,
@@ -179,6 +188,8 @@ object PolylineMetrics {
         val radius = defaultBendRadius(spec)
         val deduction = min(
             bends.sumOf { bend ->
+                // A corner inside the STRAIGHT tolerance is not bent at all.
+                if (bend.kind == BendKind.STRAIGHT) return@sumOf 0.0
                 val delta = Math.toRadians(bend.angleDegrees.toDouble()).toFloat()
                 val sweep = min(delta, Math.PI.toFloat() / 2f)
                 if (sweep <= 0f) 0.0 else {
@@ -209,7 +220,7 @@ object PolylineMetrics {
             bends = bends,
             bendDeductionMeters = deduction,
             withWasteMeters = total * (1f + wasteFactor),
-            bendCount = bends.size,
+            bendCount = bends.count { it.kind != BendKind.STRAIGHT },
             elbow90Count = elbow90,
             elbow45Count = elbow45,
             otherBendCount = other,

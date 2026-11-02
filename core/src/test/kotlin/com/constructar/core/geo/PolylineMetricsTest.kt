@@ -85,6 +85,46 @@ class PolylineMetricsTest {
         assertEquals(BendKind.BEND_90, bends[0].kind)
     }
 
+    /**
+     * Six taps along one straight wall are a 5 m pull with no bend in it. `bendAngles` classifies
+     * every interior node - that is its contract, and the straight entries are what the smoothing
+     * path reads - but `bendCount` was `bends.size`, so the protocol's *Bends* column said **4**
+     * on a run the same report ordered not a single elbow for (finding 116). The list keeps its
+     * straight rows; the count no longer does.
+     */
+    @Test
+    fun `taps along one straight wall are not bends`() {
+        val nodes = (0..5).map { step -> node(step.toFloat(), 0f, 0f) }
+        val metrics = PolylineMetrics.measure(nodes, ConduitSpec.pipe(20f))
+
+        assertEquals(0, metrics.bendCount)
+        assertEquals(0, metrics.elbow90Count + metrics.elbow45Count + metrics.otherBendCount)
+        assertEquals(0f, metrics.bendDeductionMeters, 1e-6f)
+        // The classification itself still reports every corner, straight ones included.
+        assertEquals(4, metrics.bends.size)
+        assertTrue(metrics.bends.all { it.kind == BendKind.STRAIGHT })
+    }
+
+    /** A two-degree wobble is inside the five-degree tolerance: a tap, not a bend. */
+    @Test
+    fun `a wobble inside the straight tolerance is still no bend`() {
+        val nodes = listOf(node(0f, 0f, 0f), node(1f, 0f, 0f), node(2f, 0f, 0.035f))
+        val metrics = PolylineMetrics.measure(nodes, ConduitSpec.pipe(20f))
+
+        assertEquals(0, metrics.bendCount)
+        assertEquals(BendKind.STRAIGHT, metrics.bends.single().kind)
+    }
+
+    /** And a corner that really turns is still counted - once. */
+    @Test
+    fun `a right angle is one bend`() {
+        val nodes = listOf(node(0f, 0f, 0f), node(2f, 0f, 0f), node(2f, 0f, 2f))
+        val metrics = PolylineMetrics.measure(nodes, ConduitSpec.pipe(20f))
+
+        assertEquals(1, metrics.bendCount)
+        assertEquals(1, metrics.elbow90Count)
+    }
+
     @Test
     fun `low confidence nodes are counted for review`() {
         val nodes = listOf(
