@@ -195,4 +195,16 @@ class ExportTextFormatsTest {
         }
         return -1
     }
+    @Test
+    fun `an exported ply does not call itself a room scan`() {
+        // Every exported PLY carried "comment ConstructAR scan, metres, Y-up" while the file held
+        // only the measured conduit runs: the TSDF scan never leaves the AR session it was
+        // captured in, so the header promised a room that is not in the file (finding 87).
+        val ply = PlyWriter.writeAscii(listOf(PlyWriter.PlyPart("Flur", triangleMesh())))
+        val header = ply.lines().takeWhile { it != "end_header" }
+        val diagnostic = header.joinToString(" | ")
+
+        assertTrue(diagnostic, header.any { it == "comment ${PlyWriter.DEFAULT_COMMENT}" })
+        assertFalse(diagnostic, header.any { it.contains("scan", ignoreCase = true) })
+    }
 }

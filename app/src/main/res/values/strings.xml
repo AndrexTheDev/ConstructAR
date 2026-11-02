@@ -101,7 +101,7 @@
     <string name="export_runs_total">%1$d runs · %2$s total</string>
     <string name="export_order_length">Order length incl. waste: %1$s</string>
     <string name="export_fittings">Clips %1$d · couplings %2$d · bends %3$d</string>
-    <string name="export_room_scan">Room scan: %1$d k triangles</string>
+    <string name="export_room_scan">Room scan recorded: %1$d k triangles - in the protocol; the 3D model holds the runs</string>
     <string name="export_offline_note">Files are written to the folder you pick. Nothing is uploaded; export works in airplane mode and in a basement.</string>
     <string name="export_about">%1$s %2$s · %3$s</string>
     <string name="project_none">No project open</string>

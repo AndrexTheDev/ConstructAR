@@ -22,12 +22,21 @@ import java.util.Locale
  *
  * Both use metres and Y-up (PLY has no up-axis convention, so it is written as a comment —
  * losers of the format, but a comment has saved more imports than it cost).
+ *
+ * The default comment says **export**, not "scan": what this writer receives is whatever the caller
+ * hands it, and the export hands it the measured runs. The header used to call every file a room
+ * scan, so a wholesaler opening a 40 kB PLY of conduit runs read that the room itself was in there
+ * (finding 87). The TSDF scan mesh never leaves the AR session it was captured in, so a file that
+ * really is a scan is not something this app produces yet.
  */
 object PlyWriter {
 
+    /** What the file is: an export, in metres, Y-up. See the class comment (finding 87). */
+    const val DEFAULT_COMMENT: String = "ConstructAR export, metres, Y-up"
+
     data class PlyPart(val name: String, val mesh: MeshData)
 
-    fun writeAscii(parts: List<PlyPart>, comment: String = "ConstructAR scan, metres, Y-up"): String {
+    fun writeAscii(parts: List<PlyPart>, comment: String = DEFAULT_COMMENT): String {
         val totalVertices = parts.sumOf { it.mesh.vertexCount }
         val totalFaces = parts.sumOf { it.mesh.triangleCount }
         val builder = StringBuilder(1 shl 20)
@@ -74,7 +83,7 @@ object PlyWriter {
     }
 
     /** Binary little-endian PLY; the payload is `float32 × 6` per vertex, `uint8 + int32 × 3` per face. */
-    fun writeBinaryLittleEndian(parts: List<PlyPart>, comment: String = "ConstructAR scan, metres, Y-up"): ByteArray {
+    fun writeBinaryLittleEndian(parts: List<PlyPart>, comment: String = DEFAULT_COMMENT): ByteArray {
         val header = buildString {
             append("ply\n")
             append("format binary_little_endian 1.0\n")

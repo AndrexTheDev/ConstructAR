@@ -101,7 +101,7 @@
     <string name="export_runs_total">%1$d tracciati · %2$s in totale</string>
     <string name="export_order_length">Lunghezza di ordine con sfrido: %1$s</string>
     <string name="export_fittings">Fissaggi %1$d · manicotti %2$d · curve %3$d</string>
-    <string name="export_room_scan">Scansione del locale: %1$d k triangoli</string>
+    <string name="export_room_scan">Scansione della stanza registrata: %1$d k triangoli - va nel protocollo; il modello 3D contiene le tratte</string>
     <string name="export_offline_note">I file vengono scritti nella cartella scelta. Nulla viene caricato; l’esportazione funziona in modalità aereo e in cantina.</string>
     <string name="export_about">%1$s %2$s · %3$s</string>
     <string name="project_none">Nessun cantiere aperto</string>

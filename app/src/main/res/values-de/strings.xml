@@ -101,7 +101,7 @@
     <string name="export_runs_total">%1$d Trassen · %2$s gesamt</string>
     <string name="export_order_length">Bestelllänge inkl. Verschnitt: %1$s</string>
     <string name="export_fittings">Scheiben %1$d · Kupplungen %2$d · Bögen %3$d</string>
-    <string name="export_room_scan">Raumscan: %1$d k Dreiecke</string>
+    <string name="export_room_scan">Raumscan aufgenommen: %1$d k Dreiecke - im Protokoll; das 3D-Modell enthält die Strecken</string>
     <string name="export_offline_note">Dateien werden in den gewählten Ordner geschrieben. Nichts wird hochgeladen; Export funktioniert im Flugmodus und im Keller.</string>
     <string name="export_about">%1$s %2$s · %3$s</string>
     <string name="project_none">Kein Projekt geöffnet</string>

@@ -69,7 +69,14 @@ class ExportService(
         val materialList: MaterialList,
         /** Geometry of every route, already generated (world space, metres). */
         val routeMeshes: RouteMeshes = RouteMeshes(),
-        /** The TSDF room scan, if the operator scanned one. */
+        /**
+         * The TSDF room scan, if a caller has one in hand.
+         *
+         * No caller does today: the volume lives in the AR session and is gone by the time the
+         * export screen exists, and nothing writes it to disk (a 10 MB mesh per room against an app
+         * that fits in 25 MB). It stays in the model for the day a scan is stored - but the screen
+         * must not promise a model that contains it (finding 87).
+         */
         val scanMesh: MeshData? = null,
         val screenshot: Bitmap? = null,
         val operatorName: String = "",
@@ -80,8 +87,13 @@ class ExportService(
         val includeOrderList: Boolean = false,
         val includeGlb: Boolean = true,
         val includePly: Boolean = true,
-        /** Include the raw scan mesh (not just the runs) in the 3D exports. */
-        val includeScanGeometry: Boolean = true,
+        /**
+         * Include a supplied [scanMesh] (not just the runs) in the 3D exports.
+         *
+         * `false` by default, because that is the truth of every call site: the export contains the
+         * measured runs. A default of `true` claimed a scan the app cannot deliver (finding 87).
+         */
+        val includeScanGeometry: Boolean = false,
         /**
          * Text to stamp across every page of the protocol, already localised by the caller.
          * Blank for a licensed build - see [ProtocolPdfWriter.Content.watermark].

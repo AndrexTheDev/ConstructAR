@@ -101,7 +101,7 @@
     <string name="export_runs_total">%1$d trazados · %2$s en total</string>
     <string name="export_order_length">Longitud de pedido con merma: %1$s</string>
     <string name="export_fittings">Abrazaderas %1$d · manguitos %2$d · curvas %3$d</string>
-    <string name="export_room_scan">Escaneo de la estancia: %1$d k triángulos</string>
+    <string name="export_room_scan">Escáner de sala registrado: %1$d k triángulos - va en el protocolo; el modelo 3D contiene las tiradas</string>
     <string name="export_offline_note">Los archivos se escriben en la carpeta elegida. No se sube nada; la exportación funciona en modo avión y en un sótano.</string>
     <string name="export_about">%1$s %2$s · %3$s</string>
     <string name="project_none">No hay ninguna obra abierta</string>

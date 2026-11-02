@@ -176,4 +176,18 @@ class ExportServiceTest {
         // meant to be in the model, and printing it under "geometry failed" would be a lie.
         assertTrue("recovered runs have their own note", meshes.unbuildable.isEmpty())
     }
+    @Test
+    fun `the ply of a measured room lists its runs and carries no scan`() {
+        val project = measuredProject()
+        val artifacts = service.build(request(project).copy(includePdf = false, includeCsv = false))
+
+        val ply = artifacts.single { it.fileName.endsWith(".ply") }
+        val sink = ByteArrayOutputStream()
+        ply.write(sink)
+        val text = String(sink.toByteArray(), Charsets.US_ASCII)
+
+        assertTrue(text, text.contains("comment mesh Flur"))
+        // Nothing in the model claims to be the scanned room (finding 87).
+        assertFalse("the scan mesh is not part of an export", text.contains("Room scan"))
+    }
 }

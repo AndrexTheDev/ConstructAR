@@ -101,7 +101,7 @@
     <string name="export_runs_total">%1$d tracés · %2$s au total</string>
     <string name="export_order_length">Longueur de commande avec chutes : %1$s</string>
     <string name="export_fittings">Colliers %1$d · manchons %2$d · coudes %3$d</string>
-    <string name="export_room_scan">Scan de la pièce : %1$d k triangles</string>
+    <string name="export_room_scan">Scan de la pièce enregistré : %1$d k triangles - il va dans le protocole ; le modèle 3D contient les tracés</string>
     <string name="export_offline_note">Les fichiers sont écrits dans le dossier choisi. Rien n’est téléversé ; l’export fonctionne en mode avion et au sous-sol.</string>
     <string name="export_about">%1$s %2$s · %3$s</string>
     <string name="project_none">Aucun chantier ouvert</string>
