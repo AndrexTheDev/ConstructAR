@@ -45,6 +45,7 @@ fun rememberPdfLabels(): PdfLabels = PdfLabels(
     accuracyNote = stringResource(R.string.pdf_note_accuracy),
     recoveredNote = stringResource(R.string.pdf_note_recovered),
     unbuildableNote = stringResource(R.string.pdf_note_unbuildable),
+    photosNote = stringResource(R.string.pdf_note_photos),
     footer = stringResource(R.string.pdf_footer),
     pageLabel = stringResource(R.string.pdf_page_label),
 )

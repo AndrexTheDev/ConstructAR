@@ -113,6 +113,8 @@ class ExportService(
         val photos: List<PdfPhoto> = emptyList(),
         /** Heading of the photo appendix. */
         val photosTitle: String = "",
+        /** Every photo on the job; [photos] is only the ones the appendix can hold. */
+        val photosTotal: Int = photos.size,
     )
 
     /** Human/machine-readable file stem, e.g. `ConstructAR_Bad-Keller_20260314-1015`. */
@@ -157,6 +159,7 @@ class ExportService(
                             sections = request.sections,
                             photos = request.photos,
                             photosTitle = request.photosTitle,
+                            photosTotal = request.photosTotal,
                             logo = request.logo,
                         ),
                         output,

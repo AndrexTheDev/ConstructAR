@@ -112,6 +112,14 @@ class ProtocolPdfWriter(
         /** Heading of the photo appendix, localised by the caller. */
         val photosTitle: String = "",
         /**
+         * How many photos the job actually has - [photos] is only what fits on the page.
+         *
+         * Without it the appendix is a silent cut: eight pictures under a heading that says
+         * "photo documentation" while twelve more sit in the field book (finding 91). Zero means
+         * the caller did not say, and then nothing is claimed.
+         */
+        val photosTotal: Int = 0,
+        /**
          * The product badge, printed top-right on the first page.
          *
          * Branding a document that leaves the site is the cheapest marketing there is: the
@@ -380,6 +388,10 @@ class ProtocolPdfWriter(
                 pageNumber++
                 page = newPage(document, pageNumber)
                 var py = drawSectionTitle(page.canvas, content.photosTitle, MARGIN)
+                // Said once, at the top of the appendix: this page holds part of the job's
+                // photos, and the rest are in the app rather than lost (finding 91).
+                photoAppendixNote(content.photos.size, content.photosTotal, content.labels.photosNote)
+                    ?.let { note -> py = drawNote(page.canvas, note, py) + 6 }
                 val cellWidth = (pageWidth - 2 * MARGIN - 12) / 2
                 val cellHeight = 150
                 var column = 0
@@ -638,6 +650,19 @@ internal fun unbuildableRunsNote(labels: List<String>, template: String): String
  */
 internal fun accuracyNote(template: String, trusted: Float = HitConfidence.RUN_TRUSTED): String =
     String.format(Locale.ROOT, template, Math.round(trusted * 100f))
+
+/**
+ * The line the photo appendix gets when it cannot hold every photo on the job, or `null` when it
+ * can.
+ *
+ * Out of the drawing code for the same reason as the other notes: the wording is testable, and
+ * the two ways of having nothing to say - every photo fits, and the caller did not name a total -
+ * both end in `null` instead of in "8 of 0 photos".
+ */
+internal fun photoAppendixNote(shown: Int, total: Int, template: String): String? {
+    if (total <= shown) return null
+    return String.format(Locale.ROOT, template, shown, total)
+}
 
 private fun namedRunsNote(labels: List<String>, template: String): String? {
     if (labels.isEmpty()) return null

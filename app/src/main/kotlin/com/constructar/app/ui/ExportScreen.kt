@@ -204,6 +204,9 @@ fun ExportScreen(
                             sections = sectionsNow(),
                             photos = photoAppendix,
                             photosTitle = siteFileTexts.photosTitle,
+                            // The appendix holds eight; the job can hold twenty. The protocol
+                            // says which it is printing (finding 91).
+                            photosTotal = FieldPhotos.ordered(project).size,
                             logo = logo,
                         ),
                     )

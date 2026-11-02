@@ -77,6 +77,17 @@ data class PdfLabels(
     val unbuildableNote: String =
         "No 3D geometry could be built for these runs - their lengths and fittings are still " +
             "counted: %1\$s",
+    /**
+     * The line under the photo appendix when the page does not hold every photo on the job.
+     *
+     * The appendix takes eight pictures - a page budget, not a taste - while a normal Tuesday
+     * leaves eighteen photos in the field book. Nothing said so: the operator handed the customer
+     * a "photo documentation" and both believed it was all of it, and the photos that were left
+     * out looked like photos that were never taken (finding 91). `%1$d` = printed, `%2$d` = on
+     * the job.
+     */
+    val photosNote: String =
+        "%1\$d of %2\$d photos from the site file are printed here - the rest stay in the app.",
     val footer: String = "ConstructAR %1\$s - generated on device",
     val pageLabel: String = "Page %1\$d",
 )

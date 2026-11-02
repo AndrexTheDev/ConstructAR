@@ -386,6 +386,7 @@
     <string name="pdf_label_net_total">Totale netto</string>
     <string name="pdf_note_net">Importi netti, IVA esclusa. Il materiale è il forfait inserito in cantiere.</string>
     <string name="pdf_section_photos">Documentazione fotografica</string>
+    <string name="pdf_note_photos">Qui sono stampate %1$d foto su %2$d del fascicolo - le altre restano nell’app.</string>
     <string name="ar_hold_steady">Tieni fermo</string>
     <string name="ar_point_locked">Punto agganciato</string>
     <string name="hud_segment">Tratto %1$.2f m</string>
