@@ -77,4 +77,14 @@ class PricingInputTest {
         assertTrue(PricingInput.rate("99.999.999").invalid)
         assertNull(PricingInput.rate("99.999.999").cents)
     }
+
+    @Test
+    fun `a field that reformats itself turns a typed rate into a different one`() {
+        // Why the firm-rate field must not re-derive its own text from what it stores: after the
+        // first keystroke it would read "4,00", the second digit appends to that ("4,005"), and
+        // the rate becomes 4.005,00 € - a valid amount, so nothing complains (finding 84).
+        assertEquals(400_500L, PricingInput.rate("4,005").cents?.toLong())
+        // The same two digits typed in one go are 45,00 €.
+        assertEquals(4_500L, PricingInput.rate("45").cents?.toLong())
+    }
 }

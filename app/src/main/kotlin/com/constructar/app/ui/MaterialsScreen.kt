@@ -72,7 +72,15 @@ fun MaterialsScreen(
     onBack: () -> Unit,
 ) {
     // Blank means "the built-in default", so the field is a string and not a number.
-    var rateDraft by rememberSaveable(firmHourlyRateCents) {
+    //
+    // Deliberately **not** keyed on `firmHourlyRateCents`: this field writes that value on every
+    // keystroke, and a key that changes with it re-initialises the text from the stored cents -
+    // so the field rewrites itself under the operator's finger. Typing "4" stored 4,00 € and
+    // re-printed the field as "4,00"; the next keystroke appended to that ("4,005"), which parses
+    // as 4.005,00 € and is a perfectly valid rate, so nothing complained and every job after it
+    // billed at a hundred times the intended rate (finding 84). The text is restored across a
+    // rotation by `rememberSaveable` and initialised from the store when the screen is opened.
+    var rateDraft by rememberSaveable {
         mutableStateOf(Pricing.formatForInput(firmHourlyRateCents.toLong()))
     }
     val rateInvalid = PricingInput.rate(rateDraft).invalid

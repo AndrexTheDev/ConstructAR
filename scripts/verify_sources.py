@@ -21,6 +21,7 @@ and most expensive to discover in a 12-minute Gradle run:
   9. no work-time total cached in `remember`                  (a clock must tick)
  10. the signature pad keeps its tap handler (finding 82)      (a tap is a signature)
  11. text the operator typed survives a rotation (finding 83)  (rememberSaveable, not remember)
+ 12. a money field is not keyed on the amount it writes (84)   (no re-formatting under the finger)
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -311,6 +312,14 @@ def check_raw_exception_messages() -> None:
                       f"map the failure with `storageFailureOf` or mark the site `raw-detail`")
 
 
+# A stored amount that a money field writes back on every keystroke. Used as a `remember` key it
+# re-initialises the field's text from the value just saved, so the field rewrites itself as the
+# operator types (finding 84).
+MONEY_KEY = re.compile(
+    r"by\s+remember(?:Saveable)?\(\s*[^)]*\b(firmHourlyRateCents|hourlyRateCents|materialLumpSumCents|wasteOverride)\b"
+)
+
+
 # Names a screen gives the state of a field the operator types into: a draft, a name, an address,
 # a phone number, a note, a search query, a licence key, a title, a location. Booleans, dialogs,
 # selections and one-shot status messages are deliberately not in this list - they may reset.
@@ -340,6 +349,25 @@ def check_signature_tap() -> None:
     if "state.commit(" not in text:
         add(path, "the pad must commit strokes through `commit`, so the drag and the tap path "
                   "cannot disagree about what counts as a finished stroke")
+
+
+def check_money_fields_are_not_rekeyed() -> None:
+    """A field that writes a stored amount must not be keyed on it (finding 84).
+
+    `remember(key)` re-runs its initializer when the key changes, and this field stores its text on
+    every keystroke: `var rateDraft by remember(firmHourlyRateCents) { format(firmHourlyRateCents) }`
+    therefore rewrote the field after each digit. Typing "4" printed "4,00", the next keystroke
+    appended to it ("4,005"), and 4.005,00 EUR - a valid rate - was saved for every future job.
+    """
+    for path in kotlin_sources("app"):
+        if "/src/test/" in path.as_posix() or "/ui/" not in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in MONEY_KEY.finditer(text):
+            line = text[: match.start()].count("\n") + 1
+            add(path, f"line {line}: the field is keyed on `{match.group(1)}`, which it writes on "
+                      f"every keystroke - the text would be re-created from the stored amount while "
+                      f"the operator types; key it on nothing (or on the room), not on the value")
 
 
 def check_typed_fields_are_saved() -> None:
@@ -549,6 +577,7 @@ def main() -> int:
     check_draft_write_ordering()
     check_signature_tap()
     check_typed_fields_are_saved()
+    check_money_fields_are_not_rekeyed()
     check_manifest_hardening()
     check_kotlin_structure()
     check_resource_xml()
