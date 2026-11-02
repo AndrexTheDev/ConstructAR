@@ -60,13 +60,13 @@ class TorchControllerTest {
 
     @Test
     fun `asking again gives the camera a second chance`() {
-        var refuse = true
-        val torch = controller { refuse }
+        var accepts = false
+        val torch = controller { accepts }
 
         torch.toggle()
-        assertTrue(torch.unavailable)
+        assertTrue("the refusal is reported before the second attempt", torch.unavailable)
 
-        refuse = false
+        accepts = true
         assertTrue("the second tap has to work once the camera accepts it", torch.toggle())
         assertFalse("and the refusal is not remembered against the device", torch.unavailable)
         assertTrue(torch.isOn)
