@@ -209,7 +209,7 @@ th, td{overflow-wrap:anywhere}
 CONTENT: dict[str, dict[str, str]] = {
     "en": {
         "meta_title": "ConstructAR — offline AR measuring for electricians and plumbers",
-        "meta_desc": "Scan the room with your phone, draw the cable or pipe run, get the metres, the material list and a signed PDF protocol. 100 % offline, six languages, PDF/CSV/GLB.",
+        "meta_desc": "Turn your phone into an AR tape measure: scan the room, tap the cable run, get the metres, the material list and a signed PDF. 100 % offline.",
         "nav_features": "Features", "nav_how": "How it works", "nav_price": "Pricing",
         "nav_faq": "FAQ", "nav_repo": "GitHub",
         "hero_h1": "Measure the wall with your phone.",
@@ -271,7 +271,7 @@ CONTENT: dict[str, dict[str, str]] = {
     },
     "de": {
         "meta_title": "ConstructAR — AR-Aufmaß offline für Elektriker und Installateure",
-        "meta_desc": "Raum mit dem Handy scannen, Leitungsweg zeichnen, Meter, Materialliste und unterschriebenes PDF-Protokoll erhalten. 100 % offline, sechs Sprachen, PDF/CSV/GLB.",
+        "meta_desc": "Handy als AR-Maßband: Raum scannen, Leitungsweg antippen, Meter, Materialliste und unterschriebenes PDF. 100 % offline, ohne Konto.",
         "nav_features": "Funktionen", "nav_how": "So funktioniert es", "nav_price": "Preise",
         "nav_faq": "FAQ", "nav_repo": "GitHub",
         "hero_h1": "Miss die Wand mit dem Handy.",

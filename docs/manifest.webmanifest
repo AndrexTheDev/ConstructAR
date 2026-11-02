@@ -1,7 +1,7 @@
 {
   "name": "ConstructAR",
   "short_name": "ConstructAR",
-  "description": "Scan the room with your phone, draw the cable or pipe run, get the metres, the material list and a signed PDF protocol. 100 % offline, six languages, PDF/CSV/GLB.",
+  "description": "Turn your phone into an AR tape measure: scan the room, tap the cable run, get the metres, the material list and a signed PDF. 100 % offline.",
   "lang": "en",
   "start_url": "https://andrexthedev.github.io/ConstructAR/",
   "scope": "https://andrexthedev.github.io/ConstructAR/",

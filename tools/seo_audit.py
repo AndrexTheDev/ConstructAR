@@ -203,8 +203,10 @@ def check_document(lang: str) -> Document:
     if not 20 <= len(document.title) <= 70:
         add(path, f"<title> is {len(document.title)} characters (want 20-70): {document.title!r}")
     description = meta_value(document, "description") or ""
-    if not 60 <= len(description) <= 200:
-        add(path, f"meta description is {len(description)} characters (want 60-200)")
+    # Google shows roughly 155-160 characters of a meta description; anything longer is cut off
+    # mid-sentence in the one line that has to make a craftsman click (finding 79).
+    if not 60 <= len(description) <= 160:
+        add(path, f"meta description is {len(description)} characters (want 60-160)")
     if meta_value(document, "viewport") is None:
         add(path, "missing viewport meta")
     robots = meta_value(document, "robots") or ""
