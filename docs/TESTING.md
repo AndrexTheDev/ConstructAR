@@ -81,6 +81,22 @@ again. Each line names what was read, not what was assumed.
   paid format ticked.
 * **Storage reclaimed on delete.** `ProjectRepository.delete` removes the room's JSON, its draft and
   every photo whose name starts with `<id>__`, and the diary/defect delete paths remove their own
+* **The export/BOM/PDF numeric paths, round 13.** `MaterialCsvWriter` (RFC 4180 quoting on the
+  separator, a doubled quote and a newline; the spreadsheet-formula guard with its leading-minus
+  rule; CRLF; `.` decimals through `Locale.ROOT`; and every order-list row carrying exactly the
+  columns its header promises) agrees cell for cell with the protocol. The printed net length is
+  the same quantity everywhere it appears - `route.polylineLengthMeters`, `RouteMetrics.totalMeters`
+  and the summary's total are the same chord sum, so the runs table, the procurement table and the
+  summary cannot disagree - and every summary row comes from a field the app fills. `Pricing`
+  bills `Math.round(minutes / 60.0 * rate)` on the same whole-minute quantity the time table prints
+  and rounds once, and `MoneyFormatter` forces EUR whatever the phone's locale. `LengthFormatter`
+  rounds rather than truncates, with the 0.994/0.995 boundary tested from both sides. On the app
+  side, `ExportService.Request.includeScanGeometry` defaults to `false` and the export screen
+  supplies no scan mesh - the deliberate truth of finding 87, not an omission - while
+  `RouteGeometry` honours both of its knobs (`bendRadiusOverrideMeters`, `arcSampleMeters`) and
+  `ConduitSpec.bomKey` carries kind, material, size and standoff, so two runs of one article merge
+  and two different articles never do. The two things that *were* wrong in this surface are
+  findings 113 and 114.
   photo; nothing orphaned in private storage.
 * **Run numbering with gaps.** `RouteLabels.next` numbers past the highest number in use and
   loops while the label it builds is already taken, so deleting run #2 of three cannot make the
