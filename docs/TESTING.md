@@ -108,6 +108,31 @@ again. Each line names what was read, not what was assumed.
   watermark" was checked line by line against `Entitlements` (`FREE_PROJECTS = 1`,
   `maxRoutesPerProject = MAX_VALUE`, `canExportCsv`, `canExportPdf`, `pdfWatermark = !isPro`), and
   "seven days of Pro" against `Plan.TRIAL(isPaid = true)`.
+* **Every write path reports, and what it reports is readable.** After findings 72 and 73 all of
+  them were walked again: `mutate` sets `PROJECT_SAVE_FAILED` when `save` returns false, a photo
+  copy and the off-screen room write say `PHOTO_SAVE_FAILED`, and the export and the backup map a
+  throwable to a sentence (`storageFailureOf`) instead of printing it. Underneath, `SafeFiles`
+  writes a temporary, `fsync`s and renames - the previous version deleted the target first, which
+  is how a room used to disappear with the battery. Rule 11 keeps a dropped `save()` result from
+  coming back.
+* **The licence's last valid day.** `LicenceVerifier` accepts while `todayEpochDay <=
+  expiresEpochDay` and `EntitlementRules` re-checks the same comparison against the watermark;
+  `daysLeft` reaching 0 on that day is harmless because "0 days left" is a *trial* sentence
+  (`Plan.TRIAL` only) and the trial's own window is `start..start+6`, where the counter runs 7..1.
+  `paywall_active_until` formats the epoch day in **UTC**, so a negative-offset zone cannot print
+  the previous day as the last one.
+* **PDF pagination.** Every table row, note block, photo cell and the signature block re-checks the
+  remaining height before it draws (`y`/`py` against `pageHeight - FOOTER_HEIGHT`) and starts a new
+  page with the section title repeated; the photo grid breaks whole rows, so a caption cannot be
+  printed without its picture. The photo appendix is always its own page.
+* **Icon-only controls.** Every `IconButton` in `ui/` carries a `contentDescription` resolved from
+  `strings.xml` (back, export, help, rename, delete, photo, defect toggle, clock delete, both AR
+  buttons). The only `null`s are decorative icons inside rows or buttons that already carry text
+  (`GloveControls`, the plan cards, the lock and check marks), which is what `null` is for.
+* **One total length.** `ProjectRecord.totalLengthMeters` sums `polylineLengthMeters`, which adds the
+  closing segment exactly when `closedLoop && nodes.size > 2` - the same rule
+  `PolylineMetrics.measure` applies - so the home list, the protocol summary and the bill of
+  materials cannot disagree about a closed ring.
 
 ## Findings from the systematic beta test
 
