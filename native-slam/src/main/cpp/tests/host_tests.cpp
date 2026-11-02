@@ -445,7 +445,7 @@ void testCarveFreeSpace() {
   section("Free-space carving: ghost removal, surface intact");
   SyntheticCamera camera;
 
-  auto countNearPlane = [&camera](const TsdfVolume& volume, float planeZ) {
+  auto countNearPlane = [](const TsdfVolume& volume, float planeZ) {
     const auto mesh = volume.extractMesh();
     int near = 0;
     for (size_t i = 0; i < mesh.vertexCount(); ++i) {
