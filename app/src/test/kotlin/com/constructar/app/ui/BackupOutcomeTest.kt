@@ -65,4 +65,31 @@ class BackupOutcomeTest {
 
         assertEquals(BackupOutcome.Saved(projects = 2, photos = 3, photosSkipped = 2), outcome)
     }
+
+    @Test
+    fun `a partly written backup says so instead of counting only its successes`() {
+        // Five rooms, two written: the card used to say "2 projects and 0 photos copied" in the
+        // success colour, so the three rooms that are not in the folder were invisible - while the
+        // photos it skipped in the same run got a warning line (finding 85).
+        val outcome = BackupOutcome.of(report(available = 5, written = 2), nothing, failed)
+
+        assertEquals(
+            BackupOutcome.Saved(projects = 2, photos = 0, photosSkipped = 0, projectsSkipped = 3),
+            outcome,
+        )
+    }
+
+    @Test
+    fun `a complete backup skips nothing, in either category`() {
+        val outcome = BackupOutcome.of(
+            report(available = 3, written = 3, photos = 4, photosWritten = 4),
+            nothing,
+            failed,
+        )
+
+        assertEquals(
+            BackupOutcome.Saved(projects = 3, photos = 4, photosSkipped = 0, projectsSkipped = 0),
+            outcome,
+        )
+    }
 }

@@ -228,7 +228,8 @@ fun BackupCard(
                     // the folder for an empty app is the wrong advice.
                     is BackupOutcome.Failed -> current.detail
                 }
-                val partial = current is BackupOutcome.Saved && current.photosSkipped > 0
+                val partial = current is BackupOutcome.Saved &&
+                    (current.photosSkipped > 0 || current.projectsSkipped > 0)
                 Text(
                     text,
                     style = MaterialTheme.typography.bodyMedium,
@@ -238,6 +239,19 @@ fun BackupCard(
                         else -> SiteColors.accent
                     },
                 )
+                // A room that was not backed up is the worse of the two, so it comes first and in
+                // the alarm colour: the job itself is not in the folder (finding 85).
+                if (current is BackupOutcome.Saved && current.projectsSkipped > 0) {
+                    Text(
+                        text = stringResource(
+                            R.string.backup_projects_skipped,
+                            current.projectsSkipped,
+                            current.projects + current.projectsSkipped,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SiteColors.danger,
+                    )
+                }
                 if (current is BackupOutcome.Saved && current.photosSkipped > 0) {
                     Text(
                         text = stringResource(
@@ -310,7 +324,21 @@ private const val ANY_MIME_TYPE: String = "*" + "/" + "*"
  * and a number - `0 Projekte gesichert`.
  */
 internal sealed interface BackupOutcome {
-    data class Saved(val projects: Int, val photos: Int, val photosSkipped: Int = 0) : BackupOutcome
+    /**
+     * A backup that ran, with the two kinds of file it may not have got.
+     *
+     * [photosSkipped] and [projectsSkipped] are counted apart because they cost different things
+     * and the operator can act on them differently: a missing photo is a missing piece of evidence,
+     * a missing project file is a room that is not backed up at all. Both used to be invisible -
+     * the photo gap from the start, the project gap because `projects` was filled from the
+     * *successes* and the success colour followed (finding 85).
+     */
+    data class Saved(
+        val projects: Int,
+        val photos: Int,
+        val photosSkipped: Int = 0,
+        val projectsSkipped: Int = 0,
+    ) : BackupOutcome
 
     /**
      * A restore that ran, with the two very different reasons a file can be missing from it.
@@ -366,6 +394,10 @@ internal sealed interface BackupOutcome {
                 projects = report.written,
                 photos = report.photosWritten,
                 photosSkipped = report.photos - report.photosWritten,
+                // The rooms that did not make it. Without this the card reported "2 projects and
+                // 5 photos copied" for a backup that wrote two of five rooms, in the success
+                // colour, while the photos it skipped got a warning line of their own (finding 85).
+                projectsSkipped = (report.available - report.written).coerceAtLeast(0),
             )
         }
     }

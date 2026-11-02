@@ -286,6 +286,7 @@
     <string name="backup_failed">Backup non riuscito: controlla la cartella e riprova.</string>
     <string name="backup_nothing">Non c’è ancora nulla da salvare: crea prima un progetto.</string>
     <string name="backup_photos_skipped">Non è stato possibile copiare %1$d foto su %2$d.</string>
+    <string name="backup_projects_skipped">Non è stato possibile scrivere %1$d progetti su %2$d: la cartella è piena o non più scrivibile.</string>
     <string name="waste_title">Scorta</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>

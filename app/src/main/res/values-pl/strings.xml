@@ -290,6 +290,7 @@
     <string name="backup_failed">Kopia nie powiodła się - sprawdź folder i spróbuj ponownie.</string>
     <string name="backup_nothing">Nie ma jeszcze czego kopiować - najpierw utwórz projekt.</string>
     <string name="backup_photos_skipped">Nie udało się skopiować %1$d z %2$d zdjęć.</string>
+    <string name="backup_projects_skipped">Nie udało się zapisać %1$d z %2$d projektów - folder jest pełny lub nie można do niego pisać.</string>
     <string name="waste_title">Zapas</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>

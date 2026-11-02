@@ -286,6 +286,7 @@
     <string name="backup_failed">Error en la copia: revisa la carpeta e inténtalo de nuevo.</string>
     <string name="backup_nothing">Aún no hay nada que copiar: crea primero un proyecto.</string>
     <string name="backup_photos_skipped">No se pudieron copiar %1$d de %2$d fotos.</string>
+    <string name="backup_projects_skipped">No se pudieron escribir %1$d de %2$d proyectos: la carpeta está llena o ya no admite escritura.</string>
     <string name="waste_title">Reserva</string>
     <string name="waste_default">Estándar</string>
     <string name="waste_value">%1$d %%</string>
