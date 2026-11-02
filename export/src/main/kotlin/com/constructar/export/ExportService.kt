@@ -46,7 +46,6 @@ class ExportService(
     data class ExportArtifact(
         val fileName: String,
         val mimeType: String,
-        val byteSizeEstimate: Long,
         val write: (OutputStream) -> Unit,
     )
 
@@ -128,19 +127,27 @@ class ExportService(
     /**
      * Builds every requested artifact. Never throws for a missing mesh: it just omits it - and
      * says so in the protocol, through [Request.routeMeshes]'s `unbuildable` labels.
+     *
+     * @param atMillis the instant this export is stamped with. The caller that also names the
+     *   destination folder **must** pass the same value it used for [fileStem]: the folder and the
+     *   files inside it are one export, and a screen that read the clock twice could create
+     *   `ConstructAR_Kueche_20260314-1015/` holding `ConstructAR_Kueche_20260314-1016.pdf` when the
+     *   minute turned between the two reads (finding 122).
+     * @param stem the file-name stem, derived from [atMillis] unless the caller already has it.
      */
-    fun build(request: Request): List<ExportArtifact> {
-        val stamp = clock()
-        val stem = fileStem(request.project, stamp)
+    fun build(
+        request: Request,
+        atMillis: Long = clock(),
+        stem: String = fileStem(request.project, atMillis),
+    ): List<ExportArtifact> {
         val timestampLabel = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ROOT)
-            .format(Date(stamp))
+            .format(Date(atMillis))
         val artifacts = ArrayList<ExportArtifact>(4)
 
         if (request.includePdf) {
             artifacts += ExportArtifact(
                 fileName = "$stem.pdf",
                 mimeType = "application/pdf",
-                byteSizeEstimate = 350_000L,
                 write = { output ->
                     pdfWriter.write(
                         ProtocolPdfWriter.Content(
@@ -181,7 +188,6 @@ class ExportService(
             artifacts += ExportArtifact(
                 fileName = "$stem.csv",
                 mimeType = "text/csv",
-                byteSizeEstimate = csv.toByteArray(Charsets.UTF_8).size.toLong(),
                 write = { output -> output.write(csv.toByteArray(Charsets.UTF_8)) },
             )
         }
@@ -194,7 +200,6 @@ class ExportService(
             artifacts += ExportArtifact(
                 fileName = "$stem-order.csv",
                 mimeType = "text/csv",
-                byteSizeEstimate = orderList.toByteArray(Charsets.UTF_8).size.toLong(),
                 write = { output -> output.write(orderList.toByteArray(Charsets.UTF_8)) },
             )
         }
@@ -217,7 +222,6 @@ class ExportService(
             artifacts += ExportArtifact(
                 fileName = "$stem.glb",
                 mimeType = "model/gltf-binary",
-                byteSizeEstimate = bytes.size.toLong(),
                 write = { output -> output.write(bytes) },
             )
         }
@@ -228,7 +232,6 @@ class ExportService(
             artifacts += ExportArtifact(
                 fileName = "$stem.ply",
                 mimeType = "application/octet-stream",
-                byteSizeEstimate = ascii.length.toLong(),
                 write = { output -> output.write(ascii.toByteArray(Charsets.US_ASCII)) },
             )
         }
@@ -236,33 +239,6 @@ class ExportService(
         return artifacts
     }
 
-    /**
-     * Writes every artifact into [directory] (created when missing) and returns the files in
-     * the order they were produced. Failures are per-file: one bad mesh must not cost the
-     * operator the protocol PDF.
-     */
-    fun writeToDirectory(request: Request, directory: java.io.File): Result {
-        if (!directory.exists() && !directory.mkdirs()) {
-            return Result(emptyList(), listOf("Cannot create export folder: ${directory.absolutePath}"))
-        }
-        val written = ArrayList<java.io.File>(4)
-        val errors = ArrayList<String>(2)
-        for (artifact in build(request)) {
-            val file = java.io.File(directory, artifact.fileName)
-            try {
-                file.outputStream().use { artifact.write(it) }
-                written += file
-            } catch (error: Throwable) {
-                errors += "${artifact.fileName}: ${error.message ?: error.javaClass.simpleName}"
-                file.delete()
-            }
-        }
-        return Result(written, errors)
-    }
-
-    data class Result(val files: List<java.io.File>, val errors: List<String>) {
-        val isSuccess: Boolean get() = files.isNotEmpty()
-    }
 
     companion object {
         /**

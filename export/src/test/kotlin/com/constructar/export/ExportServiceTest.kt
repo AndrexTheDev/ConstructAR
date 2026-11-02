@@ -111,6 +111,32 @@ class ExportServiceTest {
         assertEquals(artifacts.size, artifacts.map { it.fileName }.distinct().size)
     }
 
+    /**
+     * The folder and the files inside it are one export.
+     *
+     * The screen names the destination folder with `fileStem(project)` and `build` named the files
+     * with a second, independent clock read. When the minute turned between the two, the operator
+     * got `ConstructAR_Neubau_20260314-1015/` containing `ConstructAR_Neubau_20260314-1016.pdf`,
+     * `.csv`, `.glb` and `.ply` - a folder that does not match what is in it, and the success
+     * message names the folder (finding 122).
+     */
+    @Test
+    fun `every file carries the stamp of the export, not a second clock read`() {
+        val project = measuredProject()
+        val at = 1_778_616_000_000L
+        // A clock that has already ticked past the minute the folder was named with.
+        val ticking = ExportService(clock = { at + 60_000L })
+
+        val stem = ticking.fileStem(project, at)
+        val names = ticking.build(request(project), atMillis = at, stem = stem).map { it.fileName }
+
+        assertTrue(names.toString(), names.isNotEmpty())
+        assertTrue(names.toString(), names.all { it.startsWith(stem) })
+        // And the default is still the same single stamp: caller-free call sites agree too.
+        val fromDefault = ticking.build(request(project), atMillis = at).map { it.fileName }
+        assertEquals(names, fromDefault)
+    }
+
     @Test
     fun `the order list is a file of its own, next to the full bill of materials`() {
         val project = measuredProject()

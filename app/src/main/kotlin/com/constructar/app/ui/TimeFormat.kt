@@ -71,9 +71,8 @@ internal fun formatDayLabel(epochMs: Long, timeZone: TimeZone = TimeZone.getDefa
  * (finding 120).
  *
  * Compared as **formatted local dates** rather than by arithmetic on 86 400 000 ms: a daylight
- * saving change makes one local day 23 or 25 hours long, and a zone with a non-hour offset would
- * be off by that offset. Two instants 26 hours apart can share a local day, and two instants two
- * hours apart can straddle one; only the calendar knows.
+ * saving change makes one local day 23 or 25 hours long, so a 24-hour shift can sit inside a
+ * single local day, and two instants two minutes apart can straddle two. Only the calendar knows.
  */
 internal fun endsOnLaterDay(startMs: Long, endMs: Long, timeZone: TimeZone = TimeZone.getDefault()): Boolean =
     formatDayLabel(endMs, timeZone) != formatDayLabel(startMs, timeZone)

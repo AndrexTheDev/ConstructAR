@@ -184,7 +184,11 @@ fun ExportScreen(
                     }
                     val root = DocumentFile.fromTreeUri(context, uri)
                         ?: error(context.getString(R.string.export_folder_inaccessible))
-                    val stem = exportService.fileStem(project)
+                    // One clock read, one stamp: the folder and the files inside it are one
+                    // export. Reading the clock again inside `build` let a minute tick between
+                    // the two and named the folder differently from its contents (finding 122).
+                    val at = System.currentTimeMillis()
+                    val stem = exportService.fileStem(project, at)
                     val target = root.findFile(stem)?.takeIf { it.isDirectory }
                         ?: root.createDirectory(stem)
                         ?: error(context.getString(R.string.export_folder_inaccessible))
@@ -215,6 +219,8 @@ fun ExportScreen(
                             photosTotal = FieldPhotos.ordered(project).size,
                             logo = logo,
                         ),
+                        atMillis = at,
+                        stem = stem,
                     )
                     var written = 0
                     artifacts.forEach { artifact ->
