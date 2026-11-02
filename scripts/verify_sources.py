@@ -450,17 +450,21 @@ POSE_GRAPH_CALL = re.compile(
 
 STALE_LOOP_CLAIMS = (
     ("README.md", "proximity loop-closure proposer are used"),
+    ("README.md", "loop-closure pose graph, thermal-aware"),
     ("docs/SETUP.md", "runs the optimiser and refreshes the node poses"),
+    ("docs/SETUP.md", "Expected: run the loop closure"),
 )
 
 
 def check_loop_closure_claim() -> None:
     """A document may not promise a loop closure that nothing feeds (finding 98).
 
-    Three documents described the loop closure as present behaviour - README's *Optional pieces*
+    Four documents described the loop closure as present behaviour - README's *Optional pieces*
     ("without RTAB-Map the built-in pose graph and proximity loop-closure proposer are used"),
     README's drift bullet ("the pose graph redistributes a closure over the whole trajectory"),
-    and SETUP.md 5.2 ("runs the optimiser and refreshes the node poses") - while the truth was
+    SETUP.md 5.2 ("runs the optimiser and refreshes the node poses"), SETUP.md's troubleshooting
+    table ("Expected: run the loop closure") and ARCHITECTURE.md's pose-graph section - while
+    the truth was
     that no line of `:app` or `:ar-engine` ever called `optimizePoseGraph`, `addPoseNode`,
     `addPoseEdge` or `loopClosureCandidates`, and the JNI exposed no keyframe feed at all. The
     pose graph, the proximity proposer and the RTAB-Map bridge were built and host-tested, and
@@ -469,13 +473,14 @@ def check_loop_closure_claim() -> None:
     never ran.
 
     The rule reads the truth from the code: if some non-test, non-bridge Kotlin file calls the
-    pose graph, the documents must stop carrying the marker; if nothing does, both documents
-    must carry it. Either direction fails, so wiring the graph forces the docs back and unwiring
-    it cannot be papered over.
+    pose graph, the documents must stop carrying the marker; if nothing does, all of them must
+    carry it. Either direction fails, so wiring the graph forces the docs back and unwiring it
+    cannot be papered over, and the four stale sentences are named so they cannot return.
     """
     documents = {
         "README.md": ROOT / "README.md",
         "docs/SETUP.md": ROOT / "docs" / "SETUP.md",
+        "docs/ARCHITECTURE.md": ROOT / "docs" / "ARCHITECTURE.md",
     }
     texts = {name: path.read_text(encoding="utf-8") for name, path in documents.items()}
 

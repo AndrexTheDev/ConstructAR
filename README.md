@@ -47,8 +47,9 @@ a 3D model for BIM — **without a single byte leaving the device**.
 | **E** | Local export: PDF protocol, CSV material list, `.glb` (glTF 2.0 binary) and `.ply` | `export/` | Written through the Storage Access Framework; no media storage permission, no share-to-cloud |
 
 Plus: auto-torch with hysteresis, monocular depth (Depth Anything V2 Small) fused into the
-metric depth field, loop-closure pose graph, thermal-aware degradation, and explicit handling
-for every way AR can fail on a site.
+metric depth field, a loop-closure pose graph (built and host-tested — *not yet driven by the
+scan pipeline*, see finding 98), thermal-aware degradation, and explicit handling for every way
+AR can fail on a site.
 
 **Depth fusion policy.** ARCore depth is metric but holey; the network is dense but only
 relative. `AiDepthFusion` therefore lets the network **fill holes only** — a confident ARCore

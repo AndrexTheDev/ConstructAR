@@ -95,7 +95,9 @@ with the SDF gradient. Output is un-welded per face, which is what both Filament
 block-sparse Hessian solved by preconditioned conjugate gradient, backtracking line search (a
 full step overshoots on a room with one closure), snapshot/rollback so a diverging iteration can
 never corrupt the trajectory. Loop closures carry 100× the odometry weight because they are
-appearance-verified.
+appearance-verified. The graph is *not yet driven by the scan pipeline* (finding 98): it is
+host-tested and reachable from `NativeSlamEngine`, but no keyframe reaches it today, so the app
+measures on ARCore's own tracking.
 
 **Monocular depth fusion.** Optional and strictly additive:
 `YuvFrame` copies the camera planes on the render thread (~0.2 ms), the inference worker runs
