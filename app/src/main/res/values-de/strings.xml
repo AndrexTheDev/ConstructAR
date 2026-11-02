@@ -334,6 +334,7 @@
     <string name="field_time_total">Gesamt</string>
     <string name="field_time_empty">Noch keine Zeit erfasst.</string>
     <string name="field_time_open">läuft</string>
+    <string name="field_time_next_day">%1$s (Folgetag)</string>
     <string name="field_time_range">%1$s – %2$s</string>
     <string name="field_diary_title">Bautagebuch</string>
     <string name="field_diary_hint">Was ist heute passiert?</string>

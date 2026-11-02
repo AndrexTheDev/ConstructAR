@@ -334,6 +334,7 @@
     <string name="field_time_total">Total</string>
     <string name="field_time_empty">Aucun temps enregistré.</string>
     <string name="field_time_open">en cours</string>
+    <string name="field_time_next_day">%1$s (lendemain)</string>
     <string name="field_time_range">%1$s – %2$s</string>
     <string name="field_diary_title">Journal de chantier</string>
     <string name="field_diary_hint">Que s’est-il passé aujourd’hui ?</string>

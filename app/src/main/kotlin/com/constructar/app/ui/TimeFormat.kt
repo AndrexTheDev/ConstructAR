@@ -56,3 +56,20 @@ internal fun formatDayLabel(epochMs: Long, timeZone: TimeZone = TimeZone.getDefa
     SimpleDateFormat("dd.MM.yyyy", Locale.ROOT).apply {
         this.timeZone = timeZone
     }.format(Date(epochMs))
+
+/**
+ * Whether [endMs] falls on a different **local** day than [startMs].
+ *
+ * A session is two instants, and both the field book and the protocol print the *start's* date with
+ * the two clock times: a shift from 22:00 to 01:30 therefore read
+ * `12.05.2026 | 22:00 | 01:30 | 3 h 30 min` - a row that ends before it begins, on the page the
+ * customer signs, next to a duration that contradicts it. The end cell says "(next day)" instead
+ * (finding 120).
+ *
+ * Compared as **formatted local dates** rather than by arithmetic on 86 400 000 ms: a daylight
+ * saving change makes one local day 23 or 25 hours long, and a zone with a non-hour offset would
+ * be off by that offset. Two instants 26 hours apart can share a local day, and two instants two
+ * hours apart can straddle one; only the calendar knows.
+ */
+internal fun endsOnLaterDay(startMs: Long, endMs: Long, timeZone: TimeZone = TimeZone.getDefault()): Boolean =
+    formatDayLabel(endMs, timeZone) != formatDayLabel(startMs, timeZone)

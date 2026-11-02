@@ -346,6 +346,7 @@
     <string name="field_time_total">Razem</string>
     <string name="field_time_empty">Nie zapisano jeszcze czasu.</string>
     <string name="field_time_open">trwa</string>
+    <string name="field_time_next_day">%1$s (następny dzień)</string>
     <string name="field_time_range">%1$s – %2$s</string>
     <string name="field_diary_title">Dziennik budowy</string>
     <string name="field_diary_hint">Co się dziś wydarzyło?</string>

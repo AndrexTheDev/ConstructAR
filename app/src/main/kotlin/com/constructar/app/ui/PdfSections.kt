@@ -9,6 +9,7 @@ package com.constructar.app.ui
 import com.constructar.core.model.DefectItem
 import com.constructar.core.model.DefectSeverity
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.model.WorkSession
 import com.constructar.core.model.WorkTime
 import com.constructar.core.price.MoneyFormatter
 import com.constructar.core.price.Pricing
@@ -39,6 +40,13 @@ internal data class SiteFileTexts(
     val columnDuration: String,
     val totalLabel: String,
     val runningLabel: String,
+    /**
+     * End cell of a session that runs past midnight; `%1$s` is the clock time.
+     *
+     * The table prints the start's date once, so an overnight shift used to read as if it ended
+     * before it began (finding 120).
+     */
+    val nextDayLabel: String,
     /** Printed under the time table while a session is still open; `%1$s` is the duration. */
     val openSessionNote: String,
     val diaryTitle: String,
@@ -89,7 +97,7 @@ internal fun buildSiteFileSections(
             listOf(
                 formatDateLabel(session.startEpochMs),
                 formatTimeLabel(session.startEpochMs),
-                session.endEpochMs?.let { formatTimeLabel(it) } ?: texts.runningLabel,
+                endCell(session, texts),
                 duration(WorkTime.sessionMillis(session, nowMs), texts),
             )
         }
@@ -146,6 +154,23 @@ private fun defectRow(defect: DefectItem, texts: SiteFileTexts): List<String> = 
     },
     if (defect.resolved) texts.resolvedStatus else texts.openStatus,
 )
+
+/**
+ * The end cell of a time row: the clock time, marked when the session ran past midnight.
+ *
+ * The date column carries the *start* day only, so an unmarked `01:30` beside a `22:00` start reads
+ * as a shift that ended an hour and a half before it began - on the page the customer signs, next to
+ * a duration that contradicts it (finding 120).
+ */
+private fun endCell(session: WorkSession, texts: SiteFileTexts): String {
+    val end = session.endEpochMs ?: return texts.runningLabel
+    val time = formatTimeLabel(end)
+    return if (endsOnLaterDay(session.startEpochMs, end)) {
+        String.format(Locale.ROOT, texts.nextDayLabel, time)
+    } else {
+        time
+    }
+}
 
 /** `2 h 15 min`, or `45 min` — the same split the site file shows on screen. */
 private fun duration(millis: Long, texts: SiteFileTexts): String =

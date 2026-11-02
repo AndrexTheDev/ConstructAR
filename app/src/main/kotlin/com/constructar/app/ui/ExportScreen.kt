@@ -127,6 +127,7 @@ fun ExportScreen(
         columnDuration = stringResource(R.string.pdf_column_duration),
         totalLabel = stringResource(R.string.pdf_label_work_total),
         runningLabel = stringResource(R.string.field_time_open),
+        nextDayLabel = stringResource(R.string.field_time_next_day),
         openSessionNote = stringResource(R.string.pdf_note_open_session),
         diaryTitle = stringResource(R.string.pdf_section_diary),
         defectsTitle = stringResource(R.string.pdf_section_defects),

@@ -334,6 +334,7 @@
     <string name="field_time_total">Total</string>
     <string name="field_time_empty">No time recorded yet.</string>
     <string name="field_time_open">running</string>
+    <string name="field_time_next_day">%1$s (next day)</string>
     <string name="field_time_range">%1$s – %2$s</string>
     <string name="field_diary_title">Site diary</string>
     <string name="field_diary_hint">What happened today?</string>

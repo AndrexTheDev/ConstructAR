@@ -460,7 +460,16 @@ private fun durationLabel(millis: Long): String {
 @Composable
 private fun sessionLabel(session: WorkSession, nowMs: Long): String {
     val start = formatTimeLabel(session.startEpochMs)
-    val end = session.endEpochMs?.let { formatTimeLabel(it) } ?: stringResource(R.string.field_time_open)
+    val end = session.endEpochMs?.let { end ->
+        // A shift that ran past midnight says so: the label carries the start's date only, so an
+        // unmarked "01:30" would read as an end before the beginning (finding 120).
+        val time = formatTimeLabel(end)
+        if (endsOnLaterDay(session.startEpochMs, end)) {
+            stringResource(R.string.field_time_next_day, time)
+        } else {
+            time
+        }
+    } ?: stringResource(R.string.field_time_open)
     return formatDateLabel(session.startEpochMs) + " · " +
         stringResource(R.string.field_time_range, start, end) + " · " +
         durationLabel(WorkTime.sessionMillis(session, nowMs))
