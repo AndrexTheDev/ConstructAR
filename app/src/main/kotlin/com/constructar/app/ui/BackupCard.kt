@@ -221,12 +221,19 @@ fun BackupCard(
             )
             outcome?.let { current ->
                 val text = when (current) {
-                    is BackupOutcome.Saved -> stringResource(
-                        R.string.backup_saved,
+                    // Two plurals, because one sentence cannot pluralise two counts: "1 project
+                    // and 5 photos" is right, "3 projects and 1 photos" is not, and a card that
+                    // says "1 projects" is the first thing a customer sees (finding 94).
+                    is BackupOutcome.Saved -> pluralStringResource(
+                        R.plurals.backup_saved_projects,
                         current.projects,
-                        current.photos,
+                        current.projects,
                     )
-                    is BackupOutcome.Restored -> stringResource(R.string.backup_imported, current.count)
+                    is BackupOutcome.Restored -> pluralStringResource(
+                        R.plurals.backup_imported,
+                        current.count,
+                        current.count,
+                    )
                     // The detail is the localised sentence that explains *this* failure: blaming
                     // the folder for an empty app is the wrong advice.
                     is BackupOutcome.Failed -> current.detail
@@ -242,6 +249,19 @@ fun BackupCard(
                         else -> SiteColors.accent
                     },
                 )
+                // The photo count on its own line and in its own plural, so the sentence above
+                // can be a sentence (finding 94).
+                if (current is BackupOutcome.Saved && current.photos > 0) {
+                    Text(
+                        text = pluralStringResource(
+                            R.plurals.backup_saved_photos,
+                            current.photos,
+                            current.photos,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 // A room that was not backed up is the worse of the two, so it comes first and in
                 // the alarm colour: the job itself is not in the folder (finding 85).
                 if (current is BackupOutcome.Saved && current.projectsSkipped > 0) {

@@ -91,7 +91,10 @@
     <string name="export_ply_desc">PLY-Punktwolke oder Netz (CloudCompare, MeshLab)</string>
     <string name="export_choose_folder">In Ordner speichern…</string>
     <string name="export_saving">Speichern…</string>
-    <string name="export_success">%1$d Dateien in %2$s gespeichert.</string>
+    <plurals name="export_success">
+        <item quantity="one">1 Datei in %2$s gespeichert.</item>
+        <item quantity="other">%1$d Dateien in %2$s gespeichert.</item>
+    </plurals>
     <string name="export_failed">Export fehlgeschlagen: %1$s</string>
     <string name="export_partial">Nur %1$d von %2$d Dateien wurden in %3$s gespeichert.</string>
     <string name="export_meshless">%1$d von %2$d Dateien in %3$s gespeichert. Keine Strecke ließ sich als 3D-Geometrie bauen, daher wurden GLB und PLY übersprungen.</string>
@@ -285,8 +288,18 @@
     <string name="backup_note">Jedes Projekt ist eine Datei in dieser App. Kopiere sie in einen Ordner deiner Wahl - keine Cloud, außer du wählst eine - und lies sie auf jedem Telefon wieder ein.</string>
     <string name="backup_export">Alle Projekte sichern</string>
     <string name="backup_import">Projekte wiederherstellen</string>
-    <string name="backup_saved">%1$d Projekte und %2$d Fotos gesichert</string>
-    <string name="backup_imported">%1$d Projekte wiederhergestellt</string>
+    <plurals name="backup_saved_projects">
+        <item quantity="one">1 Projekt gesichert</item>
+        <item quantity="other">%1$d Projekte gesichert</item>
+    </plurals>
+    <plurals name="backup_saved_photos">
+        <item quantity="one">1 Foto gesichert</item>
+        <item quantity="other">%1$d Fotos gesichert</item>
+    </plurals>
+    <plurals name="backup_imported">
+        <item quantity="one">1 Projekt wiederhergestellt</item>
+        <item quantity="other">%1$d Projekte wiederhergestellt</item>
+    </plurals>
     <string name="backup_failed">Sicherung fehlgeschlagen - prüfe den Ordner und versuche es erneut.</string>
     <string name="backup_nothing">Noch nichts zu sichern - lege zuerst ein Projekt an.</string>
     <string name="backup_photos_skipped">%1$d von %2$d Fotos konnten nicht kopiert werden.</string>

@@ -91,7 +91,10 @@
     <string name="export_ply_desc">Nube de puntos o malla PLY (CloudCompare, MeshLab)</string>
     <string name="export_choose_folder">Guardar en carpeta…</string>
     <string name="export_saving">Guardando…</string>
-    <string name="export_success">Se han guardado %1$d archivos en %2$s.</string>
+    <plurals name="export_success">
+        <item quantity="one">Se ha guardado 1 archivo en %2$s.</item>
+        <item quantity="other">Se han guardado %1$d archivos en %2$s.</item>
+    </plurals>
     <string name="export_failed">Error al exportar: %1$s</string>
     <string name="export_partial">Solo se guardaron %1$d de %2$d archivos en %3$s.</string>
     <string name="export_meshless">Se guardaron %1$d de %2$d archivos en %3$s. Ninguna tirada se pudo convertir en geometría 3D, así que se omitieron GLB y PLY.</string>
@@ -285,8 +288,18 @@
     <string name="backup_note">Cada proyecto es un archivo de esta app. Cópialos a una carpeta que elijas (sin nube, salvo que la elijas) y recupéralos en cualquier teléfono.</string>
     <string name="backup_export">Copiar todos los proyectos</string>
     <string name="backup_import">Restaurar proyectos</string>
-    <string name="backup_saved">%1$d proyectos y %2$d fotos copiados</string>
-    <string name="backup_imported">%1$d proyectos restaurados</string>
+    <plurals name="backup_saved_projects">
+        <item quantity="one">1 proyecto copiado</item>
+        <item quantity="other">%1$d proyectos copiados</item>
+    </plurals>
+    <plurals name="backup_saved_photos">
+        <item quantity="one">1 foto copiada</item>
+        <item quantity="other">%1$d fotos copiadas</item>
+    </plurals>
+    <plurals name="backup_imported">
+        <item quantity="one">1 proyecto restaurado</item>
+        <item quantity="other">%1$d proyectos restaurados</item>
+    </plurals>
     <string name="backup_failed">Error en la copia: revisa la carpeta e inténtalo de nuevo.</string>
     <string name="backup_nothing">Aún no hay nada que copiar: crea primero un proyecto.</string>
     <string name="backup_photos_skipped">No se pudieron copiar %1$d de %2$d fotos.</string>

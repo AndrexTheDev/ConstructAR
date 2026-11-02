@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
@@ -408,7 +409,14 @@ fun ExportScreen(
 
         status?.let { current ->
             val text = when (current) {
-                is ExportStatus.Saved -> stringResource(R.string.export_success, current.count, current.folder)
+                // A plurals resource, not a sentence with a number in it: one file is not
+                // "1 files" in any of the six languages (finding 94).
+                is ExportStatus.Saved -> pluralStringResource(
+                    R.plurals.export_success,
+                    current.count,
+                    current.count,
+                    current.folder,
+                )
                 is ExportStatus.Partial -> stringResource(
                     R.string.export_partial,
                     current.saved,
