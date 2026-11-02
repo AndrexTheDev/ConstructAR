@@ -343,6 +343,7 @@ class ArMeasureController(private val context: Context) {
             meshVertexCount = state.vertexCount,
             meshTriangleCount = state.triangleCount,
             depthCoverage = tracking.status.value.scanCoverage,
+            scanLimited = state.hitBlockBudget,
         )
     }
 

@@ -64,6 +64,17 @@ data class PdfLabels(
         "Expected accuracy: 1-2 cm on a flat wall between 1 and 4 m, 3-6 cm where only depth " +
             "data is available, about 1 %% of the length on a diagonal. Confidence is the " +
             "weakest point of a run - below %1\$d %% it needs a second look.",
+    /**
+     * Printed under the summary when the scan volume hit its block budget; no placeholders.
+     *
+     * A full volume stops allocating blocks, so the mesh freezes at its current extent and the
+     * captured room is only part of the room (finding 100). The document has to say which part is
+     * affected: the lengths and the fittings come from anchor-refined taps and are unaffected,
+     * the 3D model is not. Without this line a partial capture was handed over looking complete.
+     */
+    val scanLimitedNote: String =
+        "Scan limit reached: the 3D model covers only part of the room. Lengths, fittings and " +
+            "prices are unaffected - what is missing is the geometry outside the captured volume.",
     /** Printed under the runs table when part of the room could not be placed; `%1$s` = labels. */
     val recoveredNote: String =
         "Recovered after an interruption - lengths and fittings are exact, the 3D position is not " +

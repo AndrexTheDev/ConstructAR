@@ -107,6 +107,7 @@
     <string name="export_order_length">Bestelllänge inkl. Verschnitt: %1$s</string>
     <string name="export_fittings">Scheiben %1$d · Kupplungen %2$d · Bögen %3$d</string>
     <string name="export_room_scan">Raumscan aufgenommen: %1$d k Dreiecke - im Protokoll; das 3D-Modell enthält die Strecken</string>
+    <string name="export_room_scan_limited">Nur ein Teil des Raums wurde erfasst (Scan-Limit) - das 3D-Modell ist unvollständig.</string>
     <string name="export_offline_note">Dateien werden in den gewählten Ordner geschrieben. Nichts wird hochgeladen; Export funktioniert im Flugmodus und im Keller.</string>
     <string name="export_about">%1$s %2$s · %3$s</string>
     <string name="project_none">Kein Projekt geöffnet</string>
@@ -281,6 +282,7 @@
     <string name="pdf_column_order_meters">Bestellung (m)</string>
     <string name="pdf_procurement_note">Bestelllängen enthalten die Reserve. Werte aus anker-verfeinerten Knotenpunkten - prüfe kritische Strecken vor dem Zuschnitt mit dem Maßband.</string>
     <string name="pdf_note_accuracy">Erwartete Genauigkeit: 1-2 cm auf einer ebenen Wand zwischen 1 und 4 m, 3-6 cm wo nur Tiefendaten vorliegen, rund 1 %% der Länge auf einer Diagonale. Die Konfidenz ist der schwächste Punkt einer Strecke - unter %1$d %% muss sie nachgeprüft werden.</string>
+    <string name="pdf_note_scan_limited">Scan-Limit erreicht: Das 3D-Modell deckt nur einen Teil des Raums ab. Längen, Fittings und Preise sind davon nicht betroffen - es fehlt die Geometrie außerhalb des erfassten Bereichs.</string>
     <string name="pdf_note_recovered">Nach einem Abbruch geborgen - Längen und Fittings stimmen, die 3D-Position fehlt im Modell: %1$s</string>
     <string name="pdf_note_unbuildable">Für diese Strecken ließ sich keine 3D-Geometrie bauen - Längen und Fittings zählen trotzdem: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - auf dem Gerät erzeugt</string>

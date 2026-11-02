@@ -109,6 +109,7 @@
     <string name="export_order_length">Długość zamówienia z zapasem: %1$s</string>
     <string name="export_fittings">Uchwyty %1$d · złączki %2$d · kolanka %3$d</string>
     <string name="export_room_scan">Zeskanowano pomieszczenie: %1$d tys. trójkątów - w protokole; model 3D zawiera trasy</string>
+    <string name="export_room_scan_limited">Zeskanowano tylko część pomieszczenia (limit skanowania) - model 3D jest niekompletny.</string>
     <string name="export_offline_note">Pliki są zapisywane w wybranym folderze. Nic nie jest wysyłane; eksport działa w trybie samolotowym i w piwnicy.</string>
     <string name="export_about">%1$s %2$s · %3$s</string>
     <string name="project_none">Brak otwartego obiektu</string>
@@ -287,6 +288,7 @@
     <string name="pdf_column_order_meters">Zamówienie (m)</string>
     <string name="pdf_procurement_note">Długości zamówienia zawierają zapas budowlany. Wartości z węzłów doprecyzowanych kotwicami - krytyczne trasy sprawdź miarą przed cięciem.</string>
     <string name="pdf_note_accuracy">Oczekiwana dokładność: 1-2 cm na płaskiej ścianie między 1 a 4 m, 3-6 cm tam, gdzie są tylko dane głębi, około 1 %% długości na przekątnej. Pewność to najsłabszy punkt trasy - poniżej %1$d %% trzeba ją sprawdzić.</string>
+    <string name="pdf_note_scan_limited">Osiągnięto limit skanowania: model 3D obejmuje tylko część pomieszczenia. Długości, kształtki i ceny pozostają bez zmian - brakuje geometrii poza zeskanowanym obszarem.</string>
     <string name="pdf_note_recovered">Odzyskana po przerwaniu - długości i kształtki są dokładne, pozycji 3D nie ma w modelu: %1$s</string>
     <string name="pdf_note_unbuildable">Nie udało się utworzyć geometrii 3D dla tych tras - długości i kształtki nadal się liczą: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - wygenerowano na urządzeniu</string>

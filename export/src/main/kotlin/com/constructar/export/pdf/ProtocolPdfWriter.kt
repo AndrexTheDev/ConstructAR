@@ -230,6 +230,13 @@ class ProtocolPdfWriter(
             }
             y = drawKeyValueGrid(page.canvas, summary, y)
 
+            // A capture that hit the volume limit is a valid measurement of the runs it holds,
+            // but it is not the whole room (finding 100).
+            scanLimitedNote(scan?.scanLimited == true, content.labels.scanLimitedNote)?.let { note ->
+                y += 4
+                y = drawNote(page.canvas, note, y)
+            }
+
             // How exact the numbers on this page are, and what the confidence column means.
             // The shop page promised this line in six languages while the protocol carried only
             // an unexplained percentage (finding 88).
@@ -650,6 +657,17 @@ internal fun unbuildableRunsNote(labels: List<String>, template: String): String
  */
 internal fun accuracyNote(template: String, trusted: Float = HitConfidence.RUN_TRUSTED): String =
     String.format(Locale.ROOT, template, Math.round(trusted * 100f))
+
+/**
+ * The line the summary gets when the volume ran out of blocks, or `null` when the whole capture
+ * fitted (finding 100).
+ *
+ * Out of the drawing code so the decision is testable, and so the two ways of having nothing to
+ * say - a whole-room capture, and a project with no scan at all - both end in `null` rather than
+ * in a sentence about a limit nobody reached.
+ */
+internal fun scanLimitedNote(scanLimited: Boolean, template: String): String? =
+    if (scanLimited) template else null
 
 /**
  * The line the photo appendix gets when it cannot hold every photo on the job, or `null` when it

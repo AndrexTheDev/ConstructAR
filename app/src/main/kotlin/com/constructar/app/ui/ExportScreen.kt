@@ -319,6 +319,15 @@ fun ExportScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    // A scan that hit its block budget covered only part of the room, and the
+                    // operator is about to hand the model over (finding 100).
+                    if (scan.scanLimited) {
+                        Text(
+                            stringResource(R.string.export_room_scan_limited),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SiteColors.warning,
+                        )
+                    }
                 }
             }
         }

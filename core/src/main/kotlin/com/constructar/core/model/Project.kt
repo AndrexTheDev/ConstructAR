@@ -31,6 +31,18 @@ data class ScanSummary(
     val poseGraphRmsMeters: Float = 0f,
     /** Fraction of the depth buffer that passed the confidence filter, 0..1. */
     val depthCoverage: Float = 0f,
+    /**
+     * True when the TSDF block budget was spent during this scan (finding 100).
+     *
+     * A full volume refuses every new block, so the mesh freezes at its current extent while the
+     * operator keeps walking: the capture is only part of the room. The HUD says so while the
+     * scanner is on screen, and this field is what makes the warning survive the scan -
+     * `ArMeasureController.scanSummary()` copies `ScanState.hitBlockBudget` here, the protocol
+     * prints a note from it, and the export screen refuses to present a partial capture as a
+     * whole room. Defaults to false so a project file written before this field existed still
+     * loads (see `ScanSummaryTest`).
+     */
+    val scanLimited: Boolean = false,
 ) {
     val volumeCubicMeters: Float
         get() = if (extentMin.size == 3 && extentMax.size == 3) {
