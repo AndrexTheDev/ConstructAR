@@ -8,6 +8,10 @@ name: native-tests
 # The C++ core (TSDF, Surface Nets, pose graph) has no Android dependency, so it is built and
 # tested with a plain compiler on every push. That keeps the geometry honest even when the
 # Gradle/NDK toolchain is unavailable in an environment.
+permissions:
+  contents: read
+  pull-requests: write
+
 on:
   push:
     paths:
@@ -39,8 +43,15 @@ jobs:
             native-slam/src/main/cpp/tests/host_tests.cpp \
             -o host_tests
 
+      # The run output is captured so a failure can be reported on the pull request at the end of
+      # the job: the Actions log endpoint redirects to a host that is not always reachable, and a
+      # failing assertion whose message cannot be read wastes a full CI cycle (finding 111's fix
+      # was diagnosed from a runner that only said "Run failed").
       - name: Run
-        run: ./host_tests
+        id: run_tests
+        run: |
+          set -o pipefail
+          ./host_tests 2>&1 | tee /tmp/host_tests.log
 
       # The optional RTAB-Map branch, compiled in the configuration the app would use. No
       # RTAB-Map checkout is available here, so the translation unit is built against
@@ -62,3 +73,26 @@ jobs:
       # against fake trees - `cmake` alone, no NDK, no compiler (finding 110).
       - name: Check the RTAB-Map layout probe
         run: cmake -P native-slam/src/main/cpp/tests/rtabmap-layout-check.cmake
+
+      - name: Report the failure on the pull request
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          pr=$(gh pr list --head "$GITHUB_REF_NAME" --json number -q '.[0].number' 2>/dev/null || true)
+          if [ -z "${pr:-}" ]; then echo "no open PR for $GITHUB_REF_NAME"; exit 0; fi
+          {
+            echo "### native-tests failed"
+            echo ""
+            echo "commit \`$GITHUB_SHA\` on \`$GITHUB_REF_NAME\`, job ${{ matrix.compiler }} ${{ matrix.optimisation }}"
+            echo ""
+            echo '```'
+            if [ -f /tmp/host_tests.log ]; then
+              tail -n 60 /tmp/host_tests.log
+            else
+              echo "the build failed before the tests ran"
+            fi
+            echo '```'
+          } > /tmp/comment.md
+          gh pr comment "$pr" --body-file /tmp/comment.md
