@@ -8,6 +8,7 @@ package com.constructar.app.ui
 
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -175,6 +176,12 @@ fun ProjectScreen(
     val customerDirty = customerName != project.customerName ||
         customerAddress != project.customerAddress ||
         customerPhone != project.customerPhone
+    // Typed work is work: the back arrow and the system back gesture used to drop every unsaved
+    // field without a question, while the AR screen has asked before discarding a run since
+    // finding 26 (finding 124).
+    val unsavedEdits = ProjectEdits.lostByLeaving(customerDirty, priceDirty)
+    var confirmLeave by rememberSaveable(project.id) { mutableStateOf(false) }
+    BackHandler(enabled = unsavedEdits) { confirmLeave = true }
 
     Column(
         modifier = Modifier
@@ -185,7 +192,7 @@ fun ProjectScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
+            IconButton(onClick = { if (unsavedEdits) confirmLeave = true else onBack() }) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.paywall_back),
@@ -607,6 +614,27 @@ fun ProjectScreen(
             },
             dismissButton = {
                 TextButton(onClick = { renameOpen = false }) { Text(stringResource(R.string.home_cancel)) }
+            },
+        )
+    }
+
+    if (confirmLeave) {
+        AlertDialog(
+            onDismissRequest = { confirmLeave = false },
+            title = { Text(stringResource(R.string.project_leave_title)) },
+            text = { Text(stringResource(R.string.project_leave_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmLeave = false
+                        onBack()
+                    },
+                ) { Text(stringResource(R.string.project_leave_discard)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmLeave = false }) {
+                    Text(stringResource(R.string.project_leave_keep))
+                }
             },
         )
     }

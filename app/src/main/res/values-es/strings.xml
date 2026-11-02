@@ -395,6 +395,10 @@
     <string name="project_costs_title">Lo que vale el trabajo</string>
     <string name="project_costs_rate">Precio por hora (€)</string>
     <string name="project_costs_invalid">No es un importe: escríbelo como 48,00 o 48.00</string>
+    <string name="project_leave_title">¿Descartar los cambios?</string>
+    <string name="project_leave_body">Los datos del cliente, la tarifa o el importe de material que has escrito no están guardados.</string>
+    <string name="project_leave_discard">Descartar</string>
+    <string name="project_leave_keep">Seguir editando</string>
     <string name="project_costs_material">Material a tanto alzado (€)</string>
     <string name="project_costs_labour">Mano de obra</string>
     <string name="project_costs_total">Total neto</string>
