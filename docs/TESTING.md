@@ -96,6 +96,16 @@ again. Each line names what was read, not what was assumed.
   0.16 → 0.08, the node lands on the weighted midpoint at exactly −1.2000 m), and a graph with no
   pinned node (identical cost and path to the pinned graph, so the solver does not silently no-op
   when the gauge is free). No defect in the optimiser.
+* **The JNI contract, side by side.** Every argument of `slam_jni.cpp` read against the Kotlin
+  that fills it: the depth row stride is in `uint16` *elements* on both sides (`plane.rowStride / 2`
+  at capture, `DepthFrameView::rowStrideElements` in C++, and the copy hands the integrator a
+  packed `width` stride anyway); the confidence image keeps ARCore's byte stride from capture to
+  the C++ index; the short/byte arrays are pinned and released with `JNI_ABORT` because they are
+  only read; `IntegrationResult`'s eight integers come back in the order Kotlin parses them; the
+  mesh payload `[vertices, triangles, positions(3n), normals(3n)]` plus its separate index array
+  matches `ScanMesh.fromPayload`, which checks the sizes before slicing; and the loop-candidate
+  triples are chunked by three with a partial triple dropped rather than read past. No mismatch —
+  the one thing that *was* wrong in this surface is finding 112.
 * **Surface Nets winding and placement.** 23 688 triangles of a fronto-parallel wall checked one by
   one: every face normal agrees with the vertex normal it was built from (23 688 / 23 688, zero
   disagreements, zero degenerate triangles), so nothing is inside-out for backface culling; the
