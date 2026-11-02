@@ -46,6 +46,24 @@ data class PdfLabels(
     val procurementNote: String =
         "Order lengths include the site waste factor. Figures are computed from anchor-refined " +
             "node positions; verify critical runs with a tape measure before cutting.",
+    /**
+     * The accuracy the protocol promises, printed under the summary; `%1$d` = the confidence bar.
+     *
+     * The shop page told every visitor, in six languages, that "the protocol states the expected
+     * error too" - and the protocol did not (finding 88). A customer signed a document that named
+     * no tolerance anywhere, next to a "Confidence" column that nobody had explained: a percentage
+     * with no unit and no bar is a number the reader has to take on trust, in the one file he signs.
+     *
+     * The figures are the design targets published in `README.md`, not new claims. The threshold
+     * is not written into the translation but filled in by `accuracyNote()`, so it cannot drift
+     * from [com.constructar.core.model.HitConfidence.RUN_TRUSTED] - the bar the HUD questions a
+     * run at and the bill of materials flags it by. Literal percent signs are `%%` because the
+     * writer formats this string.
+     */
+    val accuracyNote: String =
+        "Expected accuracy: 1-2 cm on a flat wall between 1 and 4 m, 3-6 cm where only depth " +
+            "data is available, about 1 %% of the length on a diagonal. Confidence is the " +
+            "weakest point of a run - below %1\$d %% it needs a second look.",
     /** Printed under the runs table when part of the room could not be placed; `%1$s` = labels. */
     val recoveredNote: String =
         "Recovered after an interruption - lengths and fittings are exact, the 3D position is not " +

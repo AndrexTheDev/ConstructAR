@@ -22,6 +22,7 @@ and most expensive to discover in a 12-minute Gradle run:
  10. the signature pad keeps its tap handler (finding 82)      (a tap is a signature)
  11. text the operator typed survives a rotation (finding 83)  (rememberSaveable, not remember)
  12. a money field is not keyed on the amount it writes (84)   (no re-formatting under the finger)
+ 13. every protocol states its expected error, in all six languages (88)
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -390,6 +391,37 @@ def check_typed_fields_are_saved() -> None:
                       f"`rememberSaveable`")
 
 
+def check_pdf_accuracy_note() -> None:
+    """The protocol must state its expected error in every language (finding 88).
+
+    The shop page told every visitor, in six languages, that "the protocol states the expected
+    error too". The protocol said nothing of the kind: no tolerance anywhere, and a "Confidence"
+    column that no line of the document explained. A customer signed a percentage with no unit and
+    no bar - in the one file he keeps. The sentence now exists; this rule keeps it existing, in all
+    six locales, with the figures a reader can act on and the placeholder the writer fills the
+    confidence bar into, so a translator cannot quietly reduce it to "accurate measurement".
+    """
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if not path.exists():
+            continue
+        strings, _ = load_locale(folder)
+        note = strings.get("pdf_note_accuracy")
+        if note is None:
+            add(path, "missing string 'pdf_note_accuracy' - the signed protocol would carry no "
+                      "accuracy statement at all")
+            continue
+        if "cm" not in note:
+            add(path, "'pdf_note_accuracy' names no centimetre figure - the expected error the "
+                      "shop page promises is the number the customer checks")
+        if "%%" not in note:
+            add(path, "'pdf_note_accuracy' has no escaped '%' - the accuracy is a percentage and "
+                      "String.format would throw on a bare one")
+        if "%1$d" not in note:
+            add(path, "'pdf_note_accuracy' has no %1$d placeholder - the confidence bar would be "
+                      "typed into the translation instead of coming from HitConfidence.RUN_TRUSTED")
+
+
 def check_draft_write_ordering() -> None:
     """Draft writes only inside `writeDraft`, which orders them (finding 74)."""
     for path in kotlin_sources("app"):
@@ -577,6 +609,7 @@ def main() -> int:
     check_draft_write_ordering()
     check_signature_tap()
     check_typed_fields_are_saved()
+    check_pdf_accuracy_note()
     check_money_fields_are_not_rekeyed()
     check_manifest_hardening()
     check_kotlin_structure()

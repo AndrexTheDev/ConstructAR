@@ -273,6 +273,7 @@
     <string name="pdf_column_waste">Réserve</string>
     <string name="pdf_column_order_meters">Commande (m)</string>
     <string name="pdf_procurement_note">Les longueurs de commande incluent la réserve de chantier. Valeurs issues de nœuds affinés par ancres ; vérifie les tracés critiques au mètre avant de couper.</string>
+    <string name="pdf_note_accuracy">Précision attendue : 1-2 cm sur un mur plat entre 1 et 4 m, 3-6 cm là où seules les données de profondeur existent, environ 1 %% de la longueur sur une diagonale. La confiance est le point le plus faible d’un tracé - sous %1$d %%, il faut le revérifier.</string>
     <string name="pdf_note_recovered">Récupéré après une interruption : longueurs et raccords exacts, la position 3D n’est pas dans le modèle : %1$s</string>
     <string name="pdf_note_unbuildable">Aucune géométrie 3D n’a pu être générée pour ces tracés : longueurs et raccords comptent quand même : %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - généré sur l’appareil</string>

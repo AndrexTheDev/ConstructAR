@@ -273,6 +273,7 @@
     <string name="pdf_column_waste">Reserva</string>
     <string name="pdf_column_order_meters">Pedido (m)</string>
     <string name="pdf_procurement_note">Las longitudes de pedido incluyen la reserva de obra. Valores de nodos refinados con anclas; comprueba los tramos críticos con cinta antes de cortar.</string>
+    <string name="pdf_note_accuracy">Precisión esperada: 1-2 cm en una pared plana entre 1 y 4 m, 3-6 cm donde solo hay datos de profundidad, cerca del 1 %% de la longitud en diagonal. La confianza es el punto más débil de una tirada - por debajo del %1$d %% conviene revisarla.</string>
     <string name="pdf_note_recovered">Recuperado tras una interrupción: longitudes y accesorios son exactos, la posición 3D no está en el modelo: %1$s</string>
     <string name="pdf_note_unbuildable">No se pudo generar geometría 3D para estas tiradas: longitudes y accesorios siguen contando: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - generado en el dispositivo</string>

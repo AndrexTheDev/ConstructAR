@@ -273,6 +273,7 @@
     <string name="pdf_column_waste">Scorta</string>
     <string name="pdf_column_order_meters">Ordine (m)</string>
     <string name="pdf_procurement_note">Le lunghezze d’ordine includono la scorta di cantiere. Valori da nodi raffinati con ancore; controlla i tratti critici con il metro prima di tagliare.</string>
+    <string name="pdf_note_accuracy">Precisione attesa: 1-2 cm su una parete piana tra 1 e 4 m, 3-6 cm dove ci sono solo dati di profondità, circa l’1 %% della lunghezza su una diagonale. L’affidabilità è il punto più debole di una tratta - sotto il %1$d %% va ricontrollata.</string>
     <string name="pdf_note_recovered">Recuperato dopo un’interruzione: lunghezze e raccordi esatti, la posizione 3D non è nel modello: %1$s</string>
     <string name="pdf_note_unbuildable">Non è stato possibile generare geometria 3D per queste tratte: lunghezze e raccordi contano comunque: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - generato sul dispositivo</string>

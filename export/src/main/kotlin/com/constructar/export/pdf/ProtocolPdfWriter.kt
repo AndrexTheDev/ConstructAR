@@ -15,6 +15,7 @@ import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.model.ConduitRoute
+import com.constructar.core.model.HitConfidence
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.units.LengthFormatter
 import java.io.OutputStream
@@ -220,6 +221,13 @@ class ProtocolPdfWriter(
                 }
             }
             y = drawKeyValueGrid(page.canvas, summary, y)
+
+            // How exact the numbers on this page are, and what the confidence column means.
+            // The shop page promised this line in six languages while the protocol carried only
+            // an unexplained percentage (finding 88).
+            y += 6
+            y = drawNote(page.canvas, accuracyNote(content.labels.accuracyNote), y)
+            y += 10
 
             // ── Runs table ──────────────────────────────────────────────────────────────
             if (content.project.routes.isNotEmpty()) {
@@ -619,6 +627,17 @@ internal fun recoveredRunsNote(routes: List<ConduitRoute>, template: String): St
  */
 internal fun unbuildableRunsNote(labels: List<String>, template: String): String? =
     namedRunsNote(labels, template)
+
+/**
+ * The accuracy sentence with the confidence bar filled in, e.g. `... below 85 % it needs a look`.
+ *
+ * Kept out of the drawing code for the same reason as [recoveredRunsNote]: the wording can be
+ * tested without a `PdfDocument`, and - the point of the function - the threshold is *computed*
+ * from [HitConfidence.RUN_TRUSTED] rather than typed into six translations, so the protocol and
+ * the HUD cannot end up disagreeing about which run is trusted (finding 88).
+ */
+internal fun accuracyNote(template: String, trusted: Float = HitConfidence.RUN_TRUSTED): String =
+    String.format(Locale.ROOT, template, Math.round(trusted * 100f))
 
 private fun namedRunsNote(labels: List<String>, template: String): String? {
     if (labels.isEmpty()) return null
