@@ -59,13 +59,29 @@ class ArInteraction(
     @Volatile
     var reticlePoint: Pair<Float, Float>? = null
 
+    /**
+     * The node the hit cascade validates a candidate against - written on the **main** thread
+     * (`applyPendingHit`, `undo`, `finish`), read on the **render** thread (`onFrameEnter`).
+     *
+     * `@Volatile` because of that, and because a stale read has an effect the operator can see:
+     * the cascade's "too close to the previous node" rejection and its normal-continuity check
+     * would answer about a point the chain no longer ends at, so the reticle falls to a weaker
+     * tier (a lower-confidence preview) or accepts a hit the committed node should have refused.
+     * The two fields above this one were volatile from the start; this one was not, which is how
+     * the omission is visible (finding 118).
+     */
+    @Volatile
     var previousNode: RouteNodeRecord? = null
 
     /**
      * Invoked on the render thread as soon as a tap has been resolved. The app funnels this
      * into a `MutableStateFlow` and applies it on the main thread (anchor creation must not
      * happen here).
+     *
+     * `@Volatile` for the same reason as [previousNode]: assigned once on the main thread when
+     * the session is created, called from the render thread on every tap.
      */
+    @Volatile
     var onTapResolved: ((HitResolution) -> Unit)? = null
 
     private var lastReticleMillis = 0L

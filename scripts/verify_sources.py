@@ -31,6 +31,8 @@ and most expensive to discover in a 12-minute Gradle run:
  19. the README's Kotlin test count equals the suite            (finding 104)
  20. every component the checklist promises to attribute is     (finding 109)
      in the app's notice list
+ 21. a field shared between the main and render threads is       (finding 118)
+     declared `@Volatile`
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -755,6 +757,53 @@ def check_backticked_names() -> None:
                       f"(finding 102)")
 
 
+# Fields that are written on one thread and read on another. Each entry names the file, the
+# field and the two sides of the boundary; adding a line here is the cheapest possible review of a
+# threading contract, and the check below fails if the declaration loses its `@Volatile`.
+CROSS_THREAD_FIELDS = [
+    (
+        "ar-engine/src/main/kotlin/com/constructar/arengine/hit/ArInteraction.kt",
+        "previousNode",
+        "written in `applyPendingHit`/`undo`/`finish` on the main thread, read in `onFrameEnter`",
+    ),
+    (
+        "ar-engine/src/main/kotlin/com/constructar/arengine/hit/ArInteraction.kt",
+        "onTapResolved",
+        "assigned when the session is created, invoked on the render thread",
+    ),
+    (
+        "ar-engine/src/main/kotlin/com/constructar/arengine/hit/ArInteraction.kt",
+        "latestSnapshot",
+        "published by the TSDF pipeline, read by the hit cascade",
+    ),
+    (
+        "ar-engine/src/main/kotlin/com/constructar/arengine/hit/ArInteraction.kt",
+        "reticlePoint",
+        "written from the render thread, read by the cascade and the HUD",
+    ),
+]
+
+
+def check_cross_thread_fields() -> None:
+    """A field the render thread and the main thread share must be `@Volatile` (finding 118).
+
+    The Java memory model promises a reader nothing about a plain field written by another
+    thread, so the reader can work with a value that was replaced long ago. In `ArInteraction`
+    that reader is the per-frame hit cascade: it validates a tap against `previousNode`, and a
+    stale node means the "too close to the previous node" and normal-continuity checks answer
+    about a point the chain no longer ends at.
+    """
+    for relative, field, why in CROSS_THREAD_FIELDS:
+        path = ROOT / relative
+        text = path.read_text(encoding="utf-8")
+        pattern = re.compile(r"^([ \t]*)(@Volatile[ \t]*\n[ \t]*)?var " + field + r"\b", re.M)
+        match = pattern.search(text)
+        if match is None:
+            add(path, f"`{field}` is no longer declared here - update the threading contract")
+        elif match.group(2) is None:
+            add(path, f"`{field}` is shared across threads ({why}) and must be `@Volatile`")
+
+
 def check_draft_write_ordering() -> None:
     """Draft writes only inside `writeDraft`, which orders them (finding 74)."""
     for path in kotlin_sources("app"):
@@ -940,6 +989,7 @@ def main() -> int:
     check_discarded_saves()
     check_raw_exception_messages()
     check_draft_write_ordering()
+    check_cross_thread_fields()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
