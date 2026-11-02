@@ -48,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,7 +96,7 @@ fun PaywallScreen(
     onStartTrial: () -> Boolean,
 ) {
     val context = LocalContext.current
-    var keyText by remember { mutableStateOf("") }
+    var keyText by rememberSaveable { mutableStateOf("") }
     var result by remember { mutableStateOf<LicenceCheck?>(null) }
     var copied by remember { mutableStateOf<String?>(null) }
     var trialFailed by remember { mutableStateOf(false) }

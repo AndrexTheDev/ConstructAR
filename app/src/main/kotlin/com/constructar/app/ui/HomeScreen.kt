@@ -46,6 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -87,8 +88,8 @@ fun HomeScreen(
     unreadableProjects: Int = 0,
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
-    var newName by remember { mutableStateOf("") }
-    var query by remember { mutableStateOf("") }
+    var newName by rememberSaveable { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
     val canCreate = entitlements.allowsAnotherProject(projects.size)
     val mostRecent = projects.firstOrNull()
     // Searching pays for itself from a handful of rooms on; with two it is just another field

@@ -20,6 +20,7 @@ and most expensive to discover in a 12-minute Gradle run:
   8. no INTERNET permission and no cloud SDK markers           (offline guarantee)
   9. no work-time total cached in `remember`                  (a clock must tick)
  10. the signature pad keeps its tap handler (finding 82)      (a tap is a signature)
+ 11. text the operator typed survives a rotation (finding 83)  (rememberSaveable, not remember)
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -310,6 +311,15 @@ def check_raw_exception_messages() -> None:
                       f"map the failure with `storageFailureOf` or mark the site `raw-detail`")
 
 
+# Names a screen gives the state of a field the operator types into: a draft, a name, an address,
+# a phone number, a note, a search query, a licence key, a title, a location. Booleans, dialogs,
+# selections and one-shot status messages are deliberately not in this list - they may reset.
+TYPED_FIELD_NAME = re.compile(
+    r"^\s*var\s+(\w*(?:Draft|Name|Address|Phone|Notes|Query|Text|Title|Location))\s+by\s+remember(?![A-Za-z])",
+    re.MULTILINE,
+)
+
+
 def check_signature_tap() -> None:
     """The signature pad must accept a tap, not only a drag (finding 82).
 
@@ -330,6 +340,26 @@ def check_signature_tap() -> None:
     if "state.commit(" not in text:
         add(path, "the pad must commit strokes through `commit`, so the drag and the tap path "
                   "cannot disagree about what counts as a finished stroke")
+
+
+def check_typed_fields_are_saved() -> None:
+    """Text the operator typed must be `rememberSaveable`, not `remember` (finding 83).
+
+    A `remember` is not part of the saved state: the phone turning, a font-size change or the
+    system recreating the screen drops it, and the operator - who is standing next to the customer
+    with one thumb free - finds the name, the address and the notes he just typed gone, with no
+    message. The signature pad had the same defect (finding 77) and so did the onboarding screen
+    (finding 66); this rule is the cheap net under all three.
+    """
+    for path in kotlin_sources("app"):
+        if "/src/test/" in path.as_posix() or "/ui/" not in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in TYPED_FIELD_NAME.finditer(text):
+            line = text[: match.start()].count("\n") + 1
+            add(path, f"line {line}: `{match.group(1)}` is a field the operator types into and it "
+                      f"is held by `remember` - a rotation throws the typing away; use "
+                      f"`rememberSaveable`")
 
 
 def check_draft_write_ordering() -> None:
@@ -518,6 +548,7 @@ def main() -> int:
     check_raw_exception_messages()
     check_draft_write_ordering()
     check_signature_tap()
+    check_typed_fields_are_saved()
     check_manifest_hardening()
     check_kotlin_structure()
     check_resource_xml()

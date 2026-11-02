@@ -46,6 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -106,9 +107,11 @@ fun FieldBookScreen(
     // glove and a scroll can take work away, so it asks too, and names what goes.
     var pendingDelete by remember(project.id) { mutableStateOf<PendingDelete?>(null) }
 
-    var diaryDraft by remember(project.id) { mutableStateOf("") }
-    var defectTitle by remember(project.id) { mutableStateOf("") }
-    var defectLocation by remember(project.id) { mutableStateOf("") }
+    // A diary line is written in the rain with one thumb; losing it because the phone turned in
+    // the operator's hand is the same defect the signature pad had (findings 77, 83).
+    var diaryDraft by rememberSaveable(project.id) { mutableStateOf("") }
+    var defectTitle by rememberSaveable(project.id) { mutableStateOf("") }
+    var defectLocation by rememberSaveable(project.id) { mutableStateOf("") }
     var defectSeverity by remember(project.id) { mutableStateOf(DefectSeverity.MEDIUM) }
 
     // The sum of the session rows below, so the big number and the list agree (finding 81).

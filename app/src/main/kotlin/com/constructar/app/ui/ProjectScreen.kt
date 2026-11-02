@@ -47,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -104,10 +105,15 @@ fun ProjectScreen(
     // thing on the screen (thirty taps of measuring) and the only destructive action on it that
     // asked nothing. It asks now, and names what goes.
     var routeToRemove by remember { mutableStateOf<ConduitRoute?>(null) }
-    var nameDraft by remember(project.id) { mutableStateOf(project.name) }
-    var notesDraft by remember(project.id) { mutableStateOf(project.notes) }
+    // Everything on this screen is typed with the customer standing next to the operator - a name,
+    // an address, a rate - and a turn of the phone used to throw it away, silently, because a
+    // `remember` is not part of the saved state (finding 83). `rememberSaveable` keeps the drafts
+    // across a rotation and across the system recreating the screen; the key still resets them when
+    // the operator moves to another room.
+    var nameDraft by rememberSaveable(project.id) { mutableStateOf(project.name) }
+    var notesDraft by rememberSaveable(project.id) { mutableStateOf(project.notes) }
     var notesSaved by remember(project.id) { mutableStateOf(false) }
-    var technicianDraft by remember(project.id) { mutableStateOf(project.technician) }
+    var technicianDraft by rememberSaveable(project.id) { mutableStateOf(project.technician) }
     val context = LocalContext.current
     var pendingCapture by remember { mutableStateOf<Uri?>(null) }
     val captureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
@@ -135,15 +141,15 @@ fun ProjectScreen(
         stringResource(R.string.ready_photo) to readyPhoto,
         stringResource(R.string.ready_time) to readyTime,
     ).filterNot { it.second }.map { it.first }
-    var customerName by remember(project.id) { mutableStateOf(project.customerName) }
-    var customerAddress by remember(project.id) { mutableStateOf(project.customerAddress) }
-    var customerPhone by remember(project.id) { mutableStateOf(project.customerPhone) }
+    var customerName by rememberSaveable(project.id) { mutableStateOf(project.customerName) }
+    var customerAddress by rememberSaveable(project.id) { mutableStateOf(project.customerAddress) }
+    var customerPhone by rememberSaveable(project.id) { mutableStateOf(project.customerPhone) }
     // Blank means "use the firm rate", which is why the fields are strings and not numbers: an
     // empty field has to be distinguishable from a typed zero.
-    var rateDraft by remember(project.id) {
+    var rateDraft by rememberSaveable(project.id) {
         mutableStateOf(project.hourlyRateCents?.let { Pricing.formatForInput(it.toLong()) } ?: "")
     }
-    var materialDraft by remember(project.id) {
+    var materialDraft by rememberSaveable(project.id) {
         mutableStateOf(
             project.materialLumpSumCents.takeIf { it > 0L }?.let(Pricing::formatForInput) ?: "",
         )

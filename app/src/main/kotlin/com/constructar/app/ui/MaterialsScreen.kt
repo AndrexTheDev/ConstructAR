@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,7 +72,7 @@ fun MaterialsScreen(
     onBack: () -> Unit,
 ) {
     // Blank means "the built-in default", so the field is a string and not a number.
-    var rateDraft by remember(firmHourlyRateCents) {
+    var rateDraft by rememberSaveable(firmHourlyRateCents) {
         mutableStateOf(Pricing.formatForInput(firmHourlyRateCents.toLong()))
     }
     val rateInvalid = PricingInput.rate(rateDraft).invalid
