@@ -186,10 +186,17 @@ constructar.rtabmap.dir=/absolute/path/to/rtabmap
 
 ### 5.2 What the bridge does — and what is wired today
 
-The C++ side is complete and host-tested:
+The C++ side is complete, and the optional branch is **compiled** by the `native-tests` job on
+every push — in the `-DCONSTRUCTAR_WITH_RTABMAP=1` configuration, against the stub headers in
+`native-slam/src/main/cpp/tests/rtabmap-stubs`. It cannot be *linked* or run there (no RTAB-Map
+checkout in CI), but it no longer rots unseen: until finding 107 it could not have compiled at
+all, and the first thing a build with `constructar.rtabmap.dir` set would have hit was a wall of
+template errors from `constructar::std::…`.
 
-* `RtabMapBridge::processKeyframe` feeds one keyframe (RGB + pose) and returns the optimised
-  pose list, with a closure accepted only after a geometric consistency check;
+* `RtabMapBridge::processKeyframe` feeds one keyframe (RGB + the ARCore odometry pose) and
+  reports whether RTAB-Map accepted a loop closure and which node it matched. It does **not**
+  return an optimised pose list — the poses come from the pose-graph call below, which the app
+  does not make yet;
 * `ProximityLoopClosureDetector` proposes a revisit by pose proximity (proposals only — a false
   closure folds a room in half, so nothing is promoted silently);
 * `PoseGraph::optimize` redistributes a closure over the whole trajectory.

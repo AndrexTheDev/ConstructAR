@@ -269,7 +269,7 @@ and the sitemap are absolute.
 | Module | Language | Responsibility |
 |--------|----------|----------------|
 | `:core` | Kotlin/JVM, **no Android deps** | Maths (`Vec3`, `Quat`, `Mat4`, `Plane3`, polygon containment), routing model, fillet/RMF smoothing, tube & duct mesh generation, measurement, bill of materials, formatting. This is the trust boundary: everything that decides a *number* lives here and is unit-tested on the JVM. |
-| `:native-slam` | C++20 + JNI | TSDF volume (block-hashed, free-space carving optional), Surface Nets extraction, pose graph with loop closures, RTAB-Map bridge. Host-testable: `native-slam/src/main/cpp/tests`. |
+| `:native-slam` | C++20 + JNI | TSDF volume (block-hashed, free-space carving optional), Surface Nets extraction, pose graph with loop closures, RTAB-Map bridge. Host-testable: `native-slam/src/main/cpp/tests`; the optional RTAB-Map branch is compile-checked in CI against stub headers. |
 | `:ar-engine` | Kotlin/Android | ARCore session & config, torch policy, tracking monitor, depth capture, TSDF pipeline, hit cascade, AI depth, anchors, routing state, Filament mesh upload, Compose AR surface. |
 | `:export` | Kotlin/Android | PDF protocol, CSV bill of materials, GLB writer, PLY writer. Storage-agnostic (works on `OutputStream`). |
 | `:app` | Kotlin/Android | Single activity, Compose Material 3 UI with glove-sized controls, project storage (JSON files), navigation. |

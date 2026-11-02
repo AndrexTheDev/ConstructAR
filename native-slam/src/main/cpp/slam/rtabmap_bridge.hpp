@@ -31,13 +31,18 @@
 
 namespace constructar {
 
-/** Result of feeding one keyframe. */
+/**
+ * Result of feeding one keyframe.
+ *
+ * There used to be a `std::vector<Mat4> optimizedPoses` here, documented as "optimised keyframe
+ * poses in world space". Neither branch ever wrote it and nothing ever read it: the pose list a
+ * caller actually wants comes from `PoseGraph::optimize`, which the JNI exposes on its own
+ * (finding 107). A field that no line fills is a promise in a header.
+ */
 struct SlamUpdate {
   bool available = false;        // false when compiled without RTAB-Map
   bool loopClosureDetected = false;
   int matchedNodeId = -1;
-  /** Optimised keyframe poses in world space (camera → world). */
-  std::vector<Mat4> optimizedPoses;
   double milliseconds = 0.0;
 };
 
@@ -55,10 +60,18 @@ class RtabMapBridge {
   RtabMapBridge(const RtabMapBridge&) = delete;
   RtabMapBridge& operator=(const RtabMapBridge&) = delete;
 
-  /** True when this build has RTAB-Map compiled in and it initialised successfully. */
+  /**
+   * True when this build was compiled with RTAB-Map.
+   *
+   * It used to answer "…and `configure()` has run", which is a question only `processKeyframe`
+   * can make true - so in a build with the back-end compiled in, the answer was still false until
+   * a keyframe arrived, and nothing feeds keyframes to this class yet. The Kotlin caller's doc has
+   * always said "true when this build was compiled with the RTAB-Map back-end", and this is that
+   * sentence implemented (finding 107).
+   */
   bool isAvailable() const;
 
-  /** Feeds one keyframe; returns the (possibly unchanged) optimised pose list. */
+  /** Feeds one keyframe (RGB + the ARCore odometry pose) and returns what RTAB-Map made of it. */
   SlamUpdate processKeyframe(const uint8_t* rgb, int rgbStrideBytes, const uint16_t* depthMm,
                              int depthStrideElements, int width, int height, float fx, float fy,
                              float cx, float cy, const Mat4& odometryCameraToWorld,

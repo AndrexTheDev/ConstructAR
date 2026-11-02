@@ -41,3 +41,17 @@ jobs:
 
       - name: Run
         run: ./host_tests
+
+      # The optional RTAB-Map branch, compiled in the configuration the app would use. No
+      # RTAB-Map checkout is available here, so the translation unit is built against
+      # `tests/rtabmap-stubs` - headers that mirror the API of the RTAB-Map version
+      # CMakeLists.txt pins (`core/include/...`, `SensorData` with an odometry pose). This is a
+      # shape check, not a link: it is what proves the branch still compiles, which it did not
+      # for as long as the includes sat inside `namespace constructar` (finding 107).
+      - name: Compile the RTAB-Map branch against stub headers
+        run: |
+          ${{ matrix.compiler }} -std=c++20 ${{ matrix.optimisation }} -Wall -Wextra -Werror \
+            -DCONSTRUCTAR_WITH_RTABMAP=1 \
+            -I native-slam/src/main/cpp \
+            -I native-slam/src/main/cpp/tests/rtabmap-stubs \
+            -c native-slam/src/main/cpp/slam/rtabmap_bridge.cpp -o /tmp/rtabmap_bridge.o
