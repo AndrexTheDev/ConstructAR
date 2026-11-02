@@ -213,7 +213,15 @@ fun ProjectScreen(
                     )
                 }
             }
-            IconButton(onClick = { renameOpen = true }, modifier = Modifier.size(52.dp)) {
+            IconButton(
+                onClick = {
+                    // Opens with the room's current name, not with whatever was last typed
+                    // into the dialog and then abandoned (finding 125).
+                    nameDraft = project.name
+                    renameOpen = true
+                },
+                modifier = Modifier.size(52.dp),
+            ) {
                 Icon(
                     Icons.Default.Edit,
                     contentDescription = stringResource(R.string.action_rename),
@@ -622,7 +630,7 @@ fun ProjectScreen(
         AlertDialog(
             onDismissRequest = { confirmLeave = false },
             title = { Text(stringResource(R.string.project_leave_title)) },
-            text = { Text(stringResource(R.string.project_leave_body)) },
+            text = { Text(stringResource(R.string.project_leave_body, project.name)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -670,7 +678,9 @@ fun ProjectScreen(
         AlertDialog(
             onDismissRequest = { deleteOpen = false },
             title = { Text(stringResource(R.string.dialog_delete_title)) },
-            text = { Text(stringResource(R.string.dialog_delete_body)) },
+            // Names the room and what goes with it: the header's delete icon sits 52 dp from
+            // the rename icon, on a phone held by a gloved hand (finding 125).
+            text = { Text(stringResource(R.string.dialog_delete_body, project.name)) },
             confirmButton = {
                 TextButton(
                     onClick = {

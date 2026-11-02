@@ -153,7 +153,7 @@
     <string name="action_delete">Borrar</string>
     <string name="action_save">Guardar</string>
     <string name="dialog_delete_title">¿Borrar el proyecto?</string>
-    <string name="dialog_delete_body">Se borran todas las mediciones de este proyecto. No se puede deshacer.</string>
+    <string name="dialog_delete_body">«%1$s» se borra con todas sus mediciones, fotos, entradas del diario de obra, defectos y horas de trabajo registradas. No se puede deshacer.</string>
     <string name="dialog_rename_title">Renombrar proyecto</string>
     <string name="notes_title">Nota para la oficina</string>
     <string name="notes_hint">Cuadro en el pasillo, contador fuera</string>
@@ -396,7 +396,7 @@
     <string name="project_costs_rate">Precio por hora (€)</string>
     <string name="project_costs_invalid">No es un importe: escríbelo como 48,00 o 48.00</string>
     <string name="project_leave_title">¿Descartar los cambios?</string>
-    <string name="project_leave_body">Los datos del cliente, la tarifa o el importe de material que has escrito no están guardados.</string>
+    <string name="project_leave_body">Los datos del cliente, la tarifa o el importe de material que has escrito para «%1$s» no están guardados.</string>
     <string name="project_leave_discard">Descartar</string>
     <string name="project_leave_keep">Seguir editando</string>
     <string name="project_costs_material">Material a tanto alzado (€)</string>

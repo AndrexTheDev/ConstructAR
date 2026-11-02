@@ -153,7 +153,7 @@
     <string name="action_delete">Supprimer</string>
     <string name="action_save">Enregistrer</string>
     <string name="dialog_delete_title">Supprimer le projet ?</string>
-    <string name="dialog_delete_body">Toutes les mesures de ce projet sont supprimées. Action irréversible.</string>
+    <string name="dialog_delete_body">«%1$s» est supprimé avec toutes ses mesures, photos, entrées du journal de chantier, défauts et heures de travail enregistrées. Action irréversible.</string>
     <string name="dialog_rename_title">Renommer le projet</string>
     <string name="notes_title">Note pour le bureau</string>
     <string name="notes_hint">Tableau dans le couloir, compteur dehors</string>
@@ -396,7 +396,7 @@
     <string name="project_costs_rate">Taux horaire (€)</string>
     <string name="project_costs_invalid">Ce n’est pas un montant : saisissez-le comme 48,00 ou 48.00</string>
     <string name="project_leave_title">Abandonner les modifications ?</string>
-    <string name="project_leave_body">Les coordonnées du client, le tarif ou le forfait matériel que tu as saisis ne sont pas enregistrés.</string>
+    <string name="project_leave_body">Les coordonnées du client, le tarif ou le forfait matériel que tu as saisis pour «%1$s» ne sont pas enregistrés.</string>
     <string name="project_leave_discard">Abandonner</string>
     <string name="project_leave_keep">Continuer la saisie</string>
     <string name="project_costs_material">Forfait matériel (€)</string>

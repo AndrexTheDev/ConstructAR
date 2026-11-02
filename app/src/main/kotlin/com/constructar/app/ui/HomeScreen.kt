@@ -90,7 +90,9 @@ fun HomeScreen(
     var showCreateDialog by remember { mutableStateOf(false) }
     var newName by rememberSaveable { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
-    val canCreate = entitlements.allowsAnotherProject(projects.size)
+    // A file this build cannot read is still a room on the phone: it occupies the one free
+    // slot just like a healthy one (finding 126).
+    val canCreate = entitlements.allowsAnotherProject(ProjectSlots.used(projects.size, unreadableProjects))
     val mostRecent = projects.firstOrNull()
     // Searching pays for itself from a handful of rooms on; with two it is just another field
     // between the operator and the thing they tapped the app for.
@@ -241,7 +243,10 @@ fun HomeScreen(
 
     if (showCreateDialog) {
         AlertDialog(
-            onDismissRequest = { showCreateDialog = false },
+            onDismissRequest = {
+                showCreateDialog = false
+                newName = ""
+            },
             title = { Text(stringResource(R.string.home_new_project)) },
             text = {
                 OutlinedTextField(
@@ -262,7 +267,13 @@ fun HomeScreen(
                 ) { Text(stringResource(R.string.home_create)) }
             },
             dismissButton = {
-                TextButton(onClick = { showCreateDialog = false }) { Text(stringResource(R.string.home_cancel)) }
+                TextButton(
+                    onClick = {
+                        // An abandoned name is not a suggestion for the next room (finding 125).
+                        showCreateDialog = false
+                        newName = ""
+                    },
+                ) { Text(stringResource(R.string.home_cancel)) }
             },
         )
     }

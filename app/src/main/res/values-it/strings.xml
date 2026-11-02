@@ -153,7 +153,7 @@
     <string name="action_delete">Elimina</string>
     <string name="action_save">Salva</string>
     <string name="dialog_delete_title">Eliminare il progetto?</string>
-    <string name="dialog_delete_body">Tutte le misure di questo progetto vengono eliminate. Operazione irreversibile.</string>
+    <string name="dialog_delete_body">«%1$s» viene eliminato con tutte le misure, le foto, le voci del diario di cantiere, i difetti e le ore di lavoro registrate. Operazione irreversibile.</string>
     <string name="dialog_rename_title">Rinomina progetto</string>
     <string name="notes_title">Nota per l’ufficio</string>
     <string name="notes_hint">Quadro nel corridoio, contatore fuori</string>
@@ -396,7 +396,7 @@
     <string name="project_costs_rate">Tariffa oraria (€)</string>
     <string name="project_costs_invalid">Non è un importo: scrivilo come 48,00 o 48.00</string>
     <string name="project_leave_title">Scartare le modifiche?</string>
-    <string name="project_leave_body">I dati del cliente, la tariffa o l’importo del materiale che hai scritto non sono salvati.</string>
+    <string name="project_leave_body">I dati del cliente, la tariffa o l’importo del materiale che hai scritto per «%1$s» non sono salvati.</string>
     <string name="project_leave_discard">Scarta</string>
     <string name="project_leave_keep">Continua a modificare</string>
     <string name="project_costs_material">Materiale a corpo (€)</string>

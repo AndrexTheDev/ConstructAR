@@ -35,6 +35,8 @@ and most expensive to discover in a 12-minute Gradle run:
      declared `@Volatile`
  22. the two figures PERFORMANCE.md derives from a knob are      (finding 119)
      recomputed from that knob
+ 23. every confirmation that destroys something names what it    (finding 125)
+     destroys
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -1036,6 +1038,38 @@ def check_licence_key() -> None:
         )
 
 
+DESTRUCTIVE_BODY = re.compile(r"^(.*_)?(delete|leave)_body.*$")
+
+
+def check_destructive_dialogs() -> None:
+    """A confirmation that destroys something must say what (finding 125).
+
+    The project screen's delete dialog said "All measurements in this project are deleted" - no
+    room name, and no mention of the photos, the site diary, the defects, the recorded working
+    hours, the customer's details or the draft of a run that was never recovered, all of which
+    `ProjectRepository.delete` takes with it. Its icon sits 52 dp from the rename icon, on a phone
+    held by a gloved hand, and the dialog is the last thing between a mis-tap and a lost job.
+
+    Every string that ends up in such a confirmation is therefore required to name its subject:
+    a placeholder for the thing that goes (`%1$s` - the room, the run, the measurement). A
+    translation that quietly drops it turns the warning back into a question with no object.
+    """
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if not path.exists():
+            continue
+        strings, _ = load_locale(folder)
+        for key, value in sorted(strings.items()):
+            if not DESTRUCTIVE_BODY.match(key):
+                continue
+            if "%1$s" not in value:
+                add(
+                    path,
+                    f"'{key}' confirms a destructive action without naming its subject - "
+                    "the dialog cannot tell the operator what he is about to lose",
+                )
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1051,6 +1085,7 @@ def main() -> int:
     check_draft_write_ordering()
     check_cross_thread_fields()
     check_performance_numbers()
+    check_destructive_dialogs()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
