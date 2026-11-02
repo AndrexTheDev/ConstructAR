@@ -409,6 +409,7 @@ Known limitations, deliberately documented rather than hidden:
   the test reports. That workflow — not a local machine — is where the "it compiles" claim is
   proven.
 * **Static gates**: `scripts/verify_sources.py` checks copyright headers, the reflection ban,
+  the published test and assertion counts against the suites themselves,
   hardcoded UI text in shipped code, string-resource references, locale parity, XML
   well-formedness and the manifest hardening — without needing a JDK. Two of its rules keep a
   *claim* tied to the code: no document may describe a loop closure while nothing feeds the pose
@@ -452,7 +453,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 482 tests in the app+core+ar-engine+export suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 479 tests in the app+core+ar-engine+export suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 49 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |

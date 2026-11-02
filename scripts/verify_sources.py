@@ -28,6 +28,7 @@ and most expensive to discover in a 12-minute Gradle run:
  16. the project schema version is actually compared            (finding 101)
  17. a kotlin.test assertion is called value-first              (finding 101)
  18. no backticked name carries a Windows-hostile character     (finding 102)
+ 19. the README's Kotlin test count equals the suite            (finding 104)
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -544,6 +545,43 @@ def check_native_assertion_count() -> None:
                     f"call sites - the count is a claim like any other (finding 99)")
 
 
+TEST_ANNOTATION = re.compile(r"^\s*@(?:[\w.]+\.)?Test\b", re.M)
+KOTLIN_SUITE_CLAIM = re.compile(r"pass — (\d+) tests in the app\+core\+ar-engine\+export suites")
+KOTLIN_SUITE_MODULES = ("app", "core", "ar-engine", "export")
+
+
+def check_readme_test_count() -> None:
+    """The README's Kotlin test count must equal the suite (finding 104).
+
+    The native half of the README has had this rule since finding 99; the Kotlin half has not,
+    and the number has been carried forward from round to round instead. It is a claim about a
+    tree anyone can count: the test sources hold 479 `@Test` methods while the README said 482,
+    and no command in the repository could tell you which of the two was right. A number nobody
+    can reproduce is a number that drifts, so the count of annotated test methods in the four
+    JVM modules is compared with the figure the README publishes - the CI run of
+    `testDebugUnitTest` proves the runtime half, this proves the arithmetic.
+    """
+    readme = ROOT / "README.md"
+    text = readme.read_text(encoding="utf-8")
+    claim = KOTLIN_SUITE_CLAIM.search(text)
+    if claim is None:
+        add(readme, "the 'pass - N tests in the app+core+ar-engine+export suites' row has "
+                    "disappeared - it is the only figure a reader has for the JVM suites "
+                    "(finding 104)")
+        return
+    counted = 0
+    for module in KOTLIN_SUITE_MODULES:
+        test_root = ROOT / module / "src" / "test"
+        if not test_root.is_dir():
+            continue
+        for path in test_root.rglob("*.kt"):
+            counted += len(TEST_ANNOTATION.findall(path.read_text(encoding="utf-8")))
+    if int(claim.group(1)) != counted:
+        add(readme, f"claims {claim.group(1)} Kotlin tests, the test sources hold {counted} "
+                    f"`@Test` methods - the suite's count is a claim like the native one "
+                    f"(finding 104)")
+
+
 SCHEMA_VERSION_DECL = re.compile(r"val\s+schemaVersion\s*:\s*Int\s*=\s*SCHEMA_VERSION")
 
 
@@ -824,6 +862,7 @@ def main() -> int:
     check_pdf_accuracy_note()
     check_loop_closure_claim()
     check_native_assertion_count()
+    check_readme_test_count()
     check_schema_version_is_read()
     check_assert_message_order()
     check_backticked_names()
