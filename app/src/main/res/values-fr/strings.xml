@@ -62,7 +62,7 @@
     <string name="ar_closed_loop">fermé</string>
     <string name="ar_confidence_weak">Point le plus faible %1$d %% : retouche-le pour améliorer le tracé</string>
     <string name="ar_no_surface">Aucune surface trouvée. Vise un mur ou le sol.</string>
-    <string name="ar_scan_progress">Pièce %1$d %% · %2$d k triangles</string>
+    <string name="ar_scan_progress">Détail %1$d %% · %2$d k triangles</string>
     <string name="ar_scan_full">Limite de scan atteinte : seule une partie de la pièce est capturée. Les tracés comptent quand même.</string>
     <string name="ar_scan_unavailable">Scan du maillage indisponible. La mesure fonctionne toujours.</string>
     <string name="ar_session_failed">Échec de la session AR : %1$s</string>

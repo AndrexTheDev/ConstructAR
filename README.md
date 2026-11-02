@@ -353,6 +353,13 @@ Known limitations, deliberately documented rather than hidden:
 * **Reflective and transparent surfaces** (windows, mirrors, polished steel) break both depth
   and tracking. The tracking monitor catches the *symptom* (depth confidence collapse) and
   coaches the operator; it cannot fix the physics.
+* **The HUD percentage is detail, not area.** The number next to the triangle count is the share
+  of a 68 k-triangle reference budget (`ScanState.detailFraction`), not a fraction of the room: a
+  cluttered cellar fills it with a third of the walls captured, an empty hall may never reach it.
+  It answers "is there enough geometry in the mesh to pick a cable out of", which is what a run
+  is measured on. How much of the *room* was captured is what the scan-limit warning in the HUD
+  (finding 97) and the protocol's scan note (finding 100) report; the app never computes a room's
+  total surface, so it does not print a room percentage anywhere.
 * **Drift.** ARCore drift is ~1 % of travelled distance and the shipped pipeline does not
   correct it: the pose graph that would redistribute a closure over the whole trajectory is
   host-tested but never fed (see *Optional pieces*), so a long run accumulates the error instead
@@ -382,8 +389,8 @@ Known limitations, deliberately documented rather than hidden:
   a project rate overriding the firm's.
 * **JVM (`:ar-engine`, `:export`)** — hit cascade priority and rejection reasons, metric depth
   calibration (including "refuses to fit on noise"), routing/anchor behaviour, GLB/PLY/CSV
-  structural validation, the protocol's note for a capture that hit the scan limit, and the ten
-  rules of the reticle stabiliser (a settled median, an
+  structural validation, the protocol's note for a capture that hit the scan limit, the HUD's
+  detail budget, and the ten rules of the reticle stabiliser (a settled median, an
   outvoted stray frame, a moving hand that never locks, a plane or tier change that resets the
   window, a miss that clears it).
 * **JVM (`:core` licence)** — the freemium gate: a signed licence verifies, a tampered payload
@@ -444,7 +451,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 473 tests in the app+core+ar-engine+export suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 475 tests in the app+core+ar-engine+export suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 49 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |

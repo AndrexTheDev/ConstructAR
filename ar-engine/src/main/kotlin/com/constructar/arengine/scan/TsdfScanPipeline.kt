@@ -72,7 +72,7 @@ class TsdfScanPipeline(
         .asCoroutineDispatcher(),
     private val onMesh: ((ScanMesh) -> Unit)? = null,
 ) {
-    /** Live state for the HUD: coverage, mesh stats, latency, thermal mode. */
+    /** Live state for the HUD: the detail budget, mesh stats, latency, thermal mode. */
     data class ScanState(
         val ready: Boolean = false,
         val integrating: Boolean = false,
@@ -88,8 +88,19 @@ class TsdfScanPipeline(
         val meshVersion: Int = 0,
         val error: String? = null,
     ) {
-        /** Rough "how much have I scanned" gauge, 0..1 (68 k triangles ≈ a full room). */
-        val coverage: Float
+        /**
+         * How much of the reference **detail** budget the mesh fills, 0..1 (68 k triangles ≈ a
+         * busy room).
+         *
+         * Deliberately not called coverage any more, and the HUD no longer calls it a room
+         * (finding 102). It is a triangle budget ratio: a cluttered cellar reaches 100 % with a
+         * third of its walls scanned, an empty hall may never get past 40 % with every wall
+         * captured. The old label promised a fraction of the room, which this number cannot know -
+         * the app never computes the room's total surface. What it does say is how much geometry
+         * the mesh holds, which is what the operator needs to judge whether the detail is enough
+         * to pick cables out of.
+         */
+        val detailFraction: Float
             get() = (triangleCount / 68_000f).coerceIn(0f, 1f)
     }
 

@@ -322,9 +322,11 @@ fun ArMeasureScreen(
     } else {
         null
     }
+    // The percentage is the share of the reference detail budget, not a fraction of the room:
+    // the string says so since finding 102.
     val scanProgressText = stringResource(
         R.string.ar_scan_progress,
-        (scanState.coverage * 100).toInt(),
+        (scanState.detailFraction * 100).toInt(),
         scanState.triangleCount / 1000,
     )
     val scanInstructionText = stringResource(R.string.scan_instruction)
