@@ -287,6 +287,7 @@
     <string name="backup_nothing">Non c’è ancora nulla da salvare: crea prima un progetto.</string>
     <string name="backup_photos_skipped">Non è stato possibile copiare %1$d foto su %2$d.</string>
     <string name="backup_projects_skipped">Non è stato possibile scrivere %1$d progetti su %2$d: la cartella è piena o non più scrivibile.</string>
+    <string name="backup_storage_failed">Non è stato possibile salvare nulla su questo telefono: lo spazio è pieno o in sola lettura. La tua copia resta intatta.</string>
     <string name="waste_title">Scorta</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>
@@ -399,6 +400,10 @@
     <plurals name="backup_unreadable">
         <item quantity="one">Non è stato possibile leggere 1 file della selezione: non è una stanza e resta intatto nel tuo backup</item>
         <item quantity="other">Non è stato possibile leggere %1$d file della selezione: non sono stanze e restano intatti nel tuo backup</item>
+    </plurals>
+    <plurals name="backup_not_written">
+        <item quantity="one">1 locale non è stato salvato su questo telefono: lo spazio è pieno o in sola lettura; il file della tua copia resta intatto</item>
+        <item quantity="other">%1$d locali non sono stati salvati su questo telefono: lo spazio è pieno o in sola lettura; i file della tua copia restano intatti</item>
     </plurals>
     <string name="route_warning_low_confidence">Questo punto proviene dai dati di profondità: tocca di nuovo la parete rilevata per un valore più solido</string>
     <string name="route_warning_height_jump">È un salto di quota notevole: una salita al soffitto o un tocco sul pavimento? Annullalo se è stato un errore</string>

@@ -65,7 +65,7 @@ fun BackupCard(
     onRestore: (
         texts: List<String>,
         photos: List<Pair<String, Uri>>,
-        done: (imported: Int, heldBack: Int, unreadable: Int) -> Unit,
+        done: (imported: Int, heldBack: Int, unreadable: Int, notWritten: Int) -> Unit,
     ) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -175,14 +175,16 @@ fun BackupCard(
                 busy = false
                 return@launch
             }
-            onRestore(texts, photos) { imported, heldBack, unreadable ->
+            onRestore(texts, photos) { imported, heldBack, unreadable, notWritten ->
                 outcome = BackupOutcome.restored(
                     counts = BackupOutcome.RestoreCounts(
                         imported = imported,
                         heldBack = heldBack,
                         unreadable = unreadable,
+                        notWritten = notWritten,
                     ),
                     nothingImported = context.getString(R.string.backup_failed),
+                    storageFailed = context.getString(R.string.backup_storage_failed),
                 )
                 busy = false
             }
@@ -274,6 +276,19 @@ fun BackupCard(
                 }
                 // A file that is not a room is not waiting for an upgrade: saying nothing about it
                 // leaves the operator counting rooms in a backup he believes was fully restored.
+                // The third case, and the one that used to hide in the second: a room that was read
+                // fine and that this phone could not store (finding 86).
+                if (current is BackupOutcome.Restored && current.notWritten > 0) {
+                    Text(
+                        text = pluralStringResource(
+                            R.plurals.backup_not_written,
+                            current.notWritten,
+                            current.notWritten,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SiteColors.danger,
+                    )
+                }
                 if (current is BackupOutcome.Restored && current.unreadable > 0) {
                     Text(
                         text = pluralStringResource(R.plurals.backup_unreadable, current.unreadable, current.unreadable),
@@ -352,6 +367,8 @@ internal sealed interface BackupOutcome {
         val count: Int,
         val heldBack: Int = 0,
         val unreadable: Int = 0,
+        /** Rooms that were read and could not be written: the phone's storage, not the file. */
+        val notWritten: Int = 0,
     ) : BackupOutcome
 
     data class Failed(val detail: String) : BackupOutcome
@@ -365,7 +382,12 @@ internal sealed interface BackupOutcome {
     )
 
     /** What a restore attempt counts, as plain numbers (the view model owns the counting). */
-    data class RestoreCounts(val imported: Int, val heldBack: Int, val unreadable: Int)
+    data class RestoreCounts(
+        val imported: Int,
+        val heldBack: Int,
+        val unreadable: Int,
+        val notWritten: Int = 0,
+    )
 
     companion object {
         /**
@@ -376,16 +398,25 @@ internal sealed interface BackupOutcome {
          * ordinary colour. A file the plan had no slot for is not a file the app could not read,
          * which is why the two are counted apart.
          */
-        fun restored(counts: RestoreCounts, nothingImported: String): BackupOutcome =
-            if (counts.imported == 0 && counts.heldBack == 0) {
-                Failed(detail = nothingImported)
-            } else {
-                Restored(
-                    count = counts.imported,
-                    heldBack = counts.heldBack,
-                    unreadable = counts.unreadable,
-                )
-            }
+        fun restored(
+            counts: RestoreCounts,
+            nothingImported: String,
+            /** Said instead of [nothingImported] when the phone, not the file, refused. */
+            storageFailed: String = nothingImported,
+        ): BackupOutcome = when {
+            // Nothing imported, nothing held back - but rooms were read and refused by this phone:
+            // "nothing imported" would send the operator looking at his backup instead of his
+            // storage (finding 86).
+            counts.imported == 0 && counts.heldBack == 0 && counts.notWritten > 0 ->
+                Failed(detail = storageFailed)
+            counts.imported == 0 && counts.heldBack == 0 -> Failed(detail = nothingImported)
+            else -> Restored(
+                count = counts.imported,
+                heldBack = counts.heldBack,
+                unreadable = counts.unreadable,
+                notWritten = counts.notWritten,
+            )
+        }
 
         fun of(report: Report, nothingToDo: String, folderUnreadable: String): BackupOutcome = when {
             report.available == 0 -> Failed(detail = nothingToDo)

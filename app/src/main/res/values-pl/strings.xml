@@ -291,6 +291,7 @@
     <string name="backup_nothing">Nie ma jeszcze czego kopiować - najpierw utwórz projekt.</string>
     <string name="backup_photos_skipped">Nie udało się skopiować %1$d z %2$d zdjęć.</string>
     <string name="backup_projects_skipped">Nie udało się zapisać %1$d z %2$d projektów - folder jest pełny lub nie można do niego pisać.</string>
+    <string name="backup_storage_failed">Nie udało się nic zapisać na tym telefonie - pamięć jest pełna lub tylko do odczytu. Twoja kopia pozostaje nietknięta.</string>
     <string name="waste_title">Zapas</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>
@@ -407,6 +408,10 @@
         <item quantity="few">Nie udało się odczytać %1$d plików z wyboru: to nie są pomieszczenia i pozostają nietknięte w kopii</item>
         <item quantity="many">Nie udało się odczytać %1$d plików z wyboru: to nie są pomieszczenia i pozostają nietknięte w kopii</item>
         <item quantity="other">Nie udało się odczytać %1$d plików z wyboru: to nie są pomieszczenia i pozostają nietknięte w kopii</item>
+    </plurals>
+    <plurals name="backup_not_written">
+        <item quantity="one">Nie udało się zapisać 1 pomieszczenia na tym telefonie - pamięć jest pełna lub tylko do odczytu; plik w kopii pozostaje nietknięty</item>
+        <item quantity="other">Nie udało się zapisać %1$d pomieszczeń na tym telefonie - pamięć jest pełna lub tylko do odczytu; pliki w kopii pozostają nietknięte</item>
     </plurals>
     <string name="route_warning_low_confidence">Ten punkt pochodzi z danych głębi – dotknij ponownie wykrytej ściany, aby uzyskać pewniejszą wartość</string>
     <string name="route_warning_height_jump">To duży skok wysokości: pion do sufitu czy przypadkowe dotknięcie podłogi? Cofnij, jeśli to był błąd</string>

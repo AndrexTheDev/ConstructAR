@@ -287,6 +287,7 @@
     <string name="backup_nothing">Rien à sauvegarder pour l’instant : crée d’abord un projet.</string>
     <string name="backup_photos_skipped">%1$d photos sur %2$d n’ont pas pu être copiées.</string>
     <string name="backup_projects_skipped">%1$d projets sur %2$d n’ont pas pu être écrits : le dossier est plein ou n’est plus accessible en écriture.</string>
+    <string name="backup_storage_failed">Rien n’a pu être enregistré sur ce téléphone : le stockage est plein ou en lecture seule. Ta sauvegarde reste intacte.</string>
     <string name="waste_title">Réserve</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>
@@ -399,6 +400,10 @@
     <plurals name="backup_unreadable">
         <item quantity="one">1 fichier de la sélection n’a pas pu être lu : ce n’est pas une pièce et il reste intact dans ta sauvegarde</item>
         <item quantity="other">%1$d fichiers de la sélection n’ont pas pu être lus : ce ne sont pas des pièces et ils restent intacts dans ta sauvegarde</item>
+    </plurals>
+    <plurals name="backup_not_written">
+        <item quantity="one">1 pièce n’a pas pu être enregistrée sur ce téléphone : le stockage est plein ou en lecture seule ; le fichier de ta sauvegarde reste intact</item>
+        <item quantity="other">%1$d pièces n’ont pas pu être enregistrées sur ce téléphone : le stockage est plein ou en lecture seule ; les fichiers de ta sauvegarde restent intacts</item>
     </plurals>
     <string name="route_warning_low_confidence">Ce point vient des données de profondeur - touche à nouveau le mur détecté pour une valeur plus sûre</string>
     <string name="route_warning_height_jump">C’est un grand écart de hauteur : une montée au plafond ou un appui sur le sol ? Annule-le si c’était une erreur</string>

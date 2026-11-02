@@ -678,7 +678,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun importBackup(
         texts: List<String>,
         photos: List<Pair<String, Uri>> = emptyList(),
-        onDone: (imported: Int, heldBack: Int, unreadable: Int) -> Unit = { _, _, _ -> },
+        onDone: (imported: Int, heldBack: Int, unreadable: Int, notWritten: Int) -> Unit = { _, _, _, _ -> },
     ) {
         viewModelScope.launch {
             // Restoring is a way to *create* projects, so it obeys the same plan as creating
@@ -723,7 +723,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
             }
-            onDone(counts.imported, counts.heldBack, counts.unreadable)
+            onDone(counts.imported, counts.heldBack, counts.unreadable, counts.notWritten)
         }
     }
 
@@ -810,6 +810,15 @@ internal data class RestoreCounts(
     val heldBack: Int,
     /** Files that are not a room at all: no upgrade will ever import them. */
     val unreadable: Int,
+    /**
+     * Rooms that were read fine but could not be stored on this phone.
+     *
+     * A third category, because the other two both describe the *file* and this one describes the
+     * phone: a full or read-only storage. Counting it as [unreadable] told the operator "this file
+     * is not a room" about a perfectly good room he had just backed up, and then pointed him at a
+     * file that is fine while the room was gone (finding 86).
+     */
+    val notWritten: Int,
 )
 
 internal inline fun restoreOutcome(
@@ -821,6 +830,7 @@ internal inline fun restoreOutcome(
     var imported = 0
     var heldBack = 0
     var unreadable = 0
+    var notWritten = 0
     for (text in texts) {
         // Two questions, in this order, because they have different answers. "Is this a room at
         // all?" is answered by parsing, for every file in the selection - a file past the free
@@ -835,7 +845,14 @@ internal inline fun restoreOutcome(
             heldBack++
             continue
         }
-        if (import(text)) imported++ else unreadable++
+        // The file parsed, so a refusal here is the phone's answer, not the file's: a full disk, a
+        // revoked folder, an unwritable file. Reported apart from `unreadable` (finding 86).
+        if (import(text)) imported++ else notWritten++
     }
-    return RestoreCounts(imported = imported, heldBack = heldBack, unreadable = unreadable)
+    return RestoreCounts(
+        imported = imported,
+        heldBack = heldBack,
+        unreadable = unreadable,
+        notWritten = notWritten,
+    )
 }

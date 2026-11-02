@@ -121,4 +121,16 @@ class RestorePlanTest {
         assertEquals(0, counts.heldBack)
         assertEquals(0, counts.unreadable)
     }
+    @Test
+    fun `a room this phone cannot store is not called a file that is not a room`() {
+        // The file parsed, so a refusal here is the phone's answer - a full disk, a read-only
+        // folder. It used to be counted with the files that are not rooms at all, so the card told
+        // the operator his backup contained junk while the room was simply not saved (finding 86).
+        val counts = restoreOutcome(3, listOf("room", "room2"), parse = { true }) { it == "room" }
+
+        assertEquals(1, counts.imported)
+        assertEquals(0, counts.heldBack)
+        assertEquals(0, counts.unreadable)
+        assertEquals(1, counts.notWritten)
+    }
 }

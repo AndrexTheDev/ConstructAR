@@ -287,6 +287,7 @@
     <string name="backup_nothing">Noch nichts zu sichern - lege zuerst ein Projekt an.</string>
     <string name="backup_photos_skipped">%1$d von %2$d Fotos konnten nicht kopiert werden.</string>
     <string name="backup_projects_skipped">%1$d von %2$d Projekten konnten nicht geschrieben werden - der Ordner ist voll oder nicht mehr beschreibbar.</string>
+    <string name="backup_storage_failed">Auf diesem Telefon konnte nichts gespeichert werden - der Speicher ist voll oder gesperrt. Deine Sicherung bleibt unberührt.</string>
     <string name="waste_title">Reserve</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>
@@ -399,6 +400,10 @@
     <plurals name="backup_unreadable">
         <item quantity="one">1 Datei aus der Auswahl konnte nicht gelesen werden - sie ist kein Raum und bleibt unverändert in deiner Sicherung</item>
         <item quantity="other">%1$d Dateien aus der Auswahl konnten nicht gelesen werden - sie sind keine Räume und bleiben unverändert in deiner Sicherung</item>
+    </plurals>
+    <plurals name="backup_not_written">
+        <item quantity="one">1 Raum konnte auf diesem Telefon nicht gespeichert werden - der Speicher ist voll oder gesperrt; die Datei in deiner Sicherung bleibt unberührt</item>
+        <item quantity="other">%1$d Räume konnten auf diesem Telefon nicht gespeichert werden - der Speicher ist voll oder gesperrt; die Dateien in deiner Sicherung bleiben unberührt</item>
     </plurals>
     <string name="route_warning_low_confidence">Dieser Punkt stammt aus Tiefendaten – tippe für einen sichereren Wert erneut auf die erkannte Wand</string>
     <string name="route_warning_height_jump">Das ist ein großer Höhensprung - eine Steigleitung zur Decke oder ein Fehltipp auf den Boden? Mach ihn rückgängig, wenn es ein Fehltipp war</string>

@@ -92,4 +92,35 @@ class BackupOutcomeTest {
             outcome,
         )
     }
+    @Test
+    fun `a restore this phone refused blames the storage, not the backup`() {
+        // Nothing imported, nothing held back, one room read and refused: "nothing imported" would
+        // send the operator looking at his backup instead of at his storage (finding 86).
+        val refused = BackupOutcome.RestoreCounts(
+            imported = 0,
+            heldBack = 0,
+            unreadable = 0,
+            notWritten = 2,
+        )
+
+        assertEquals(
+            BackupOutcome.Failed(detail = "storage"),
+            BackupOutcome.restored(refused, nothingImported = "no rooms", storageFailed = "storage"),
+        )
+    }
+
+    @Test
+    fun `a restore that saved one room and was refused two still names both counts`() {
+        val partial = BackupOutcome.RestoreCounts(
+            imported = 1,
+            heldBack = 0,
+            unreadable = 0,
+            notWritten = 2,
+        )
+
+        assertEquals(
+            BackupOutcome.Restored(count = 1, notWritten = 2),
+            BackupOutcome.restored(partial, nothingImported = "no rooms", storageFailed = "storage"),
+        )
+    }
 }

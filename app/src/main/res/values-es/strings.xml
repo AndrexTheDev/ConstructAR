@@ -287,6 +287,7 @@
     <string name="backup_nothing">Aún no hay nada que copiar: crea primero un proyecto.</string>
     <string name="backup_photos_skipped">No se pudieron copiar %1$d de %2$d fotos.</string>
     <string name="backup_projects_skipped">No se pudieron escribir %1$d de %2$d proyectos: la carpeta está llena o ya no admite escritura.</string>
+    <string name="backup_storage_failed">No se pudo guardar nada en este teléfono: el almacenamiento está lleno o bloqueado. Tu copia sigue intacta.</string>
     <string name="waste_title">Reserva</string>
     <string name="waste_default">Estándar</string>
     <string name="waste_value">%1$d %%</string>
@@ -399,6 +400,10 @@
     <plurals name="backup_unreadable">
         <item quantity="one">No se pudo leer 1 archivo de la selección: no es una sala y sigue intacto en tu copia</item>
         <item quantity="other">No se pudieron leer %1$d archivos de la selección: no son salas y siguen intactos en tu copia</item>
+    </plurals>
+    <plurals name="backup_not_written">
+        <item quantity="one">No se pudo guardar 1 sala en este teléfono: el almacenamiento está lleno o bloqueado; el archivo de tu copia sigue intacto</item>
+        <item quantity="other">No se pudieron guardar %1$d salas en este teléfono: el almacenamiento está lleno o bloqueado; los archivos de tu copia siguen intactos</item>
     </plurals>
     <string name="route_warning_low_confidence">Este punto viene de datos de profundidad: toca de nuevo la pared detectada para un valor más firme</string>
     <string name="route_warning_height_jump">Ese salto de altura es grande: ¿una subida al techo o un toque en el suelo? Deshazlo si fue un fallo</string>

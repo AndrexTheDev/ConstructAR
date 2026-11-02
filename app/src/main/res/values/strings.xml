@@ -287,6 +287,7 @@
     <string name="backup_nothing">Nothing to back up yet - create a project first.</string>
     <string name="backup_photos_skipped">%1$d of %2$d photos could not be copied.</string>
     <string name="backup_projects_skipped">%1$d of %2$d projects could not be written - the folder is full or no longer writable.</string>
+    <string name="backup_storage_failed">Nothing could be saved on this phone - its storage is full or read-only. Your backup is untouched.</string>
     <string name="waste_title">Waste factor</string>
     <string name="waste_default">Default</string>
     <string name="waste_value">%1$d %%</string>
@@ -399,6 +400,10 @@
     <plurals name="backup_unreadable">
         <item quantity="one">1 file in the selection could not be read - it is not a room and stays untouched in your backup</item>
         <item quantity="other">%1$d files in the selection could not be read - they are not rooms and stay untouched in your backup</item>
+    </plurals>
+    <plurals name="backup_not_written">
+        <item quantity="one">1 room could not be saved on this phone - the storage is full or read-only; the file in your backup is untouched</item>
+        <item quantity="other">%1$d rooms could not be saved on this phone - the storage is full or read-only; the files in your backup are untouched</item>
     </plurals>
     <string name="route_warning_low_confidence">This point came from depth data - tap the tracked wall again for a firmer value</string>
     <string name="route_warning_height_jump">That is a big jump in height - a riser up to the ceiling, or a tap on the floor? Undo it if it was a mis-tap</string>
