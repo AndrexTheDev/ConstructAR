@@ -83,6 +83,9 @@ class ArMeasureController(private val context: Context) {
 
     val torchOn = MutableStateFlow(false)
 
+    /** True when the camera refused the torch — the button is hidden rather than left dead. */
+    val torchUnavailable = MutableStateFlow(false)
+
     /**
      * Screen position (pixels) of the floating length label, or null when there is nothing to
      * label. Computed on the render thread from the camera matrices and published for the HUD.
@@ -222,6 +225,14 @@ class ArMeasureController(private val context: Context) {
         }
         val stats = pipeline.depthStats
         val ambientLux = ambientLuxOf(frame.lightEstimate, colorCorrection)
+        // The automatic torch path can switch the light on and can be refused by the camera, so
+        // the UI has to hear about both - and the tracking status should see the torch as it is
+        // now, not as it was on the previous frame (finding 106).
+        torchController?.let { torch ->
+            torch.onAmbientIntensity(ambientLux, batteryPercent())
+            torchOn.value = torch.isOn
+            torchUnavailable.value = torch.unavailable
+        }
         tracking.onFrame(
             tracking = quality,
             // `trackingFailureReason` is non-null (NONE while tracking is fine); it only
@@ -237,7 +248,6 @@ class ArMeasureController(private val context: Context) {
             torchOn = torchOn.value,
             thermallyThrottled = pipeline.state.value.throttleMode == TsdfScanPipeline.ThrottleMode.THROTTLED,
         )
-        torchController?.onAmbientIntensity(ambientLux, batteryPercent())
     }
 
     /** Called from the UI thread when the operator taps the AR view. */
@@ -316,6 +326,7 @@ class ArMeasureController(private val context: Context) {
         val controller = torchController ?: return false
         val result = controller.toggle()
         torchOn.value = controller.isOn
+        torchUnavailable.value = controller.unavailable
         return result
     }
 

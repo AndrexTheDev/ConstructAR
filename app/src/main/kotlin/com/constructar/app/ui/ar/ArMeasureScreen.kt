@@ -190,6 +190,10 @@ fun ArMeasureScreen(
     val tracking by controller.tracking.status.collectAsStateWithLifecycle()
     val scanState by controller.pipeline.state.collectAsStateWithLifecycle()
     val torchOn by controller.torchOn.collectAsStateWithLifecycle()
+    // A torch button that cannot switch anything on is not a button: on a device whose camera
+    // refuses the torch (most tablets have no flash) the tap used to do nothing at all
+    // (finding 106).
+    val torchUnavailable by controller.torchUnavailable.collectAsStateWithLifecycle()
     val hudPosition by controller.hudScreenPixels.collectAsStateWithLifecycle()
     val lastHit by controller.lastHit.collectAsStateWithLifecycle()
     val stability by controller.stability.collectAsStateWithLifecycle()
@@ -629,14 +633,16 @@ fun ArMeasureScreen(
                     enabled = routeState.nodeCount > 0,
                     modifier = Modifier.weight(1f),
                 )
-                GloveButton(
-                    label = stringResource(R.string.ar_torch),
-                    icon = Icons.Default.FlashlightOn,
-                    onClick = { controller.toggleTorch() },
-                    tone = ActionTone.SECONDARY,
-                    selected = torchOn,
-                    modifier = Modifier.weight(1f),
-                )
+                if (!torchUnavailable) {
+                    GloveButton(
+                        label = stringResource(R.string.ar_torch),
+                        icon = Icons.Default.FlashlightOn,
+                        onClick = { controller.toggleTorch() },
+                        tone = ActionTone.SECONDARY,
+                        selected = torchOn,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 GloveButton(
                     label = stringResource(if (showScanner) R.string.ar_stop_scan else R.string.ar_scan),
                     icon = Icons.Default.Add,
