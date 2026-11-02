@@ -35,7 +35,7 @@ class ScanDetailFractionTest {
     }
 
     @Test
-    fun `a dense mesh cannot print more than 100 %`() {
+    fun `a dense mesh cannot print more than one hundred percent`() {
         assertEquals(1f, fractionFor(400_000), 0f)
         assertEquals(1f, fractionFor(Int.MAX_VALUE), 0f)
     }

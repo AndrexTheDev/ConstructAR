@@ -27,6 +27,7 @@ and most expensive to discover in a 12-minute Gradle run:
  15. the README's native assertion count equals the suite      (finding 99)
  16. the project schema version is actually compared            (finding 101)
  17. a kotlin.test assertion is called value-first              (finding 101)
+ 18. no backticked name carries a Windows-hostile character     (finding 102)
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -605,6 +606,34 @@ def check_assert_message_order() -> None:
                       f"mix-up only shows up as a red build (finding 101)")
 
 
+# Only a declaration, never a KDoc code span: `:native-slam` in a comment is not an identifier.
+BACKTICKED_NAME = re.compile(r"(?:fun|class|val|var|object)\s+`([^`\n]+)`")
+WINDOWS_HOSTILE = set('%/:*?"<>|\\')
+
+
+def check_backticked_names() -> None:
+    """A backticked function name may not carry `%`, `/`, `:`, `*`, `?`, quotes, `<>`, `|`, `\\`.
+
+    Kotlin allows a backticked name to be almost anything, and the compiler then refuses the ones
+    that cannot be written as a file name on Windows: `fun \`a dense mesh cannot print more than
+    100 %\`` failed the build with "Name contains character(s) that can cause problems on
+    Windows: %", which no amount of reading the diff would have predicted (finding 102). Test
+    names are written as sentences here, so the trap is one keystroke away every round.
+    """
+    for path in kotlin_sources("app", "ar-engine", "core", "export", "native-slam"):
+        text = path.read_text(encoding="utf-8")
+        if "`" not in text:
+            continue
+        for match in BACKTICKED_NAME.finditer(text):
+            bad = sorted({char for char in match.group(1) if char in WINDOWS_HOSTILE})
+            if not bad:
+                continue
+            line = text[: match.start()].count("\n") + 1
+            add(path, f"line {line}: the backticked name contains {', '.join(repr(c) for c in bad)} "
+                      f"- Kotlin rejects it as a file name on Windows and the build stops "
+                      f"(finding 102)")
+
+
 def check_draft_write_ordering() -> None:
     """Draft writes only inside `writeDraft`, which orders them (finding 74)."""
     for path in kotlin_sources("app"):
@@ -797,6 +826,7 @@ def main() -> int:
     check_native_assertion_count()
     check_schema_version_is_read()
     check_assert_message_order()
+    check_backticked_names()
     check_money_fields_are_not_rekeyed()
     check_manifest_hardening()
     check_kotlin_structure()
