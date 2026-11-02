@@ -92,6 +92,13 @@ DISCARDED_SAVE = re.compile(r"(?m)^\s*repository\.save\s*\(")
 # really does want the raw text (ARCore's own diagnosis) says so in a comment above it.
 RAW_DETAIL = re.compile(r"\.message\s*(\?:|!!)")
 
+# A draft write is fire-and-forget, so two of them can complete out of order. They may therefore
+# only be issued through `writeDraft`, which hands out a ticket in submission order (finding 74) -
+# a direct `repository.saveDraft`/`deleteDraft` anywhere else is a save that can resurrect a draft
+# the operator just deleted.
+DRAFT_WRITE = re.compile(r"repository\s*\.\s*(save|delete)Draft\s*\(")
+DRAFT_GUARD_WINDOW = 40
+
 R_REFERENCE = re.compile(r"\bR\s*\.\s*(string|plurals|array|drawable|xml|style)\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)")
 
 FORBIDDEN_PERMISSIONS = ["android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"]
@@ -302,6 +309,43 @@ def check_raw_exception_messages() -> None:
                       f"map the failure with `storageFailureOf` or mark the site `raw-detail`")
 
 
+def check_draft_write_ordering() -> None:
+    """Draft writes only inside `writeDraft`, which orders them (finding 74)."""
+    for path in kotlin_sources("app"):
+        if "/src/test/" in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        guard_start, guard_end = _function_span(text, "fun writeDraft(")
+        if guard_start < 0:
+            continue
+        for match in DRAFT_WRITE.finditer(text):
+            if guard_start <= match.start() < guard_end:
+                continue
+            line = text[: match.start()].count("\n") + 1
+            add(path, f"line {line}: a draft write outside `writeDraft` can complete out of order "
+                      f"and resurrect a draft that was just deleted")
+
+
+def _function_span(text: str, signature: str) -> tuple[int, int]:
+    """Character range of the function body that starts at [signature], or (-1, -1)."""
+    start = text.find(signature)
+    if start < 0:
+        return -1, -1
+    opening = text.find("{", start)
+    if opening < 0:
+        return start, start
+    depth = 0
+    for index in range(opening, len(text)):
+        character = text[index]
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return start, index
+    return start, len(text)
+
+
 def check_manifest_hardening() -> None:
     """Rules that keep a release build from handing its own data to anyone with a cable.
 
@@ -449,6 +493,7 @@ def main() -> int:
     check_ar_alpha_literals()
     check_discarded_saves()
     check_raw_exception_messages()
+    check_draft_write_ordering()
     check_manifest_hardening()
     check_kotlin_structure()
     check_resource_xml()

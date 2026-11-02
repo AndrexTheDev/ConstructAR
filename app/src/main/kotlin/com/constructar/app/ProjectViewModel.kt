@@ -13,6 +13,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.constructar.app.billing.EntitlementStore
 import com.constructar.app.billing.LicencePublicKey
+import com.constructar.app.data.DraftGate
 import com.constructar.app.data.ProjectRepository
 import com.constructar.app.data.SiteSettings
 import com.constructar.app.data.UiPreferences
@@ -37,6 +38,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 /**
@@ -71,6 +74,10 @@ enum class UiMessage {
 class ProjectViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = ProjectRepository(application)
+
+    /** Submission order for draft writes; see [writeDraft]. */
+    private val draftGate = DraftGate()
+    private val draftWrites = Mutex()
     private val entitlements = EntitlementStore(application)
     private val preferences = UiPreferences(application)
     private val settings = SiteSettings(application)
@@ -303,14 +310,34 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
      * Fire-and-forget on purpose: the screen writes on every committed point, and a write that
      * fails must never interrupt a measurement. The cost of a lost draft is the same as before
      * this existed; the cost of a blocked tap is worse.
+     *
+     * Ordering, however, is not negotiable - see [writeDraft].
      */
     fun saveDraft(draft: RouteDraft?) {
         val projectId = mutableState.value.openProject?.id ?: return
+        writeDraft(projectId, draft)
+    }
+
+    /**
+     * The one place a draft reaches the disk, and the only place that decides whether it may.
+     *
+     * Two calls a second apart can still complete out of order, because both cross to
+     * `Dispatchers.IO` and neither waits for the other. Without a rule, the delete that follows
+     * "Save as run" can finish first and the save that came before it can finish last - the draft
+     * is back on disk, the next entry offers to "recover" a run that is already saved, and the same
+     * conduit is measured into the bill of materials twice. So each request takes a ticket in
+     * submission order and only the newest ticket writes, under one lock (finding 74).
+     */
+    private fun writeDraft(projectId: String, draft: RouteDraft?) {
+        val ticket = draftGate.ticket()
         viewModelScope.launch {
-            if (draft == null || !draft.isRecoverable) {
-                repository.deleteDraft(projectId)
-            } else {
-                repository.saveDraft(draft)
+            draftWrites.withLock {
+                if (!draftGate.isNewest(ticket)) return@withLock
+                if (draft == null || !draft.isRecoverable) {
+                    repository.deleteDraft(projectId)
+                } else {
+                    repository.saveDraft(draft)
+                }
             }
         }
     }
@@ -324,7 +351,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             createdAtEpochMs = System.currentTimeMillis(),
         ) ?: return
         mutableState.value = mutableState.value.copy(pendingDraft = null)
-        viewModelScope.launch { repository.deleteDraft(project.id) }
+        // Through the gate: a save that was queued while he was tapping must not bring the
+        // draft back after he has taken it as a run.
+        writeDraft(project.id, null)
         upsertRoute(route)
     }
 
@@ -332,7 +361,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun discardDraft() {
         val project = mutableState.value.openProject ?: return
         mutableState.value = mutableState.value.copy(pendingDraft = null)
-        viewModelScope.launch { repository.deleteDraft(project.id) }
+        writeDraft(project.id, null)
     }
 
     fun removeRoute(routeId: String, onSaved: (ProjectRecord?) -> Unit = {}) {
