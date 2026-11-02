@@ -33,6 +33,10 @@ import kotlin.test.assertTrue
 @Config(sdk = [34])
 class SignaturePadTest {
 
+    /**
+     * A pad whose strokes are what the state stores: fractions of the pad, not pixels. (The
+     * coordinate space changed in finding 77 precisely so a rotated phone cannot distort them.)
+     */
     private fun pad(vararg strokes: List<Offset>): SignaturePadState {
         val state = SignaturePadState()
         state.surface = IntSize(1_000, 360)
@@ -60,7 +64,7 @@ class SignaturePadTest {
 
     @Test
     fun `a touch without a drag still leaves a signature`() {
-        val bitmap = assertNotNull(pad(listOf(Offset(500f, 180f))).bitmap())
+        val bitmap = assertNotNull(pad(listOf(Offset(0.5f, 0.5f))).bitmap())
         assertEquals(Bitmap.Config.ARGB_8888, bitmap.config)
         assertTrue(inkedPixels(bitmap) > 0, "a tapped pad must not print a blank signature")
     }
@@ -68,7 +72,7 @@ class SignaturePadTest {
     @Test
     fun `a dragged signature is drawn and the page stays white`() {
         val bitmap = assertNotNull(
-            pad(listOf(Offset(100f, 300f), Offset(400f, 60f), Offset(900f, 320f))).bitmap(),
+            pad(listOf(Offset(0.1f, 0.83f), Offset(0.4f, 0.17f), Offset(0.9f, 0.89f))).bitmap(),
         )
         val inked = inkedPixels(bitmap)
         assertTrue(inked > 100, "the stroke must be on the page: $inked pixels")
