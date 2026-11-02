@@ -101,6 +101,9 @@ class ArMeasureController(private val context: Context) {
     val stability: MutableStateFlow<HitStabilizer.Reading?> = MutableStateFlow(null)
     private val hitStabilizer = HitStabilizer()
 
+    /** Keeps the reticle at the centre of a view that may have been rotated or resized. */
+    private val reticleCentre = ReticleCentre()
+
     /**
      * Set from the render thread when a tap has been resolved, consumed on the main thread.
      * The hand-off exists because `Session.createAnchor` belongs to the UI thread while the
@@ -197,9 +200,12 @@ class ArMeasureController(private val context: Context) {
         if (activeInteraction != null) {
             activeInteraction.latestSnapshot = pipeline.latestSnapshot
             // Aim the reticle at the screen centre: the operator holds the phone in front of
-            // the wall, so the centre pixel is what they are pointing at.
-            if (activeInteraction.reticlePoint == null && viewWidth > 0) {
-                activeInteraction.reticlePoint = (viewWidth / 2f) to (viewHeight / 2f)
+            // the wall, so the centre pixel is what they are pointing at. Recomputed whenever the
+            // view changes size - `configChanges` keeps this screen alive across a rotation, so a
+            // centre computed once left the reticle sampling a pixel that had moved off the screen
+            // (finding 117).
+            reticleCentre.update(viewWidth, viewHeight)?.let { centre ->
+                activeInteraction.reticlePoint = centre
             }
             activeInteraction.onFrameEnter(frame, viewWidth, viewHeight, SystemClock.uptimeMillis())
             // Live preview follows the reticle (throttled inside ArInteraction to 12 Hz).
