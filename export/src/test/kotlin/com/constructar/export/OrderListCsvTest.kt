@@ -109,7 +109,7 @@ class OrderListCsvTest {
         elbow90Count = elbow90,
         elbow45Count = elbow45,
         otherBendCount = other,
-        bendAllowanceMeters = 0.5f,
+        bendDeductionMeters = 0.5f,
         lowConfidenceRuns = 0,
     )
 

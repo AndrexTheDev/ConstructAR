@@ -284,6 +284,22 @@ private fun MaterialCard(line: MaterialLine) {
                 )
             }
 
+            // The one number that differs between the tape and the cut: a bend of radius r and
+            // sweep δ makes the bent conduit shorter than the measured polyline by
+            // 2·r·tan(δ/2) − r·δ. It is tiny (4 cm per 90° on a 20 mm pipe) and well inside the
+            // waste factor, so it is never folded in - but it is the figure a fitter cuts to, and
+            // until finding 114 it was computed as a negative "allowance" and shown nowhere.
+            if (line.bendDeductionMeters > 0.0005f) {
+                Text(
+                    stringResource(
+                        R.string.materials_bend_deduction,
+                        LengthFormatter.format(line.bendDeductionMeters),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             Text(
                 stringResource(
                     R.string.export_fittings,

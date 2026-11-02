@@ -28,7 +28,7 @@ data class MaterialLine(
     val elbow90Count: Int,
     val elbow45Count: Int,
     val otherBendCount: Int,
-    val bendAllowanceMeters: Float,
+    val bendDeductionMeters: Float,
     /** Runs in this line whose measurement came from a soft hit source. */
     val lowConfidenceRuns: Int,
 )
@@ -123,7 +123,7 @@ object MaterialListBuilder {
                 elbow90Count = entries.sumOf { it.second.elbow90Count },
                 elbow45Count = entries.sumOf { it.second.elbow45Count },
                 otherBendCount = entries.sumOf { it.second.otherBendCount },
-                bendAllowanceMeters = entries.sumOf { it.second.bendAllowanceMeters.toDouble() }.toFloat(),
+                bendDeductionMeters = entries.sumOf { it.second.bendDeductionMeters.toDouble() }.toFloat(),
                 lowConfidenceRuns = entries.count { it.second.lowConfidenceNodes > 0 },
             )
         }.sortedWith(compareBy({ it.kind.ordinal }, { it.spec.label }))

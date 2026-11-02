@@ -121,6 +121,59 @@ class PolylineMetricsTest {
         assertEquals(0, PolylineMetrics.measure(plane, ConduitSpec.cable(16f)).lowConfidenceNodes)
     }
 
+    /**
+     * A bend of sweep δ and centreline radius r replaces two straight trims of `r·tan(δ/2)` with
+     * an arc of `r·δ`, so the bent conduit is *shorter* than the polyline the tape measures.
+     *
+     * A 20 mm pipe bends at r = 0.1 m, so one right angle deducts
+     * `2 · 0.1 · tan 45° − 0.1 · π/2 = 0.0429 m`. The field used to hold the negative of this and
+     * was documented as "the arc length a fitter has to add inside the bend" - the opposite sign
+     * of what a bend does - and was printed nowhere (finding 114).
+     */
+    @Test
+    fun `a right angle shortens the developed length by the bend deduction`() {
+        val nodes = listOf(node(0f, 0f, 0f), node(2f, 0f, 0f), node(2f, 0f, 2f))
+        val metrics = PolylineMetrics.measure(nodes, ConduitSpec.pipe(20f))
+
+        assertEquals(0.0429f, metrics.bendDeductionMeters, 1e-4f)
+        // Reported, never folded in: the metre figure stays the tape-measure one.
+        assertEquals(4f, metrics.totalMeters, 1e-4f)
+        assertEquals(4f * 1.08f, metrics.withWasteMeters, 1e-3f)
+        assertEquals(1, metrics.elbow90Count)
+    }
+
+    /** A 45° offset deducts a tenth of what a right angle does - the same formula at δ = π/4. */
+    @Test
+    fun `a forty five degree offset deducts its own smaller amount`() {
+        val diagonal = 0.7071f
+        val nodes = listOf(node(0f, 0f, 0f), node(2f, 0f, 0f), node(2f + diagonal, 0f, diagonal))
+        val metrics = PolylineMetrics.measure(nodes, ConduitSpec.pipe(20f))
+
+        assertEquals(0.0043f, metrics.bendDeductionMeters, 1e-4f)
+        assertTrue(metrics.bendDeductionMeters < 0.0429f)
+    }
+
+    /**
+     * A run that doubles back is a measurement artefact, not a 180° bend: `tan(δ/2)` goes to
+     * infinity there, so the uncapped formula produced a deduction of astronomical size. The
+     * sweep is clamped to what a bender can make, and the total can never eat the piece.
+     */
+    @Test
+    fun `a double back is clamped instead of deducting the whole run`() {
+        val nodes = listOf(node(0f, 0f, 0f), node(2f, 0f, 0f), node(1f, 0f, 0f))
+        val metrics = PolylineMetrics.measure(nodes, ConduitSpec.pipe(20f))
+
+        assertTrue(metrics.bendDeductionMeters.isFinite())
+        assertEquals(0.0429f, metrics.bendDeductionMeters, 1e-4f)
+
+        // Two nodes on one line: no corner, no deduction at all.
+        val straight = PolylineMetrics.measure(
+            listOf(node(0f, 0f, 0f), node(3f, 0f, 0f), node(6f, 0f, 0f)),
+            ConduitSpec.pipe(20f),
+        )
+        assertEquals(0f, straight.bendDeductionMeters, 1e-6f)
+    }
+
     @Test
     fun `minimum bend radius scales with the conduit`() {
         val cable = PolylineMetrics.defaultBendRadius(ConduitSpec.cable(16f))

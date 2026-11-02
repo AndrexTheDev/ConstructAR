@@ -253,6 +253,7 @@
     <string name="materials_empty">Noch keine Strecken gemessen - nichts zu bestellen.</string>
     <string name="materials_net">%1$s netto</string>
     <string name="materials_waste">plus %1$d %% Reserve</string>
+    <string name="materials_bend_deduction">Biegeabzug %1$s</string>
     <string name="materials_order">%1$s bestellen</string>
     <string name="materials_total">Insgesamt zu bestellen</string>
     <string name="materials_low_confidence">%1$d Strecken mit unsicherem Treffer - prüfe vor der Bestellung</string>

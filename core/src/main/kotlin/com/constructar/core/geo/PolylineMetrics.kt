@@ -17,6 +17,7 @@ import com.constructar.core.model.SurfaceKind
 import kotlin.math.PI
 import kotlin.math.ceil
 import kotlin.math.max
+import kotlin.math.min
 
 /** Classification of an interior corner — drives the elbow count of the bill of materials. */
 enum class BendKind {
@@ -49,15 +50,25 @@ data class BendAngle(
  *
  * [totalMeters] is the strict Euclidean sum the specification asks for
  * (`L = Σ |Pᵢ₊₁ − Pᵢ|`) over the *anchor-refined* node positions — the same value the
- * floating HUD shows. [bendAllowanceMeters] is reported separately (never folded in) so
- * the on-site figure stays verifiable with a tape measure; procurement uses
- * [withWasteMeters].
+ * floating HUD shows and the figure a tape measure can check.
+ *
+ * [bendDeductionMeters] is the amount by which the *bent* conduit is shorter than that figure:
+ * a bend of sweep δ and centreline radius r replaces two straight trims of `r·tan(δ/2)` with an
+ * arc of `r·δ`, so the developed length loses `2·r·tan(δ/2) − r·δ` at every corner. The trade
+ * calls this the bend deduction (or the "gain" of a bend); it is always positive, and it used to
+ * be here as a negative `bendAllowanceMeters` described as "the arc length a fitter has to add",
+ * which is the opposite sign of what a bend does and was printed nowhere (finding 114).
+ *
+ * It is reported, never folded in: the on-site metre stays the tape-measure figure and
+ * procurement uses [withWasteMeters]. Only sweeps a bender can make (up to 90°, clamped, and
+ * never more than half the run) count - a sharper corner is formed with a fitting, and a
+ * measurement that doubles back on itself is not a bend at all.
  */
 data class RouteMetrics(
     val totalMeters: Float,
     val segments: List<SegmentLength>,
     val bends: List<BendAngle>,
-    val bendAllowanceMeters: Float,
+    val bendDeductionMeters: Float,
     val withWasteMeters: Float,
     val bendCount: Int,
     val elbow90Count: Int,
@@ -161,16 +172,22 @@ object PolylineMetrics {
         val elbow45 = bends.count { it.kind == BendKind.BEND_45 }
         val other = bends.count { it.kind == BendKind.BEND_OTHER }
 
-        // Bend allowance (arc length a fitter has to add inside the bend): each bend of
-        // angle δ replaces two straight trims t with an arc of radius r and sweep δ.
+        // Bend deduction: each bend of sweep δ replaces two straight trims of r·tan(δ/2) with an
+        // arc of radius r, so the bent conduit is shorter than the polyline by
+        // 2·r·tan(δ/2) − r·δ. Clamped to a right angle (a sharper corner is made with a fitting,
+        // not by bending) and to half the run (a deduction can never eat the piece).
         val radius = defaultBendRadius(spec)
-        val allowance = bends.sumOf { bend ->
-            val delta = Math.toRadians(bend.angleDegrees.toDouble()).toFloat()
-            if (delta <= 0f) 0.0 else {
-                val trim = 2f * radius * kotlin.math.tan(delta / 2f)
-                ((radius * delta) - trim).toDouble()
-            }
-        }.toFloat()
+        val deduction = min(
+            bends.sumOf { bend ->
+                val delta = Math.toRadians(bend.angleDegrees.toDouble()).toFloat()
+                val sweep = min(delta, Math.PI.toFloat() / 2f)
+                if (sweep <= 0f) 0.0 else {
+                    val trim = 2f * radius * kotlin.math.tan(sweep / 2f)
+                    (trim - (radius * sweep)).coerceAtLeast(0f).toDouble()
+                }
+            }.toFloat(),
+            total * 0.5f,
+        )
 
         // An open run is clipped at both ends, so it needs one more clip than it has gaps. A
         // closed ring does not: the clip at the start *is* the clip at the end, and the run of
@@ -190,7 +207,7 @@ object PolylineMetrics {
             totalMeters = total,
             segments = segments,
             bends = bends,
-            bendAllowanceMeters = allowance,
+            bendDeductionMeters = deduction,
             withWasteMeters = total * (1f + wasteFactor),
             bendCount = bends.size,
             elbow90Count = elbow90,
