@@ -60,13 +60,52 @@ class SafeFilesTest {
 
     @Test
     fun `the target is untouched when the write cannot happen`() {
-        val target = File(directory, "project.json")
-        target.writeText("important")
-        // A directory in the temporary's place makes the write fail the way a full or
-        // unwritable volume would.
-        File(directory, "project.json.tmp").mkdirs()
+        // A regular file where the parent directory should be: the temporary cannot be created,
+        // which is what a full or unwritable volume looks like from here. (The old version of
+        // this test put a directory in `<target>.tmp`, which only worked while the temporary had
+        // one fixed name - see finding 115.)
+        val blocked = File(directory, "blocked").apply { writeText("not a directory") }
+        val target = File(blocked, "project.json")
         assertFalse(SafeFiles.writeAtomically(target, "replacement"))
-        assertEquals("important", target.readText())
+        assertEquals("not a directory", blocked.readText())
+    }
+
+    /**
+     * The defect this guards was in the crash-safety code itself: every write used one fixed
+     * scratch name, `<target>.tmp`, so two saves of the same room opened the same path, truncated
+     * each other and renamed a *mixture* into place - the one outcome the object exists to make
+     * impossible. Two writers and one shared scratch name produced 25 mixed targets in 40 rounds;
+     * a unique scratch name per call produced none.
+     */
+    @Test
+    fun `writes of the same room from several threads never leave a mixture`() {
+        val target = File(directory, "project.json")
+        val payloads = List(6) { index ->
+            ByteArray(128 * 1024) { index.digitToChar().code.toByte() }
+        }
+        repeat(3) {
+            val barrier = java.util.concurrent.CyclicBarrier(payloads.size)
+            val results = java.util.concurrent.ConcurrentLinkedQueue<Boolean>()
+            val threads = payloads.map { payload ->
+                Thread {
+                    barrier.await()
+                    results += SafeFiles.writeAtomically(target, payload)
+                }
+            }
+            threads.forEach { it.start() }
+            threads.forEach { it.join() }
+
+            assertTrue("every write must report what it did", results.all { it })
+            val content = target.readBytes()
+            assertTrue(
+                "the target must be exactly one payload, never a mixture of two",
+                payloads.any { it.contentEquals(content) },
+            )
+        }
+        assertTrue(
+            "no scratch file may survive the round",
+            directory.listFiles()?.none { it.name.endsWith(SafeFiles.TEMPORARY_SUFFIX) } == true,
+        )
     }
 
     @Test

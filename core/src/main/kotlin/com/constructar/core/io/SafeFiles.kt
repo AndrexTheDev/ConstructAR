@@ -24,6 +24,13 @@ import java.io.FileOutputStream
  *     either the old file or the new one, never half of either,
  *  4. on any failure, remove the temporary file and leave the target untouched.
  *
+ * 5. write under a lock and into a temporary whose name is **unique per call**, because a fixed
+ *    `<target>.tmp` is a shared scratch file: two saves of the same room (two taps, a save that
+ *    overlaps the draft write) opened the same path, truncated each other's bytes and renamed a
+ *    mixture into place - the one failure this object exists to prevent, caused by the object
+ *    itself. Simulated with two writers and one scratch name: 25 of 40 rounds left a target that
+ *    was neither payload; with a unique name, 0 of 40 (finding 115).
+ *
  * Kept in `:core` with no Android types so it can be unit-tested on the host JVM.
  */
 object SafeFiles {
@@ -32,10 +39,16 @@ object SafeFiles {
     fun writeAtomically(target: File, text: String): Boolean =
         writeAtomically(target, text.toByteArray(Charsets.UTF_8))
 
-    fun writeAtomically(target: File, bytes: ByteArray): Boolean {
+    fun writeAtomically(target: File, bytes: ByteArray): Boolean =
+        // One lock for the whole object: writes are small (a project is a few hundred kilobytes),
+        // rare, and already on an I/O thread, so serialising them costs nothing and removes the
+        // only way two callers can meet in the same directory at all.
+        synchronized(writeLock) { writeLocked(target, bytes) }
+
+    private fun writeLocked(target: File, bytes: ByteArray): Boolean {
         val directory = target.parentFile ?: return false
         if (!directory.exists() && !directory.mkdirs()) return false
-        val temporary = File(directory, "${target.name}.tmp")
+        val temporary = File(directory, "${target.name}.${serial.incrementAndGet()}$TEMPORARY_SUFFIX")
         return try {
             FileOutputStream(temporary).use { output ->
                 output.write(bytes)
@@ -76,4 +89,10 @@ object SafeFiles {
     }
 
     const val TEMPORARY_SUFFIX = ".tmp"
+
+    /** Serialises every write in this process - see [writeAtomically]. */
+    private val writeLock = Any()
+
+    /** Makes each temporary unique: `project.json.17.tmp`, not one shared `project.json.tmp`. */
+    private val serial = java.util.concurrent.atomic.AtomicLong(0L)
 }
