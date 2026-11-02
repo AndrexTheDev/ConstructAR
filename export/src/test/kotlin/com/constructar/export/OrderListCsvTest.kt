@@ -6,8 +6,11 @@
 
 package com.constructar.export
 
+import com.constructar.core.bom.MaterialLine
+import com.constructar.core.bom.MaterialList
 import com.constructar.core.bom.MaterialListBuilder
 import com.constructar.core.math.Vec3
+import com.constructar.core.model.ConduitKind
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.HitSource
@@ -53,7 +56,12 @@ class OrderListCsvTest {
 
         val lines = csv.trim().split("\r\n")
         assertTrue(lines.first(), lines.first().startsWith("Project;"))
-        assertTrue(csv.contains("Article;Order length (m);Clips;Couplings;Bends"))
+        assertTrue(
+            csv,
+            csv.contains(
+                "Article;Order length (m);Clips;Couplings;90° elbows;45° elbows;Other bends",
+            ),
+        )
         // One conduit type in the project: header, project, timestamp, one row, blank, total.
         assertEquals(1, lines.count { it.startsWith("LSZH 3 × 2.5 mm²;") })
         assertEquals(1, lines.count { it.startsWith("Total;") })
@@ -87,5 +95,68 @@ class OrderListCsvTest {
         assertTrue(csv.contains("Ø 16 mm"))
         // And the project name became text for the spreadsheet, not a formula.
         assertTrue(csv, csv.contains("Project;'=cmd|' /C calc'!A0"))
+    }
+    private fun line(elbow90: Int, elbow45: Int, other: Int) = MaterialLine(
+        bomKey = "cable|16",
+        kind = ConduitKind.CABLE,
+        spec = ConduitSpec.cable(16f, "Cable Ø16").copy(material = "LSZH 3 × 2.5 mm²"),
+        runCount = 3,
+        totalMeters = 10f,
+        withWasteMeters = 10.7f,
+        wasteFactor = 0.07f,
+        clipCount = 17,
+        couplingCount = 2,
+        elbow90Count = elbow90,
+        elbow45Count = elbow45,
+        otherBendCount = other,
+        bendAllowanceMeters = 0.5f,
+        lowConfidenceRuns = 0,
+    )
+
+    private fun listOfLines(vararg lines: MaterialLine) =
+        MaterialList(
+            projectId = "p1",
+            projectName = "Bad Nord",
+            lines = lines.toList(),
+            generatedAtEpochMs = 0L,
+        )
+
+    @Test
+    fun `the bend articles stay apart, so the list can be ordered from`() {
+        // 2 x 90°, 3 x 45°, 1 bend of unknown angle. A single "Bends: 6" tells the wholesaler
+        // nothing he can put in a van (finding 90).
+        val csv = MaterialCsvWriter.writeOrderList(
+            listOfLines(line(elbow90 = 2, elbow45 = 3, other = 1)),
+            MaterialCsvWriter.Options(includeBom = false),
+        )
+
+        val rows = csv.trim().split("\r\n")
+        val header = rows.first { it.startsWith("Article;") }.split(";")
+        val article = rows.first { it.startsWith("LSZH") }.split(";")
+        val total = rows.first { it.startsWith("Total;") }.split(";")
+
+        assertEquals(
+            "every row must have one cell per header: header=$header",
+            header.size,
+            article.size,
+        )
+        assertEquals("header=$header", header.size, total.size)
+        assertEquals(listOf("2", "3", "1"), article.takeLast(3))
+        assertEquals(listOf("2", "3", "1"), total.takeLast(3))
+    }
+
+    @Test
+    fun `the totals add each bend article across every conduit`() {
+        val csv = MaterialCsvWriter.writeOrderList(
+            listOfLines(
+                line(elbow90 = 2, elbow45 = 3, other = 1),
+                line(elbow90 = 1, elbow45 = 0, other = 4),
+            ),
+            MaterialCsvWriter.Options(includeBom = false),
+        )
+
+        val total = csv.trim().split("\r\n").first { it.startsWith("Total;") }.split(";")
+        // 3 x 90°, 3 x 45°, 5 of unknown angle - summed per article, never merged.
+        assertEquals(listOf("3", "3", "5"), total.takeLast(3))
     }
 }

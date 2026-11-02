@@ -44,7 +44,18 @@ data class MaterialList(
     val totalWithWasteMeters: Float get() = lines.sumOf { it.withWasteMeters.toDouble() }.toFloat()
     val totalClips: Int get() = lines.sumOf { it.clipCount }
     val totalCouplings: Int get() = lines.sumOf { it.couplingCount }
-    val totalElbows: Int get() = lines.sumOf { it.elbow90Count + it.elbow45Count + it.otherBendCount }
+    /**
+     * The bend count, per article - because a wholesaler orders articles, not bends.
+     *
+     * The totals used to exist only as one number. The order list, whose whole job is a purchase
+     * order, printed it as a single "Bends" column: a line saying "4" was four 90° elbows, two 90°
+     * and two 45°, or four bends nobody can identify - and the buyer cannot order any of them
+     * without ringing the electrician (finding 90).
+     */
+    val totalElbow90: Int get() = lines.sumOf { it.elbow90Count }
+    val totalElbow45: Int get() = lines.sumOf { it.elbow45Count }
+    val totalOtherBends: Int get() = lines.sumOf { it.otherBendCount }
+    val totalElbows: Int get() = totalElbow90 + totalElbow45 + totalOtherBends
     val isEmpty: Boolean get() = lines.isEmpty()
 
     fun metersFor(kind: ConduitKind): Float =

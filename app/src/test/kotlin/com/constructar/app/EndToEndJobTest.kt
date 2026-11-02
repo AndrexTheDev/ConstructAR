@@ -170,6 +170,10 @@ class EndToEndJobTest {
         val total = order.split("\r\n").first { it.startsWith("Total;") }.split(";")
         assertEquals(list.totalClips.toString(), total[2])
         assertEquals(list.totalCouplings.toString(), total[3])
-        assertEquals(list.totalElbows.toString(), total[4])
+        assertEquals(list.totalElbow90.toString(), total[4])
+        assertEquals(list.totalElbow45.toString(), total[5])
+        assertEquals(list.totalOtherBends.toString(), total[6])
+        // The three articles add up to the one number the screens show.
+        assertEquals(list.totalElbows, list.totalElbow90 + list.totalElbow45 + list.totalOtherBends)
     }
 }

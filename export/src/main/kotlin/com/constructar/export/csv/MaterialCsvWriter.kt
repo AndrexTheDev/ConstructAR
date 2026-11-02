@@ -137,7 +137,17 @@ object MaterialCsvWriter {
             listOf("Order list", generatedAtLabel.ifBlank { materialList.generatedAtEpochMs.toString() }),
         )
         sb.append(lineEnding)
-        row(sb, sep, listOf("Article", "Order length (m)", "Clips", "Couplings", "Bends"))
+        // One column per bend article, not one for "bends": the buyer orders 90° elbows and 45°
+        // elbows as different articles, and a single total told him only that there were four of
+        // something. The full bill of materials split them from the start; the file written *for*
+        // the wholesaler was the one that did not (finding 90).
+        row(
+            sb, sep,
+            listOf(
+                "Article", "Order length (m)", "Clips", "Couplings",
+                "90° elbows", "45° elbows", "Other bends",
+            ),
+        )
         for (line in materialList.lines) {
             // The article is the procureable description; a spec without one falls back to the
             // size label, exactly as the protocol's procurement table does.
@@ -148,7 +158,9 @@ object MaterialCsvWriter {
                     number(line.withWasteMeters),
                     line.clipCount.toString(),
                     line.couplingCount.toString(),
-                    (line.elbow90Count + line.elbow45Count + line.otherBendCount).toString(),
+                    line.elbow90Count.toString(),
+                    line.elbow45Count.toString(),
+                    line.otherBendCount.toString(),
                 ),
             )
         }
@@ -161,7 +173,9 @@ object MaterialCsvWriter {
                     number(materialList.totalWithWasteMeters),
                     materialList.totalClips.toString(),
                     materialList.totalCouplings.toString(),
-                    materialList.totalElbows.toString(),
+                    materialList.totalElbow90.toString(),
+                    materialList.totalElbow45.toString(),
+                    materialList.totalOtherBends.toString(),
                 ),
             )
         }
