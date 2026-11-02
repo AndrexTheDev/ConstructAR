@@ -180,8 +180,13 @@ private fun columns(vararg fractions: Float): List<Int> {
 /**
  * Turns hours and material into the money block the customer actually reads.
  *
- * Returns `null` for a project without time and without material: an empty "0,00 €" block would
- * only invite the question whether the job was free.
+ * Returns `null` for a project without billable time and without material: an empty "0,00 €" block
+ * would only invite the question whether the job was free.
+ *
+ * "Billable time" is the whole-minute quantity the table prints (finding 76), so the labour line
+ * exists exactly when there is something to multiply. A job of forty seconds used to print
+ * "Arbeitslohn: 0 min x 48,00 €" - a line whose two factors make nothing, on a document the
+ * customer signs (finding 78).
  *
  * The arithmetic lives in [Pricing], not here, so the protocol and the on-screen card cannot
  * drift apart.
@@ -193,12 +198,13 @@ internal fun buildCostSection(
     nowMs: Long = System.currentTimeMillis(),
 ): PdfSection? {
     val workMillis = WorkTime.totalMillis(project.sessions, nowMs)
+    val billedMinutes = WorkTime.billableMinutes(workMillis)
     val labour = Pricing.labourCents(workMillis, hourlyRateCents)
     val material = project.materialLumpSumCents
-    if (workMillis <= 0L && material <= 0L) return null
+    if (billedMinutes <= 0L && material <= 0L) return null
 
     val lines = ArrayList<String>(3)
-    if (workMillis > 0L) {
+    if (billedMinutes > 0L) {
         lines += "%s: %s x %s".format(
             texts.labourLabel,
             duration(workMillis, texts),

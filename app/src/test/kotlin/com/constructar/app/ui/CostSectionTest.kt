@@ -150,6 +150,27 @@ class CostSectionTest {
     }
 
     @Test
+    fun `a job shorter than a minute has no cost block at all`() {
+        // Forty seconds of work, no material: there is nothing to bill, so there is nothing to
+        // print. A "0,00 €" block would only ask the customer whether the job was free.
+        val brief = WorkSession(id = "brief", startEpochMs = 1_767_225_600_000L, endEpochMs = 1_767_225_600_000L + 40_000L)
+        assertNull(buildCostSection(project(sessions = listOf(brief)), 4_800, texts()))
+    }
+
+    @Test
+    fun `a sub-minute session is not printed as a labour line`() {
+        // With material on the job the block exists - but a "0 min x 48,00 €" line whose factors
+        // make nothing does not belong on a document the customer signs.
+        val brief = WorkSession(id = "brief", startEpochMs = 1_767_225_600_000L, endEpochMs = 1_767_225_600_000L + 40_000L)
+        val section = buildCostSection(project(sessions = listOf(brief), materialCents = 25_000L), 4_800, texts())
+        requireNotNull(section)
+        assertEquals(2, section.paragraphs.size)
+        assertTrue(section.paragraphs.any { it.contains(MoneyFormatter.format(25_000)) })
+        assertTrue(section.paragraphs.none { it.contains("0 min") }, section.paragraphs.toString())
+        assertTrue(section.paragraphs.last().contains(MoneyFormatter.format(25_000)))
+    }
+
+    @Test
     fun `a project rate overrides the firm rate`() {
         // 60,00 an hour for a warranty job: one hour bills 60,00, not the firm's default.
         val section = buildCostSection(project(rateCents = 6_000), 6_000, texts(), nowMs = 4_000_000_000_000L)
