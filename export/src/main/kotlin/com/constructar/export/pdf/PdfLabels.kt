@@ -53,8 +53,8 @@ data class PdfLabels(
      * length of the piece that goes in, with no sentence saying why (finding 141).
      */
     val procurementDeduction: String =
-        "Bend deduction %2$s on %1$s - the cut piece is shorter than the run, the order length is " +
-            "not reduced.",
+        "Bend deduction %2\$s on %1\$s - the cut piece is shorter than the run, the order length " +
+            "is not reduced.",
     /**
      * The accuracy the protocol promises, printed under the summary; `%1$d` = the confidence bar.
      *
