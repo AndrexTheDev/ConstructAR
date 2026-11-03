@@ -97,11 +97,9 @@ fun HomeScreen(
     // Searching pays for itself from a handful of rooms on; with two it is just another field
     // between the operator and the thing they tapped the app for.
     val needle = query.trim()
-    val filtered = if (needle.isEmpty()) {
-        projects
-    } else {
-        projects.filter { it.name.contains(needle, ignoreCase = true) || it.siteName.contains(needle, ignoreCase = true) }
-    }
+    // Name, site **and customer**: he remembers who the job was for, not what he called the room
+    // (finding 144).
+    val filtered = projects.filter { ProjectFilter.matches(needle, it) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Header(
@@ -464,11 +462,18 @@ private fun ProjectMetaLine(project: ProjectRepository.ProjectSummary) {
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
-    if (project.siteName.isNotBlank() || project.workRunning || defectsText.isNotEmpty()) {
+    // The customer and the site share one line: the row has to stay three lines tall on a phone
+    // held in a glove, and both facts are the same kind of quiet grey detail. One ellipsized Text
+    // keeps the running-clock and defect chips on the right (finding 129's lesson), where two
+    // weighted Texts would have squeezed them off (finding 144).
+    val placeAndCustomer = listOf(project.customerName.trim(), project.siteName.trim())
+        .filter { it.isNotEmpty() }
+        .joinToString(" · ")
+    if (placeAndCustomer.isNotEmpty() || project.workRunning || defectsText.isNotEmpty()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-            if (project.siteName.isNotBlank()) {
+            if (placeAndCustomer.isNotEmpty()) {
                 Text(
-                    project.siteName,
+                    placeAndCustomer,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

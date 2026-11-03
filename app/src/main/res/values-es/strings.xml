@@ -366,7 +366,7 @@
     <string name="ready_runs">Tramos</string>
     <string name="ready_photo">Foto</string>
     <string name="ready_time">Horas</string>
-    <string name="home_search_hint">Buscar estancias u obras</string>
+    <string name="home_search_hint">Buscar estancias, obras o clientes</string>
     <string name="home_search_empty">Nada coincide con «%1$s».</string>
     <string name="pdf_section_diary">Diario de obra</string>
     <string name="pdf_section_defects">Defectos</string>

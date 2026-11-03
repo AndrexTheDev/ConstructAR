@@ -366,7 +366,7 @@
     <string name="ready_runs">Strecken</string>
     <string name="ready_photo">Foto</string>
     <string name="ready_time">Zeit</string>
-    <string name="home_search_hint">Räume oder Objekte suchen</string>
+    <string name="home_search_hint">Räume, Objekte oder Kunden suchen</string>
     <string name="home_search_empty">Nichts gefunden für „%1$s“.</string>
     <string name="pdf_section_diary">Bautagebuch</string>
     <string name="pdf_section_defects">Mängelliste</string>

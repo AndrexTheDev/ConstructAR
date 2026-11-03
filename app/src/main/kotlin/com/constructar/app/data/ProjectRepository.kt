@@ -74,6 +74,14 @@ class ProjectRepository(private val context: Context) {
         val openDefects: Int = 0,
         /** True while this room's clock is still running. */
         val workRunning: Boolean = false,
+        /**
+         * Who the job is for - the name the operator searches by.
+         *
+         * It is the one of the three names on a room (room, site, customer) that he remembers when
+         * he is standing in front of the man, and it was in neither the row nor the search
+         * (finding 144). Defaulted so a summary written by an older build still decodes.
+         */
+        val customerName: String = "",
     )
 
     /**
@@ -109,6 +117,7 @@ class ProjectRepository(private val context: Context) {
                     updatedAtEpochMs = project.updatedAtEpochMs,
                     openDefects = project.openDefectCount,
                     workRunning = WorkTime.isRunning(project.sessions),
+                    customerName = project.customerName,
                 )
             }
         }

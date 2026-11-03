@@ -366,7 +366,7 @@
     <string name="ready_runs">Runs</string>
     <string name="ready_photo">Photo</string>
     <string name="ready_time">Time</string>
-    <string name="home_search_hint">Search rooms or sites</string>
+    <string name="home_search_hint">Search rooms, sites or customers</string>
     <string name="home_search_empty">Nothing matches “%1$s”.</string>
     <string name="pdf_section_diary">Site diary</string>
     <string name="pdf_section_defects">Defects</string>

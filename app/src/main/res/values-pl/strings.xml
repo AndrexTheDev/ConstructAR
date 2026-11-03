@@ -378,7 +378,7 @@
     <string name="ready_runs">Trasy</string>
     <string name="ready_photo">Zdjęcie</string>
     <string name="ready_time">Czas</string>
-    <string name="home_search_hint">Szukaj pomieszczeń lub budów</string>
+    <string name="home_search_hint">Szukaj pomieszczeń, budów lub klientów</string>
     <string name="home_search_empty">Brak wyników dla „%1$s”.</string>
     <string name="pdf_section_diary">Dziennik budowy</string>
     <string name="pdf_section_defects">Usterki</string>
