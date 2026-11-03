@@ -1278,6 +1278,29 @@ def check_licence_diagnostics_reach_the_screen() -> None:
         if field not in screens:
             add(store, f"Diagnostics.{field} is printed by no screen in app/ui")
 
+def check_onboarding_position_is_saved_state() -> None:
+    """The introduction's position must survive the screen being recreated (finding 145).
+
+    The deck is shown exactly once in the life of the app - `onboardingDone` is persisted when the
+    operator leaves it - and its position lived in a plain `remember`, so a rotation, the obvious
+    thing to do while reading a slide, started it again at slide one. The step also did its own
+    arithmetic (`step++`, `step < 2`) beside a helper that exists to keep it in bounds, so a fourth
+    slide would have been a silent off-by-one.
+
+    Both are pinned here: the position is saved state, and every move goes through `OnboardingStep`.
+    """
+    screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui"
+              / "OnboardingScreen.kt")
+    text = screen.read_text(encoding="utf-8")
+    if not re.search(r"var\s+step\s+by\s+rememberSaveable", text):
+        add(screen, "the introduction's position is not saved state - a rotation restarts the deck "
+                    "at slide one, and the deck is shown once in the life of the app")
+    if re.search(r"var\s+step\s+by\s+remember\s*\{", text):
+        add(screen, "the introduction's position is a plain `remember` again (finding 145)")
+    if re.search(r"step\s*\+\s*1|step\s*-\s*1|step\+\+|\+\+\s*step|step--", text):
+        add(screen, "the slide arithmetic is written inline - it belongs to `OnboardingStep`, which "
+                    "clamps at both ends")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1301,6 +1324,7 @@ def main() -> int:
     check_defect_toggle_is_unambiguous()
     check_mirrored_icons_use_automirrored()
     check_licence_diagnostics_reach_the_screen()
+    check_onboarding_position_is_saved_state()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

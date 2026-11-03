@@ -449,4 +449,5 @@
     <string name="paywall_trial_tampered">El estado de la prueba guardado en este teléfono no se pudo verificar, así que la prueba cuenta como usada. Tus mediciones no se ven afectadas.</string>
     <string name="pdf_procurement_deduction">Descuento por curva %2$s en %1$s: la pieza cortada es más corta que el trazado, la longitud de pedido no se reduce.</string>
     <string name="field_leave_body">La entrada del diario, la incidencia o la ubicación que escribiste para «%1$s» todavía no se ha añadido.</string>
+    <string name="onboard_back">Atrás</string>
 </resources>
