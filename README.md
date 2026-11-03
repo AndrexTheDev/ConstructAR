@@ -443,7 +443,7 @@ Known limitations, deliberately documented rather than hidden:
   copy the bytes it found rather than re-encode them (finding 153), and every length total has to be
   the sum of the rows the documents print (finding 154), and a column of numbers may not sit under a
   blank header (finding 155), and a control may not ask the operator to pick a value it never shows
-  (finding 156).
+  (finding 156), and a CI failure reporter has to be able to find its pull request (finding 157).
 * **Site gate**: `tools/seo_audit.py` reads the *generated* landing pages and refuses a
   regression: canonical and the six `hreflang` pairs, title/description lengths, Open Graph and
   Twitter cards with a real image size, JSON-LD whose offers match the four real prices, every

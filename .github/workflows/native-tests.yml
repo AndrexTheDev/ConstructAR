@@ -78,14 +78,29 @@ jobs:
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The pull request this run belongs to, from the event itself - see the same note in
+          # `.github/workflows/android-build.yml`. This workflow is triggered by a `pull_request`
+          # for every change under the C++ tree and by a `push` only for those paths, so every
+          # failure it ever reports comes from a run whose `GITHUB_REF_NAME` is `<pr>/merge`. The
+          # branch lookup therefore never matched, the step exited 0 and the comment was never
+          # posted: the reporter built because "a failing assertion whose message cannot be read
+          # wastes a full CI cycle" (finding 111) had been wasting them ever since (finding 157).
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
         run: |
           set -uo pipefail
-          pr=$(gh pr list --head "$GITHUB_REF_NAME" --json number -q '.[0].number' 2>/dev/null || true)
-          if [ -z "${pr:-}" ]; then echo "no open PR for $GITHUB_REF_NAME"; exit 0; fi
+          pr="${PR_NUMBER:-}"
+          if [ -z "$pr" ]; then
+            pr=$(gh pr list --head "$HEAD_REF" --json number -q '.[0].number' 2>/dev/null || true)
+          fi
+          if [ -z "${pr:-}" ]; then
+            echo "::warning::no open pull request for '$HEAD_REF' - the failure report was not posted"
+            exit 0
+          fi
           {
             echo "### native-tests failed"
             echo ""
-            echo "commit \`$GITHUB_SHA\` on \`$GITHUB_REF_NAME\`, job ${{ matrix.compiler }} ${{ matrix.optimisation }}"
+            echo "commit \`$GITHUB_SHA\` on \`$HEAD_REF\`, job ${{ matrix.compiler }} ${{ matrix.optimisation }}"
             echo ""
             echo '```'
             if [ -f /tmp/host_tests.log ]; then

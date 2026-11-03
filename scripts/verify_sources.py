@@ -1550,6 +1550,35 @@ def check_screen_states_the_trade_defaults() -> None:
         add(screen, "the screen hard-codes a waste factor instead of asking the engine for it - "
                     "the printed default and the applied one would be two numbers (finding 156)")
 
+def check_failure_reporter_finds_the_pull_request() -> None:
+    """A CI step that reports a failure has to be able to find the pull request (finding 157).
+
+    Both workflows end with a "Report the failure on the pull request" step, written because the
+    Actions log endpoint redirects to a host that is not always reachable and a red job used to
+    arrive as "Run failed" with no message (finding 111). It resolved the pull request with
+    `gh pr list --head "$GITHUB_REF_NAME"` - and on a `pull_request` run `GITHUB_REF_NAME` is
+    `<pr>/merge`, which is not a branch, so the lookup matched nothing, the step printed one line
+    into a log nobody reads and exited **0**. `native-tests` only ever posts from a pull_request
+    run, so it never posted at all: every native failure still arrived mute. The number comes from
+    the event payload now, the branch name is the fallback for push runs, and "no pull request
+    found" is a visible warning rather than a silent success.
+    """
+    workflows = ROOT / ".github" / "workflows"
+    for path in sorted(workflows.glob("*.yml")):
+        text = path.read_text(encoding="utf-8")
+        if "Report the failure on the pull request" not in text:
+            continue
+        if '"$GITHUB_REF_NAME"' in text:
+            add(path, "the failure reporter still resolves the pull request from "
+                      "`GITHUB_REF_NAME`, which is `<pr>/merge` on the runs that fail - the "
+                      "comment is never posted (finding 157)")
+        if "github.event.pull_request.number" not in text:
+            add(path, "the failure reporter does not take the pull request number from the event, "
+                      "so a `pull_request` run cannot find its own PR (finding 157)")
+        if "no open PR for" in text:
+            add(path, "the reporter exits successfully when it cannot find the pull request, so a "
+                      "failure is still reported nowhere (finding 157)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1584,6 +1613,7 @@ def main() -> int:
     check_totals_are_sums_of_printed_rows()
     check_csv_headers_name_their_cells()
     check_screen_states_the_trade_defaults()
+    check_failure_reporter_finds_the_pull_request()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
