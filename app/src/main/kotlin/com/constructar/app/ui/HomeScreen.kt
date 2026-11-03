@@ -91,8 +91,13 @@ fun HomeScreen(
     var newName by rememberSaveable { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
     // A file this build cannot read is still a room on the phone: it occupies the one free
-    // slot just like a healthy one (finding 126).
-    val canCreate = entitlements.allowsAnotherProject(ProjectSlots.used(projects.size, unreadableProjects))
+    // slot just like a healthy one (finding 126). Asked through `ProjectSlots` because the gate
+    // behind this button has to answer with the same count (finding 149).
+    val canCreate = ProjectSlots.allowsAnother(
+        entitlements = entitlements,
+        readable = projects.size,
+        unreadable = unreadableProjects,
+    )
     val mostRecent = projects.firstOrNull()
     // Searching pays for itself from a handful of rooms on; with two it is just another field
     // between the operator and the thing they tapped the app for.

@@ -20,6 +20,12 @@ import org.junit.Test
  * separately, which is the honest thing to do with data the app does not understand. The limit
  * then used that shorter list, so a free install whose only room file was damaged was offered
  * "New room" and ended up with two rooms - one of them invisible (finding 126).
+ *
+ * Finding 126 fixed the *button*, which draws from that same shorter list, and left the two
+ * places that actually create a room: `createProject`'s gate and the room count a restore is
+ * granted. Both counted readable projects only, so a free installation whose one room file was
+ * damaged could still import last week's backup from the backup card and hold two room files
+ * (finding 149). Every decision about the plan's rooms is asked here now.
  */
 class ProjectSlotsTest {
 
@@ -44,5 +50,28 @@ class ProjectSlotsTest {
     @Test
     fun `a licence does not count them at all`() {
         assertTrue(pro.allowsAnotherProject(ProjectSlots.used(readable = 40, unreadable = 3)))
+    }
+
+    @Test
+    fun `a restore is granted no room when a damaged file already holds the slot`() {
+        // The gate behind the button - the one a share intent or the backup card reaches.
+        assertFalse(ProjectSlots.allowsAnother(free, readable = 0, unreadable = 1))
+        assertEquals(0, ProjectSlots.remaining(free, readable = 0, unreadable = 1))
+        // Where finding 126's scenario actually bit: the restore's allowance was the difference
+        // to the *readable* list, which was empty.
+        assertEquals(0, ProjectSlots.remaining(free, readable = 1, unreadable = 0))
+        assertEquals(0, ProjectSlots.remaining(free, readable = 0, unreadable = 2))
+    }
+
+    @Test
+    fun `an empty free install is granted exactly one room`() {
+        assertTrue(ProjectSlots.allowsAnother(free, readable = 0, unreadable = 0))
+        assertEquals(1, ProjectSlots.remaining(free, readable = 0, unreadable = 0))
+    }
+
+    @Test
+    fun `a licence borrows as many rooms as it likes`() {
+        assertEquals(Int.MAX_VALUE - 43, ProjectSlots.remaining(pro, readable = 40, unreadable = 3))
+        assertTrue(ProjectSlots.allowsAnother(pro, readable = 40, unreadable = 3))
     }
 }

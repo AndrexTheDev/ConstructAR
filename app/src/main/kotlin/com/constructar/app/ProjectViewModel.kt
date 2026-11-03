@@ -18,6 +18,7 @@ import com.constructar.app.data.ProjectRepository
 import com.constructar.app.data.SiteSettings
 import com.constructar.app.data.UiPreferences
 import com.constructar.app.ui.FieldPhotos
+import com.constructar.app.ui.ProjectSlots
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.bom.MaterialListBuilder
 import com.constructar.core.bom.MaterialListOptions
@@ -284,7 +285,14 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun createProject(name: String, siteName: String = "", onCreated: (ProjectRecord) -> Unit) {
         viewModelScope.launch {
             val current = mutableState.value
-            if (!current.entitlements.allowsAnotherProject(current.projects.size)) {
+            // The same count the button draws its state from: a room file this build cannot read
+            // is still a room on the phone (findings 126, 149).
+            val slotsLeft = ProjectSlots.allowsAnother(
+                entitlements = current.entitlements,
+                readable = current.projects.size,
+                unreadable = current.unreadableProjects,
+            )
+            if (!slotsLeft) {
                 mutableState.value = current.copy(lastError = UiMessage.PROJECT_LIMIT_REACHED)
                 return@launch
             }
@@ -752,8 +760,14 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             // else's backup - and the free plan would mean nothing. The files that are held
             // back are not deleted or altered; they stay in the operator's zip and can be
             // imported after upgrading.
-            val room = (mutableState.value.entitlements.maxProjects - mutableState.value.projects.size)
-                .coerceAtLeast(0)
+            // Counted through `ProjectSlots` for the same reason the create gate is: a room file
+            // that cannot be read still occupies its slot, so a restore may not hand a free
+            // installation a second room file (findings 126, 149).
+            val room = ProjectSlots.remaining(
+                entitlements = mutableState.value.entitlements,
+                readable = mutableState.value.projects.size,
+                unreadable = mutableState.value.unreadableProjects,
+            )
             // The id each restored file was stored under, keyed by the id it carried: equal for a
             // new room, a fresh id when the old one was taken. A photo follows its room, never
             // the name it happened to have in the zip.

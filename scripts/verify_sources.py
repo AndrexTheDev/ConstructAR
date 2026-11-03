@@ -1374,6 +1374,30 @@ def check_clock_follows_the_phone_setting() -> None:
                           "locale - the convention belongs to the phone's setting and the digits "
                           "to no locale at all (finding 148)")
 
+def check_room_budget_has_one_definition() -> None:
+    """The plan's room budget is computed in `ProjectSlots` and nowhere else (findings 126, 149).
+
+    Finding 126 made the home screen count the room files a build *cannot read* as rooms - a
+    damaged file is still a room on the operator's phone - and fixed the button with it. The two
+    places that actually create a room kept their own arithmetic over the readable list:
+    `createProject`'s gate and the number of rooms a restore is granted. So a free installation
+    whose only room file was damaged was told to upgrade by the button, and could still restore
+    last week's backup into a second room. One definition, asked twice.
+    """
+    pattern = re.compile(r"maxProjects|allowsAnotherProject\s*\(")
+    for path in sorted((ROOT / "app" / "src" / "main").rglob("*.kt")):
+        if path.name == "ProjectSlots.kt":
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            stripped = line.strip()
+            if stripped.startswith("*") or stripped.startswith("//"):
+                continue
+            if pattern.search(line):
+                add(path, f"line {number}: the room budget is computed here instead of in "
+                          "`ProjectSlots` - a count that leaves out a room file this build "
+                          "cannot read is how a free installation ends up with two rooms "
+                          "(findings 126, 149)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1401,6 +1425,7 @@ def main() -> int:
     check_ar_readiness_rechecks_on_resume()
     check_percentages_are_rounded()
     check_clock_follows_the_phone_setting()
+    check_room_budget_has_one_definition()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
