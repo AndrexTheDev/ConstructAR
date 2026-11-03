@@ -440,7 +440,8 @@ Known limitations, deliberately documented rather than hidden:
   the build cannot read has to be reachable and deletable from the list (finding 150), and both
   estimating options the engine reads must be passed where the list is built (finding 151), and the
   order list that leaves the shop must state the waste it applied (finding 152), and a backup has to
-  copy the bytes it found rather than re-encode them (finding 153).
+  copy the bytes it found rather than re-encode them (finding 153), and every length total has to be
+  the sum of the rows the documents print (finding 154).
 * **Site gate**: `tools/seo_audit.py` reads the *generated* landing pages and refuses a
   regression: canonical and the six `hreflang` pairs, title/description lengths, Open Graph and
   Twitter cards with a real image size, JSON-LD whose offers match the four real prices, every
@@ -478,7 +479,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 617 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 618 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 58 checks, 0 failures |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |

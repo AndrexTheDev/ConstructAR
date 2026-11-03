@@ -7,12 +7,14 @@
 package com.constructar.core.bom
 
 import com.constructar.core.math.Vec3
+import com.constructar.core.model.ConduitKind
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.HitSource
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.model.RouteNodeRecord
 import com.constructar.core.model.SurfaceKind
+import com.constructar.core.units.LengthFormatter
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -158,6 +160,66 @@ class MaterialListTest {
         ).lines.single()
         assertEquals(1, guessed.lowConfidenceRuns)
     }
+
+    @Test
+    fun `the total is the sum of the rows the documents print`() {
+        // Three articles of 3.335 m in two trades: each row prints "3.34", so the column adds up
+        // to 10.02 while one rounding at the end gives 10.01. A wholesaler adding the column in
+        // front of the operator is looking at a sheet that does not add up (finding 154).
+        val lines = listOf(
+            line("cable|16", ConduitKind.CABLE, 3.335f),
+            line("cable|10", ConduitKind.CABLE, 3.335f),
+            line("pipe|20", ConduitKind.PIPE, 3.335f),
+        )
+        val list = MaterialList("p1", "Bad Nord", lines, generatedAtEpochMs = 0L)
+
+        val printedRows = lines.map { LengthFormatter.number(it.withWasteMeters).toDouble() }
+        assertEquals(10.02, printedRows.sum(), 1e-9)
+        assertEquals(
+            printedMetersOf(list.totalWithWasteMeters),
+            printedRows.sum(),
+            1e-9,
+            "the total under the column must be the column",
+        )
+        // And the case has teeth: the raw sum rounded once would have printed a different number.
+        assertTrue(
+            printedMetersOf(lines.sumOf { it.withWasteMeters.toDouble() }.toFloat()) != printedRows.sum(),
+            "the fixture no longer reproduces the defect",
+        )
+        // The same rule for the net column and for the per-trade summary.
+        assertEquals(
+            lines.map { LengthFormatter.number(it.totalMeters).toDouble() }.sum(),
+            printedMetersOf(list.totalMeters),
+            1e-9,
+        )
+        assertEquals(
+            printedMetersOf(list.totalMeters),
+            printedMetersOf(list.metersFor(ConduitKind.CABLE)) + printedMetersOf(list.metersFor(ConduitKind.PIPE)),
+            1e-9,
+        )
+    }
+
+    /** A length as the paperwork prints it, for comparing totals with columns. */
+    private fun printedMetersOf(meters: Float): Double =
+        LengthFormatter.number(meters).toDouble()
+
+    /** A hand-built line, for the rounding cases where the builder would only blur the number. */
+    private fun line(key: String, kind: ConduitKind, meters: Float) = MaterialLine(
+        bomKey = key,
+        kind = kind,
+        spec = if (kind == ConduitKind.CABLE) ConduitSpec.cable(16f, "Cable Ø16") else ConduitSpec.pipe(20f, "Pipe Ø20"),
+        runCount = 1,
+        totalMeters = meters,
+        withWasteMeters = meters,
+        wasteFactor = 0f,
+        clipCount = 0,
+        couplingCount = 0,
+        elbow90Count = 0,
+        elbow45Count = 0,
+        otherBendCount = 0,
+        bendDeductionMeters = 0f,
+        lowConfidenceRuns = 0,
+    )
 
     @Test
     fun `an empty room produces an empty list, not a zero line`() {

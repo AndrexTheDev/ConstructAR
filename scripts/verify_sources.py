@@ -1477,6 +1477,36 @@ def check_backup_copies_bytes() -> None:
         add(card, "the backup card writes a re-encoded string instead of the file's own bytes "
                   "(finding 153)")
 
+def check_totals_are_sums_of_printed_rows() -> None:
+    """Every length total has to be the sum of the rows the documents print (finding 154).
+
+    The screen, the bill of materials, the order list and the protocol each print one row per
+    article to the centimetre and a total under the rows. Adding the raw floats and rounding once
+    at the end produced a total that the column did not add up to - three articles of 3.335 m print
+    "3.34" each under a "10.01" - which is the same defect the minutes and the money were fixed
+    for (findings 76, 81). The fix lives in `MaterialList`, so the rule can be local: the aggregate
+    getters must go through `printedMeters`.
+    """
+    material_list = ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" / "bom" / "MaterialList.kt"
+    text = material_list.read_text(encoding="utf-8")
+    # Only the list's own aggregates: `MaterialLine` declares a `totalMeters` of its own, and that
+    # one is the row, not the total.
+    body_from = text.find("data class MaterialList(")
+    if body_from < 0:
+        add(material_list, "`data class MaterialList` is gone; this rule has nothing to check")
+        return
+    for getter in ("val totalMeters:", "val totalWithWasteMeters:", "fun metersFor("):
+        start = text.find(getter, body_from)
+        if start < 0:
+            add(material_list, f"`{getter}` is gone; this rule has nothing to check")
+            continue
+        # The getter, plus the one continuation line a wrapped body may use.
+        window = text[start:text.find("\n", start) + 120]
+        if "printedMeters(" not in window:
+            add(material_list, f"`{getter.strip()}` sums the raw floats, so the total is not the "
+                               "sum of the printed rows and the paperwork does not add up "
+                               "(finding 154)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1508,6 +1538,7 @@ def main() -> int:
     check_both_estimating_overrides_are_passed()
     check_order_list_states_its_waste()
     check_backup_copies_bytes()
+    check_totals_are_sums_of_printed_rows()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

@@ -10,6 +10,7 @@ import com.constructar.core.geo.RouteMetrics
 import com.constructar.core.model.ConduitKind
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.units.LengthFormatter
 
 /**
  * One procurement line. Aggregated per conduit type across every run in the project, so
@@ -40,8 +41,23 @@ data class MaterialList(
     val lines: List<MaterialLine>,
     val generatedAtEpochMs: Long,
 ) {
-    val totalMeters: Float get() = lines.sumOf { it.totalMeters.toDouble() }.toFloat()
-    val totalWithWasteMeters: Float get() = lines.sumOf { it.withWasteMeters.toDouble() }.toFloat()
+    /**
+     * The totals add up **the way the documents print them** - one line at a time, to the
+     * centimetre.
+     *
+     * Every surface prints a row per article and a total under the rows (the screen's list, the
+     * bill of materials, the order list, the protocol), and a reader with a calculator adds the
+     * column. Summing the raw floats rounded once at the end did not give the number under the
+     * column: three articles of 3.335 m print "3.34" each and a total of "10.01", and the operator
+     * who adds the column in front of a wholesaler is holding a sheet that does not add up. The
+     * same problem was fixed for minutes and money (findings 76 and 81) and the length column was
+     * left behind (finding 154).
+     *
+     * [printedMeters] is the one place that decides, and it is *the formatter itself*, so the
+     * arithmetic cannot drift from what is on the page by a half-centimetre boundary either.
+     */
+    val totalMeters: Float get() = lines.sumOf { printedMeters(it.totalMeters) }.toFloat()
+    val totalWithWasteMeters: Float get() = lines.sumOf { printedMeters(it.withWasteMeters) }.toFloat()
     val totalClips: Int get() = lines.sumOf { it.clipCount }
     val totalCouplings: Int get() = lines.sumOf { it.couplingCount }
     /**
@@ -58,8 +74,25 @@ data class MaterialList(
     val totalElbows: Int get() = totalElbow90 + totalElbow45 + totalOtherBends
     val isEmpty: Boolean get() = lines.isEmpty()
 
+    /** The net metres of one trade, added up the same way the summary block prints them. */
     fun metersFor(kind: ConduitKind): Float =
-        lines.filter { it.kind == kind }.sumOf { it.totalMeters.toDouble() }.toFloat()
+        lines.filter { it.kind == kind }.sumOf { printedMeters(it.totalMeters) }.toFloat()
+
+    companion object {
+        /**
+         * One length as the documents print it, back as a number.
+         *
+         * Deliberately a round trip through the formatter: `Math.round(x * 100)` and
+         * `String.format("%.2f", x)` disagree exactly at the half-centimetre boundaries
+         * (`1.005f` is `1.0049999952316284` as a double, which the formatter prints as `1.01` and
+         * `Math.round` turns into `100`), so the only way for a total to be the sum of the printed
+         * rows is to sum what the formatter returned.
+         */
+        internal fun printedMeters(meters: Float): Double {
+            if (!meters.isFinite()) return 0.0
+            return LengthFormatter.number(meters).toDoubleOrNull() ?: 0.0
+        }
+    }
 }
 
 /** Tunables for the estimate. Defaults follow common European site practice. */
