@@ -1495,7 +1495,7 @@ def check_totals_are_sums_of_printed_rows() -> None:
     if body_from < 0:
         add(material_list, "`data class MaterialList` is gone; this rule has nothing to check")
         return
-    for getter in ("val totalMeters:", "val totalWithWasteMeters:", "fun metersFor("):
+    for getter in ("val totalMeters:", "val totalWithWasteMeters:", "fun metersFor(", "fun orderMetersFor("):
         start = text.find(getter, body_from)
         if start < 0:
             add(material_list, f"`{getter}` is gone; this rule has nothing to check")
@@ -1506,6 +1506,26 @@ def check_totals_are_sums_of_printed_rows() -> None:
             add(material_list, f"`{getter.strip()}` sums the raw floats, so the total is not the "
                                "sum of the printed rows and the paperwork does not add up "
                                "(finding 154)")
+
+def check_csv_headers_name_their_cells() -> None:
+    """A column of numbers may not sit under a blank header (finding 155).
+
+    The bill of materials ended with a "Summary by trade" block whose header row was
+    `Summary by trade;` - one named cell and one empty one - over a per-trade length. The number in
+    that unnamed column was the *net* metres, in a file that elsewhere distinguishes net from order
+    length and whose whole purpose is to be ordered from, so the one figure that answered "how much
+    cable altogether" was also the one a buyer could not identify (and not the one he orders by).
+    Every header cell in this writer has to say what its column is.
+    """
+    csv_writer = (ROOT / "export" / "src" / "main" / "kotlin" / "com" / "constructar" / "export" /
+                  "csv" / "MaterialCsvWriter.kt")
+    for number, line in enumerate(csv_writer.read_text(encoding="utf-8").splitlines(), start=1):
+        if "row(" not in line and "listOf(" not in line:
+            continue
+        for blank in ('""', '\'\''):
+            if f", {blank})" in line or f"({blank}, " in line:
+                add(csv_writer, f"line {number}: a CSV cell is blank - a number under a blank "
+                                "header cannot be looked up (finding 155)")
 
 def main() -> int:
     files = tracked_sources()
@@ -1539,6 +1559,7 @@ def main() -> int:
     check_order_list_states_its_waste()
     check_backup_copies_bytes()
     check_totals_are_sums_of_printed_rows()
+    check_csv_headers_name_their_cells()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

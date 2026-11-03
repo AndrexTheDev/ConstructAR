@@ -9,6 +9,7 @@ package com.constructar.export
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.bom.MaterialListBuilder
 import com.constructar.core.mesh.MeshData
+import com.constructar.core.model.ConduitKind
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.ProjectRecord
@@ -100,6 +101,59 @@ class ExportTextFormatsTest {
         // Nothing in the file may begin a line with an evaluating character.
         csv.lineSequence().forEach { line ->
             assertFalse("line starts a formula: $line", line.startsWith("=") || line.startsWith("@"))
+        }
+    }
+
+    @Test
+    fun `the by-trade summary names its length and carries both of them`() {
+        // `Cable; 3.50 m` under a blank header, and the figure was the net metres while the column
+        // above it was the order length (finding 155).
+        val list = MaterialListBuilder.build(sampleProject(), nowMs = 0L)
+        val csv = MaterialCsvWriter.write(list, MaterialCsvWriter.Options(includeBom = false))
+        val rows = csv.split("\r\n")
+
+        val summaryStart = rows.indexOfFirst { it.startsWith("Summary by trade") }
+        assertTrue("the summary block must exist", summaryStart >= 0)
+        val header = rows[summaryStart].split(";")
+        assertEquals(listOf("Summary by trade", "Net length (m)", "Order length (m)"), header)
+        // The line table also has a row per trade, so the summary row is the one *after* its header.
+        val cable = rows.drop(summaryStart + 1).first { it.startsWith("Cable;") }.split(";")
+        assertEquals(MaterialCsvWriter.number(list.metersFor(ConduitKind.CABLE)), cable[1])
+        assertEquals(MaterialCsvWriter.number(list.orderMetersFor(ConduitKind.CABLE)), cable[2])
+        // The order figure is the one to buy by, and it is larger than the net one - a summary that
+        // printed only the first left the buyer to add the waste himself.
+        assertTrue(cable[2].toFloat() > cable[1].toFloat())
+
+        // Both columns still add up to the totals at the top of the same file.
+        val kinds = ConduitKind.entries
+        assertEquals(
+            MaterialCsvWriter.number(list.totalMeters),
+            MaterialCsvWriter.number(kinds.sumOf { list.metersFor(it).toDouble() }.toFloat()),
+        )
+        assertEquals(
+            MaterialCsvWriter.number(list.totalWithWasteMeters),
+            MaterialCsvWriter.number(kinds.sumOf { list.orderMetersFor(it).toDouble() }.toFloat()),
+        )
+    }
+
+    @Test
+    fun `no header cell in the bill of materials is blank`() {
+        // A blank header is a number nobody can look up: the one that used to be here was the
+        // length that decides the order (finding 155).
+        val csv = MaterialCsvWriter.write(
+            MaterialListBuilder.build(sampleProject(), nowMs = 0L),
+            MaterialCsvWriter.Options(includeBom = false, includeRunDetail = true),
+            runDetails = listOf(Triple("Run r1", "Ø 16 mm", 3.5f)),
+        )
+
+        val headers = csv.split("\r\n").filter { row ->
+            row.startsWith("Kind;") || row.startsWith("Summary by trade") || row.startsWith("Run;")
+        }
+        assertEquals("one header per block: $headers", 3, headers.size)
+        headers.forEach { header ->
+            header.split(";").forEachIndexed { index, cell ->
+                assertTrue("blank header cell at $index in \"$header\"", cell.isNotBlank())
+            }
         }
     }
 

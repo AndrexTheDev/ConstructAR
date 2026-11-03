@@ -78,6 +78,16 @@ data class MaterialList(
     fun metersFor(kind: ConduitKind): Float =
         lines.filter { it.kind == kind }.sumOf { printedMeters(it.totalMeters) }.toFloat()
 
+    /**
+     * The **order** metres of one trade: what to buy of this kind, waste included.
+     *
+     * The distinction the by-trade summary did not make: it printed the net figure under a blank
+     * header, in a file whose per-line column is the order length. One trade, two numbers, and the
+     * buyer needs the second (finding 155).
+     */
+    fun orderMetersFor(kind: ConduitKind): Float =
+        lines.filter { it.kind == kind }.sumOf { printedMeters(it.withWasteMeters) }.toFloat()
+
     companion object {
         /**
          * One length as the documents print it, back as a number.

@@ -92,14 +92,26 @@ object MaterialCsvWriter {
             )
         }
 
+        // Both lengths per trade, and a name over each of them.
+        //
+        // This block used to print `label; 112.34 m` under a header row whose second cell was
+        // empty, and the figure was the *net* metres - in a file whose top block distinguishes
+        // "Total metres (net)" from "Total metres (incl. waste)" and whose line table has both a
+        // net and an order column. It was the only length in the document that did not say which
+        // of the two it was, and it answered the question the file exists to answer ("how much
+        // cable altogether") with the number the buyer does not order by (finding 155). The label
+        // and the net figure keep their positions, so a reader of the two old columns is
+        // unaffected; the order length is new, at the end.
         val byKind = ConduitKind.entries.mapNotNull { kind ->
             val meters = materialList.metersFor(kind)
-            if (meters <= 0f) null else kindLabel(kind) to meters
+            if (meters <= 0f) null else Triple(kindLabel(kind), meters, materialList.orderMetersFor(kind))
         }
         if (byKind.isNotEmpty()) {
             sb.append(lineEnding)
-            row(sb, sep, listOf("Summary by trade", ""))
-            byKind.forEach { (label, meters) -> row(sb, sep, listOf(label, number(meters) + " m")) }
+            row(sb, sep, listOf("Summary by trade", "Net length (m)", "Order length (m)"))
+            byKind.forEach { (label, meters, orderMeters) ->
+                row(sb, sep, listOf(label, number(meters), number(orderMeters)))
+            }
         }
 
         if (options.includeRunDetail && runDetails.isNotEmpty()) {
