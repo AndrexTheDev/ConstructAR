@@ -40,6 +40,7 @@ and most expensive to discover in a 12-minute Gradle run:
  24. every write into a folder the operator picked goes through   (findings 130, 131)
      ExportFiles.writeOnce
  25. something re-derives the licence when the app resumes        (finding 132)
+ 26. a screen that shows the device code also lets it be copied   (finding 133)
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -1135,6 +1136,36 @@ def check_resume_entitlement_refresh() -> None:
         add(view_model, "refreshEntitlements() is gone, so the resume hook has nothing to call")
 
 
+def check_device_code_is_copyable() -> None:
+    """A screen that prints the device code must offer a way to copy it (finding 133).
+
+    The tag is the only string the operator has to transmit to buy a licence: twelve hex
+    characters that go into a mail together with the transaction id, and the whole purchase
+    depends on them arriving correctly. The paywall printed it as a headline with no copy button -
+    while each wallet address three lines above had one - and the help screen printed it again
+    without one, so it had to be retyped by hand from a phone screen into the same phone. A single
+    wrong character mints a key for another installation, which fails on activation.
+
+    `DeviceCodeLine` is the one place that prints it, and it carries the button.
+    """
+    ui = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui"
+    writer = ui / "DeviceCode.kt"
+    # A screen *renders* the code; passing it down as an argument is not rendering.
+    renders = re.compile(r"Text\(\s*(text\s*=\s*)?deviceTag\b")
+    for path in sorted(ui.rglob("*.kt")):
+        if path == writer:
+            continue
+        text = path.read_text(encoding="utf-8")
+        if not renders.search(text):
+            continue
+        if "DeviceCodeLine(" not in text:
+            add(
+                path,
+                "prints the device code without DeviceCodeLine - the operator would have to retype "
+                "the one string the purchase depends on",
+            )
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1153,6 +1184,7 @@ def main() -> int:
     check_destructive_dialogs()
     check_folder_writes()
     check_resume_entitlement_refresh()
+    check_device_code_is_copyable()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

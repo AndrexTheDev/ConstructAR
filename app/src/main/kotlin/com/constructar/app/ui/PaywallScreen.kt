@@ -6,8 +6,6 @@
 
 package com.constructar.app.ui
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -269,11 +267,9 @@ fun PaywallScreen(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(
-                    deviceTag,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Jamaica.Lime,
-                )
+                // Printed *and* copyable: this is the one value the operator has to send
+                // (finding 133).
+                DeviceCodeLine(tag = deviceTag)
                 Text(
                     stringResource(R.string.paywall_device_body),
                     style = MaterialTheme.typography.bodySmall,
@@ -493,11 +489,6 @@ private fun price(product: Product): String {
  */
 private fun formatEpochDay(epochDay: Long): String =
     formatDayLabel(epochDay * 86_400_000L, TimeZone.getTimeZone("UTC"))
-
-private fun copyToClipboard(context: Context, value: String) {
-    val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
-    manager.setPrimaryClip(ClipData.newPlainText(value.take(8), value))
-}
 
 /**
  * Opens the operator's wallet if one is installed.

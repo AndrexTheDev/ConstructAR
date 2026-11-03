@@ -146,11 +146,11 @@ fun HelpScreen(
         Section(title = stringResource(R.string.help_licence_title)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PlanChip(entitlements = entitlements, trialDaysLeft = trialDaysLeft, onClick = onUpgrade)
-                Text(
-                    text = deviceTag,
+                DeviceCodeLine(
+                    tag = deviceTag,
+                    modifier = Modifier.padding(start = 12.dp),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 12.dp),
                 )
             }
             // Everything below is a *diagnosis*, shown only when it applies: a normal
