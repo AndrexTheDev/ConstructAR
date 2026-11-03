@@ -1197,6 +1197,57 @@ def check_counted_days_are_plurals() -> None:
                 add(path, f"R.string.{key} is a count - use R.plurals.{key}")
 
 
+def check_defect_toggle_is_unambiguous() -> None:
+    """One button on a defect row may not carry one sentence for two opposite actions (finding 136).
+
+    The row showed a tick in both states with the description "Mark resolved / open again". On a
+    defect that was already resolved the tick says "done" and tapping it *undoes* done - silently,
+    on the row the operator is most likely to tap while reading through the punch list - and the
+    reopened defect then prints as outstanding on the document the customer signs. The two keys
+    below are the fix; the combined one is the defect and may not come back.
+    """
+    labels = ("field_defect_resolve", "field_defect_reopen")
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if not path.exists():
+            continue
+        strings, _ = load_locale(folder)
+        if "field_defect_toggle" in strings:
+            add(path, "'field_defect_toggle' is back: one sentence for a tick that closes an open "
+                      "defect and reopens a resolved one")
+        values = []
+        for key in labels:
+            if key not in strings:
+                add(path, f"'{key}' is missing - one direction of the defect button has no sentence")
+            else:
+                values.append(strings[key])
+        if len(values) == len(labels) and len(set(values)) != len(values):
+            add(path, "the resolve and the reopen sentence of the defect button are identical, so "
+                      "the button still does not say which way it moves the defect")
+    for path in kotlin_sources("app"):
+        if "R.string.field_defect_toggle" in path.read_text(encoding="utf-8"):
+            add(path, "R.string.field_defect_toggle is a shape of finding 136 - ask DefectToggle.labelRes")
+
+
+def check_mirrored_icons_use_automirrored() -> None:
+    """A deprecated icon that got an auto-mirrored twin may not be drawn through `Icons.Default`.
+
+    `Icons.Filled.Undo` is deprecated in favour of `Icons.AutoMirrored.Filled.Undo`, and this app
+    builds with `-Werror`, so drawing the old one does not warn - it fails `:app:compileDebugKotlin`
+    (round 29, finding 136's fix, CI run 41613928215). Nothing in this repository can compile
+    Kotlin, so the failure was only visible 6 minutes into CI; this rule makes it a local one.
+    """
+    deprecated = (
+        "ArrowBack", "ArrowForward", "ArrowLeft", "ArrowRight", "KeyboardArrowLeft",
+        "KeyboardArrowRight", "ExitToApp", "Help", "HelpOutline", "List", "Login", "Logout",
+        "Redo", "Send", "Sort", "Undo", "VolumeOff", "VolumeUp",
+    )
+    pattern = re.compile(r"Icons\.(?:Default|Filled)\.(" + "|".join(deprecated) + r")\b")
+    for path in kotlin_sources("app", "export", "core"):
+        for match in pattern.finditer(path.read_text(encoding="utf-8")):
+            add(path, f"{match.group(0)} is deprecated - use Icons.AutoMirrored.Filled."
+                      f"{match.group(1)}, which builds under -Werror")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1217,6 +1268,8 @@ def main() -> int:
     check_resume_entitlement_refresh()
     check_device_code_is_copyable()
     check_counted_days_are_plurals()
+    check_defect_toggle_is_unambiguous()
+    check_mirrored_icons_use_automirrored()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

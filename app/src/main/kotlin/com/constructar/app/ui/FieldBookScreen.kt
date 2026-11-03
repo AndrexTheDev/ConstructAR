@@ -121,19 +121,33 @@ fun FieldBookScreen(
     // One camera launcher serves every entry: the pending token decides which diary line or
     // defect the picture ends up on. The camera app writes straight into our cache through the
     // FileProvider, so no storage permission and no copy of the operator's gallery is needed.
+    //
+    // The three fields are saved state, not a `remember`: the camera is a second app, and this one
+    // - native AR buffers, a depth model, a rendered scene - is the process Android reclaims while
+    // it is in front. The operator closed the shutter, the result came back to a recreated screen,
+    // and the `remember`ed token was null: the photo was taken and dropped (finding 137).
     val context = LocalContext.current
-    var pending by remember { mutableStateOf<Triple<String, Uri, java.io.File>?>(null) }
+    var pendingToken by rememberSaveable(project.id) { mutableStateOf("") }
+    var pendingUri by rememberSaveable(project.id) { mutableStateOf("") }
+    var pendingPath by rememberSaveable(project.id) { mutableStateOf("") }
     val captureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
-        val target = pending
-        pending = null
-        if (captured && target != null) {
-            // The cache copy goes as soon as it has been copied into private storage - and stays
-            // when that copy failed, because then it is the only picture there is (finding 128).
-            onAttachPhoto(target.first, target.second) { attached ->
-                if (CaptureFile.shouldDelete(captured = true, attached = attached)) target.third.delete()
+        val target = PendingCapture.restore(pendingToken, pendingUri, pendingPath)
+        pendingToken = ""
+        pendingUri = ""
+        pendingPath = ""
+        when (captureOutcome(target, captured)) {
+            CaptureOutcome.ATTACH -> if (target != null) {
+                // The cache copy goes as soon as it has been copied into private storage - and
+                // stays when that copy failed, because then it is the only picture there is
+                // (finding 128).
+                onAttachPhoto(target.token, Uri.parse(target.uriString)) { attached ->
+                    if (CaptureFile.shouldDelete(captured = true, attached = attached)) {
+                        java.io.File(target.path).delete()
+                    }
+                }
             }
-        } else {
-            target?.third?.delete()
+            CaptureOutcome.DISCARD -> if (target != null) java.io.File(target.path).delete()
+            CaptureOutcome.NOTHING -> Unit
         }
     }
     val capture: (String) -> Unit = { token ->
@@ -144,7 +158,9 @@ fun FieldBookScreen(
             context.packageName + ".fileprovider",
             file,
         )
-        pending = Triple(token, uri, file)
+        pendingToken = token
+        pendingUri = uri.toString()
+        pendingPath = file.absolutePath
         captureLauncher.launch(uri)
     }
 
