@@ -123,6 +123,22 @@ object PolylineMetrics {
         com.constructar.core.model.ConduitKind.DUCT -> 0.5f
     }
 
+    /**
+     * The length one piece of this family is bought in, or `null` for a reel that has no joint.
+     *
+     * Cable comes on a drum, so a pull needs no coupling however long it is. Pipes, empty conduit
+     * and duct channels are sold in 3 m lengths, so every 3 m of run needs a socket. The order list
+     * used to answer this with one hard-coded limit for everything: 3 m for ducts and **50 m** for
+     * pipes and cable, so a 40 m pipe pull ordered no socket at all (the fitter cannot join two
+     * pieces he was never sent) and a 60 m cable ordered a coupling that no one makes for a drum
+     * (finding 138).
+     */
+    fun defaultStockLength(spec: ConduitSpec): Float? = when (spec.kind) {
+        com.constructar.core.model.ConduitKind.CABLE -> null
+        com.constructar.core.model.ConduitKind.PIPE -> 3f
+        com.constructar.core.model.ConduitKind.DUCT -> 3f
+    }
+
     /** Euclidean polyline length: `L = Σ |Pᵢ₊₁ − Pᵢ|`, metres. */
     fun length(points: List<Vec3>, closed: Boolean = false): Float {
         if (points.size < 2) return 0f
@@ -142,6 +158,7 @@ object PolylineMetrics {
         closed: Boolean = false,
         wasteFactor: Float = defaultWasteFactor(spec),
         clipSpacingMeters: Float = defaultClipSpacing(spec),
+        stockLengthMeters: Float? = defaultStockLength(spec),
     ): RouteMetrics {
         val segments = ArrayList<SegmentLength>(max(0, nodes.size))
         var total = 0f
@@ -210,9 +227,14 @@ object PolylineMetrics {
         } else {
             ceil(total / clipSpacingMeters).toInt() + if (closedRing) 0 else 1
         }
-        // One coupling per straight length limit exceeded: 3 m for ducts, 50 m cable pulls.
-        val couplingLimit = if (spec.kind == com.constructar.core.model.ConduitKind.DUCT) 3f else 50f
-        val couplings = if (total <= couplingLimit) 0 else ceil(total / couplingLimit).toInt() - 1
+        // One coupling per joint the run needs, and the joint count follows the stock length: a
+        // 12 m pipe is four 3 m pieces and three sockets, a 70 m cable on a drum is still one
+        // piece. See [defaultStockLength] for the 50 m limit this replaces (finding 138).
+        val couplings = if (stockLengthMeters == null || stockLengthMeters <= 0f || total <= stockLengthMeters) {
+            0
+        } else {
+            ceil(total / stockLengthMeters).toInt() - 1
+        }
 
         return RouteMetrics(
             totalMeters = total,

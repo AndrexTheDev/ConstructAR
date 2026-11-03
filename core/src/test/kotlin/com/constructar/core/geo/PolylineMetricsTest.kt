@@ -221,4 +221,32 @@ class PolylineMetricsTest {
         assertEquals(0.128f, cable, 1e-4f) // 8 × 0.016 m
         assertEquals(0.16f, pipe, 1e-4f) // 5 × 0.032 m
     }
+
+    /**
+     * The order list's joints follow the length the trade buys, not one limit for everything.
+     *
+     * A 12 m pipe is four 3 m lengths, so it needs three sockets; a 70 m cable comes off a drum and
+     * needs none; a duct is still joined every 3 m. The old rule used 3 m for ducts and 50 m for
+     * pipes and cable alike, so a 40 m pipe pull ordered **no socket at all** - two pieces, no
+     * fitting to join them - while a 60 m cable ordered a coupling nobody makes for a drum
+     * (finding 138).
+     */
+    @Test
+    fun `a twelve metre pipe is four lengths and three sockets`() {
+        val nodes = listOf(node(0f, 0f, 0f), node(6f, 0f, 0f), node(12f, 0f, 0f))
+        assertEquals(3, PolylineMetrics.measure(nodes, ConduitSpec.pipe(20f)).couplingCount)
+    }
+
+    @Test
+    fun `a seventy metre cable has no joint in it`() {
+        val nodes = listOf(node(0f, 0f, 0f), node(35f, 0f, 0f), node(70f, 0f, 0f))
+        assertEquals(0, PolylineMetrics.measure(nodes, ConduitSpec.cable(16f)).couplingCount)
+    }
+
+    @Test
+    fun `a duct is joined every three metres`() {
+        val nodes = listOf(node(0f, 0f, 0f), node(3.25f, 0f, 0f), node(6.5f, 0f, 0f))
+        // ceil(6.5 / 3) - 1 = 2 joints, the same number the duct has had since the rule existed.
+        assertEquals(2, PolylineMetrics.measure(nodes, ConduitSpec.duct(60f, 40f)).couplingCount)
+    }
 }
