@@ -24,7 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.TextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import com.constructar.app.R
 import com.constructar.app.ui.theme.Jamaica
