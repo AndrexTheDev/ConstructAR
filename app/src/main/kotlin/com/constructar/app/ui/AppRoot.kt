@@ -127,6 +127,20 @@ fun AppRoot(viewModel: ProjectViewModel) {
                 }
 
                 composable(Routes.HOME) {
+                    // The list is the destination that means "no room is open" (finding 134). The
+                    // arrow on the project screen closes the room, the system back gesture did
+                    // not - and neither did coming back from an export started here - so a room
+                    // the operator had left stayed "open" and the next cold start walked back
+                    // into it. A quick resume that has not been shown yet is left alone.
+                    LaunchedEffect(Unit) {
+                        if (OpenRoom.closesOnHome(
+                                hasOpenProject = state.openProject != null,
+                                resumePending = state.resumeReady,
+                            )
+                        ) {
+                            viewModel.closeProject()
+                        }
+                    }
                     HomeScreen(
                         projects = state.projects,
                         unreadableProjects = state.unreadableProjects,
