@@ -8,6 +8,7 @@ package com.constructar.app.ui
 
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -114,6 +115,12 @@ fun FieldBookScreen(
     var defectTitle by rememberSaveable(project.id) { mutableStateOf("") }
     var defectLocation by rememberSaveable(project.id) { mutableStateOf("") }
     var defectSeverity by remember(project.id) { mutableStateOf(DefectSeverity.MEDIUM) }
+    // A diary line is typed with one thumb in the rain and the screen holds it in a draft until
+    // "add" is pressed; the back arrow and the gesture used to take it without a word. The same
+    // question the project screen asks since findings 124 and 142 (finding 143).
+    val unsavedDraft = FieldDrafts.unsaved(diaryDraft, defectTitle, defectLocation)
+    var confirmLeave by rememberSaveable(project.id) { mutableStateOf(false) }
+    BackHandler(enabled = unsavedDraft) { confirmLeave = true }
 
     // The sum of the session rows below, so the big number and the list agree (finding 81).
     val totalMillis = WorkTime.billableMillis(project.sessions, nowMs)
@@ -173,7 +180,7 @@ fun FieldBookScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
+            IconButton(onClick = { if (unsavedDraft) confirmLeave = true else onBack() }) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.paywall_back),
@@ -393,6 +400,27 @@ fun FieldBookScreen(
                 FieldTail(FieldLists.hiddenCount(project.defects.size, FieldLists.DEFECTS_SHOWN))
             }
         }
+    }
+
+    if (confirmLeave) {
+        AlertDialog(
+            onDismissRequest = { confirmLeave = false },
+            title = { Text(stringResource(R.string.project_leave_title)) },
+            text = { Text(stringResource(R.string.field_leave_body, project.name)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmLeave = false
+                        onBack()
+                    },
+                ) { Text(stringResource(R.string.project_leave_discard), color = SiteColors.danger) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmLeave = false }) {
+                    Text(stringResource(R.string.project_leave_keep))
+                }
+            },
+        )
     }
 
     pendingDelete?.let { pending ->
