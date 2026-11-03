@@ -64,6 +64,12 @@ class ArMeasureController(private val context: Context) {
     private val tsdfConfig = com.constructar.nativebridge.TsdfConfig()
     val pipeline = TsdfScanPipeline(config = tsdfConfig)
     val tracking = TrackingMonitor()
+
+    /**
+     * Runs finished in *this* AR session - the only ones whose world coordinates mean anything
+     * here. See [SessionRuns] and finding 129.
+     */
+    private val sessionRouteIds = LinkedHashSet<String>()
     private val sessionController = ArSessionController(context)
     private val anchors = DelegatingAnchorFactory()
     val routeSession = RouteSession(anchors)
@@ -315,6 +321,7 @@ class ArMeasureController(private val context: Context) {
 
     fun finish(label: String): ConduitRoute? {
         val route = routeSession.finish(label) ?: return null
+        sessionRouteIds += route.id
         // Keep the anchors alive: the committed run keeps following ARCore's refinement.
         routeSession.startNewRun()
         hitStabilizer.reset()
@@ -323,9 +330,15 @@ class ArMeasureController(private val context: Context) {
         return route
     }
 
-    /** Uploads/refreshes every committed run of the project. */
+    /**
+     * Uploads/refreshes the committed runs that can be placed in this session.
+     *
+     * A run measured in another session is not drawn: its coordinates belong to a world origin
+     * that no longer exists, and a tube in the wrong spot is worse than no tube at all
+     * (finding 129).
+     */
     fun syncCommittedRoutes(routes: List<ConduitRoute>) {
-        sceneController?.syncCommittedRoutes(routes)
+        sceneController?.syncCommittedRoutes(SessionRuns.placeable(sessionRouteIds, routes))
     }
 
     fun toggleTorch(): Boolean {
@@ -339,6 +352,7 @@ class ArMeasureController(private val context: Context) {
     fun resetScan() = pipeline.reset()
 
     fun release() {
+        sessionRouteIds.clear()
         routeSession.release()
         (anchors.delegate as? ArCoreAnchorFactory)?.detachAll()
         monocularDepth?.close()

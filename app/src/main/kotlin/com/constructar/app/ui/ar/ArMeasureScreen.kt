@@ -280,9 +280,10 @@ fun ArMeasureScreen(
     }
     // Committed runs are re-meshed when a new one is added (and at most once per second).
     LaunchedEffect(project.routes.size) {
-        // A recovered run's coordinates belong to a session that no longer exists: drawing it
-        // would put a length of conduit in a random spot of this room.
-        controller.syncCommittedRoutes(project.routes.filterNot { it.recovered })
+        // Only this session's runs can be placed: a recovered run - and one measured on an
+        // earlier visit - belongs to a world origin that no longer exists, and drawing it would
+        // put a length of conduit in a random spot of this room (finding 129).
+        controller.syncCommittedRoutes(project.routes)
     }
 
     val lengthText = stringResource(R.string.hud_length, LengthFormatter.number(routeState.lengthMeters))
