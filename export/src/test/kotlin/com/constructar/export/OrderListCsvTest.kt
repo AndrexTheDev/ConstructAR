@@ -59,7 +59,8 @@ class OrderListCsvTest {
         assertTrue(
             csv,
             csv.contains(
-                "Article;Order length (m);Clips;Couplings;90° elbows;45° elbows;Other bends",
+                "Article;Order length (m);Clips;Couplings;90° elbows;45° elbows;Other bends;" +
+                    "Net length (m);Waste (%)",
             ),
         )
         // One conduit type in the project: header, project, timestamp, one row, blank, total.
@@ -141,8 +142,8 @@ class OrderListCsvTest {
             article.size,
         )
         assertEquals("header=$header", header.size, total.size)
-        assertEquals(listOf("2", "3", "1"), article.takeLast(3))
-        assertEquals(listOf("2", "3", "1"), total.takeLast(3))
+        assertEquals(listOf("2", "3", "1"), article.atBends(header))
+        assertEquals(listOf("2", "3", "1"), total.atBends(header))
     }
 
     @Test
@@ -155,9 +156,81 @@ class OrderListCsvTest {
             MaterialCsvWriter.Options(includeBom = false),
         )
 
-        val total = csv.trim().split("\r\n").first { it.startsWith("Total;") }.split(";")
+        val rows = csv.trim().split("\r\n")
+        val header = rows.first { it.startsWith("Article;") }.split(";")
+        val total = rows.first { it.startsWith("Total;") }.split(";")
         // 3 x 90°, 3 x 45°, 5 of unknown angle - summed per article, never merged.
-        assertEquals(listOf("3", "3", "5"), total.takeLast(3))
+        assertEquals(listOf("3", "3", "5"), total.atBends(header))
+    }
+
+    /** The three bend cells of a row, found by header name rather than by position. */
+    private fun List<String>.atBends(header: List<String>): List<String> =
+        listOf("90° elbows", "45° elbows", "Other bends").map { this[header.indexOf(it)] }
+
+    @Test
+    fun `the sheet states the length it measured and the waste it added`() {
+        // The order length is the one figure on this sheet that is not a measurement (finding 152).
+        val csv = MaterialCsvWriter.writeOrderList(
+            listOfLines(line(elbow90 = 2, elbow45 = 0, other = 0)),
+            MaterialCsvWriter.Options(includeBom = false),
+        )
+
+        val rows = csv.trim().split("\r\n")
+        val header = rows.first { it.startsWith("Article;") }.split(";")
+        val article = rows.first { it.startsWith("LSZH") }.split(";")
+        val total = rows.first { it.startsWith("Total;") }.split(";")
+
+        assertEquals(listOf("Net length (m)", "Waste (%)"), header.takeLast(2))
+        assertEquals("10.00", article[header.indexOf("Net length (m)")])
+        assertEquals("7.00", article[header.indexOf("Waste (%)")])
+        // The pair reconciles with the column it explains: 10.00 m + 7 % = 10.70 m.
+        assertEquals(
+            MaterialCsvWriter.number(
+                article[header.indexOf("Net length (m)")].toFloat() *
+                    (1f + article[header.indexOf("Waste (%)")].toFloat() / 100f),
+            ),
+            article[header.indexOf("Order length (m)")],
+        )
+        // And the total row holds the same relationship across the whole order.
+        val totalNet = total[header.indexOf("Net length (m)")].toFloat()
+        val totalWaste = total[header.indexOf("Waste (%)")].toFloat()
+        assertEquals(
+            MaterialCsvWriter.number(totalNet * (1f + totalWaste / 100f)),
+            total[header.indexOf("Order length (m)")],
+        )
+    }
+
+    @Test
+    fun `the new columns go at the end, so the seven originals keep their positions`() {
+        // `orderNote` chose a note row over a column for this reason: an importer reading the
+        // original seven by position is the normal case. The count and the waste arrive after
+        // them, never in the middle of them (finding 152).
+        val csv = MaterialCsvWriter.writeOrderList(
+            listOfLines(line(elbow90 = 2, elbow45 = 3, other = 1)),
+            MaterialCsvWriter.Options(includeBom = false),
+        )
+
+        val header = csv.trim().split("\r\n").first { it.startsWith("Article;") }.split(";")
+        assertEquals(
+            listOf(
+                "Article", "Order length (m)", "Clips", "Couplings",
+                "90° elbows", "45° elbows", "Other bends",
+            ),
+            header.take(7),
+        )
+        assertEquals(9, header.size)
+    }
+
+    @Test
+    fun `a total row of an empty list cannot divide by zero`() {
+        val csv = MaterialCsvWriter.writeOrderList(
+            listOfLines(),
+            MaterialCsvWriter.Options(includeBom = false),
+        )
+
+        // No articles, no total row - but the writer must not throw on the way there.
+        assertFalse(csv, csv.contains("Total;"))
+        assertEquals(0f, MaterialCsvWriter.blendedWastePercent(listOfLines()), 0.0001f)
     }
 
     @Test

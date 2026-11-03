@@ -1421,6 +1421,31 @@ def check_both_estimating_overrides_are_passed() -> None:
                                 "`MaterialListOptions` documents and the engine reads - the app "
                                 "then counts every job at the trade default (finding 151)")
 
+def check_order_list_states_its_waste() -> None:
+    """The order list may not print an order length without the waste that made it (finding 152).
+
+    Three surfaces state the pair: the material screen ("Net" / "Waste" / order length), the
+    protocol (a net column and a waste column) and the full CSV (`Net length (m)`, `Waste (%)`,
+    `Order length (m)`). The order list - the one document that leaves the shop, gets mailed to the
+    wholesaler and carried on site - printed the order length alone, so the only number on it that
+    is not a measurement could not be checked against the site or traced back to a chosen factor.
+    """
+    csv_writer = (ROOT / "export" / "src" / "main" / "kotlin" / "com" / "constructar" /
+                  "export" / "csv" / "MaterialCsvWriter.kt")
+    text = csv_writer.read_text(encoding="utf-8")
+    start = text.find("fun writeOrderList(")
+    if start < 0:
+        add(csv_writer, "the order list writer is gone; this rule has nothing to check")
+        return
+    body = text[start:text.find("\n    /**", start)]
+    if "Order length (m)" not in body:
+        return
+    for required in ('"Net length (m)"', '"Waste (%)"', "wasteFactor"):
+        if required not in body:
+            add(csv_writer, "the order list prints an order length without "
+                            f"`{required}` - the only figure on that sheet that is not a "
+                            "measurement, unverifiable against the site (finding 152)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1450,6 +1475,7 @@ def main() -> int:
     check_clock_follows_the_phone_setting()
     check_room_budget_has_one_definition()
     check_both_estimating_overrides_are_passed()
+    check_order_list_states_its_waste()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

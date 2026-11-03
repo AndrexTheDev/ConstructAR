@@ -141,11 +141,22 @@ object MaterialCsvWriter {
         // elbows as different articles, and a single total told him only that there were four of
         // something. The full bill of materials split them from the start; the file written *for*
         // the wholesaler was the one that did not (finding 90).
+        // One column per article on the left, the arithmetic that produced it on the right.
+        //
+        // The order length is the only number on this sheet that is not a measurement: it is the
+        // route plus the waste factor, and the operator can now choose that factor (finding 151).
+        // The screen states the pair, the protocol has a net and a waste column, the full CSV has
+        // both - and the one document that leaves the shop printed the total alone, so 82 m on a
+        // 77 m job read as an error to the fitter holding the sheet in the corridor (finding 152).
+        // The two columns go at the end rather than beside the order length: `orderNote` promises
+        // that a reader of the seven original columns is unaffected, and an importer that reads
+        // them by position is the normal case for this file.
         row(
             sb, sep,
             listOf(
                 "Article", "Order length (m)", "Clips", "Couplings",
                 "90° elbows", "45° elbows", "Other bends",
+                "Net length (m)", "Waste (%)",
             ),
         )
         for (line in materialList.lines) {
@@ -161,6 +172,8 @@ object MaterialCsvWriter {
                     line.elbow90Count.toString(),
                     line.elbow45Count.toString(),
                     line.otherBendCount.toString(),
+                    number(line.totalMeters),
+                    number(line.wasteFactor * 100f),
                 ),
             )
         }
@@ -176,6 +189,8 @@ object MaterialCsvWriter {
                     materialList.totalElbow90.toString(),
                     materialList.totalElbow45.toString(),
                     materialList.totalOtherBends.toString(),
+                    number(materialList.totalMeters),
+                    number(blendedWastePercent(materialList)),
                 ),
             )
         }
@@ -198,6 +213,19 @@ object MaterialCsvWriter {
      * (finding 105). The note is one row under the total rather than an eighth column, so an
      * importer reading the seven columns it was built for keeps working.
      */
+    /**
+     * The waste percentage the total row implies, once the trades are mixed.
+     *
+     * Cable takes 7 % and duct 10 %, so a line-by-line factor cannot be printed in a single total
+     * cell - the sheet would be off by the mix. This is the ratio the two totals actually hold,
+     * which is the only figure that reconciles: `net * (1 + waste/100) == order`.
+     */
+    internal fun blendedWastePercent(materialList: MaterialList): Float {
+        val net = materialList.totalMeters
+        if (net <= 0f) return 0f
+        return (materialList.totalWithWasteMeters - net) / net * 100f
+    }
+
     internal fun orderNote(uncertainRuns: Int): String =
         "runs with an uncertain hit: $uncertainRuns - check those lengths before ordering"
 
