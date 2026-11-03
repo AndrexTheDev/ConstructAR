@@ -89,6 +89,10 @@ fun PaywallScreen(
     deviceTag: String,
     trialUsed: Boolean,
     trialDaysLeft: Long,
+    /** The stored trial state failed its seal, so "already used" is not what happened. */
+    localStateTampered: Boolean = false,
+    /** What the licence rules say about starting a trial on this phone - the same answer `startTrial()` uses. */
+    trialAvailable: Boolean = true,
     onBack: () -> Unit,
     onActivate: (String) -> LicenceCheck,
     /** `false` when the trial could not be started; the screen must not claim it did. */
@@ -185,7 +189,15 @@ fun PaywallScreen(
         // `trialUsed && trialDaysLeft > 0`, which is a different computation: after a clock
         // rollback the licence rules kill the trial while the day counter still reported days left,
         // so the paywall promised an active trial on a build that granted none.
-        when (trialBlockOf(entitlements, failed = trialFailed, used = trialUsed)) {
+        when (
+            trialBlockOf(
+                entitlements = entitlements,
+                failed = trialFailed,
+                used = trialUsed,
+                tampered = localStateTampered,
+                available = trialAvailable,
+            )
+        ) {
             TrialBlock.ACTIVE -> Text(
                 // A count of one is not "1 days left": the sentence that decides whether he buys
                 // is also a sentence that says "1 day" when it is the last one (finding 135).
@@ -202,6 +214,13 @@ fun PaywallScreen(
             // is the difference between a dead button and a sentence the operator can act on.
             TrialBlock.UNAVAILABLE -> Text(
                 stringResource(R.string.paywall_trial_unavailable),
+                style = MaterialTheme.typography.bodyMedium,
+                color = SiteColors.warning,
+            )
+            // Not "the trial has already been used": nothing was used, a stored value did not
+            // verify. The app knows the difference and used to keep it to itself (finding 139).
+            TrialBlock.TAMPERED -> Text(
+                stringResource(R.string.paywall_trial_tampered),
                 style = MaterialTheme.typography.bodyMedium,
                 color = SiteColors.warning,
             )
@@ -513,7 +532,7 @@ private fun openWallet(context: Context, uri: String) {
 }
 
 /** What the trial block of the paywall shows. */
-internal enum class TrialBlock { NONE, OFFER, ACTIVE, UNAVAILABLE, USED }
+internal enum class TrialBlock { NONE, OFFER, ACTIVE, UNAVAILABLE, USED, TAMPERED }
 
 /**
  * The one place that answers "what does the trial block say".
@@ -521,13 +540,29 @@ internal enum class TrialBlock { NONE, OFFER, ACTIVE, UNAVAILABLE, USED }
  * `entitlements.isTrial` is the same value the plan chip shows and every export gate reads, so the
  * paywall cannot claim a trial the rest of the app does not honour.
  */
-internal fun trialBlockOf(entitlements: Entitlements, failed: Boolean, used: Boolean): TrialBlock = when {
+internal fun trialBlockOf(
+    entitlements: Entitlements,
+    failed: Boolean,
+    used: Boolean,
+    tampered: Boolean = false,
+    available: Boolean = true,
+): TrialBlock = when {
     // The trial is a *paid* plan (`Plan.TRIAL.isPaid`), so this branch has to come first: the block
     // used to sit behind `if (!isPro)` and was therefore never shown to the one operator who wants
     // to read it - the one with four days left and a decision to make.
     entitlements.isTrial -> TrialBlock.ACTIVE
     entitlements.isPro -> TrialBlock.NONE
+    // A stored value that failed its seal makes the trial *count* as used without anybody having
+    // used it, so this answer comes before both "used" and "the start was refused": it is the
+    // cause, and the other two sentences would blame the operator (finding 139).
+    tampered -> TrialBlock.TAMPERED
     failed -> TrialBlock.UNAVAILABLE
+    // A trial that was started and is over: the honest sentence, even though the rules also say
+    // none can be started now.
     used -> TrialBlock.USED
+    // The rules already answered "no" - clock rollback, a build that cannot vouch for itself -
+    // and the button's only possible outcome was the failure sentence. Offering it was the defect
+    // (finding 140).
+    !available -> TrialBlock.UNAVAILABLE
     else -> TrialBlock.OFFER
 }

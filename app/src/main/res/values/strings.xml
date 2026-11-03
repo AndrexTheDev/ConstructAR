@@ -446,4 +446,5 @@
     </plurals>
     <string name="field_defect_resolve">Mark resolved</string>
     <string name="field_defect_reopen">Open again</string>
+    <string name="paywall_trial_tampered">The trial state saved on this phone did not verify, so the trial counts as used. Nothing you measured is affected.</string>
 </resources>

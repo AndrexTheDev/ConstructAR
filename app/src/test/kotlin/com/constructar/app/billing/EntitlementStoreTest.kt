@@ -122,6 +122,32 @@ class EntitlementStoreTest {
         assertTrue(store.diagnostics.value.localStateTampered)
     }
 
+    /**
+     * The diagnosis survives a second look.
+     *
+     * `refresh()` used to read the flag into `Diagnostics` and clear it on the way out, so the
+     * screen that refreshes on entry (the licence screen, the paywall after an activation) wiped
+     * the evidence before printing it - and the operator was left with "the trial has already been
+     * used" as the only explanation the app would give (finding 139).
+     */
+    @Test
+    fun `the tamper diagnosis survives the next refresh`() {
+        val store = store()
+        assertTrue(store.startTrial())
+        context.getSharedPreferences("constructar.licence", Context.MODE_PRIVATE)
+            .edit()
+            .putString("trial_start_epoch_day", (startDay + 20L).toString())
+            .apply()
+
+        now = day(startDay + 21L)
+        store.refresh()
+        assertTrue(store.diagnostics.value.localStateTampered)
+
+        // The screen that shows it refreshes on entry: reading twice must not erase the reason.
+        store.refresh()
+        assertTrue("the diagnosis was cleared by a later refresh", store.diagnostics.value.localStateTampered)
+    }
+
     private companion object {
         const val MILLIS_PER_DAY = 86_400_000L
         const val NOON = 43_200_000L

@@ -115,12 +115,29 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val deviceTag: String = "",
         val trialUsed: Boolean = false,
         val trialDaysLeft: Long = 0L,
+        /**
+         * Whether the licence rules would let this phone start a trial right now.
+         *
+         * Defaults to `true`: an unseeded state must not claim a trial is impossible. The paywall
+         * used to draw its "try Pro for 7 days" button from `trialUsed`, a raw presence check of
+         * the stored key, while `startTrial()` refuses on `trialAvailable` - so after a clock
+         * rollback or on a build that cannot vouch for itself the screen offered a button whose
+         * only outcome was the failure sentence (finding 140).
+         */
+        val trialAvailable: Boolean = true,
         /** True while the bundled licence key is the demo key — surfaced in a debug build only. */
         val demoSigningKey: Boolean = false,
         /** The device clock is behind the last day this install has seen. */
         val clockRolledBack: Boolean = false,
         /** The installation could not be confirmed (re-signed APK or an attached debugger). */
         val integrityFailed: Boolean = false,
+        /**
+         * A sealed value on this phone failed to verify, so the trial counts as used.
+         *
+         * Otherwise the paywall answers that state with "the trial has already been used" - the
+         * app's guess about a trial nobody used (finding 139).
+         */
+        val localStateTampered: Boolean = false,
         val onboardingDone: Boolean = false,
         /** Firm-wide waste factor, `null` = each conduit family's default. */
         val wasteOverride: Float? = null,
@@ -162,10 +179,12 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             deviceTag = entitlements.deviceTag,
             trialUsed = entitlements.trialUsed(),
             trialDaysLeft = entitlements.trialDaysLeft(),
+            trialAvailable = entitlements.diagnostics.value.trialAvailable,
             demoSigningKey = LicencePublicKey.isDemoKey,
             onboardingDone = preferences.onboardingDone(),
             wasteOverride = settings.wasteFactorOverride(),
             firmHourlyRateCents = settings.hourlyRateCents() ?: Pricing.DEFAULT_HOURLY_RATE_CENTS,
+            localStateTampered = entitlements.diagnostics.value.localStateTampered,
         )
         refresh()
         resumeLastProject()
@@ -214,14 +233,21 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     /** Re-derives licence, trial and device state. Called on resume: that is how expiry works. */
     fun refreshEntitlements() {
         entitlements.refresh()
+        // The two answered from sealed values run *before* the snapshot: either of them can fail a
+        // seal, and that is the diagnosis the screen is about to show (finding 139).
+        val trialUsed = entitlements.trialUsed()
+        val trialDaysLeft = entitlements.trialDaysLeft()
+        entitlements.refreshDiagnostics()
         mutableState.value = mutableState.value.copy(
             entitlements = entitlements.entitlements.value,
             deviceTag = entitlements.deviceTag,
-            trialUsed = entitlements.trialUsed(),
-            trialDaysLeft = entitlements.trialDaysLeft(),
+            trialUsed = trialUsed,
+            trialDaysLeft = trialDaysLeft,
             demoSigningKey = LicencePublicKey.isDemoKey,
             clockRolledBack = entitlements.diagnostics.value.clockRolledBack,
             integrityFailed = entitlements.diagnostics.value.integrityFailed,
+            localStateTampered = entitlements.diagnostics.value.localStateTampered,
+            trialAvailable = entitlements.diagnostics.value.trialAvailable,
         )
     }
 

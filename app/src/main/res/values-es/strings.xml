@@ -446,4 +446,5 @@
     </plurals>
     <string name="field_defect_resolve">Marcar como resuelto</string>
     <string name="field_defect_reopen">Reabrir</string>
+    <string name="paywall_trial_tampered">El estado de la prueba guardado en este teléfono no se pudo verificar, así que la prueba cuenta como usada. Tus mediciones no se ven afectadas.</string>
 </resources>

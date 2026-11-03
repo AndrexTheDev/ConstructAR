@@ -58,6 +58,7 @@ fun HelpScreen(
     deviceTag: String,
     clockRolledBack: Boolean = false,
     integrityFailed: Boolean = false,
+    localStateTampered: Boolean = false,
     demoSigningKey: Boolean = false,
     repository: ProjectRepository,
     onBack: () -> Unit,
@@ -167,6 +168,15 @@ fun HelpScreen(
                     stringResource(R.string.licence_integrity_failed),
                     style = MaterialTheme.typography.bodySmall,
                     color = SiteColors.danger,
+                )
+            }
+            // The diagnosis the store has always computed and no screen ever showed: without it
+            // the paywall's "already used" is the only thing the operator hears (finding 139).
+            if (localStateTampered) {
+                Text(
+                    stringResource(R.string.paywall_trial_tampered),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SiteColors.warning,
                 )
             }
             if (demoSigningKey) {

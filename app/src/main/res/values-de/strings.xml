@@ -446,4 +446,5 @@
     </plurals>
     <string name="field_defect_resolve">Als erledigt markieren</string>
     <string name="field_defect_reopen">Wieder öffnen</string>
+    <string name="paywall_trial_tampered">Der gespeicherte Teststatus auf diesem Telefon ließ sich nicht prüfen, daher gilt die Testphase als verbraucht. Deine Messungen sind nicht betroffen.</string>
 </resources>

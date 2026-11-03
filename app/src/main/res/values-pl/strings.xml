@@ -468,4 +468,5 @@
     </plurals>
     <string name="field_defect_resolve">Oznacz jako naprawione</string>
     <string name="field_defect_reopen">Otwórz ponownie</string>
+    <string name="paywall_trial_tampered">Zapisany na tym telefonie stan okresu próbnego nie przeszedł weryfikacji, więc okres próbny liczy się jako wykorzystany. Twoje pomiary pozostają bez zmian.</string>
 </resources>

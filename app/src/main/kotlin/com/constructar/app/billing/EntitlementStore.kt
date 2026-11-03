@@ -76,7 +76,17 @@ class EntitlementStore(
     val diagnostics: StateFlow<Diagnostics> = mutableDiagnostics.asStateFlow()
 
     /**
-     * True once a stored value has failed its seal - read by [refresh], cleared by it.
+     * True once any sealed value has failed to verify - and it stays true for the process.
+     *
+     * It was a flag that [refresh] read and then cleared, which lost the evidence twice over: a
+     * second refresh (the licence screen refreshes on entry, the paywall after an activation)
+     * cleared it before anything could read it, and the fields filled in *after* the refresh -
+     * `trialUsed()` and `trialDaysLeft()` - set it only for the next refresh to report. What the
+     * operator is told in the meantime is the paywall's "the trial has already been used", which
+     * is the app's guess: nothing was used, the state did not verify (finding 139).
+     *
+     * A diagnosis is not something to be consumed once: it is why the plan looks the way it does,
+     * and it has to survive until the process ends.
      *
      * Declared *before* `init` on purpose: property initialisers run in declaration order, so a
      * flag declared below would be reset to `false` after the first refresh had set it.
@@ -138,7 +148,19 @@ class EntitlementStore(
             localStateTampered = localStateTampered,
             trialAvailable = decision.trialAvailable,
         )
-        localStateTampered = false
+    }
+
+    /**
+     * Recomputes the diagnostics from the stored state, without touching the entitlements.
+     *
+     * The screen that shows the diagnosis refreshes and then reads; the two fields the refresh
+     * itself fills in are not enough, because `trialUsed()` and `trialDaysLeft()` are answered
+     * from the same sealed values and can raise the tamper flag *after* [refresh] has snapshotted
+     * it. This runs after those reads, so the snapshot the licence screen and the paywall see
+     * includes what they just learned (finding 139).
+     */
+    fun refreshDiagnostics() {
+        mutableDiagnostics.value = mutableDiagnostics.value.copy(localStateTampered = localStateTampered)
     }
 
     /**

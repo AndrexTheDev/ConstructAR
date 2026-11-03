@@ -446,4 +446,5 @@
     </plurals>
     <string name="field_defect_resolve">Segna come risolto</string>
     <string name="field_defect_reopen">Riapri</string>
+    <string name="paywall_trial_tampered">Lo stato della prova salvato su questo telefono non è stato verificato, quindi la prova vale come usata. Le tue misurazioni non sono toccate.</string>
 </resources>

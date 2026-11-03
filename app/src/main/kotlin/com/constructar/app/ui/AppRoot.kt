@@ -307,6 +307,8 @@ fun AppRoot(viewModel: ProjectViewModel) {
                         deviceTag = state.deviceTag,
                         trialUsed = state.trialUsed,
                         trialDaysLeft = state.trialDaysLeft,
+                        localStateTampered = state.localStateTampered,
+                        trialAvailable = state.trialAvailable,
                         onBack = { navController.popBackStack() },
                         onActivate = { key -> viewModel.activateLicence(key) },
                         onStartTrial = {
@@ -326,6 +328,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                         deviceTag = state.deviceTag,
                         clockRolledBack = state.clockRolledBack,
                         integrityFailed = state.integrityFailed,
+                        localStateTampered = state.localStateTampered,
                         demoSigningKey = state.demoSigningKey,
                         repository = viewModel.repository(),
                         onBack = { navController.popBackStack() },

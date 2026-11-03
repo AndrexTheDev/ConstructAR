@@ -1248,6 +1248,36 @@ def check_mirrored_icons_use_automirrored() -> None:
             add(path, f"{match.group(0)} is deprecated - use Icons.AutoMirrored.Filled."
                       f"{match.group(1)}, which builds under -Werror")
 
+def check_licence_diagnostics_reach_the_screen() -> None:
+    """Every diagnosis `EntitlementStore` computes has to arrive at something the operator sees (finding 139).
+
+    `Diagnostics.localStateTampered` was computed, documented as "for the licence screen", and read
+    by nothing: no `UiState` field carried it, no screen printed it, and `refresh()` cleared it on
+    its way out - so the one place the app could have explained itself (a trial that "was already
+    used" without anyone having used it) knew nothing. A diagnosis nobody can read is not a
+    diagnosis; it is a comment.
+    """
+    store = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app"
+             / "billing" / "EntitlementStore.kt")
+    text = store.read_text(encoding="utf-8")
+    block = re.search(r"data class Diagnostics\((.*?)\n    \)", text, re.S)
+    if block is None:
+        add(store, "EntitlementStore.Diagnostics is gone - this rule cannot see what it explains")
+        return
+    fields = re.findall(r"val (\w+): Boolean =", block.group(1))
+    if not fields:
+        add(store, "Diagnostics has no boolean field - the rule would pass without checking anything")
+        return
+    view_model = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app"
+                  / "ProjectViewModel.kt").read_text(encoding="utf-8")
+    ui = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui"
+    screens = "\n".join(path.read_text(encoding="utf-8") for path in ui.rglob("*.kt"))
+    for field in fields:
+        if f"val {field}: Boolean" not in view_model:
+            add(store, f"Diagnostics.{field} never reaches UiState - no screen can show it")
+        if field not in screens:
+            add(store, f"Diagnostics.{field} is printed by no screen in app/ui")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1270,6 +1300,7 @@ def main() -> int:
     check_counted_days_are_plurals()
     check_defect_toggle_is_unambiguous()
     check_mirrored_icons_use_automirrored()
+    check_licence_diagnostics_reach_the_screen()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
