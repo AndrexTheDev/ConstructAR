@@ -176,10 +176,20 @@ fun ProjectScreen(
     val customerDirty = customerName != project.customerName ||
         customerAddress != project.customerAddress ||
         customerPhone != project.customerPhone
+    // The two drafts that are *not* customer or price, and were not in the guard: the name that
+    // signs the protocol and the note for the office each have their own Save button, so an
+    // unsaved one is work the operator can still lose (finding 142).
+    val technicianDirty = technicianDraft.trim() != project.technician
+    val notesDirty = notesDraft != project.notes
     // Typed work is work: the back arrow and the system back gesture used to drop every unsaved
     // field without a question, while the AR screen has asked before discarding a run since
-    // finding 26 (finding 124).
-    val unsavedEdits = ProjectEdits.lostByLeaving(customerDirty, priceDirty)
+    // finding 26 (finding 124). All four groups are named, not counted.
+    val unsavedEdits = ProjectEdits.lostByLeaving(
+        customerFieldsDiffer = customerDirty,
+        priceDiffers = priceDirty,
+        technicianDiffers = technicianDirty,
+        notesDiffer = notesDirty,
+    )
     var confirmLeave by rememberSaveable(project.id) { mutableStateOf(false) }
     BackHandler(enabled = unsavedEdits) { confirmLeave = true }
 
