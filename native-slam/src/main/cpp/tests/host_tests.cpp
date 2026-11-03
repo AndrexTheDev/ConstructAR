@@ -553,6 +553,53 @@ void testBlockBudgetUnderConcurrency() {
                               std::to_string(kBudget) + ")");
 }
 
+/**
+ * What a frame reports about the blocks it allocated.
+ *
+ * `IntegrationStats::blocksAllocated` is published to the app through the JNI (`IntegrationResult`)
+ * and it used to be wrong twice over: a block created during the frame was *never* counted, because
+ * the code that created it set `lastFrame` to the current frame first, so the caller's "is this new
+ * to me?" test said no - one frame into an empty volume reported hundreds of blocks in the volume
+ * and zero allocated; and a block reached by two worker threads in the same frame was counted
+ * twice, because the touch was a plain read-modify-write outside the shard lock (finding 160).
+ */
+void testBlocksAllocatedPerFrame() {
+  section("Block allocation accounting");
+  SyntheticCamera camera;
+  const auto depth = renderSphereDepth(camera, Vec3(0.f, 0.f, -2.f), 0.5f);
+  TsdfConfig config;
+  config.voxelSize = 0.01f;
+  config.minConfidence = 0;
+  config.workerThreads = 8;
+  TsdfVolume volume(config);
+
+  const auto first = volume.integrate(makeFrame(camera, depth, Mat4::identity()), 2);
+  check(first.blocksTotal > 0, "the first frame allocates blocks (" +
+                                  std::to_string(first.blocksTotal) + ")");
+  check(first.blocksAllocated == first.blocksTotal,
+        "every block of the first frame is reported (" + std::to_string(first.blocksAllocated) +
+            " of " + std::to_string(first.blocksTotal) + ")");
+
+  const auto second = volume.integrate(makeFrame(camera, depth, Mat4::identity()), 2);
+  check(second.blocksAllocated > 0, "the second frame reports the blocks it reached (" +
+                                        std::to_string(second.blocksAllocated) + ")");
+  check(second.blocksAllocated <= second.blocksTotal,
+        "no block is counted twice in one frame (" + std::to_string(second.blocksAllocated) +
+            " of " + std::to_string(second.blocksTotal) + ")");
+  check(second.blocksTotal == first.blocksTotal, "the same view does not grow the volume");
+
+  // Eight workers, twelve volumes, a step of one pixel: the window for two threads to land in one
+  // block is as wide as this test can make it, and every frame still has to add up.
+  bool bounded = true;
+  for (int round = 0; round < 12; ++round) {
+    TsdfVolume concurrent(config);
+    concurrent.integrate(makeFrame(camera, depth, Mat4::identity()), 1);
+    const auto stats = concurrent.integrate(makeFrame(camera, depth, Mat4::identity()), 1);
+    bounded = bounded && stats.blocksAllocated <= stats.blocksTotal && stats.blocksAllocated > 0;
+  }
+  check(bounded, "twelve eight-worker frames counted within the volume");
+}
+
 void testInvalidInput() {
   section("Invalid input handling");
   TsdfConfig config;
@@ -582,6 +629,7 @@ int main() {
   testTriangleBudgetAndReset();
   testBlockBudget();
   testBlockBudgetUnderConcurrency();
+  testBlocksAllocatedPerFrame();
   testInvalidInput();
 
   std::printf("\n%d checks, %d failures\n", g_checks, g_failures);

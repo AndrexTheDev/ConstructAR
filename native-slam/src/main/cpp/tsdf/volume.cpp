@@ -56,12 +56,20 @@ int TsdfVolume::shardFor(int64_t key) {
   return static_cast<int>((mixed >> 58) & (kShardCount - 1));
 }
 
-TsdfVolume::Block* TsdfVolume::findOrCreateBlock(int32_t bx, int32_t by, int32_t bz) {
+TsdfVolume::Touch TsdfVolume::findOrCreateBlock(int32_t bx, int32_t by, int32_t bz) {
   const int64_t key = blockKey(bx, by, bz);
   Shard& shard = *shards_[shardFor(key)];
   std::lock_guard<std::mutex> lock(shard.mutex);
   auto it = shard.index.find(key);
-  if (it != shard.index.end()) return &shard.blocks[it->second];
+  if (it != shard.index.end()) {
+    Block* existing = &shard.blocks[it->second];
+    // The touch belongs under this lock, next to the header it writes. It used to be the caller's
+    // `if (block->lastFrame != frameCounter_) { …; ++allocated; }` - an unsynchronised read and
+    // write of a field another thread may own at the same moment (finding 160).
+    if (existing->lastFrame == frameCounter_) return Touch{existing, false};
+    existing->lastFrame = frameCounter_;
+    return Touch{existing, true};
+  }
   // The slot is claimed **before** the memory exists, and the claim is atomic.
   //
   // This used to be a relaxed load, a comparison and a `fetch_add` after the block was built.
@@ -75,7 +83,7 @@ TsdfVolume::Block* TsdfVolume::findOrCreateBlock(int32_t bx, int32_t by, int32_t
   for (;;) {
     if (claimed >= config_.maxBlocks) {
       blockBudgetReported_.store(true, std::memory_order_relaxed);
-      return nullptr;
+      return Touch{nullptr, false};
     }
     if (blockCount_.compare_exchange_weak(claimed, claimed + 1, std::memory_order_relaxed,
                                           std::memory_order_relaxed)) {
@@ -95,7 +103,11 @@ TsdfVolume::Block* TsdfVolume::findOrCreateBlock(int32_t bx, int32_t by, int32_t
   block.bz = bz;
   block.lastFrame = frameCounter_;
   shard.index.emplace(key, static_cast<uint32_t>(shard.blocks.size() - 1));
-  return &block;
+  // A block that did not exist a moment ago is this frame's allocation, and it used to be counted
+  // as *nothing*: `lastFrame` was pre-set here, so the caller's "is this block new to me?" test
+  // always said no. One frame into an empty volume reported 572 blocks in the volume and 0
+  // allocated (finding 160).
+  return Touch{&block, true};
 }
 
 const TsdfVolume::Block* TsdfVolume::findBlock(int32_t bx, int32_t by, int32_t bz) const {
@@ -213,12 +225,10 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
         const int32_t bx = floorDiv(ix, kResolution);
         const int32_t by = floorDiv(iy, kResolution);
         const int32_t bz = floorDiv(iz, kResolution);
-        Block* block = findOrCreateBlock(bx, by, bz);
+        const Touch touch = findOrCreateBlock(bx, by, bz);
+        Block* block = touch.block;
         if (!block) continue;
-        if (block->lastFrame != frameCounter_) {
-          block->lastFrame = frameCounter_;
-          ++allocated;
-        }
+        if (touch.firstInFrame) ++allocated;
 
         const int lx = ix - bx * kResolution;
         const int ly = iy - by * kResolution;

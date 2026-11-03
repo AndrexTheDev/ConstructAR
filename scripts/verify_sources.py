@@ -1607,7 +1607,7 @@ def check_block_budget_claim_is_atomic() -> None:
     """
     volume = (ROOT / "native-slam" / "src" / "main" / "cpp" / "tsdf" / "volume.cpp")
     text = volume.read_text(encoding="utf-8")
-    start = text.find("TsdfVolume::Block* TsdfVolume::findOrCreateBlock(")
+    start = text.find("TsdfVolume::findOrCreateBlock(")
     if start < 0:
         add(volume, "`findOrCreateBlock` is gone; this rule has nothing to check")
         return
@@ -1617,6 +1617,35 @@ def check_block_budget_claim_is_atomic() -> None:
     if "compare_exchange_weak" not in body:
         add(volume, "the block budget is compared before the slot is claimed, so two threads can "
                     "both allocate past it - the memory guard leaks (finding 159)")
+
+def check_block_touch_is_locked() -> None:
+    """The per-frame block bookkeeping belongs inside the shard lock (finding 160).
+
+    `integrateRows` used to touch each block one line after the lookup:
+
+        if (block->lastFrame != frameCounter_) { block->lastFrame = frameCounter_; ++allocated; }
+
+    That is an unsynchronised read-modify-write of a field of a block another worker thread may be
+    writing at the same instant, and the two mistakes it hid were both visible in the number the
+    JNI publishes: a block created during the frame was never counted (its `lastFrame` was set at
+    creation, so the caller's test said no - one frame into an empty volume reported hundreds of
+    blocks and zero allocated), and a block reached by two threads was counted twice. The touch now
+    happens in `findOrCreateBlock`, under the shard mutex, and hands back whether it was the first
+    of the frame.
+    """
+    volume = (ROOT / "native-slam" / "src" / "main" / "cpp" / "tsdf" / "volume.cpp")
+    text = volume.read_text(encoding="utf-8")
+    start = text.find("TsdfVolume::findOrCreateBlock(")
+    if start < 0:
+        add(volume, "`findOrCreateBlock` is gone; this rule has nothing to check")
+        return
+    end = text.find("\n}\n", start)
+    outside = text[:start] + text[end:]
+    for number, line in enumerate(outside.splitlines(), start=1):
+        if "lastFrame" in line:
+            add(volume, f"line {number}: `lastFrame` is touched outside `findOrCreateBlock`, where "
+                        "no shard lock is held - the frame's block count is a race, and a new "
+                        "block is counted as nothing (finding 160)")
 
 def main() -> int:
     files = tracked_sources()
@@ -1655,6 +1684,7 @@ def main() -> int:
     check_failure_reporter_finds_the_pull_request()
     check_confidence_zero_is_a_reading()
     check_block_budget_claim_is_atomic()
+    check_block_touch_is_locked()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

@@ -197,7 +197,22 @@ class TsdfVolume {
   static int64_t blockKey(int32_t bx, int32_t by, int32_t bz);
   static int shardFor(int64_t key);
 
-  Block* findOrCreateBlock(int32_t bx, int32_t by, int32_t bz);
+  /**
+   * A block for one sample, and whether this frame is the first to reach it.
+   *
+   * The second half exists because the per-frame bookkeeping has to happen **inside** the shard
+   * lock. It used to be done by the caller, one line after the lookup, on a field of a block whose
+   * header another worker thread may be writing at the same instant - a data race, a double count
+   * when two threads land in one block, and, because a freshly created block was created with
+   * `lastFrame` already set, a first frame that allocated hundreds of blocks and reported zero
+   * (finding 160).
+   */
+  struct Touch {
+    Block* block = nullptr;
+    bool firstInFrame = false;
+  };
+
+  Touch findOrCreateBlock(int32_t bx, int32_t by, int32_t bz);
   /** Existing block, or null. Read-only, for the gather paths. */
   const Block* findBlock(int32_t bx, int32_t by, int32_t bz) const;
   /** Existing block, or null - never allocates. The carving pass needs to write into it. */
