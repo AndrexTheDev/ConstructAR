@@ -319,6 +319,25 @@ class ArMeasureController(private val context: Context) {
         routeSession.setLivePoint(hit)
     }
 
+    /**
+     * Draws the run being measured: the nodes placed so far plus the segment to the reticle.
+     *
+     * `RouteSession` has built this mesh on every node and every reticle move since the routing
+     * state was written, and `RouteSceneController.syncLiveRoute` has existed to upload it - but
+     * nothing ever called it, so the only thing the operator saw while measuring was the crosshair
+     * and the numbers: the conduit appeared in one piece when the run was finished, and the
+     * preview mesh was rebuilt up to twelve times a second for nobody (finding 162). The upload is
+     * deduped on the mesh identity inside the controller, so a still reticle costs nothing.
+     */
+    fun syncLiveRoute() {
+        val state = routeSession.state.value
+        sceneController?.syncLiveRoute(
+            nodes = state.nodes,
+            spec = state.spec,
+            previewGeometry = state.preview?.mesh,
+        )
+    }
+
     fun setSpec(spec: ConduitSpec) = routeSession.setSpec(spec)
 
     fun undo() {

@@ -1671,6 +1671,41 @@ def check_excluded_runs_are_recorded() -> None:
         add(source, "the excluded runs' metres are not on the list, so no document can say how "
                     "much of the job is missing from it (finding 161)")
 
+def check_live_route_is_drawn() -> None:
+    """The run being measured has to reach the renderer (finding 162).
+
+    `RouteSession` builds the preview mesh and `RouteSceneController.syncLiveRoute` uploads it, but
+    for as long as the routing state existed nothing in the app called the second one: the only
+    thing on screen while measuring was the crosshair and the numbers, the conduit appeared in one
+    piece when the run was finished, and the preview was rebuilt up to twelve times a second for
+    nobody. A unit test of the controller cannot see a missing caller, so the wiring is a rule.
+    """
+    app = ROOT / "app" / "src" / "main" / "kotlin"
+    controller = ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" / "arengine" / "render" / "RouteSceneController.kt"
+    calls = 0
+    for source in app.rglob("*.kt"):
+        text = source.read_text(encoding="utf-8")
+        for line in text.splitlines():
+            trimmed = line.strip()
+            if trimmed.startswith(("*", "//")):
+                continue
+            if "syncLiveRoute(" in trimmed:
+                calls += 1
+    if calls == 0:
+        add(controller, "nothing in the app calls `syncLiveRoute`, so the run being measured is "
+                       "never drawn and the preview mesh is built for nobody (finding 162)")
+    text = controller.read_text(encoding="utf-8")
+    start = text.find("fun syncLiveRoute(")
+    if start < 0:
+        add(controller, "`syncLiveRoute` is gone; this rule has nothing to check")
+        return
+    end = text.find("\n    }\n", start)
+    body = text[start:end if end > 0 else len(text)]
+    if "uploadedSignatures" in body:
+        add(controller, "the live preview is deduped on the node signature, but its geometry "
+                        "changes when the reticle moves without a node being added - the drawn "
+                        "run trails the operator by one node (finding 162)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1710,6 +1745,7 @@ def main() -> int:
     check_block_budget_claim_is_atomic()
     check_block_touch_is_locked()
     check_excluded_runs_are_recorded()
+    check_live_route_is_drawn()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

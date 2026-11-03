@@ -294,6 +294,13 @@ fun ArMeasureScreen(
             if (event != null) controller.applyPendingHit()
         }
     }
+    // The run being measured follows the reticle (finding 162): `RouteSession` rebuilds the
+    // preview whenever a node is added or the reticle moves, and the geometry controller skips the
+    // upload when the signature has not changed, so this is at most one upload per geometry change
+    // - and the key becomes `null` when the run is finished, which removes the mesh.
+    LaunchedEffect(routeState.preview, routeState.nodeCount) {
+        controller.syncLiveRoute()
+    }
     // Re-upload the room scan whenever the (300 ms-throttled) mesh changes.
     LaunchedEffect(scanState.meshVersion, showScanner) {
         controller.syncScanMesh(showScanner)
