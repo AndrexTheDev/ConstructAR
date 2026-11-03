@@ -128,14 +128,27 @@ class MaterialListTest {
         ).lines.single()
         assertEquals(1, flagged.lowConfidenceRuns, "a 0.2-confidence run must be visible in the BOM")
 
-        val excluded = MaterialListBuilder.build(
+        val excludedList = MaterialListBuilder.build(
             project(route("a", cable, 3f, confidence = 0.2f), route("b", cable, 2f)),
             MaterialListOptions(includeLowConfidenceRuns = false),
             nowMs = 0L,
-        ).lines.single()
+        )
+        val excluded = excludedList.lines.single()
         assertEquals(1, excluded.runCount)
         assertEquals(2f, excluded.totalMeters, 1e-3f)
         assertEquals(0, excluded.lowConfidenceRuns)
+
+        // The exclusion has to leave a trace: every warning in the app counts the runs that
+        // *survived*, so a list that dropped one and recorded nothing prints as a job with no
+        // uncertainty at all, short by the metres it threw away (finding 161).
+        assertEquals(1, excludedList.excludedLowConfidenceRuns, "the dropped run is counted")
+        assertEquals(3f, excludedList.excludedLowConfidenceMeters, 1e-3f)
+        val included = MaterialListBuilder.build(
+            project(route("a", cable, 3f, confidence = 0.2f), route("b", cable, 2f)),
+            nowMs = 0L,
+        )
+        assertEquals(0, included.excludedLowConfidenceRuns, "nothing is excluded by default")
+        assertEquals(0f, included.excludedLowConfidenceMeters, 1e-6f)
     }
 
     @Test

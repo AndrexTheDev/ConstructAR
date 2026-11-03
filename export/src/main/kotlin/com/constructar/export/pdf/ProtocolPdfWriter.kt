@@ -336,6 +336,14 @@ class ProtocolPdfWriter(
                     y = drawNote(page.canvas, note, y)
                 }
                 drawNote(page.canvas, content.labels.procurementNote, y)
+                // The table can be short by whole runs on purpose: the list was built with the
+                // uncertain ones excluded (finding 161). Every other warning counts what survived,
+                // so without this line the page says nothing about the metres it left out.
+                exclusionNote(
+                    content.materialList.excludedLowConfidenceRuns,
+                    content.materialList.excludedLowConfidenceMeters,
+                    content.labels.procurementExcluded,
+                )?.let { note -> y = drawNote(page.canvas, note, y) }
                 y += 22
             }
 
@@ -736,6 +744,16 @@ internal fun bendDeductionNotes(lines: List<MaterialLine>, template: String): Li
                 LengthFormatter.format(line.bendDeductionMeters),
             )
         }
+
+/**
+ * The line under the procurement table when runs were left out of it; `%1$d` runs, `%2$s` metres.
+ *
+ * `null` when nothing was excluded, so a complete table carries no sentence about completeness.
+ */
+internal fun exclusionNote(runs: Int, meters: Float, template: String): String? {
+    if (runs <= 0) return null
+    return String.format(Locale.ROOT, template, runs, LengthFormatter.format(meters))
+}
 
 internal fun photoAppendixNote(shown: Int, total: Int, template: String): String? {
     if (total <= shown) return null

@@ -1647,6 +1647,30 @@ def check_block_touch_is_locked() -> None:
                         "no shard lock is held - the frame's block count is a race, and a new "
                         "block is counted as nothing (finding 160)")
 
+def check_excluded_runs_are_recorded() -> None:
+    """A run left out of the bill of materials has to be counted somewhere (finding 161).
+
+    `MaterialListOptions.includeLowConfidenceRuns = false` removes a run from `lines`, and every
+    warning the app has - the screen line, the order list's note, the protocol's per-run flag -
+    counts the runs that *survived*. A list built with the option therefore printed a
+    complete-looking bill of materials, a total short by the metres it dropped, and "0" wherever
+    it was asked how uncertain it was. The builder now adds the run to
+    `excludedLowConfidenceRuns` / `excludedLowConfidenceMeters` before it `continue`s, and the
+    documents can say what is missing.
+    """
+    source = ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" / "bom" / "MaterialList.kt"
+    text = source.read_text(encoding="utf-8")
+    if "includeLowConfidenceRuns" not in text:
+        add(source, "`includeLowConfidenceRuns` is gone; this rule has nothing to check")
+        return
+    if "excludedLowConfidenceRuns" not in text:
+        add(source, "`includeLowConfidenceRuns` drops runs without recording them, so the list, "
+                    "the order note and the screen all report no uncertainty on the job that has "
+                    "the most of it (finding 161)")
+    if "excludedLowConfidenceMeters" not in text:
+        add(source, "the excluded runs' metres are not on the list, so no document can say how "
+                    "much of the job is missing from it (finding 161)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1685,6 +1709,7 @@ def main() -> int:
     check_confidence_zero_is_a_reading()
     check_block_budget_claim_is_atomic()
     check_block_touch_is_locked()
+    check_excluded_runs_are_recorded()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

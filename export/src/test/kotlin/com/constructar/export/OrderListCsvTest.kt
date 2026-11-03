@@ -114,13 +114,18 @@ class OrderListCsvTest {
         lowConfidenceRuns = 0,
     )
 
-    private fun listOfLines(vararg lines: MaterialLine) =
-        MaterialList(
-            projectId = "p1",
-            projectName = "Bad Nord",
-            lines = lines.toList(),
-            generatedAtEpochMs = 0L,
-        )
+    private fun listOfLines(
+        vararg lines: MaterialLine,
+        excludedLowConfidenceRuns: Int = 0,
+        excludedLowConfidenceMeters: Float = 0f,
+    ) = MaterialList(
+        projectId = "p1",
+        projectName = "Bad Nord",
+        lines = lines.toList(),
+        generatedAtEpochMs = 0L,
+        excludedLowConfidenceRuns = excludedLowConfidenceRuns,
+        excludedLowConfidenceMeters = excludedLowConfidenceMeters,
+    )
 
     @Test
     fun `the bend articles stay apart, so the list can be ordered from`() {
@@ -263,6 +268,36 @@ class OrderListCsvTest {
         // The absence of the note is a claim too: an operator who does not see it has to be able
         // to trust that every length on the sheet was measured.
         assertFalse(csv, csv.contains("Note;"))
+    }
+
+    @Test
+    fun `a list with the uncertain runs left out says so under the total`() {
+        // Everything the sheet warns with counts the runs that survived, so an order list built
+        // with the uncertain ones excluded warned about nothing at all and read like a job whose
+        // every length had been checked - while it was short by the metres left out (finding 161).
+        val csv = MaterialCsvWriter.writeOrderList(
+            listOfLines(
+                line(elbow90 = 1, elbow45 = 0, other = 0),
+                excludedLowConfidenceRuns = 2,
+                excludedLowConfidenceMeters = 6.5f,
+            ),
+            MaterialCsvWriter.Options(includeBom = false),
+        )
+
+        val note = csv.trim().split("\r\n").last()
+        assertTrue("the note is the last row: $note", note.startsWith("Note;"))
+        assertTrue("it names how many runs are missing: $note", note.contains("left out as too uncertain: 2"))
+        assertTrue("and what they measured: $note", note.contains("6.50 m"))
+        assertTrue("with the totals it is missing from: $note", note.contains("totals above do not include"))
+    }
+
+    @Test
+    fun `a list that left nothing out carries no exclusion note`() {
+        val csv = MaterialCsvWriter.writeOrderList(
+            listOfLines(line(elbow90 = 1, elbow45 = 1, other = 1)),
+            MaterialCsvWriter.Options(includeBom = false),
+        )
+        assertFalse(csv, csv.contains("left out as too uncertain"))
     }
 
     @Test

@@ -259,6 +259,7 @@
     <string name="materials_order">%1$s to order</string>
     <string name="materials_total">To order in total</string>
     <string name="materials_low_confidence">%1$d runs with an uncertain hit - check them before ordering</string>
+    <string name="materials_excluded_low_confidence">%1$d runs were left out as too uncertain (%2$s) - the totals below do not include them</string>
     <string name="signature_title">Customer signature</string>
     <string name="signature_hint">Sign with a finger - it is printed on the protocol.</string>
     <string name="signature_clear">Clear</string>
@@ -457,6 +458,7 @@
     <string name="field_defect_reopen">Open again</string>
     <string name="paywall_trial_tampered">The trial state saved on this phone did not verify, so the trial counts as used. Nothing you measured is affected.</string>
     <string name="pdf_procurement_deduction">Bend deduction %2$s on %1$s - the cut piece is shorter than the run, the order length is not reduced.</string>
+    <string name="pdf_procurement_excluded">%1$d runs too uncertain to price were left out of this procurement table (%2$s) - the totals above do not include them.</string>
     <string name="field_leave_body">The diary line, defect or location you typed for “%1$s” has not been added yet.</string>
     <string name="onboard_back">Back</string>
 </resources>

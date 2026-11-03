@@ -19,7 +19,8 @@ package com.constructar.export.pdf
  * a script or a future CLI tool can generate a protocol without a resources table, and so a
  * missing field degrades to something readable instead of an empty page.
  *
- * Format arguments: [footer] takes `%1$s` (app version), [pageLabel] takes `%1$d` (page number).
+ * Format arguments: [footer] takes `%1$s` (app version), [pageLabel] takes `%1$d` (page number),
+ * [procurementExcluded] takes `%1$d` runs and `%2$s` metres.
  */
 data class PdfLabels(
     val title: String = "Measurement protocol",
@@ -55,6 +56,18 @@ data class PdfLabels(
     val procurementDeduction: String =
         "Bend deduction %2\$s on %1\$s - the cut piece is shorter than the run, the order length " +
             "is not reduced.",
+    /**
+     * Printed under the procurement table when the list left the uncertain runs out; `%1$d` runs,
+     * `%2$s` their metres.
+     *
+     * The order list gained the same sentence in finding 161, for the same reason: every warning in
+     * the product counts the runs that **survived**, so a procurement table built with them excluded
+     * printed nothing about uncertainty at all while quietly ordering less than the job needs - on
+     * the one page the customer signs.
+     */
+    val procurementExcluded: String =
+        "%1\$d runs too uncertain to price were left out of this procurement table (%2\$s) - the " +
+            "totals above do not include them.",
     /**
      * The accuracy the protocol promises, printed under the summary; `%1$d` = the confidence bar.
      *

@@ -259,6 +259,7 @@
     <string name="materials_order">%1$s a pedir</string>
     <string name="materials_total">Total a pedir</string>
     <string name="materials_low_confidence">%1$d recorridos con impacto incierto: revísalos antes de pedir</string>
+    <string name="materials_excluded_low_confidence">%1$d recorridos se han excluido por ser demasiado inciertos (%2$s): los totales de abajo no los incluyen</string>
     <string name="signature_title">Firma del cliente</string>
     <string name="signature_hint">Firma con el dedo: se imprime en el protocolo.</string>
     <string name="signature_clear">Borrar</string>
@@ -457,6 +458,7 @@
     <string name="field_defect_reopen">Reabrir</string>
     <string name="paywall_trial_tampered">El estado de la prueba guardado en este teléfono no se pudo verificar, así que la prueba cuenta como usada. Tus mediciones no se ven afectadas.</string>
     <string name="pdf_procurement_deduction">Descuento por curva %2$s en %1$s: la pieza cortada es más corta que el trazado, la longitud de pedido no se reduce.</string>
+    <string name="pdf_procurement_excluded">%1$d recorridos demasiado inciertos para valorarlos se han excluido de esta tabla de compra (%2$s): los totales de arriba no los incluyen.</string>
     <string name="field_leave_body">La entrada del diario, la incidencia o la ubicación que escribiste para «%1$s» todavía no se ha añadido.</string>
     <string name="onboard_back">Atrás</string>
 </resources>

@@ -259,6 +259,7 @@
     <string name="materials_order">%1$s bestellen</string>
     <string name="materials_total">Insgesamt zu bestellen</string>
     <string name="materials_low_confidence">%1$d Strecken mit unsicherem Treffer - prüfe vor der Bestellung</string>
+    <string name="materials_excluded_low_confidence">%1$d Strecken wurden als zu unsicher ausgelassen (%2$s) - die Summen unten enthalten sie nicht</string>
     <string name="signature_title">Unterschrift des Kunden</string>
     <string name="signature_hint">Mit dem Finger unterschreiben - sie erscheint auf dem Protokoll.</string>
     <string name="signature_clear">Zurücksetzen</string>
@@ -457,6 +458,7 @@
     <string name="field_defect_reopen">Wieder öffnen</string>
     <string name="paywall_trial_tampered">Der gespeicherte Teststatus auf diesem Telefon ließ sich nicht prüfen, daher gilt die Testphase als verbraucht. Deine Messungen sind nicht betroffen.</string>
     <string name="pdf_procurement_deduction">Biegeabzug %2$s bei %1$s - das Zuschnittstück ist kürzer als die Strecke, die Bestelllänge bleibt unverändert.</string>
+    <string name="pdf_procurement_excluded">%1$d zu unsichere Strecken wurden aus dieser Beschaffungstabelle ausgelassen (%2$s) - die Summen oben enthalten sie nicht.</string>
     <string name="field_leave_body">Der Tagebucheintrag, die Mängelnotiz oder der Ort, den du für „%1$s“ eingegeben hast, wurde noch nicht hinzugefügt.</string>
     <string name="onboard_back">Zurück</string>
 </resources>

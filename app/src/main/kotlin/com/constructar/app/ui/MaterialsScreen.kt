@@ -252,6 +252,21 @@ fun MaterialsScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
+        // A list that was asked to leave the uncertain runs out is not a list with nothing to
+        // warn about - it is a list that is missing them, and every warning below counts only
+        // what survived (finding 161).
+        if (materialList.excludedLowConfidenceRuns > 0) {
+            Text(
+                stringResource(
+                    R.string.materials_excluded_low_confidence,
+                    materialList.excludedLowConfidenceRuns,
+                    LengthFormatter.format(materialList.excludedLowConfidenceMeters),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = SiteColors.warning,
+            )
+        }
+
         materialList.lines.forEach { line ->
             MaterialCard(line)
         }

@@ -211,20 +211,27 @@ object MaterialCsvWriter {
             sb.append(lineEnding)
             row(sb, sep, listOf("Note", orderNote(uncertain)))
         }
+        // A list built with the uncertain runs *excluded* is not a list with nothing to warn
+        // about: it is a list that is missing them. The note above counts what survived, so on
+        // such a list it printed nothing at all and the sheet read as if every length had been
+        // checked (finding 161).
+        if (materialList.excludedLowConfidenceRuns > 0) {
+            sb.append(lineEnding)
+            row(
+                sb,
+                sep,
+                listOf(
+                    "Note",
+                    excludedNote(
+                        materialList.excludedLowConfidenceRuns,
+                        materialList.excludedLowConfidenceMeters,
+                    ),
+                ),
+            )
+        }
         return sb.toString()
     }
 
-    /**
-     * The line under the order list when part of it rests on a hit that was not fully trusted.
-     *
-     * The screen says it (`materials_low_confidence`), the bill of materials carries it as a
-     * column, and the protocol carries the flag per run - but the order list, the one document
-     * that turns a measurement into money at the wholesaler's counter, said nothing at all about
-     * it. A run whose points came from a soft hit is a length that may be short by centimetres,
-     * and the buyer had no way to know which of the articles on the sheet were affected
-     * (finding 105). The note is one row under the total rather than an eighth column, so an
-     * importer reading the seven columns it was built for keeps working.
-     */
     /**
      * The waste percentage the total row implies, once the trades are mixed.
      *
@@ -238,8 +245,30 @@ object MaterialCsvWriter {
         return (materialList.totalWithWasteMeters - net) / net * 100f
     }
 
+    /**
+     * The line under the order list when part of it rests on a hit that was not fully trusted.
+     *
+     * The screen says it (`materials_low_confidence`), the bill of materials carries it as a
+     * column, and the protocol carries the flag per run - but the order list, the one document
+     * that turns a measurement into money at the wholesaler's counter, said nothing at all about
+     * it. A run whose points came from a soft hit is a length that may be short by centimetres,
+     * and the buyer had no way to know which of the articles on the sheet were affected
+     * (finding 105). The note is one row under the total rather than an eighth column, so an
+     * importer reading the seven columns it was built for keeps working.
+     */
     internal fun orderNote(uncertainRuns: Int): String =
         "runs with an uncertain hit: $uncertainRuns - check those lengths before ordering"
+
+    /**
+     * The line under the order list when runs were left out of it.
+     *
+     * The figure has to be on the sheet: an order list is what the wholesaler is asked to deliver,
+     * and "these metres are not in the totals" is the difference between a job that was measured
+     * and a job that was measured except for the part nobody has checked yet (finding 161).
+     */
+    internal fun excludedNote(excludedRuns: Int, excludedMeters: Float): String =
+        "runs left out as too uncertain: $excludedRuns (" + number(excludedMeters) +
+            " m) - the totals above do not include them"
 
     /**
      * Field quoting per RFC 4180: double quotes, doubled internal quotes — plus a formula guard.

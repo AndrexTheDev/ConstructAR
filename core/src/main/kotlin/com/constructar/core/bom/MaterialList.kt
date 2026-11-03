@@ -40,6 +40,23 @@ data class MaterialList(
     val projectName: String,
     val lines: List<MaterialLine>,
     val generatedAtEpochMs: Long,
+    /**
+     * The runs [MaterialListOptions.includeLowConfidenceRuns] was asked to leave out, and what
+     * they measured.
+     *
+     * The option dropped them from `lines` and said nothing else, so everything that could have
+     * carried the warning went quiet with them: [MaterialLine.lowConfidenceRuns] counts the runs
+     * that *survived*, and the screen's warning, the order list's note under the total and the
+     * protocol's per-run flag are all driven by that count. A job with three excluded runs
+     * therefore printed a complete-looking bill of materials, a total short by their metres and
+     * "0" wherever it was asked how uncertain it was - the one document that turns a measurement
+     * into money, quietly missing the part of it nobody had checked (finding 161).
+     *
+     * The count and the metres live on the list so a document built with the option can say what
+     * is missing, and so a consumer that never asks can still see that the list is not everything.
+     */
+    val excludedLowConfidenceRuns: Int = 0,
+    val excludedLowConfidenceMeters: Float = 0f,
 ) {
     /**
      * The totals add up **the way the documents print them** - one line at a time, to the
@@ -111,7 +128,14 @@ data class MaterialListOptions(
     val wasteFactorOverride: Float? = null,
     /** When null, each conduit family uses its own default clip spacing. */
     val clipSpacingMetersOverride: Float? = null,
-    /** Include runs flagged as low confidence in the totals (default: yes, with a warning). */
+    /**
+     * Include runs flagged as low confidence in the totals (default: yes, with a warning).
+     *
+     * Setting this to `false` leaves the runs out of the list; what they measured is kept on
+     * [MaterialList.excludedLowConfidenceRuns] and
+     * [MaterialList.excludedLowConfidenceMeters], so an excluded list can still say what is
+     * missing from it (finding 161).
+     */
     val includeLowConfidenceRuns: Boolean = true,
 )
 
@@ -128,6 +152,8 @@ object MaterialListBuilder {
         nowMs: Long = System.currentTimeMillis(),
     ): MaterialList {
         val groups = LinkedHashMap<String, MutableList<Pair<ConduitSpec, RouteMetrics>>>()
+        var excludedRuns = 0
+        var excludedMeters = 0f
 
         for (route in project.routes) {
             if (!route.isRoutable) continue
@@ -144,7 +170,13 @@ object MaterialListBuilder {
                 clipSpacingMeters = options.clipSpacingMetersOverride
                     ?: com.constructar.core.geo.PolylineMetrics.defaultClipSpacing(spec),
             )
-            if (!options.includeLowConfidenceRuns && metrics.lowConfidenceNodes > 0) continue
+            if (!options.includeLowConfidenceRuns && metrics.lowConfidenceNodes > 0) {
+                // Recorded before the drop, not after: the run is gone from every total on the
+                // page, so this counter is the only thing left that says it existed (finding 161).
+                excludedRuns += 1
+                excludedMeters += metrics.totalMeters
+                continue
+            }
             groups.getOrPut(spec.bomKey) { mutableListOf() }.add(spec to metrics)
         }
 
@@ -176,6 +208,8 @@ object MaterialListBuilder {
             projectName = project.name,
             lines = lines,
             generatedAtEpochMs = nowMs,
+            excludedLowConfidenceRuns = excludedRuns,
+            excludedLowConfidenceMeters = excludedMeters,
         )
     }
 }
