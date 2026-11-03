@@ -329,7 +329,13 @@ private fun Header(
 @Composable
 fun PlanChip(entitlements: Entitlements, trialDaysLeft: Long, onClick: () -> Unit) {
     val (label, tint) = when {
-        entitlements.isTrial -> stringResource(R.string.plan_trial_days, trialDaysLeft) to SiteColors.accent
+        // A count of one is not "1 days": the chip on the list can show the trial's last day
+        // (finding 135).
+        entitlements.isTrial -> pluralStringResource(
+            R.plurals.plan_trial_days,
+            trialDaysLeft.toInt().coerceAtLeast(0),
+            trialDaysLeft,
+        ) to SiteColors.accent
         entitlements.isPro -> stringResource(R.string.plan_pro) to SiteColors.accent
         else -> stringResource(R.string.plan_free) to MaterialTheme.colorScheme.onSurfaceVariant
     }

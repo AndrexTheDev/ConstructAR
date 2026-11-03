@@ -142,7 +142,6 @@
     </plurals>
     <string name="plan_free">Gratuit</string>
     <string name="plan_pro">Pro</string>
-    <string name="plan_trial_days">Essai · %1$d jours</string>
     <string name="home_upgrade">Activer Pro</string>
     <string name="home_limit_title">Une pièce en version gratuite</string>
     <string name="home_limit_body">Supprime ce projet ou active Pro pour ajouter d’autres pièces.</string>
@@ -219,7 +218,6 @@
     <string name="paywall_err_device">Cette clé appartient à un autre appareil.</string>
     <string name="paywall_err_expired">Cette clé a expiré.</string>
     <string name="paywall_trial_button">Essaie Pro pendant %1$d jours</string>
-    <string name="paywall_trial_active">Essai actif, %1$d jours restants</string>
     <string name="paywall_trial_used">L’essai a déjà été utilisé.</string>
     <string name="paywall_trial_unavailable">L’essai ne peut pas être lancé sur ce téléphone. Achète une licence : elle marche hors ligne, tout de suite.</string>
     <string name="paywall_active_title">Pro est activé</string>
@@ -439,4 +437,12 @@
     </plurals>
     <string name="route_warning_low_confidence">Ce point vient des données de profondeur - touche à nouveau le mur détecté pour une valeur plus sûre</string>
     <string name="route_warning_height_jump">C’est un grand écart de hauteur : une montée au plafond ou un appui sur le sol ? Annule-le si c’était une erreur</string>
+    <plurals name="plan_trial_days">
+        <item quantity="one">Essai · %1$d jour</item>
+        <item quantity="other">Essai · %1$d jours</item>
+    </plurals>
+    <plurals name="paywall_trial_active">
+        <item quantity="one">Essai actif, %1$d jour restant</item>
+        <item quantity="other">Essai actif, %1$d jours restants</item>
+    </plurals>
 </resources>

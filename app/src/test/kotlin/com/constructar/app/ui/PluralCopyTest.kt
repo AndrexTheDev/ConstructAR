@@ -77,6 +77,42 @@ class PluralCopyTest {
     }
 
     @Test
+    fun `the trial's last day is a day and not one days`() {
+        locales.forEach { locale ->
+            val resources = context(locale).resources
+            val tag = locale.toLanguageTag()
+
+            val oneChip = resources.getQuantityString(R.plurals.plan_trial_days, 1, 1)
+            val sevenChips = resources.getQuantityString(R.plurals.plan_trial_days, 7, 7)
+            assertNotEquals(
+                sevenChips,
+                oneChip,
+                "$tag: the plan chip says \"1 days\" on the trial's last day",
+            )
+
+            val oneLeft = resources.getQuantityString(R.plurals.paywall_trial_active, 1, 1)
+            val sixLeft = resources.getQuantityString(R.plurals.paywall_trial_active, 6, 6)
+            assertNotEquals(
+                sixLeft,
+                oneLeft,
+                "$tag: the paywall says \"1 days left\" on the last day of the trial",
+            )
+        }
+    }
+
+    @Test
+    fun `the trial plurals still print the number they are given`() {
+        locales.forEach { locale ->
+            val resources = context(locale).resources
+            val tag = locale.toLanguageTag()
+
+            assertTrue(resources.getQuantityString(R.plurals.plan_trial_days, 1, 1).contains("1"), tag)
+            assertTrue(resources.getQuantityString(R.plurals.plan_trial_days, 7, 7).contains("7"), tag)
+            assertTrue(resources.getQuantityString(R.plurals.paywall_trial_active, 2, 2).contains("2"), tag)
+        }
+    }
+
+    @Test
     fun `the count comes from the argument, never from the copy`() {
         locales.forEach { locale ->
             val resources = context(locale).resources

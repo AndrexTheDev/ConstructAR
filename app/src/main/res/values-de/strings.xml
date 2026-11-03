@@ -142,7 +142,6 @@
     </plurals>
     <string name="plan_free">Kostenlos</string>
     <string name="plan_pro">Pro</string>
-    <string name="plan_trial_days">Testversion · %1$d Tage</string>
     <string name="home_upgrade">Pro freischalten</string>
     <string name="home_limit_title">Ein Raum in der Gratisversion</string>
     <string name="home_limit_body">Lösche dieses Projekt oder schalte Pro frei, um weitere Räume anzulegen.</string>
@@ -219,7 +218,6 @@
     <string name="paywall_err_device">Dieser Schlüssel gehört zu einem anderen Gerät.</string>
     <string name="paywall_err_expired">Dieser Schlüssel ist abgelaufen.</string>
     <string name="paywall_trial_button">%1$d Tage Pro testen</string>
-    <string name="paywall_trial_active">Testversion aktiv, noch %1$d Tage</string>
     <string name="paywall_trial_used">Die Testversion wurde schon genutzt.</string>
     <string name="paywall_trial_unavailable">Die Testversion lässt sich auf diesem Telefon nicht starten. Kauf eine Lizenz - sie funktioniert offline, sofort.</string>
     <string name="paywall_active_title">Pro ist aktiv</string>
@@ -439,4 +437,12 @@
     </plurals>
     <string name="route_warning_low_confidence">Dieser Punkt stammt aus Tiefendaten – tippe für einen sichereren Wert erneut auf die erkannte Wand</string>
     <string name="route_warning_height_jump">Das ist ein großer Höhensprung - eine Steigleitung zur Decke oder ein Fehltipp auf den Boden? Mach ihn rückgängig, wenn es ein Fehltipp war</string>
+    <plurals name="plan_trial_days">
+        <item quantity="one">Testversion · %1$d Tag</item>
+        <item quantity="other">Testversion · %1$d Tage</item>
+    </plurals>
+    <plurals name="paywall_trial_active">
+        <item quantity="one">Testversion aktiv, noch %1$d Tag</item>
+        <item quantity="other">Testversion aktiv, noch %1$d Tage</item>
+    </plurals>
 </resources>

@@ -142,7 +142,6 @@
     </plurals>
     <string name="plan_free">Gratis</string>
     <string name="plan_pro">Pro</string>
-    <string name="plan_trial_days">Prueba · %1$d días</string>
     <string name="home_upgrade">Activar Pro</string>
     <string name="home_limit_title">Una estancia en la versión gratuita</string>
     <string name="home_limit_body">Borra este proyecto o activa Pro para añadir más estancias.</string>
@@ -219,7 +218,6 @@
     <string name="paywall_err_device">Esta clave pertenece a otro equipo.</string>
     <string name="paywall_err_expired">Esta clave ha caducado.</string>
     <string name="paywall_trial_button">Prueba Pro %1$d días</string>
-    <string name="paywall_trial_active">Prueba activa, quedan %1$d días</string>
     <string name="paywall_trial_used">La prueba ya se ha usado.</string>
     <string name="paywall_trial_unavailable">La versión de prueba no se puede iniciar en este teléfono. Compra una licencia: funciona offline, al instante.</string>
     <string name="paywall_active_title">Pro está activo</string>
@@ -439,4 +437,12 @@
     </plurals>
     <string name="route_warning_low_confidence">Este punto viene de datos de profundidad: toca de nuevo la pared detectada para un valor más firme</string>
     <string name="route_warning_height_jump">Ese salto de altura es grande: ¿una subida al techo o un toque en el suelo? Deshazlo si fue un fallo</string>
+    <plurals name="plan_trial_days">
+        <item quantity="one">Prueba · %1$d día</item>
+        <item quantity="other">Prueba · %1$d días</item>
+    </plurals>
+    <plurals name="paywall_trial_active">
+        <item quantity="one">Prueba activa, queda %1$d día</item>
+        <item quantity="other">Prueba activa, quedan %1$d días</item>
+    </plurals>
 </resources>

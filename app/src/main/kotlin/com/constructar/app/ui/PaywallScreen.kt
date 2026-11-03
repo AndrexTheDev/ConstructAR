@@ -51,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -186,7 +187,13 @@ fun PaywallScreen(
         // so the paywall promised an active trial on a build that granted none.
         when (trialBlockOf(entitlements, failed = trialFailed, used = trialUsed)) {
             TrialBlock.ACTIVE -> Text(
-                stringResource(R.string.paywall_trial_active, trialDaysLeft),
+                // A count of one is not "1 days left": the sentence that decides whether he buys
+                // is also a sentence that says "1 day" when it is the last one (finding 135).
+                pluralStringResource(
+                    R.plurals.paywall_trial_active,
+                    trialDaysLeft.toInt().coerceAtLeast(0),
+                    trialDaysLeft,
+                ),
                 style = MaterialTheme.typography.bodyLarge,
                 color = Jamaica.Lime,
             )
@@ -316,7 +323,10 @@ private fun StatusCard(entitlements: Entitlements) {
         Plan.MONTHLY -> stringResource(R.string.paywall_month_title)
         Plan.YEARLY -> stringResource(R.string.paywall_year_title)
         Plan.LIFETIME -> stringResource(R.string.paywall_lifetime_title)
-        Plan.TRIAL -> stringResource(R.string.plan_trial_days, entitlements.daysLeft ?: 0L)
+        Plan.TRIAL -> {
+            val days = entitlements.daysLeft ?: 0L
+            pluralStringResource(R.plurals.plan_trial_days, days.toInt().coerceAtLeast(0), days)
+        }
         Plan.FREE -> stringResource(R.string.plan_free)
     }
     val validity = if (entitlements.expiresEpochDay <= 0L) {

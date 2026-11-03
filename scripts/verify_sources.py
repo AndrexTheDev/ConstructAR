@@ -41,6 +41,7 @@ and most expensive to discover in a 12-minute Gradle run:
      ExportFiles.writeOnce
  25. something re-derives the licence when the app resumes        (finding 132)
  26. a screen that shows the device code also lets it be copied   (finding 133)
+ 27. a count of days is a plural resource, never a plain string   (finding 135)
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -1166,6 +1167,36 @@ def check_device_code_is_copyable() -> None:
             )
 
 
+def check_counted_days_are_plurals() -> None:
+    """A number of days goes through `plurals`, not through a sentence with a `%d` (finding 135).
+
+    The plan chip on the list and the two sentences on the paywall said "Trial · %1$d days" and
+    "Trial active, %1$d days left". On the last day of the trial that count is **one**, and all
+    six languages then printed "1 days", "1 Tage", "1 jours", "1 giorni", "1 días", "1 dni" - in
+    the sentence that tells the operator whether to buy, on the day he is deciding. Android has
+    `plurals` for this and every other counted sentence in the app already used it (finding 94);
+    these two were added after that rule was written.
+
+    So the keys may not exist as plain strings in any locale, and the app must ask for the plural.
+    """
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if not path.exists():
+            continue
+        strings, plurals = load_locale(folder)
+        for key in ("plan_trial_days", "paywall_trial_active"):
+            if key in strings:
+                add(path, f"'{key}' prints a count of days as a plain string - a single day reads "
+                          "as a plural in every one of the six languages")
+            if key not in plurals:
+                add(path, f"plurals '{key}' is missing")
+    for path in kotlin_sources("app"):
+        text = path.read_text(encoding="utf-8")
+        for key in ("plan_trial_days", "paywall_trial_active"):
+            if f"R.string.{key}" in text:
+                add(path, f"R.string.{key} is a count - use R.plurals.{key}")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1185,6 +1216,7 @@ def main() -> int:
     check_folder_writes()
     check_resume_entitlement_refresh()
     check_device_code_is_copyable()
+    check_counted_days_are_plurals()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

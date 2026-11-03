@@ -142,7 +142,6 @@
     </plurals>
     <string name="plan_free">Gratuito</string>
     <string name="plan_pro">Pro</string>
-    <string name="plan_trial_days">Prova · %1$d giorni</string>
     <string name="home_upgrade">Attiva Pro</string>
     <string name="home_limit_title">Un locale nella versione gratuita</string>
     <string name="home_limit_body">Elimina questo progetto o attiva Pro per aggiungere altri locali.</string>
@@ -219,7 +218,6 @@
     <string name="paywall_err_device">Questa chiave appartiene a un altro dispositivo.</string>
     <string name="paywall_err_expired">Questa chiave è scaduta.</string>
     <string name="paywall_trial_button">Prova Pro per %1$d giorni</string>
-    <string name="paywall_trial_active">Prova attiva, %1$d giorni rimasti</string>
     <string name="paywall_trial_used">La prova è già stata usata.</string>
     <string name="paywall_trial_unavailable">La prova non può essere avviata su questo telefono. Acquista una licenza: funziona offline, subito.</string>
     <string name="paywall_active_title">Pro è attivo</string>
@@ -439,4 +437,12 @@
     </plurals>
     <string name="route_warning_low_confidence">Questo punto proviene dai dati di profondità: tocca di nuovo la parete rilevata per un valore più solido</string>
     <string name="route_warning_height_jump">È un salto di quota notevole: una salita al soffitto o un tocco sul pavimento? Annullalo se è stato un errore</string>
+    <plurals name="plan_trial_days">
+        <item quantity="one">Prova · %1$d giorno</item>
+        <item quantity="other">Prova · %1$d giorni</item>
+    </plurals>
+    <plurals name="paywall_trial_active">
+        <item quantity="one">Prova attiva, %1$d giorno rimasto</item>
+        <item quantity="other">Prova attiva, %1$d giorni rimasti</item>
+    </plurals>
 </resources>

@@ -148,7 +148,6 @@
     </plurals>
     <string name="plan_free">Darmowa</string>
     <string name="plan_pro">Pro</string>
-    <string name="plan_trial_days">Próba · %1$d dni</string>
     <string name="home_upgrade">Odblokuj Pro</string>
     <string name="home_limit_title">Jedno pomieszczenie w wersji darmowej</string>
     <string name="home_limit_body">Usuń ten projekt lub odblokuj Pro, aby dodać kolejne pomieszczenia.</string>
@@ -225,7 +224,6 @@
     <string name="paywall_err_device">Ten klucz należy do innego urządzenia.</string>
     <string name="paywall_err_expired">Ten klucz wygasł.</string>
     <string name="paywall_trial_button">Wypróbuj Pro przez %1$d dni</string>
-    <string name="paywall_trial_active">Próba aktywna, pozostało %1$d dni</string>
     <string name="paywall_trial_used">Próba została już wykorzystana.</string>
     <string name="paywall_trial_unavailable">Wersji próbnej nie można uruchomić na tym telefonie. Kup licencję - działa offline, od razu.</string>
     <string name="paywall_active_title">Pro jest aktywne</string>
@@ -457,4 +455,16 @@
     </plurals>
     <string name="route_warning_low_confidence">Ten punkt pochodzi z danych głębi – dotknij ponownie wykrytej ściany, aby uzyskać pewniejszą wartość</string>
     <string name="route_warning_height_jump">To duży skok wysokości: pion do sufitu czy przypadkowe dotknięcie podłogi? Cofnij, jeśli to był błąd</string>
+    <plurals name="plan_trial_days">
+        <item quantity="one">Próba · %1$d dzień</item>
+        <item quantity="few">Próba · %1$d dni</item>
+        <item quantity="many">Próba · %1$d dni</item>
+        <item quantity="other">Próba · %1$d dnia</item>
+    </plurals>
+    <plurals name="paywall_trial_active">
+        <item quantity="one">Próba aktywna, pozostał %1$d dzień</item>
+        <item quantity="few">Próba aktywna, pozostały %1$d dni</item>
+        <item quantity="many">Próba aktywna, pozostało %1$d dni</item>
+        <item quantity="other">Próba aktywna, pozostało %1$d dnia</item>
+    </plurals>
 </resources>
