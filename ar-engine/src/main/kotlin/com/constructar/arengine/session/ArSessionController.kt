@@ -124,7 +124,17 @@ class ArSessionController(private val context: Context) {
      * Checks ARCore availability *without* creating a session. Suspending because the Play
      * install flow starts an activity and must not block the main thread.
      */
-    suspend fun checkReadiness(activity: Activity?, hasCameraPermission: Boolean): ArReadiness {
+    suspend fun checkReadiness(
+        activity: Activity?,
+        hasCameraPermission: Boolean,
+        /**
+         * `false` for a re-check the operator did not ask for: the screen re-asks when it comes
+         * back from the Play Store or from the settings app, and calling `requestInstall` again
+         * there would put the install dialog in front of somebody who already declined it once -
+         * every resume, forever (finding 146).
+         */
+        requestInstallFromPlay: Boolean = true,
+    ): ArReadiness {
         if (!hasCameraPermission) return ArReadiness.CameraPermissionMissing
         val availability = try {
             ArCoreApk.getInstance().checkAvailability(context)
@@ -135,6 +145,19 @@ class ArSessionController(private val context: Context) {
         // While the query is still in flight, Play has not answered yet: treat as ready and
         // let session creation produce the definitive answer.
         if (availability.isTransient) return ArReadiness.Ready
+        // A silent re-check answers from the availability query alone. It is the same answer the
+        // install flow would end in, minus the dialog.
+        if (!requestInstallFromPlay) {
+            return when (availability) {
+                ArCoreApk.Availability.SUPPORTED_INSTALLED -> ArReadiness.Ready
+                ArCoreApk.Availability.SUPPORTED_NOT_INSTALLED,
+                ArCoreApk.Availability.SUPPORTED_APK_TOO_OLD ->
+                    ArReadiness.NeedsInstall("availability=${availability.name}")
+                ArCoreApk.Availability.UNSUPPORTED_DEVICE_NOT_CAPABLE ->
+                    ArReadiness.Unsupported("availability=${availability.name}")
+                else -> ArReadiness.Ready
+            }
+        }
         if (!availability.isSupported) return ArReadiness.Unsupported("availability=${availability.name}")
         val installer = activity ?: return ArReadiness.Ready
         return try {

@@ -71,8 +71,9 @@
     <string name="ar_grant_permission">Consenti fotocamera</string>
     <string name="ar_camera_blocked">L’accesso alla fotocamera è disattivato per questa app. Apri le impostazioni dell’app e consenti la fotocamera.</string>
     <string name="ar_open_settings">Apri impostazioni</string>
+    <string name="ar_install_arcore">Apri Play Store</string>
     <string name="ar_unavailable_unsupported">Questo dispositivo non supporta ARCore. Usa uno smartphone o un tablet compatibile.</string>
-    <string name="ar_unavailable_needs_install">ARCore deve essere aggiornato. Installalo dal Play Store e riapri ConstructAR.</string>
+    <string name="ar_unavailable_needs_install">ARCore deve essere installato o aggiornato. Apri il Play Store e torna su questa schermata.</string>
     <string name="ar_unavailable_declined">L’installazione di ARCore è stata rifiutata. Serve per misurare con la fotocamera.</string>
     <string name="ar_unavailable_failure">AR non è riuscito ad avviarsi su questo dispositivo. Riavvia l’app e riprova.</string>
     <string name="ar_offline_badge">Offline</string>

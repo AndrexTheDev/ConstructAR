@@ -132,9 +132,18 @@ class ArMeasureController(private val context: Context) {
     /** True when the live session has depth (drives the "plane only" warning). */
     val depthAvailable: Boolean get() = sessionController.depthAvailable
 
-    /** ARCore readiness check, surfaced as a localised blocking message when it is not [ArReadiness.Ready]. */
-    suspend fun checkReadiness(activity: android.app.Activity?, hasCameraPermission: Boolean): ArReadiness =
-        sessionController.checkReadiness(activity, hasCameraPermission)
+    /**
+     * ARCore readiness check, surfaced as a localised blocking message when it is not [ArReadiness.Ready].
+     *
+     * `requestInstallFromPlay = false` for the re-check the screen runs when it resumes: that one
+     * must not put the Play install dialog in front of the operator again (finding 146).
+     */
+    suspend fun checkReadiness(
+        activity: android.app.Activity?,
+        hasCameraPermission: Boolean,
+        requestInstallFromPlay: Boolean = true,
+    ): ArReadiness =
+        sessionController.checkReadiness(activity, hasCameraPermission, requestInstallFromPlay)
 
     /**
      * Called once when ARCore has a live session (also after a relocalisation).

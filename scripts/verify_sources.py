@@ -1301,6 +1301,28 @@ def check_onboarding_position_is_saved_state() -> None:
         add(screen, "the slide arithmetic is written inline - it belongs to `OnboardingStep`, which "
                     "clamps at both ends")
 
+def check_ar_readiness_rechecks_on_resume() -> None:
+    """The AR gate must re-ask ARCore when the AR screen comes back (finding 146).
+
+    The answer was fetched once per *camera permission* - `LaunchedEffect(hasCameraPermission)`.
+    An ARCore install or update finishes in the Play Store, i.e. while this screen is merely
+    stopped and the permission has not changed, so the gate kept saying "ARCore needs an update"
+    over a device that no longer needed one; the only way out was to leave the screen and come
+    back. Two things are pinned here: the resume observer invalidates the answer, and the effect
+    that fetches it is keyed on that invalidation.
+    """
+    screen = ROOT / AR_OVERLAY_SCREEN
+    text = screen.read_text(encoding="utf-8")
+    if not re.search(r"ON_RESUME[\s\S]{0,400}?readinessRecheck", text):
+        add(screen, "coming back to the AR screen does not invalidate the ARCore answer - an "
+                    "install finished in the Play Store leaves the gate blocking (finding 146)")
+    effects = re.findall(r"LaunchedEffect\(([^)]*)\)\s*\{([\s\S]{0,600}?)checkReadiness", text)
+    if not effects:
+        add(screen, "nothing fetches ARCore readiness before the surface is composed")
+    elif not any("readinessRecheck" in keys for keys, _ in effects):
+        add(screen, "the readiness check is keyed on the camera permission alone, so it is asked "
+                    "once and never again (finding 146)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1325,6 +1347,7 @@ def main() -> int:
     check_mirrored_icons_use_automirrored()
     check_licence_diagnostics_reach_the_screen()
     check_onboarding_position_is_saved_state()
+    check_ar_readiness_rechecks_on_resume()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

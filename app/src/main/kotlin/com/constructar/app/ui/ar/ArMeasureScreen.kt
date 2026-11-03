@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.Loop
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
@@ -56,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -149,11 +151,18 @@ fun ArMeasureScreen(
         }
     }
     // Coming back from the settings app has to be noticed: the launcher callback only fires for
-    // a dialog, and there is none once the system has stopped showing it.
+    // a dialog, and there is none once the system has stopped showing it. The same resume also has
+    // to invalidate the ARCore answer: an install or an update completed in the Play Store happens
+    // while this screen is merely stopped, and readiness was fetched once per camera permission -
+    // so the gate kept saying "ARCore needs an update" over a device that had it (finding 146).
+    var readinessRecheck by remember { mutableStateOf(0) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) hasCameraPermission = cameraGranted()
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasCameraPermission = cameraGranted()
+                readinessRecheck++
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -177,8 +186,17 @@ fun ArMeasureScreen(
     // ARCore readiness (installed / supported / up to date) — checked before the surface is
     // composed so a device without AR gets a sentence instead of a black screen.
     var readiness by remember { mutableStateOf<ArReadiness?>(null) }
-    LaunchedEffect(hasCameraPermission) {
-        readiness = if (hasCameraPermission) controller.checkReadiness(activity, true) else null
+    // The first check on entry may send him to Play; every re-check after a resume asks the device
+    // silently instead. Reset to false by the gate's own "Play Store" button, which is an explicit
+    // request to be prompted again.
+    var readinessMayPrompt by remember { mutableStateOf(true) }
+    LaunchedEffect(hasCameraPermission, readinessRecheck) {
+        if (!hasCameraPermission) {
+            readiness = null
+        } else {
+            readiness = controller.checkReadiness(activity, true, requestInstallFromPlay = readinessMayPrompt)
+            readinessMayPrompt = false
+        }
     }
     var sessionError by remember { mutableStateOf<String?>(null) }
 
@@ -372,11 +390,22 @@ fun ArMeasureScreen(
                 )
             }
 
-            ArGate.READINESS -> GateMessage(
-                text = readinessText.orEmpty(),
-                action = stringResource(R.string.export_back),
-                onAction = onBack,
-            )
+            // The three fixable answers (ARCore missing, too old, install declined) get the one
+            // button that actually helps; "Back" stays for the answers that are not his to fix.
+            ArGate.READINESS -> {
+                val install = ArReadinessAction.offersInstall(readinessIssue)
+                // Asking Play again is an explicit request to be prompted, so the dialog comes back.
+                val askStore: () -> Unit = {
+                    readinessMayPrompt = true
+                    readinessRecheck++
+                }
+                GateMessage(
+                    text = readinessText.orEmpty(),
+                    action = stringResource(if (install) R.string.ar_install_arcore else R.string.export_back),
+                    icon = if (install) Icons.Default.Refresh else Icons.Default.Close,
+                    onAction = if (install) askStore else onBack,
+                )
+            }
 
             // A session that failed is not a note in the corner: no frame arrives, so no point
             // can be placed and every control is inert. Take the surface away and say so.
@@ -803,7 +832,12 @@ fun ArMeasureScreen(
 
 /** Blocking message with one action: missing permission, unsupported device, failed session. */
 @Composable
-private fun GateMessage(text: String, action: String, onAction: () -> Unit) {
+private fun GateMessage(
+    text: String,
+    action: String,
+    icon: ImageVector = Icons.Default.Add,
+    onAction: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -819,7 +853,7 @@ private fun GateMessage(text: String, action: String, onAction: () -> Unit) {
         )
         GloveButton(
             label = action,
-            icon = Icons.Default.Add,
+            icon = icon,
             onClick = onAction,
             modifier = Modifier
                 .fillMaxWidth()

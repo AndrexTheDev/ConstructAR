@@ -71,8 +71,9 @@
     <string name="ar_grant_permission">Zezwól na aparat</string>
     <string name="ar_camera_blocked">Dostęp do aparatu jest wyłączony dla tej aplikacji. Otwórz ustawienia aplikacji i zezwól na aparat.</string>
     <string name="ar_open_settings">Otwórz ustawienia</string>
+    <string name="ar_install_arcore">Otwórz Sklep Play</string>
     <string name="ar_unavailable_unsupported">To urządzenie nie obsługuje ARCore. Użyj zgodnego telefonu lub tabletu.</string>
-    <string name="ar_unavailable_needs_install">ARCore wymaga aktualizacji. Zainstaluj ją ze Sklepu Play i otwórz ConstructAR ponownie.</string>
+    <string name="ar_unavailable_needs_install">ARCore wymaga instalacji lub aktualizacji. Otwórz Sklep Play i wróć na ten ekran.</string>
     <string name="ar_unavailable_declined">Instalacja ARCore została odrzucona. Jest konieczna do pomiaru aparatem.</string>
     <string name="ar_unavailable_failure">AR nie uruchomiło się na tym urządzeniu. Uruchom aplikację ponownie i spróbuj jeszcze raz.</string>
     <string name="ar_offline_badge">Offline</string>
