@@ -223,16 +223,27 @@ fun ExportScreen(
                         stem = stem,
                     )
                     var written = 0
+                    // The first write that threw, so the storage sentence still names the cause
+                    // when nothing at all made it to the folder (finding 130).
+                    var failure: Throwable? = null
                     artifacts.forEach { artifact ->
-                        val file = target.createFile(artifact.mimeType, artifact.fileName)
-                        val output = file?.uri?.let { context.contentResolver.openOutputStream(it) }
-                        if (output != null) {
-                            output.use { artifact.write(it) }
-                            written++
-                        } else {
-                            file?.delete()
+                        val outcome = ExportFiles.writeOnce(
+                            create = { target.createFile(artifact.mimeType, artifact.fileName) },
+                            open = { file -> context.contentResolver.openOutputStream(file.uri) },
+                            write = { stream -> stream.use { artifact.write(it) } },
+                            delete = { file -> file.delete() },
+                        )
+                        when (outcome) {
+                            ExportFiles.Outcome.Written -> written++
+                            ExportFiles.Outcome.NotCreated, ExportFiles.Outcome.NotOpened -> Unit
+                            // A file that did not finish writing was deleted by `writeOnce`: a
+                            // truncated protocol must not sit in the folder looking finished.
+                            is ExportFiles.Outcome.Broken -> failure = failure ?: outcome.cause
                         }
                     }
+                    // Nothing written and something threw: report the exception, not "the folder
+                    // is not writable", which is a different problem with a different fix.
+                    if (written == 0) failure?.let { throw it }
                     ExportStatus.Report(
                         requested = requestedCount,
                         produced = artifacts.size,
