@@ -24,6 +24,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -127,7 +128,7 @@ class ProjectRepositoryTest {
     @Test
     fun `a room written by a newer app is refused instead of half-read`(): Unit = runBlocking {
         repository.save(room())
-        val text = repository.backupEntries().single().text
+        val text = repository.backupEntries().single().bytes!!.decodeToString()
         val newer = text.replace("\"schemaVersion\": 1", "\"schemaVersion\": 2")
         assertTrue(newer != text, "the fixture must carry a bumped schema version")
 
@@ -149,7 +150,7 @@ class ProjectRepositoryTest {
         val original = repository.save(room())
         assertTrue(original)
 
-        val backupText = repository.backupEntries().single().text
+        val backupText = repository.backupEntries().single().bytes!!.decodeToString()
         val restored = assertNotNull(repository.importProject(backupText))
 
         assertTrue(restored.id != "room-1", "the restored copy must get a fresh id")
@@ -163,7 +164,7 @@ class ProjectRepositoryTest {
         // The room is still on the phone, so the restore stores a copy under a fresh id - and it
         // has to say which id the *file* had, because that is the name its photo was saved under.
         repository.save(room())
-        val backupText = repository.backupEntries().single().text
+        val backupText = repository.backupEntries().single().bytes!!.decodeToString()
 
         val restored = assertNotNull(repository.importProjectDetailed(backupText))
 
@@ -175,7 +176,7 @@ class ProjectRepositoryTest {
     @Test
     fun `a restore onto an empty phone keeps the file's own id`(): Unit = runBlocking {
         repository.save(room())
-        val backupText = repository.backupEntries().single().text
+        val backupText = repository.backupEntries().single().bytes!!.decodeToString()
         File(projectsDirectory, "room-1.json").delete()
 
         val restored = assertNotNull(repository.importProjectDetailed(backupText))
@@ -308,13 +309,53 @@ class ProjectRepositoryTest {
 
         val entry = repository.backupEntries().single()
         assertEquals("room-1.json", entry.fileName)
-        assertEquals(onDisk, entry.text)
+        assertEquals(onDisk, entry.bytes!!.decodeToString())
+    }
+
+    @Test
+    fun `the backup keeps a damaged byte exactly as it is`(): Unit = runBlocking {
+        // A room file with one byte that is not valid UTF-8 - the shape a half-written file or a
+        // filesystem repair leaves behind, and the reason the list refuses to parse it while
+        // keeping the bytes (findings 150, 153).
+        projectsDirectory.mkdirs()
+        val damaged = byteArrayOf(
+            '{'.code.toByte(), '"'.code.toByte(), 'x'.code.toByte(), '"'.code.toByte(),
+            0xC3.toByte(), 0x28.toByte(),
+        )
+        File(projectsDirectory, "damaged.json").writeBytes(damaged)
+
+        val entry = repository.backupEntries().single()
+
+        // The backup is the file: same bytes, same length - not a decode and a re-encode.
+        assertContentEquals(damaged, entry.bytes!!)
+        // And the difference is not academic: decoding would have produced three bytes where the
+        // file had two, and the operator's only copy would come back altered.
+        assertFalse(
+            String(entry.bytes, Charsets.UTF_8).toByteArray(Charsets.UTF_8).contentEquals(damaged),
+            "a text round trip must not be mistaken for a copy",
+        )
+    }
+
+    @Test
+    fun `a project file that cannot be read is reported, not dropped`(): Unit = runBlocking {
+        // A directory where a project file should be: `listFiles` sees it, `readBytes` cannot read
+        // it. The entry stays in the list with no bytes, so the card's `available - written`
+        // counts it as a room that is not in the folder.
+        repository.save(room())
+        val unreadable = File(projectsDirectory, "a-broken.json")
+        assertTrue(unreadable.mkdirs())
+
+        val entries = repository.backupEntries()
+
+        assertEquals(listOf("a-broken.json", "room-1.json"), entries.map { it.fileName })
+        assertNull(entries.first { it.fileName == "a-broken.json" }.bytes)
+        assertNotNull(entries.first { it.fileName == "room-1.json" }.bytes)
     }
 
     @Test
     fun `an id in a restored file never becomes a path`(): Unit = runBlocking {
         repository.save(room())
-        val original = repository.backupEntries().single().text
+        val original = repository.backupEntries().single().bytes!!.decodeToString()
         val hostile = original.replace("\"room-1\"", "\"../../escape\"")
 
         val restored = assertNotNull(repository.importProject(hostile))

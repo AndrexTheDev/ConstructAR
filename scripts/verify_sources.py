@@ -1446,6 +1446,37 @@ def check_order_list_states_its_waste() -> None:
                             f"`{required}` - the only figure on that sheet that is not a "
                             "measurement, unverifiable against the site (finding 152)")
 
+def check_backup_copies_bytes() -> None:
+    """The operator's backup has to be a copy, not a transcription (finding 153).
+
+    `backupEntries` documents itself as "a byte-for-byte copy of what the app wrote ... so a
+    corrupted-but-readable file is not silently fixed into something else" - and it read every file
+    as text while the card wrote that text back out as UTF-8. A byte that is not valid UTF-8
+    decodes to the replacement character and returns as three bytes that were never in the file,
+    so the one file where a copy matters most (the damaged room the list keeps because it is the
+    operator's only copy, finding 150) came back from a backup altered. Reading bytes and writing
+    bytes is the whole rule; `readText`/`toByteArray` in this path is the defect.
+    """
+    repository = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" /
+                  "data" / "ProjectRepository.kt")
+    text = repository.read_text(encoding="utf-8")
+    start = text.find("suspend fun backupEntries(")
+    if start >= 0:
+        body = text[start:text.find("\n    }", start)]
+        if "readBytes()" not in body:
+            add(repository, "the backup does not read the project files as bytes - a decode and a "
+                            "re-encode is not a copy (finding 153)")
+        if ".readText()" in body:
+            add(repository, "the backup decodes project files to text, so a byte that is not "
+                            "valid UTF-8 comes back as something else (finding 153)")
+
+    card = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+            "BackupCard.kt")
+    card_text = card.read_text(encoding="utf-8")
+    if "it.write(entry.text" in card_text or "entry.text.toByteArray" in card_text:
+        add(card, "the backup card writes a re-encoded string instead of the file's own bytes "
+                  "(finding 153)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1476,6 +1507,7 @@ def main() -> int:
     check_room_budget_has_one_definition()
     check_both_estimating_overrides_are_passed()
     check_order_list_states_its_waste()
+    check_backup_copies_bytes()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

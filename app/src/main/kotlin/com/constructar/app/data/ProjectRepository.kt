@@ -197,22 +197,34 @@ class ProjectRepository(private val context: Context) {
         saved
     }
 
-    /** One project file, verbatim — the unit of a backup. */
-    data class BackupEntry(val fileName: String, val text: String)
+    /**
+     * One project file, verbatim — the unit of a backup.
+     *
+     * [bytes] is the file exactly as it sits on disk. `null` means the file is there but could not
+     * be read at all; it stays in the list rather than vanishing, because a backup has to be able
+     * to say what it could not copy (finding 153).
+     */
+    data class BackupEntry(val fileName: String, val bytes: ByteArray?)
 
     /**
-     * Every project as its raw JSON, for the operator's own backup.
+     * Every project as its raw bytes, for the operator's own backup.
      *
      * The files are copied verbatim rather than re-serialised: a backup must be a byte-for-byte
      * copy of what the app wrote, so a restore of an older app version stays possible and so a
      * corrupted-but-readable file is not silently "fixed" into something else.
+     *
+     * This used to read each file as *text* and the caller wrote that text back out as UTF-8,
+     * which is not the same thing: a byte that is not valid UTF-8 decodes to the replacement
+     * character and is re-encoded as three bytes that were never in the file. The one file where
+     * that matters is the damaged one - the room the list cannot parse and therefore keeps, which
+     * finding 150 made deletable precisely because it is the operator's only copy. Backing up
+     * rewrote it. The bytes are now read as bytes and written as bytes, and a file that cannot be
+     * read at all is reported instead of dropped (finding 153).
      */
     suspend fun backupEntries(): List<BackupEntry> = withContext(Dispatchers.IO) {
         directory.listFiles { file -> file.extension == "json" }
             ?.sortedBy { it.name }
-            ?.mapNotNull { file ->
-                runCatching { BackupEntry(file.name, file.readText()) }.getOrNull()
-            }
+            ?.map { file -> BackupEntry(file.name, runCatching { file.readBytes() }.getOrNull()) }
             .orEmpty()
     }
 

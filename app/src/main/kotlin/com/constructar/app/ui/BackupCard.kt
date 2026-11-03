@@ -108,10 +108,16 @@ fun BackupCard(
                     // it while the folder looked like a complete backup (finding 131).
                     var failure: Throwable? = null
                     entries.forEach { entry ->
+                        // A file this phone could not read is not copied - and is counted below
+                        // through `available - written`, so the card says a room is missing
+                        // instead of reporting the folder complete (finding 153).
+                        val bytes = entry.bytes ?: return@forEach
                         val outcome = ExportFiles.writeOnce(
                             create = { folder.createFile("application/json", entry.fileName) },
                             open = { file -> context.contentResolver.openOutputStream(file.uri) },
-                            write = { stream -> stream.use { it.write(entry.text.toByteArray(Charsets.UTF_8)) } },
+                            // The bytes as they are: decode-and-re-encode is how a damaged byte
+                            // became three different bytes in the operator's own backup.
+                            write = { stream -> stream.use { it.write(bytes) } },
                             delete = { file -> file.delete() },
                         )
                         when (outcome) {
