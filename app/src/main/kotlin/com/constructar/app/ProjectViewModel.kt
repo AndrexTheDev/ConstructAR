@@ -149,6 +149,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val onboardingDone: Boolean = false,
         /** Firm-wide waste factor, `null` = each conduit family's default. */
         val wasteOverride: Float? = null,
+        /** Firm-wide clip spacing in metres, `null` = each conduit family's default. */
+        val clipSpacingOverride: Float? = null,
         /** Documentation photo of the open project, decoded for screen and protocol. */
         val photo: Bitmap? = null,
         /** Firm-wide hourly rate, used when a project does not override it. */
@@ -191,6 +193,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             demoSigningKey = LicencePublicKey.isDemoKey,
             onboardingDone = preferences.onboardingDone(),
             wasteOverride = settings.wasteFactorOverride(),
+            clipSpacingOverride = settings.clipSpacingMetersOverride(),
             firmHourlyRateCents = settings.hourlyRateCents() ?: Pricing.DEFAULT_HOURLY_RATE_CENTS,
             localStateTampered = entitlements.diagnostics.value.localStateTampered,
         )
@@ -741,6 +744,21 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /**
+     * Sets the firm's clip spacing and rebuilds the open project's material list immediately.
+     *
+     * The same shape as [setWasteOverride], and for the same reason: the number the operator just
+     * changed has to be the number on the screen and in the export (finding 151).
+     */
+    fun setClipSpacingOverride(value: Float?) {
+        settings.setClipSpacingOverride(value)
+        val project = mutableState.value.openProject
+        mutableState.value = mutableState.value.copy(
+            clipSpacingOverride = value,
+            materialList = project?.let { buildMaterialList(it) },
+        )
+    }
+
+    /**
      * Sets the firm's hourly rate, the default every project bills at unless it overrides it.
      *
      * Re-emitting the state is what makes the open project's card and the protocol pick the new
@@ -757,7 +775,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     private fun buildMaterialList(project: ProjectRecord): MaterialList =
         MaterialListBuilder.build(
             project = project,
-            options = MaterialListOptions(wasteFactorOverride = mutableState.value.wasteOverride),
+            options = MaterialListOptions(
+                wasteFactorOverride = mutableState.value.wasteOverride,
+                clipSpacingMetersOverride = mutableState.value.clipSpacingOverride,
+            ),
         )
 
     fun clearError() {

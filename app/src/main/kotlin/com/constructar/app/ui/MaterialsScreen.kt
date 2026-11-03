@@ -68,6 +68,15 @@ fun MaterialsScreen(
     materialList: MaterialList?,
     wasteOverride: Float?,
     onWasteChange: (Float?) -> Unit,
+    /**
+     * The firm's clip spacing in metres - the second half of the same firm-level number.
+     *
+     * `MaterialListOptions` has documented it since finding 113 and only the waste factor ever
+     * reached this screen, so a shop that clips a fire-alarm cable every 30 cm had no way to say
+     * so and ordered half the clips it needs (finding 151).
+     */
+    clipSpacingOverride: Float? = null,
+    onClipSpacingChange: (Float?) -> Unit = {},
     firmHourlyRateCents: Int,
     onHourlyRateChange: (Int?) -> Unit,
     onBack: () -> Unit,
@@ -151,22 +160,10 @@ fun MaterialsScreen(
             )
         }
 
-        if (materialList == null || materialList.isEmpty) {
-            Text(
-                stringResource(R.string.materials_empty),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            return@Column
-        }
-
-        Text(
-            stringResource(R.string.materials_intro),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        // ── The firm's waste factor ─────────────────────────────────────────────────
+        // ── The firm's two estimating numbers ──────────────────────────────────────
+        // Above the empty-list return on purpose: these are firm-wide settings, not room data.
+        // A room whose runs are all single points has no list to show, and its screen used to end
+        // before the one section that is about the shop rather than the job (finding 151).
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 stringResource(R.string.waste_title),
@@ -189,6 +186,52 @@ fun MaterialsScreen(
                 }
             }
         }
+
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                stringResource(R.string.clips_title),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                WasteChip(
+                    label = stringResource(R.string.clips_default),
+                    selected = clipSpacingOverride == null,
+                    onClick = { onClipSpacingChange(null) },
+                )
+                // Trade spacings, not a slider: 30 cm is fire-alarm practice, 60 cm and 90 cm are
+                // the cable and pipe defaults the app already assumes, 100 cm is a ceiling grid.
+                listOf(0.30f, 0.60f, 0.90f, 1.00f).forEach { spacing ->
+                    WasteChip(
+                        label = stringResource(R.string.clips_value, LengthFormatter.format(spacing)),
+                        selected = clipSpacingOverride == spacing,
+                        onClick = { onClipSpacingChange(spacing) },
+                    )
+                }
+            }
+            Text(
+                stringResource(R.string.clips_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+        }
+
+        if (materialList == null || materialList.isEmpty) {
+            Text(
+                stringResource(R.string.materials_empty),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@Column
+        }
+
+        Text(
+            stringResource(R.string.materials_intro),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         materialList.lines.forEach { line ->
             MaterialCard(line)

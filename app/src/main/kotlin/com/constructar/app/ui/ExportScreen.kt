@@ -84,6 +84,14 @@ fun ExportScreen(
     hourlyRateCents: Int = Pricing.DEFAULT_HOURLY_RATE_CENTS,
     /** The firm's waste factor, the one the material screen showed - `null` for the defaults. */
     wasteOverride: Float? = null,
+    /**
+     * The firm's clip spacing, the one the material screen showed - `null` for the defaults.
+     *
+     * Both halves travel together: the counts on the page are built from the same measurement the
+     * screen showed, so a firm that clips every 30 cm must not read its order sheet at 60 cm
+     * (findings 96, 151).
+     */
+    clipSpacingOverride: Float? = null,
     onBack: () -> Unit,
     onUpgrade: () -> Unit,
 ) {
@@ -198,7 +206,12 @@ fun ExportScreen(
                     val artifacts = exportService.build(
                         ExportService.Request(
                             project = project,
-                            materialList = exportMaterialList(project, materialList, wasteOverride),
+                            materialList = exportMaterialList(
+                                project = project,
+                                cached = materialList,
+                                wasteOverride = wasteOverride,
+                                clipSpacingOverride = clipSpacingOverride,
+                            ),
                             routeMeshes = ExportService.routeMeshes(project),
                             screenshot = photo,
                             operatorName = operatorName,
@@ -676,9 +689,13 @@ internal fun exportMaterialList(
     project: ProjectRecord,
     cached: MaterialList?,
     wasteOverride: Float?,
+    clipSpacingOverride: Float? = null,
 ): MaterialList = cached ?: MaterialListBuilder.build(
     project,
-    MaterialListOptions(wasteFactorOverride = wasteOverride),
+    MaterialListOptions(
+        wasteFactorOverride = wasteOverride,
+        clipSpacingMetersOverride = clipSpacingOverride,
+    ),
 )
 
 /** Exposed for tests/diagnostics: the CSV the operator will get for this project. */

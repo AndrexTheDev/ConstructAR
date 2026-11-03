@@ -1398,6 +1398,29 @@ def check_room_budget_has_one_definition() -> None:
                           "cannot read is how a free installation ends up with two rooms "
                           "(findings 126, 149)")
 
+def check_both_estimating_overrides_are_passed() -> None:
+    """The app's one material-list build sets both documented estimating options (finding 151).
+
+    `MaterialListOptions` documents a waste factor and a clip spacing; finding 113 made the builder
+    *read* both, and this file's own rule pinned that. What nobody pinned is that the app passes
+    them: `ProjectViewModel` passed the waste factor and forgot the spacing, so every job in the
+    app was counted at the trade default (60 cm of cable, 90 cm of pipe) while the engine could do
+    better - and a shop that clips a fire-alarm cable every 30 cm ordered half the clips it needs.
+    Both knobs, in the one place the list is built.
+    """
+    view_model = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ProjectViewModel.kt"
+    text = view_model.read_text(encoding="utf-8")
+    builds = re.findall(r"MaterialListOptions\(([^)]*)\)", text)
+    if not builds:
+        add(view_model, "nothing builds a material list with any options at all")
+        return
+    for arguments in builds:
+        for option in ("wasteFactorOverride", "clipSpacingMetersOverride"):
+            if option not in arguments:
+                add(view_model, f"the material list is built without `{option}`, which "
+                                "`MaterialListOptions` documents and the engine reads - the app "
+                                "then counts every job at the trade default (finding 151)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1426,6 +1449,7 @@ def main() -> int:
     check_percentages_are_rounded()
     check_clock_follows_the_phone_setting()
     check_room_budget_has_one_definition()
+    check_both_estimating_overrides_are_passed()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

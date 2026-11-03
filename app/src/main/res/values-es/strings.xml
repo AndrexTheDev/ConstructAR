@@ -315,6 +315,10 @@
     <string name="waste_title">Reserva</string>
     <string name="waste_default">Estándar</string>
     <string name="waste_value">%1$d %%</string>
+    <string name="clips_title">Separación de clips</string>
+    <string name="clips_default">Según el gremio</string>
+    <string name="clips_value">%1$s</string>
+    <string name="clips_hint">Los clips y los empalmes se cuentan a partir de esta separación. Cámbiala si tu taller fija de otra forma en esta obra.</string>
     <string name="photo_title">Foto de la obra</string>
     <string name="photo_hint">Una foto de la pared o del tramo terminado: se imprime en el protocolo.</string>
     <string name="photo_take">Hacer una foto</string>

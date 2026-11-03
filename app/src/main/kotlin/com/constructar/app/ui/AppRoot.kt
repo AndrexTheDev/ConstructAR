@@ -254,6 +254,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             fieldPhotos = state.fieldPhotos,
                             hourlyRateCents = viewModel.hourlyRateCents(project),
                             wasteOverride = state.wasteOverride,
+                            clipSpacingOverride = state.clipSpacingOverride,
                             onBack = { navController.popBackStack() },
                             onUpgrade = { navController.navigate(Routes.PAYWALL) },
                         )
@@ -270,6 +271,8 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             materialList = state.materialList,
                             wasteOverride = state.wasteOverride,
                             onWasteChange = { viewModel.setWasteOverride(it) },
+                            clipSpacingOverride = state.clipSpacingOverride,
+                            onClipSpacingChange = { viewModel.setClipSpacingOverride(it) },
                             firmHourlyRateCents = state.firmHourlyRateCents,
                             onHourlyRateChange = { viewModel.setFirmHourlyRate(it) },
                             onBack = { navController.popBackStack() },

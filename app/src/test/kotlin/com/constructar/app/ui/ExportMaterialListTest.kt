@@ -66,6 +66,20 @@ class ExportMaterialListTest {
     }
 
     @Test
+    fun `the fallback list counts clips with the firm's spacing`() {
+        // 10 m of cable: 17 clips at the 60 cm cable default, 11 at the metre a ceiling grid is
+        // clipped at - the same number the material screen shows (finding 151).
+        val list = exportMaterialList(
+            project = project(),
+            cached = null,
+            wasteOverride = null,
+            clipSpacingOverride = 1.0f,
+        )
+
+        assertEquals(11, list.totalClips)
+    }
+
+    @Test
     fun `a cached list is never rebuilt`() {
         // The cached list is the one the material screen showed; rebuilding it with other options
         // in the export path is how the screen and the paperwork came apart in the first place.

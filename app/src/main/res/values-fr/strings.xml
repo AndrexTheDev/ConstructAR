@@ -315,6 +315,10 @@
     <string name="waste_title">Réserve</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>
+    <string name="clips_title">Espacement des colliers</string>
+    <string name="clips_default">Standard du métier</string>
+    <string name="clips_value">%1$s</string>
+    <string name="clips_hint">Les colliers et les raccords sont comptés à partir de cet espacement. Change-le si ton entreprise fixe autrement sur ce chantier.</string>
     <string name="photo_title">Photo du chantier</string>
     <string name="photo_hint">Une photo du mur ou du tracé terminé : elle apparaît sur le protocole.</string>
     <string name="photo_take">Prendre une photo</string>

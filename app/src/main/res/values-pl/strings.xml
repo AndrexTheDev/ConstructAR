@@ -327,6 +327,10 @@
     <string name="waste_title">Zapas</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>
+    <string name="clips_title">Rozstaw uchwytów</string>
+    <string name="clips_default">Standard branżowy</string>
+    <string name="clips_value">%1$s</string>
+    <string name="clips_hint">Uchwyty i złączki są liczone od tego rozstawu. Zmień go, jeśli Twoja firma mocuje inaczej na tej budowie.</string>
     <string name="photo_title">Zdjęcie budowy</string>
     <string name="photo_hint">Jedno zdjęcie ściany lub gotowej trasy - trafia na protokół.</string>
     <string name="photo_take">Zrób zdjęcie</string>
