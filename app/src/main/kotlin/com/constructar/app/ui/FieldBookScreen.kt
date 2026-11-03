@@ -27,9 +27,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
@@ -597,7 +597,7 @@ private fun DefectRow(
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         IconButton(onClick = onToggle, modifier = Modifier.size(52.dp)) {
             Icon(
-                if (toggle == DefectToggle.Action.REOPEN) Icons.Default.Undo else Icons.Default.Check,
+                if (toggle == DefectToggle.Action.REOPEN) Icons.AutoMirrored.Filled.Undo else Icons.Default.Check,
                 contentDescription = stringResource(DefectToggle.labelRes(toggle)),
                 tint = accent,
             )
