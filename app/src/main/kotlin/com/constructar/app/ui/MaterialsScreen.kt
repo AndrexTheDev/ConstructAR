@@ -48,6 +48,7 @@ import com.constructar.core.bom.MaterialList
 import com.constructar.core.model.ConduitKind
 import com.constructar.core.price.Pricing
 import com.constructar.core.units.LengthFormatter
+import com.constructar.core.units.PercentText
 
 /**
  * The shopping list for one room.
@@ -181,7 +182,7 @@ fun MaterialsScreen(
                 )
                 listOf(0.05f, 0.10f, 0.15f).forEach { factor ->
                     WasteChip(
-                        label = stringResource(R.string.waste_value, (factor * 100f).toInt()),
+                        label = stringResource(R.string.waste_value, PercentText.of(factor)),
                         selected = wasteOverride == factor,
                         onClick = { onWasteChange(factor) },
                     )
@@ -269,10 +270,7 @@ private fun MaterialCard(line: MaterialLine) {
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
-                        stringResource(
-                            R.string.materials_waste,
-                            (line.wasteFactor * 100f).toInt(),
-                        ),
+                        stringResource(R.string.materials_waste, PercentText.of(line.wasteFactor)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

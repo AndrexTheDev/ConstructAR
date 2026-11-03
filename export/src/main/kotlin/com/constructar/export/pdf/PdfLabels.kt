@@ -110,4 +110,14 @@ data class PdfLabels(
         "%1\$d of %2\$d photos from the site file are printed here - the rest stay in the app.",
     val footer: String = "ConstructAR %1\$s - generated on device",
     val pageLabel: String = "Page %1\$d",
+
+    /**
+     * A percent cell in a table, `%1$d` = the already-rounded percentage (finding 147).
+     *
+     * The template exists so the percent is not glued together as `"$value %"` inside the drawing
+     * code: the number comes from `PercentText`, the sentence from the labels. `%` is the same
+     * character in all six languages, which is exactly why the glue survived this long - but the
+     * rounded value and the template belong together, because the protocol is signed.
+     */
+    val percentValue: String = "%1\$d %%",
 )

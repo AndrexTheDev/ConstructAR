@@ -19,6 +19,7 @@ import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.HitConfidence
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.units.LengthFormatter
+import com.constructar.core.units.PercentText
 import java.io.OutputStream
 import java.util.Locale
 
@@ -255,7 +256,7 @@ class ProtocolPdfWriter(
                         y = MARGIN
                         y = drawTableHeader(page.canvas, header, columns, y)
                     }
-                    y = drawTableRow(page.canvas, routeRow(route), columns, y)
+                    y = drawTableRow(page.canvas, routeRow(route, content.labels), columns, y)
                 }
                 // A run that survived an interruption counts in every length, every fitting and
                 // the price - its coordinates belong to an ARCore session that no longer exists,
@@ -313,7 +314,7 @@ class ProtocolPdfWriter(
                             line.spec.material.ifBlank { line.spec.sizeLabel },
                             line.spec.sizeLabel,
                             format(line.totalMeters),
-                            "${(line.wasteFactor * 100).toInt()} %",
+                            PercentText.format(content.labels.percentValue, line.wasteFactor),
                             format(line.withWasteMeters),
                         ),
                         columns,
@@ -581,15 +582,21 @@ class ProtocolPdfWriter(
         canvas.drawText(pageLabel, pageWidth - MARGIN - footer.measureText(pageLabel), (y + 14).toFloat(), footer)
     }
 
-    private fun routeRow(route: ConduitRoute): List<String> {
+    /**
+     * One row of the runs table.
+     *
+     * The confidence is rounded by `PercentText` - the same rule the phone's weak-point warning
+     * uses - instead of being truncated on the way into the document that gets signed
+     * (finding 147).
+     */
+    private fun routeRow(route: ConduitRoute, labels: PdfLabels): List<String> {
         val metrics = com.constructar.core.geo.PolylineMetrics.measure(route)
-        val confidence = (metrics.minimumConfidence * 100).toInt()
         return listOf(
             route.label,
             route.spec.sizeLabel,
             format(route.polylineLengthMeters),
             metrics.bendCount.toString(),
-            "$confidence %",
+            PercentText.format(labels.percentValue, metrics.minimumConfidence),
         )
     }
 
@@ -659,7 +666,7 @@ internal fun unbuildableRunsNote(labels: List<String>, template: String): String
  * the HUD cannot end up disagreeing about which run is trusted (finding 88).
  */
 internal fun accuracyNote(template: String, trusted: Float = HitConfidence.RUN_TRUSTED): String =
-    String.format(Locale.ROOT, template, Math.round(trusted * 100f))
+    PercentText.format(template, trusted)
 
 /**
  * The key/value rows of the protocol's summary, in the order they are drawn (finding 103).

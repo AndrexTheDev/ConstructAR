@@ -93,6 +93,7 @@ import com.constructar.core.model.ConduitPresets
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.units.LengthFormatter
+import com.constructar.core.units.PercentText
 import com.constructar.core.model.RouteDraft
 import com.constructar.core.model.RouteLabels
 
@@ -349,7 +350,7 @@ fun ArMeasureScreen(
     // the string says so since finding 102.
     val scanProgressText = stringResource(
         R.string.ar_scan_progress,
-        (scanState.detailFraction * 100).toInt(),
+        PercentText.of(scanState.detailFraction),
         scanState.triangleCount / 1000,
     )
     val scanInstructionText = stringResource(R.string.scan_instruction)

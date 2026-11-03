@@ -7,7 +7,7 @@
 package com.constructar.app.ui.ar
 
 import com.constructar.core.model.HitConfidence
-import kotlin.math.roundToInt
+import com.constructar.core.units.PercentText
 
 /**
  * How honest a run is about its weakest point.
@@ -41,6 +41,6 @@ internal object RunConfidence {
     fun weakPointPercent(nodeCount: Int, worstNodeConfidence: Float): Int? {
         if (nodeCount < 2) return null
         if (worstNodeConfidence <= 0f || worstNodeConfidence >= WEAK_BELOW) return null
-        return (worstNodeConfidence * 100f).roundToInt().coerceIn(1, 99)
+        return PercentText.of(worstNodeConfidence).coerceIn(1, 99)
     }
 }

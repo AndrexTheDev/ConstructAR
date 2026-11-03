@@ -76,7 +76,7 @@ object LengthFormatter {
 
     /** Deliberate, documented waste factor formatting: `"+7 %"`. */
     fun formatWasteFactor(factor: Float): String =
-        "+" + String.format(Locale.ROOT, "%.0f %%", factor * 100f)
+        String.format(Locale.ROOT, "+%d %%", PercentText.of(factor))
 
     /** Timestamp used across exports; ISO-like and sortable, in the device time zone. */
     fun formatTimestamp(epochMillis: Long, timeZone: java.util.TimeZone = java.util.TimeZone.getDefault()): String {

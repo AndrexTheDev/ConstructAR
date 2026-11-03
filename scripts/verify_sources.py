@@ -1323,6 +1323,31 @@ def check_ar_readiness_rechecks_on_resume() -> None:
         add(screen, "the readiness check is keyed on the camera permission alone, so it is asked "
                     "once and never again (finding 146)")
 
+def check_percentages_are_rounded() -> None:
+    """A percent the operator reads is rounded by `PercentText`, never truncated (finding 147).
+
+    `(ratio * 100).toInt()` is one unit low whenever the multiplication lands below the integer -
+    `0.29f * 100f` is `28.999998` - and it was written in five surfaces while the app already
+    carried three other rules for the same kind of number (`roundToInt` for the AR warning,
+    `Math.round` in the protocol's accuracy note, `%.0f` in a formatter nobody called). The one
+    that mattered: a run whose weakest point is 0.849 read 85 % on the phone and 84 % in the
+    signed protocol, and that document's own sentence says anything below 85 % needs a look.
+
+    Banned in the modules that draw or print: `:app`, `:export` and `:core`. `:ar-engine` is out
+    of scope because its `* 100).toInt()` call sites are a log line and a position hash, not a
+    percent (finding 147).
+    """
+    pattern = re.compile(r"\*\s*100(?:\.0)?f?\s*\)?\s*\.toInt\(\)")
+    for module in ("app", "core", "export"):
+        for path in sorted((ROOT / module / "src" / "main").rglob("*.kt")):
+            text = path.read_text(encoding="utf-8")
+            for match in pattern.finditer(text):
+                line = text.count("\n", 0, match.start()) + 1
+                add(path,
+                    f"line {line}: a percentage is truncated with `.toInt()` - a percent is "
+                    "rounded by `PercentText.of`, or the phone and the protocol disagree about "
+                    "the same number (finding 147)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1348,6 +1373,7 @@ def main() -> int:
     check_licence_diagnostics_reach_the_screen()
     check_onboarding_position_is_saved_state()
     check_ar_readiness_rechecks_on_resume()
+    check_percentages_are_rounded()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
