@@ -41,6 +41,7 @@ fun rememberPdfLabels(): PdfLabels = PdfLabels(
     columnWaste = stringResource(R.string.pdf_column_waste),
     columnOrderMeters = stringResource(R.string.pdf_column_order_meters),
     procurementNote = stringResource(R.string.pdf_procurement_note),
+    procurementDeduction = stringResource(R.string.pdf_procurement_deduction),
     accuracyNote = stringResource(R.string.pdf_note_accuracy),
     scanLimitedNote = stringResource(R.string.pdf_note_scan_limited),
     recoveredNote = stringResource(R.string.pdf_note_recovered),

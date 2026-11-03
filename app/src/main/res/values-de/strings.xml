@@ -447,4 +447,5 @@
     <string name="field_defect_resolve">Als erledigt markieren</string>
     <string name="field_defect_reopen">Wieder öffnen</string>
     <string name="paywall_trial_tampered">Der gespeicherte Teststatus auf diesem Telefon ließ sich nicht prüfen, daher gilt die Testphase als verbraucht. Deine Messungen sind nicht betroffen.</string>
+    <string name="pdf_procurement_deduction">Biegeabzug %2$s bei %1$s - das Zuschnittstück ist kürzer als die Strecke, die Bestelllänge bleibt unverändert.</string>
 </resources>

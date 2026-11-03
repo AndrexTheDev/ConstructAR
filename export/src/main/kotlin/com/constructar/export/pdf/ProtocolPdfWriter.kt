@@ -13,6 +13,7 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import com.constructar.core.bom.MaterialLine
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.HitConfidence
@@ -320,6 +321,19 @@ class ProtocolPdfWriter(
                     )
                 }
                 y += 6
+                // The bend deduction is what a fitter cuts to, and it was on the screen only
+                // (finding 141): a printed page whose order length is not the length of the piece
+                // that goes in, with nothing saying why.
+                for (note in bendDeductionNotes(content.materialList.lines, content.labels.procurementDeduction)) {
+                    if (y > pageHeight - FOOTER_HEIGHT - 30) {
+                        drawFooter(page.canvas, pageNumber, content)
+                        document.finishPage(page)
+                        pageNumber++
+                        page = newPage(document, pageNumber)
+                        y = MARGIN
+                    }
+                    y = drawNote(page.canvas, note, y)
+                }
                 drawNote(page.canvas, content.labels.procurementNote, y)
                 y += 22
             }
@@ -694,6 +708,28 @@ internal fun scanLimitedNote(scanLimited: Boolean, template: String): String? =
  * the two ways of having nothing to say - every photo fits, and the caller did not name a total -
  * both end in `null` instead of in "8 of 0 photos".
  */
+/** A bend deduction below this is rounding noise, not a number a fitter cuts to. */
+internal const val MIN_DEDUCTION_METERS: Float = 0.0005f
+
+/**
+ * One note per material whose bends make the cut piece shorter than the measured run.
+ *
+ * The screen has printed this since finding 114 - "the figure a fitter cuts to" - and the printed
+ * procurement table never did, so the document the customer signs carried an order length that is
+ * not the length of the piece that goes in, and no sentence saying why (finding 141). Lines without
+ * a bend produce nothing at all, so an ordinary job adds no noise to the page.
+ */
+internal fun bendDeductionNotes(lines: List<MaterialLine>, template: String): List<String> =
+    lines.filter { it.bendDeductionMeters > MIN_DEDUCTION_METERS }
+        .map { line ->
+            String.format(
+                Locale.ROOT,
+                template,
+                line.spec.material.ifBlank { line.spec.sizeLabel },
+                LengthFormatter.format(line.bendDeductionMeters),
+            )
+        }
+
 internal fun photoAppendixNote(shown: Int, total: Int, template: String): String? {
     if (total <= shown) return null
     return String.format(Locale.ROOT, template, shown, total)

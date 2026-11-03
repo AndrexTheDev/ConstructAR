@@ -469,4 +469,5 @@
     <string name="field_defect_resolve">Oznacz jako naprawione</string>
     <string name="field_defect_reopen">Otwórz ponownie</string>
     <string name="paywall_trial_tampered">Zapisany na tym telefonie stan okresu próbnego nie przeszedł weryfikacji, więc okres próbny liczy się jako wykorzystany. Twoje pomiary pozostają bez zmian.</string>
+    <string name="pdf_procurement_deduction">Odliczenie na zagięcia %2$s przy %1$s - cięty odcinek jest krótszy niż trasa, długość zamówienia się nie zmienia.</string>
 </resources>

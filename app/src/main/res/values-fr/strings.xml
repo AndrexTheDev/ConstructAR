@@ -447,4 +447,5 @@
     <string name="field_defect_resolve">Marquer comme résolu</string>
     <string name="field_defect_reopen">Rouvrir</string>
     <string name="paywall_trial_tampered">L’état de l’essai enregistré sur ce téléphone n’a pas pu être vérifié ; l’essai compte donc comme utilisé. Tes mesures ne sont pas affectées.</string>
+    <string name="pdf_procurement_deduction">Déduction de cintrage %2$s sur %1$s : la pièce coupée est plus courte que le tracé, la longueur de commande n’est pas réduite.</string>
 </resources>

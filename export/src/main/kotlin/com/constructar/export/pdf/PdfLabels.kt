@@ -46,6 +46,16 @@ data class PdfLabels(
         "Order lengths include the site waste factor. Figures are computed from anchor-refined " +
             "node positions; verify critical runs with a tape measure before cutting.",
     /**
+     * One line per material whose bends make the cut piece shorter; `%1$s` = article, `%2$s` = metres.
+     *
+     * The screen has reported this since finding 114 ("the figure a fitter cuts to") and the
+     * printed procurement table never did: the customer signed a page whose order length is not the
+     * length of the piece that goes in, with no sentence saying why (finding 141).
+     */
+    val procurementDeduction: String =
+        "Bend deduction %2$s on %1$s - the cut piece is shorter than the run, the order length is " +
+            "not reduced.",
+    /**
      * The accuracy the protocol promises, printed under the summary; `%1$d` = the confidence bar.
      *
      * The shop page told every visitor, in six languages, that "the protocol states the expected
