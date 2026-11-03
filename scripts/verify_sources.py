@@ -37,6 +37,8 @@ and most expensive to discover in a 12-minute Gradle run:
      recomputed from that knob
  23. every confirmation that destroys something names what it    (finding 125)
      destroys
+ 24. every write into a folder the operator picked goes through   (findings 130, 131)
+     ExportFiles.writeOnce
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -1070,6 +1072,44 @@ def check_destructive_dialogs() -> None:
                 )
 
 
+def check_folder_writes() -> None:
+    """Every write into a folder the operator picked goes through one guarded writer.
+
+    The Storage Access Framework hands back a *file*, and a file is not a promise: the provider
+    can create it and then refuse the stream, and the write itself can die halfway. Both screens
+    that write into a picked folder used to spell the sequence out inline - `createFile`,
+    `openOutputStream`, `write`, and an `else { file?.delete() }` that only covered the missing
+    stream. A throw left the half-written file exactly where the finished one belonged and aborted
+    the rest (findings 130 and 131): a truncated protocol that opens and looks complete, or a
+    truncated project JSON that no restore can read while the backup folder looks whole.
+
+    Deleting is therefore part of writing, in [ExportFiles.writeOnce] and nowhere else. A new
+    `openOutputStream` in a screen is this defect returning, so it is refused here before it can be
+    compiled into a release.
+    """
+    ui = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui"
+    writer = ui / "ExportFiles.kt"
+    for path in sorted(ui.glob("*.kt")):
+        if path == writer:
+            continue
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for number, line in enumerate(lines, start=1):
+            if ".openOutputStream(" not in line:
+                continue
+            # The one legal shape: the `open` argument of the guarded writer.
+            if line.strip().startswith("open = {"):
+                continue
+            add(
+                path,
+                f"line {number}: writes into a picked folder without ExportFiles.writeOnce - "
+                "a write that throws would leave the half-written file in place",
+            )
+    for name in ("ExportScreen.kt", "BackupCard.kt"):
+        path = ui / name
+        if path.exists() and "ExportFiles.writeOnce(" not in path.read_text(encoding="utf-8"):
+            add(path, "no longer writes its files through ExportFiles.writeOnce")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1086,6 +1126,7 @@ def main() -> int:
     check_cross_thread_fields()
     check_performance_numbers()
     check_destructive_dialogs()
+    check_folder_writes()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

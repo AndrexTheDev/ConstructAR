@@ -102,16 +102,26 @@ fun BackupCard(
                         ?: root.createDirectory("ConstructAR-backup-$stamp")
                         ?: error(context.getString(R.string.backup_failed))
                     var written = 0
+                    // Same rule as the export bundle (finding 130): a file that did not get
+                    // written is deleted again. Here the half-written file is a *room* - the one
+                    // copy of it - and a truncated JSON does not parse, so a restore would drop
+                    // it while the folder looked like a complete backup (finding 131).
+                    var failure: Throwable? = null
                     entries.forEach { entry ->
-                        val file = folder.createFile("application/json", entry.fileName)
-                        val output = file?.uri?.let { context.contentResolver.openOutputStream(it) }
-                        if (output != null) {
-                            output.use { it.write(entry.text.toByteArray(Charsets.UTF_8)) }
-                            written++
-                        } else {
-                            file?.delete()
+                        val outcome = ExportFiles.writeOnce(
+                            create = { folder.createFile("application/json", entry.fileName) },
+                            open = { file -> context.contentResolver.openOutputStream(file.uri) },
+                            write = { stream -> stream.use { it.write(entry.text.toByteArray(Charsets.UTF_8)) } },
+                            delete = { file -> file.delete() },
+                        )
+                        when (outcome) {
+                            ExportFiles.Outcome.Written -> written++
+                            ExportFiles.Outcome.NotCreated, ExportFiles.Outcome.NotOpened -> Unit
+                            is ExportFiles.Outcome.Broken -> failure = failure ?: outcome.cause
                         }
                     }
+                    // Nothing written and something threw: name the cause, not the folder.
+                    if (written == 0) failure?.let { throw it }
                     // Photos are part of the job: copy them next to the project files so a restore
                     // on a new phone gets the documentation too, not just the metres. They are
                     // counted, because a backup that silently drops them is worse than one that
@@ -119,14 +129,15 @@ fun BackupCard(
                     val photos = repository.photoFiles()
                     var photosWritten = 0
                     photos.forEach { photo ->
-                        val file = folder.createFile("image/jpeg", photo.name)
-                        val output = file?.uri?.let { context.contentResolver.openOutputStream(it) }
-                        if (output != null) {
-                            output.use { stream -> photo.inputStream().use { it.copyTo(stream) } }
-                            photosWritten++
-                        } else {
-                            file?.delete()
-                        }
+                        val outcome = ExportFiles.writeOnce(
+                            create = { folder.createFile("image/jpeg", photo.name) },
+                            open = { file -> context.contentResolver.openOutputStream(file.uri) },
+                            write = { stream ->
+                                stream.use { out -> photo.inputStream().use { it.copyTo(out) } }
+                            },
+                            delete = { file -> file.delete() },
+                        )
+                        if (outcome == ExportFiles.Outcome.Written) photosWritten++
                     }
                     BackupOutcome.of(
                         report = BackupOutcome.Report(
