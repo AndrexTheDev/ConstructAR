@@ -434,7 +434,8 @@ Known limitations, deliberately documented rather than hidden:
   and in `NOTICE`, and any licence text `NOTICE` points at must be there (finding 109). And a
   *screen* to its *promise*: the AR gate may not fetch ARCore's answer once and keep it, because
   an install finishes in the Play Store while the screen is stopped (finding 146), and a
-  percentage may not be truncated on its way to the signed page (finding 147).
+  percentage may not be truncated on its way to the signed page (finding 147), and a printed
+  clock may not take its convention or its digits from the phone's language (finding 148).
 * **Site gate**: `tools/seo_audit.py` reads the *generated* landing pages and refuses a
   regression: canonical and the six `hreflang` pairs, title/description lengths, Open Graph and
   Twitter cards with a real image size, JSON-LD whose offers match the four real prices, every
@@ -472,7 +473,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 596 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 600 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 58 checks, 0 failures |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |

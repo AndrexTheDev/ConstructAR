@@ -1348,6 +1348,32 @@ def check_percentages_are_rounded() -> None:
                     "rounded by `PercentText.of`, or the phone and the protocol disagree about "
                     "the same number (finding 147)")
 
+def check_clock_follows_the_phone_setting() -> None:
+    """A printed clock time follows the phone's 12/24-hour setting, never its language (finding 148).
+
+    `DateFormat.getTimeInstance(SHORT).format(...)` looks like the polite call and takes **two**
+    things from the locale: the 12/24-hour convention (so a German fitter with an English phone
+    read `10:00 PM` on a protocol whose other numbers are 24-hour) and the digits (so the same
+    protocol on an Arabic phone carried a time table written `٢:٠٥ م` beside lengths written
+    `14.82 m`). Finding 121 pinned the date column for the same second reason; the clock column
+    was the one left behind.
+
+    The app now asks `timePattern(use24Hour = ...)`, fed by `DateFormat.is24HourFormat(context)`,
+    and formats with `Locale.ROOT`. Any `getTimeInstance(...)` call that formats is a finding.
+    """
+    pattern = re.compile(r"getTimeInstance\s*\(")
+    for path in sorted((ROOT / "app" / "src" / "main").rglob("*.kt")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for number, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            # The comment that explains why this call is gone may name it.
+            if stripped.startswith("*") or stripped.startswith("//"):
+                continue
+            for _ in pattern.finditer(line):
+                add(path, f"line {number}: a clock time is formatted straight from the device "
+                          "locale - the convention belongs to the phone's setting and the digits "
+                          "to no locale at all (finding 148)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1374,6 +1400,7 @@ def main() -> int:
     check_onboarding_position_is_saved_state()
     check_ar_readiness_rechecks_on_resume()
     check_percentages_are_rounded()
+    check_clock_follows_the_phone_setting()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

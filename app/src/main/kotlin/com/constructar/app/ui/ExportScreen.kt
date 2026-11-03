@@ -149,6 +149,8 @@ fun ExportScreen(
         photosTitle = stringResource(R.string.pdf_section_photos),
         photoDiaryPrefix = stringResource(R.string.pdf_section_diary),
         photoDefectPrefix = stringResource(R.string.pdf_section_defects),
+        // The phone's own clock convention, so the printed table matches the screen (finding 148).
+        timePattern = rememberTimePattern(),
     )
     // Built at the moment of the export, not at the moment the screen appeared: a session that
     // is still open keeps counting, and a protocol whose time table is frozen at composition

@@ -28,9 +28,10 @@ import java.util.TimeZone
  * paywall had been pinned to `dd.MM.yyyy` long before, so the same day showed up in two formats one
  * tap apart (finding 121).
  *
- * A **clock time** still follows the device's 12/24-hour convention on purpose: that setting is the
- * owner's, and a trade worker reads the clock the way the phone shows it. These tests pin the date
- * and leave the time alone - the assertions on the time only check that it is there.
+ * A **clock time** follows the phone's 12/24-hour **setting** on purpose: that setting is the
+ * owner's, and a trade worker reads the clock the way the phone shows it. What it does not follow
+ * any more is the phone's *language* - neither the convention nor the digits (finding 148) - so the
+ * time assertions here pass the pattern explicitly and hold the language fixed.
  */
 class DocumentDateTest {
 
@@ -53,7 +54,7 @@ class DocumentDateTest {
         TimeZone.setDefault(originalZone)
     }
 
-    private fun texts() = SiteFileTexts(
+    private fun texts(timePattern: String = "HH:mm") = SiteFileTexts(
         customerTitle = "Customer",
         customerLabel = "Customer",
         addressLabel = "Site",
@@ -87,6 +88,7 @@ class DocumentDateTest {
         photosTitle = "Photos",
         photoDiaryPrefix = "Diary",
         photoDefectPrefix = "Defect",
+        timePattern = timePattern,
     )
 
     private val project = ProjectRecord(
@@ -134,21 +136,29 @@ class DocumentDateTest {
         assertTrue(diary, diary.contains("Wall opened."))
     }
 
-    /** The clock time is still the phone's: only the date is pinned. */
+    /** The clock convention comes from the phone's setting; the language may not move it. */
     @Test
-    fun `the time of day keeps the device convention`() {
+    fun `the time of day follows the setting, not the language`() {
+        // A German phone whose owner chose 24-hour time.
         Locale.setDefault(Locale.GERMANY)
-        val row = section("Working time").rows.single()
+        val german = buildSiteFileSections(project, texts("HH:mm"), nowMs = 1_778_620_000_000L)
+            .single { it.title == "Working time" }.rows.single()
 
-        assertEquals("12.05.2026", row[0])
-        assertEquals("22:00", row[1])
+        assertEquals("12.05.2026", german[0])
+        assertEquals("22:00", german[1])
 
-        // Only the clock convention may differ - and only in the clock, never in the day.
+        // The same phone set to English: the setting still decides, so the clock does not move.
         Locale.setDefault(Locale.forLanguageTag("en-US"))
-        val american = section("Working time").rows.single()
+        val englishSpeaking = buildSiteFileSections(project, texts("HH:mm"), nowMs = 1_778_620_000_000L)
+            .single { it.title == "Working time" }.rows.single()
 
-        assertEquals("12.05.2026", american[0])
-        assertTrue(american[1], american[1].contains("10:00"))
-        assertTrue(american[1], american[1] != "22:00")
+        assertEquals("22:00", englishSpeaking[1])
+
+        // And a 12-hour setting prints 12-hour time even on a language that never does.
+        Locale.setDefault(Locale.GERMANY)
+        val twelveHour = buildSiteFileSections(project, texts("h:mm a"), nowMs = 1_778_620_000_000L)
+            .single { it.title == "Working time" }.rows.single()
+
+        assertEquals("10:00 PM", twelveHour[1])
     }
 }

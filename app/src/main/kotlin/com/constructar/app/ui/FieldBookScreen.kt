@@ -125,6 +125,10 @@ fun FieldBookScreen(
     // The sum of the session rows below, so the big number and the list agree (finding 81).
     val totalMillis = WorkTime.billableMillis(project.sessions, nowMs)
 
+    // The phone's own 12/24-hour setting, once for the whole screen - the running clock in the
+    // header and every row below print the same convention (finding 148).
+    val timePattern = rememberTimePattern()
+
     // One camera launcher serves every entry: the pending token decides which diary line or
     // defect the picture ends up on. The camera app writes straight into our cache through the
     // FileProvider, so no storage permission and no copy of the operator's gallery is needed.
@@ -222,7 +226,7 @@ fun FieldBookScreen(
                 val session = WorkTime.runningSession(project.sessions)
                 if (session != null) {
                     Text(
-                        stringResource(R.string.field_time_running, formatTimeLabel(session.startEpochMs)),
+                        stringResource(R.string.field_time_running, formatTimeLabel(session.startEpochMs, timePattern)),
                         style = MaterialTheme.typography.bodySmall,
                         color = Jamaica.Lime,
                     )
@@ -512,11 +516,12 @@ private fun durationLabel(millis: Long): String {
 /** Clock-off time to clock-on time, in the phone's own 12/24-hour convention. */
 @Composable
 private fun sessionLabel(session: WorkSession, nowMs: Long): String {
-    val start = formatTimeLabel(session.startEpochMs)
+    val timePattern = rememberTimePattern()
+    val start = formatTimeLabel(session.startEpochMs, timePattern)
     val end = session.endEpochMs?.let { end ->
         // A shift that ran past midnight says so: the label carries the start's date only, so an
         // unmarked "01:30" would read as an end before the beginning (finding 120).
-        val time = formatTimeLabel(end)
+        val time = formatTimeLabel(end, timePattern)
         if (endsOnLaterDay(session.startEpochMs, end)) {
             stringResource(R.string.field_time_next_day, time)
         } else {

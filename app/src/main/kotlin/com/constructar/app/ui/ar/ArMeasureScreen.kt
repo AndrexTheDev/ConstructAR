@@ -79,6 +79,7 @@ import com.constructar.app.ui.ActionTone
 import com.constructar.app.ui.GloveButton
 import com.constructar.app.ui.GloveButtonRow
 import com.constructar.app.ui.formatTimeLabel
+import com.constructar.app.ui.rememberTimePattern
 import com.constructar.app.ui.label
 import com.constructar.app.ui.message
 import com.constructar.app.ui.routingLabel
@@ -801,7 +802,7 @@ fun ArMeasureScreen(
                                 pending.nodes.size,
                                 pending.nodes.size,
                             ) + " · " + stringResource(R.string.hud_length, LengthFormatter.number(pending.lengthMeters)),
-                            formatTimeLabel(pending.savedAtEpochMs),
+                            formatTimeLabel(pending.savedAtEpochMs, rememberTimePattern()),
                         ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = HudStyle.dialogBody,

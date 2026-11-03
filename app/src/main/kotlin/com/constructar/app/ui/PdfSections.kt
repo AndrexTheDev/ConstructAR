@@ -69,6 +69,14 @@ internal data class SiteFileTexts(
     val photosTitle: String,
     val photoDiaryPrefix: String,
     val photoDefectPrefix: String,
+    /**
+     * The clock pattern the phone's own 12/24-hour setting asks for, from `timePattern`.
+     *
+     * Carried here so the time table prints the clock the operator reads on his own phone - and so
+     * its digits stay Latin, which the shipped `DateFormat` call did not do (finding 148). Not a
+     * translated string: it is a pattern, not a word.
+     */
+    val timePattern: String = "HH:mm",
 )
 
 /** A4 printable width at 72 dpi, the budget the tables divide between their columns. */
@@ -96,7 +104,7 @@ internal fun buildSiteFileSections(
         val rows = project.sessions.map { session ->
             listOf(
                 formatDayLabel(session.startEpochMs),
-                formatTimeLabel(session.startEpochMs),
+                formatTimeLabel(session.startEpochMs, texts.timePattern),
                 endCell(session, texts),
                 duration(WorkTime.sessionMillis(session, nowMs), texts),
             )
@@ -126,7 +134,7 @@ internal fun buildSiteFileSections(
     if (diary.isNotEmpty()) {
         sections += PdfSection(
             title = texts.diaryTitle,
-            paragraphs = diary.map { "${formatDateTimeLabel(it.createdAtEpochMs)} — ${it.text}" },
+            paragraphs = diary.map { "${formatDateTimeLabel(it.createdAtEpochMs, texts.timePattern)} — ${it.text}" },
         )
     }
 
@@ -164,7 +172,7 @@ private fun defectRow(defect: DefectItem, texts: SiteFileTexts): List<String> = 
  */
 private fun endCell(session: WorkSession, texts: SiteFileTexts): String {
     val end = session.endEpochMs ?: return texts.runningLabel
-    val time = formatTimeLabel(end)
+    val time = formatTimeLabel(end, texts.timePattern)
     return if (endsOnLaterDay(session.startEpochMs, end)) {
         String.format(Locale.ROOT, texts.nextDayLabel, time)
     } else {
