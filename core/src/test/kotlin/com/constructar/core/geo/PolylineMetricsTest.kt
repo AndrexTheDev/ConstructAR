@@ -7,6 +7,7 @@
 package com.constructar.core.geo
 
 import com.constructar.core.math.Vec3
+import com.constructar.core.model.ConduitKind
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.HitSource
 import com.constructar.core.model.RouteNodeRecord
@@ -26,6 +27,25 @@ class PolylineMetricsTest {
             hitSource = source,
             confidence = source.reliability,
         )
+
+    @Test
+    fun `the default the screen prints is the default the engine applies`() {
+        // The material screen now says what "the trade default" means before the operator picks it
+        // (finding 156). It asks per family, so the two ways of asking must be one number.
+        ConduitKind.entries.forEach { kind ->
+            val spec = when (kind) {
+                ConduitKind.CABLE -> ConduitSpec.cable(16f)
+                ConduitKind.PIPE -> ConduitSpec.pipe(20f)
+                ConduitKind.DUCT -> ConduitSpec.duct(60f, 40f)
+            }
+            val perSpec = PolylineMetrics.defaultWasteFactor(spec)
+            val perKind = PolylineMetrics.defaultWasteFactor(kind)
+            assertTrue(
+                "the per-family default must be the per-spec default for $kind: $perKind vs $perSpec",
+                perSpec == perKind,
+            )
+        }
+    }
 
     @Test
     fun `straight run length is the euclidean sum`() {

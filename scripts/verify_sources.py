@@ -1527,6 +1527,29 @@ def check_csv_headers_name_their_cells() -> None:
                 add(csv_writer, f"line {number}: a CSV cell is blank - a number under a blank "
                                 "header cannot be looked up (finding 155)")
 
+def check_screen_states_the_trade_defaults() -> None:
+    """The waste control has to say what "the trade default" is before it is chosen (finding 156).
+
+    It is three numbers - 7 % of cable, 8 % of pipe, 10 % of duct - and the chip row asked the
+    operator to choose between "Default" and 5/10/15 % without ever showing them. The only place a
+    default appeared was a material card, one line at a time, *after* the choice. So the screen
+    builds that sentence from `PolylineMetrics.defaultWasteFactor` for the three families, and a
+    literal percentage in this file would be the defect returning.
+    """
+    screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+              "MaterialsScreen.kt")
+    text = screen.read_text(encoding="utf-8")
+    calls = text.count("PolylineMetrics.defaultWasteFactor(")
+    if calls < 3:
+        add(screen, "the material screen states the trade waste default for "
+                    f"{calls} of the three families, so the chip row asks the operator to choose "
+                    "a number he cannot see (finding 156)")
+    # The chip row deliberately offers 5/10/15 %, so those literals are not evidence of anything -
+    # 7 % and 8 % are nobody's chip, and a screen that spells one out is printing its own number.
+    if "0.07f" in text or "0.08f" in text:
+        add(screen, "the screen hard-codes a waste factor instead of asking the engine for it - "
+                    "the printed default and the applied one would be two numbers (finding 156)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1560,6 +1583,7 @@ def main() -> int:
     check_backup_copies_bytes()
     check_totals_are_sums_of_printed_rows()
     check_csv_headers_name_their_cells()
+    check_screen_states_the_trade_defaults()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

@@ -45,6 +45,7 @@ import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.bom.MaterialLine
 import com.constructar.core.bom.MaterialList
+import com.constructar.core.geo.PolylineMetrics
 import com.constructar.core.model.ConduitKind
 import com.constructar.core.price.Pricing
 import com.constructar.core.units.LengthFormatter
@@ -164,6 +165,18 @@ fun MaterialsScreen(
         // Above the empty-list return on purpose: these are firm-wide settings, not room data.
         // A room whose runs are all single points has no list to show, and its screen used to end
         // before the one section that is about the shop rather than the job (finding 151).
+        //
+        // The waste row says what "the trade default" stands for before it is chosen. It is three
+        // different numbers - 7 % of cable, 8 % of pipe, 10 % of duct - and the only place they
+        // ever appeared was a material card, one line at a time, *after* the choice, so "Default"
+        // and "10 %" looked like the same offer to a shop working in duct and to one working in
+        // cable (finding 156). The numbers come from the engine's own function, never from here.
+        val tradeDefaultsText = stringResource(
+            R.string.waste_hint,
+            LengthFormatter.formatWasteFactor(PolylineMetrics.defaultWasteFactor(ConduitKind.CABLE)),
+            LengthFormatter.formatWasteFactor(PolylineMetrics.defaultWasteFactor(ConduitKind.PIPE)),
+            LengthFormatter.formatWasteFactor(PolylineMetrics.defaultWasteFactor(ConduitKind.DUCT)),
+        )
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 stringResource(R.string.waste_title),
@@ -185,6 +198,12 @@ fun MaterialsScreen(
                     )
                 }
             }
+            Text(
+                tradeDefaultsText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp),
+            )
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

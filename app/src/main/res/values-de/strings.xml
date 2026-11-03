@@ -313,6 +313,7 @@
     <string name="backup_projects_skipped">%1$d von %2$d Projekten konnten nicht geschrieben werden - der Ordner ist voll oder nicht mehr beschreibbar.</string>
     <string name="backup_storage_failed">Auf diesem Telefon konnte nichts gespeichert werden - der Speicher ist voll oder gesperrt. Deine Sicherung bleibt unberührt.</string>
     <string name="waste_title">Reserve</string>
+    <string name="waste_hint">Standard der Gewerke: Kabel %1$s, Rohr %2$s, Kanal %3$s – ein Wert hier ersetzt alle drei.</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>
     <string name="clips_title">Clipabstand</string>

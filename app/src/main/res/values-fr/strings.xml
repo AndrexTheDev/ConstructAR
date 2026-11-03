@@ -313,6 +313,7 @@
     <string name="backup_projects_skipped">%1$d projets sur %2$d n’ont pas pu être écrits : le dossier est plein ou n’est plus accessible en écriture.</string>
     <string name="backup_storage_failed">Rien n’a pu être enregistré sur ce téléphone : le stockage est plein ou en lecture seule. Ta sauvegarde reste intacte.</string>
     <string name="waste_title">Réserve</string>
+    <string name="waste_hint">Standard du métier : câble %1$s, tube %2$s, goulotte %3$s — un pourcentage ici remplace les trois.</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>
     <string name="clips_title">Espacement des colliers</string>

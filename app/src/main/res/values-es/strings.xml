@@ -313,6 +313,7 @@
     <string name="backup_projects_skipped">No se pudieron escribir %1$d de %2$d proyectos: la carpeta está llena o ya no admite escritura.</string>
     <string name="backup_storage_failed">No se pudo guardar nada en este teléfono: el almacenamiento está lleno o bloqueado. Tu copia sigue intacta.</string>
     <string name="waste_title">Reserva</string>
+    <string name="waste_hint">Según el gremio: cable %1$s, tubo %2$s, canal %3$s: un porcentaje aquí sustituye los tres.</string>
     <string name="waste_default">Estándar</string>
     <string name="waste_value">%1$d %%</string>
     <string name="clips_title">Separación de clips</string>

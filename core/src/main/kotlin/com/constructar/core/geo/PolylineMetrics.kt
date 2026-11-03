@@ -109,12 +109,21 @@ data class RouteMetrics(
  */
 object PolylineMetrics {
 
-    /** Default procurement waste: cables are re-pulled, ducts are cut, both need spare. */
-    fun defaultWasteFactor(spec: ConduitSpec): Float = when (spec.kind) {
+    /**
+     * Default procurement waste: cables are re-pulled, ducts are cut, both need spare.
+     *
+     * Answered per **family**, because that is all it depends on - and the material screen has to
+     * be able to say what "the trade default" means before the operator picks it, without inventing
+     * a spec to ask about (finding 156). The spec overload is the same function, so the number the
+     * screen shows and the number the engine applies cannot drift apart.
+     */
+    fun defaultWasteFactor(kind: com.constructar.core.model.ConduitKind): Float = when (kind) {
         com.constructar.core.model.ConduitKind.CABLE -> 0.07f
         com.constructar.core.model.ConduitKind.PIPE -> 0.08f
         com.constructar.core.model.ConduitKind.DUCT -> 0.10f
     }
+
+    fun defaultWasteFactor(spec: ConduitSpec): Float = defaultWasteFactor(spec.kind)
 
     /** Clip spacing in metres by trade practice (cables/pipes 60 cm, channels 50 cm). */
     fun defaultClipSpacing(spec: ConduitSpec): Float = when (spec.kind) {

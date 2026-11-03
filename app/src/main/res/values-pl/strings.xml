@@ -325,6 +325,7 @@
     <string name="backup_projects_skipped">Nie udało się zapisać %1$d z %2$d projektów - folder jest pełny lub nie można do niego pisać.</string>
     <string name="backup_storage_failed">Nie udało się nic zapisać na tym telefonie - pamięć jest pełna lub tylko do odczytu. Twoja kopia pozostaje nietknięta.</string>
     <string name="waste_title">Zapas</string>
+    <string name="waste_hint">Standard branżowy: kabel %1$s, rura %2$s, kanał %3$s — wartość tutaj zastępuje wszystkie trzy.</string>
     <string name="waste_default">Standard</string>
     <string name="waste_value">%1$d %%</string>
     <string name="clips_title">Rozstaw uchwytów</string>
