@@ -35,12 +35,18 @@ internal object RunConfidence {
     /**
      * The warning worth showing, as a percentage, or `null` when there is nothing to say.
      *
-     * `null` also for a run that has not started, and for one where the engine reported no
-     * confidence at all (`0`) - an absent number is not a weak one.
+     * `null` for a run that has not started. It used to be `null` for a confidence of `0` as well,
+     * read as "the engine reported no number" - but `0` is a legal confidence (`RouteNodeRecord`
+     * documents 0..1, the hit cascade never produces it, and a project file restored from another
+     * phone or written by an older build can carry it) and it is the *worst* legal one. The order
+     * list has always counted it (`confidence < HitConfidence.RUN_TRUSTED`), so the same run was
+     * questioned in the paperwork and passed in silence on the phone - the exact disagreement
+     * [WEAK_BELOW] exists to prevent (findings 47, 158). The "no nodes yet" case this guard was
+     * meant for is already answered by [nodeCount].
      */
     fun weakPointPercent(nodeCount: Int, worstNodeConfidence: Float): Int? {
         if (nodeCount < 2) return null
-        if (worstNodeConfidence <= 0f || worstNodeConfidence >= WEAK_BELOW) return null
+        if (worstNodeConfidence >= WEAK_BELOW) return null
         return PercentText.of(worstNodeConfidence).coerceIn(1, 99)
     }
 }

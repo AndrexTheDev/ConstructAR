@@ -443,7 +443,8 @@ Known limitations, deliberately documented rather than hidden:
   copy the bytes it found rather than re-encode them (finding 153), and every length total has to be
   the sum of the rows the documents print (finding 154), and a column of numbers may not sit under a
   blank header (finding 155), and a control may not ask the operator to pick a value it never shows
-  (finding 156), and a CI failure reporter has to be able to find its pull request (finding 157).
+  (finding 156), a CI failure reporter has to be able to find its pull request (finding 157), and
+  the phone may not read a legal confidence as an absent one (finding 158).
 * **Site gate**: `tools/seo_audit.py` reads the *generated* landing pages and refuses a
   regression: canonical and the six `hreflang` pairs, title/description lengths, Open Graph and
   Twitter cards with a real image size, JSON-LD whose offers match the four real prices, every
@@ -481,7 +482,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 621 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 623 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 58 checks, 0 failures |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |

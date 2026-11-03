@@ -1579,6 +1579,23 @@ def check_failure_reporter_finds_the_pull_request() -> None:
             add(path, "the reporter exits successfully when it cannot find the pull request, so a "
                       "failure is still reported nowhere (finding 157)")
 
+def check_confidence_zero_is_a_reading() -> None:
+    """The HUD may not treat a legal confidence as an absent one (finding 158).
+
+    `RunConfidence.weakPointPercent` returned `null` when the run's weakest point was exactly `0`,
+    reading it as "the engine reported no number". `0` is inside the range `RouteNodeRecord`
+    documents (0..1), the "no nodes yet" case is already answered by `nodeCount`, and the order
+    list has always counted it (`confidence < HitConfidence.RUN_TRUSTED`): the same run was
+    questioned on the paperwork and passed in silence on the phone - the disagreement the shared
+    threshold exists to prevent (finding 47).
+    """
+    hud = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" / "ar" /
+           "RunConfidence.kt")
+    text = hud.read_text(encoding="utf-8")
+    if "worstNodeConfidence <= 0f" in text or "worstNodeConfidence > 0f" in text:
+        add(hud, "the HUD still reads a confidence of 0 as 'no reading', while the bill of "
+                 "materials counts it as the weakest possible point (finding 158)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1614,6 +1631,7 @@ def main() -> int:
     check_csv_headers_name_their_cells()
     check_screen_states_the_trade_defaults()
     check_failure_reporter_finds_the_pull_request()
+    check_confidence_zero_is_a_reading()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
