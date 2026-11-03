@@ -39,6 +39,7 @@ and most expensive to discover in a 12-minute Gradle run:
      destroys
  24. every write into a folder the operator picked goes through   (findings 130, 131)
      ExportFiles.writeOnce
+ 25. something re-derives the licence when the app resumes        (finding 132)
 
 Exit code 0 means "no finding". It does **not** mean "compiles" — only Gradle can say that.
 
@@ -1110,6 +1111,30 @@ def check_folder_writes() -> None:
             add(path, "no longer writes its files through ExportFiles.writeOnce")
 
 
+def check_resume_entitlement_refresh() -> None:
+    """A plan that expires has to be re-derived when the app comes back (finding 132).
+
+    There is no server and no timer, so expiry is a comparison against the current day that
+    happens whenever `EntitlementStore.refresh()` runs. The class documents the plan plainly -
+    "cheap and idempotent, so the app calls it on resume: that is how a licence that expires at
+    midnight stops working at midnight" - and nothing called it: `refreshEntitlements()` was
+    reachable only from the paywall, so a monthly subscription and a seven-day trial both stayed
+    open for as long as the process lived, which on a site phone is days.
+    """
+    app = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app"
+    root = app / "ui" / "AppRoot.kt"
+    text = root.read_text(encoding="utf-8")
+    if "Lifecycle.Event.ON_RESUME" not in text or "refreshEntitlements" not in text:
+        add(
+            root,
+            "nothing re-derives the licence when the app resumes - a plan that expired at "
+            "midnight would keep working until the process is killed",
+        )
+    view_model = app / "ProjectViewModel.kt"
+    if "fun refreshEntitlements(" not in view_model.read_text(encoding="utf-8"):
+        add(view_model, "refreshEntitlements() is gone, so the resume hook has nothing to call")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1127,6 +1152,7 @@ def main() -> int:
     check_performance_numbers()
     check_destructive_dialogs()
     check_folder_writes()
+    check_resume_entitlement_refresh()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

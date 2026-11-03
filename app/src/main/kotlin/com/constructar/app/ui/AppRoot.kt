@@ -15,11 +15,15 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -59,6 +63,21 @@ fun AppRoot(viewModel: ProjectViewModel) {
     val defaultRoomName = stringResource(R.string.home_default_room_name)
     val navController: NavHostController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // A licence that expires at midnight has to stop working at midnight, and it has to happen
+    // without a timer, a service or a background job (finding 132). `EntitlementStore` says so in
+    // its own documentation - "the app calls it on resume" - and nothing did: `refreshEntitlements`
+    // was reachable only from the paywall, so a monthly subscription or a seven-day trial stayed
+    // open for as long as the process lived, which on a site phone is days. The verification is
+    // one ECDSA check on the stored licence, so a resume is cheap enough to do it every time.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshEntitlements()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val errorText = when (state.lastError) {
         UiMessage.PROJECT_OPEN_FAILED -> stringResource(R.string.error_project_open)
