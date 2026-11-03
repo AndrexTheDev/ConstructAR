@@ -519,6 +519,40 @@ void testBlockBudget() {
   check(afterReset.hitBlockBudget, "after a reset the budget is hit again, not remembered");
 }
 
+/**
+ * The block budget under the threading it actually runs with.
+ *
+ * A budget is a memory guard: `maxBlocks` is what keeps a ten-minute scan from filling the phone.
+ * It is spent inside `findOrCreateBlock`, which runs on every worker thread, and the shards have
+ * independent mutexes - so the check and the increment have to be one atomic step. The older code
+ * read the count, compared it with the budget and incremented afterwards, which let two threads
+ * both take the last slot: five blocks where the budget said four, intermittently, depending on how
+ * many cores the machine has. This case runs twelve volumes with eight workers and a step of one
+ * pixel, which is the widest window the race gets (finding 159).
+ */
+void testBlockBudgetUnderConcurrency() {
+  section("Block budget: exact under eight workers");
+  SyntheticCamera camera;
+  const auto depth = renderSphereDepth(camera, Vec3(0.f, 0.f, -2.f), 0.5f);
+  constexpr size_t kBudget = 6;
+  size_t worst = 0;
+  bool reported = true;
+  for (int round = 0; round < 12; ++round) {
+    TsdfConfig config;
+    config.voxelSize = 0.01f;
+    config.minConfidence = 0;
+    config.maxBlocks = kBudget;
+    config.workerThreads = 8;
+    TsdfVolume volume(config);
+    const auto stats = volume.integrate(makeFrame(camera, depth, Mat4::identity()), 1);
+    reported = reported && stats.hitBlockBudget;
+    worst = std::max(worst, volume.blockCount());
+  }
+  check(reported, "every round reports the budget being hit");
+  check(worst <= kBudget, "no round allocates past the budget (" + std::to_string(worst) + " of " +
+                              std::to_string(kBudget) + ")");
+}
+
 void testInvalidInput() {
   section("Invalid input handling");
   TsdfConfig config;
@@ -547,6 +581,7 @@ int main() {
   testProximityDetector();
   testTriangleBudgetAndReset();
   testBlockBudget();
+  testBlockBudgetUnderConcurrency();
   testInvalidInput();
 
   std::printf("\n%d checks, %d failures\n", g_checks, g_failures);

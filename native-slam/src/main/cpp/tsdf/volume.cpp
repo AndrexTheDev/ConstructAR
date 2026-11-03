@@ -62,10 +62,30 @@ TsdfVolume::Block* TsdfVolume::findOrCreateBlock(int32_t bx, int32_t by, int32_t
   std::lock_guard<std::mutex> lock(shard.mutex);
   auto it = shard.index.find(key);
   if (it != shard.index.end()) return &shard.blocks[it->second];
-  if (blockCount_.load(std::memory_order_relaxed) >= config_.maxBlocks) {
-    blockBudgetReported_.store(true, std::memory_order_relaxed);
-    return nullptr;
+  // The slot is claimed **before** the memory exists, and the claim is atomic.
+  //
+  // This used to be a relaxed load, a comparison and a `fetch_add` after the block was built.
+  // `integrate` splits a frame across worker threads and the shards have independent mutexes, so
+  // two threads could both read "3 of 4" and both allocate: five blocks against a budget of four,
+  // intermittently, depending on the core count of the machine. That budget is the guard that
+  // keeps a long scan from filling the phone's memory, and it is also what the native test asserted
+  // - which is why the suite failed on a CI runner with more cores than the machine it was written
+  // on (finding 159).
+  size_t claimed = blockCount_.load(std::memory_order_relaxed);
+  for (;;) {
+    if (claimed >= config_.maxBlocks) {
+      blockBudgetReported_.store(true, std::memory_order_relaxed);
+      return nullptr;
+    }
+    if (blockCount_.compare_exchange_weak(claimed, claimed + 1, std::memory_order_relaxed,
+                                          std::memory_order_relaxed)) {
+      break;
+    }
   }
+
+  // The memory, after the claim. There is nothing to unwind to if this fails: the app's native
+  // build compiles with `-fno-exceptions`, so a refused allocation ends the process rather than
+  // leaving a slot to give back.
   shard.blocks.emplace_back();
   Block& block = shard.blocks.back();
   std::memset(block.sdf, 0, sizeof(block.sdf));
@@ -75,7 +95,6 @@ TsdfVolume::Block* TsdfVolume::findOrCreateBlock(int32_t bx, int32_t by, int32_t
   block.bz = bz;
   block.lastFrame = frameCounter_;
   shard.index.emplace(key, static_cast<uint32_t>(shard.blocks.size() - 1));
-  blockCount_.fetch_add(1, std::memory_order_relaxed);
   return &block;
 }
 

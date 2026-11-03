@@ -1596,6 +1596,28 @@ def check_confidence_zero_is_a_reading() -> None:
         add(hud, "the HUD still reads a confidence of 0 as 'no reading', while the bill of "
                  "materials counts it as the weakest possible point (finding 158)")
 
+def check_block_budget_claim_is_atomic() -> None:
+    """A budget spent from several threads has to be claimed atomically (finding 159).
+
+    `TsdfVolume::findOrCreateBlock` runs on every worker thread, the 64 shards have independent
+    mutexes, and the block budget is the only thing between a full scan and the phone's memory. A
+    relaxed load, a comparison and a later `fetch_add` let two threads both take the last slot -
+    seven blocks against a budget of six, measured with eight workers - and the native test only
+    failed on machines with enough cores to open that window.
+    """
+    volume = (ROOT / "native-slam" / "src" / "main" / "cpp" / "tsdf" / "volume.cpp")
+    text = volume.read_text(encoding="utf-8")
+    start = text.find("TsdfVolume::Block* TsdfVolume::findOrCreateBlock(")
+    if start < 0:
+        add(volume, "`findOrCreateBlock` is gone; this rule has nothing to check")
+        return
+    body = text[start:text.find("\n}\n", start)]
+    if "maxBlocks" not in body:
+        return
+    if "compare_exchange_weak" not in body:
+        add(volume, "the block budget is compared before the slot is claimed, so two threads can "
+                    "both allocate past it - the memory guard leaks (finding 159)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1632,6 +1654,7 @@ def main() -> int:
     check_screen_states_the_trade_defaults()
     check_failure_reporter_finds_the_pull_request()
     check_confidence_zero_is_a_reading()
+    check_block_budget_claim_is_atomic()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
