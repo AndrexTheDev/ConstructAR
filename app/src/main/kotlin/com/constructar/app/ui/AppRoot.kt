@@ -144,6 +144,8 @@ fun AppRoot(viewModel: ProjectViewModel) {
                     HomeScreen(
                         projects = state.projects,
                         unreadableProjects = state.unreadableProjects,
+                        unreadableFiles = state.unreadableFiles,
+                        onDeleteUnreadable = viewModel::deleteUnreadableFile,
                         loading = state.loading,
                         entitlements = state.entitlements,
                         trialDaysLeft = state.trialDaysLeft,

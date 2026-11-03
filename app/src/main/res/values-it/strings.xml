@@ -134,9 +134,12 @@
         <item quantity="other">%1$d tracciati</item>
     </plurals>
     <plurals name="home_unreadable">
-        <item quantity="one">Non è stato possibile leggere 1 file di progetto. È stato conservato: ripristinalo da un backup.</item>
-        <item quantity="other">Non è stato possibile leggere %1$d file di progetto. Sono stati conservati: ripristinali da un backup.</item>
+        <item quantity="one">1 file di progetto non è stato letto. È stato conservato: ripristinalo da un backup o eliminalo qui sotto per liberare la stanza.</item>
+        <item quantity="other">%1$d file di progetto non sono stati letti. Sono stati conservati: ripristinali da un backup o eliminali qui sotto per liberare le stanze.</item>
     </plurals>
+    <string name="home_damaged_title">File che questa versione non può leggere</string>
+    <string name="home_damaged_delete">Elimina file</string>
+    <string name="home_damaged_body">Eliminare «%1$s»? Questa versione non riesce a leggere il file, quindi non può mostrare la stanza che contiene. Eliminandolo si libera la stanza che occupa. Non è possibile annullare.</string>
     <plurals name="ar_points">
         <item quantity="one">%1$d punto</item>
         <item quantity="other">%1$d punti</item>

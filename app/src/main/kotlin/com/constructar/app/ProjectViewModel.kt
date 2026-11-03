@@ -109,6 +109,13 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
          * the app has to say so rather than let a damaged room look like a deleted one.
          */
         val unreadableProjects: Int = 0,
+        /**
+         * Those files by name, so the list can offer the one action that frees their room.
+         *
+         * Empty when nothing is damaged; a name is only ever shown with a delete button attached
+         * (finding 150).
+         */
+        val unreadableFiles: List<String> = emptyList(),
         val openProject: ProjectRecord? = null,
         val materialList: MaterialList? = null,
         val lastError: UiMessage? = null,
@@ -227,6 +234,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 loading = false,
                 projects = listing.projects,
                 unreadableProjects = listing.unreadable,
+                unreadableFiles = listing.unreadableNames,
             )
         }
     }
@@ -640,6 +648,25 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             repository.loadPhotoAs(token)?.let { out[token] = it }
         }
         return out
+    }
+
+    /**
+     * Deletes a project file this build cannot read, freeing the room it occupies.
+     *
+     * Without this the free plan could be locked for good: the damaged file takes the one slot
+     * (finding 126), the button refuses to create (finding 149), a restore is granted no room -
+     * and the file itself could not be reached from any screen, so the app's own sentence
+     * "deleting it frees the slot - nothing is ever locked away" was untrue (finding 150).
+     */
+    fun deleteUnreadableFile(name: String) {
+        viewModelScope.launch {
+            // Asked, not assumed - a read-only folder keeps the file and the count (finding 93).
+            if (!repository.deleteUnreadable(name)) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_DELETE_FAILED)
+                return@launch
+            }
+            refresh()
+        }
     }
 
     fun deleteProject(id: String, onDeleted: () -> Unit = {}) {

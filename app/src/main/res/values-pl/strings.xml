@@ -138,9 +138,12 @@
         <item quantity="other">%1$d trasy</item>
     </plurals>
     <plurals name="home_unreadable">
-        <item quantity="one">Nie udało się odczytać 1 pliku projektu. Został zachowany - przywróć go z kopii zapasowej.</item>
-        <item quantity="other">Nie udało się odczytać %1$d plików projektu. Zostały zachowane - przywróć je z kopii zapasowej.</item>
+        <item quantity="one">1 plik projektu nie mógł zostać odczytany. Został zachowany - przywróć go z kopii zapasowej albo usuń go poniżej, aby zwolnić pomieszczenie.</item>
+        <item quantity="other">%1$d plików projektu nie mogło zostać odczytanych. Zostały zachowane - przywróć je z kopii zapasowej albo usuń je poniżej, aby zwolnić pomieszczenia.</item>
     </plurals>
+    <string name="home_damaged_title">Pliki, których ta wersja nie może odczytać</string>
+    <string name="home_damaged_delete">Usuń plik</string>
+    <string name="home_damaged_body">Usunąć „%1$s”? Ta wersja nie może odczytać pliku, więc nie pokaże pomieszczenia, które zawiera. Usunięcie zwalnia zajmowane pomieszczenie. Nie można tego cofnąć.</string>
     <plurals name="ar_points">
         <item quantity="one">%1$d punkt</item>
         <item quantity="few">%1$d punkty</item>

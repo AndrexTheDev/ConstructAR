@@ -134,9 +134,12 @@
         <item quantity="other">%1$d trazados</item>
     </plurals>
     <plurals name="home_unreadable">
-        <item quantity="one">No se pudo leer 1 archivo de proyecto. Se ha conservado: recupéralo desde una copia de seguridad.</item>
-        <item quantity="other">No se pudieron leer %1$d archivos de proyecto. Se han conservado: recupéralos desde una copia de seguridad.</item>
+        <item quantity="one">1 archivo de proyecto no se pudo leer. Se conservó: restáuralo desde una copia de seguridad o elimínalo abajo para liberar el cuarto.</item>
+        <item quantity="other">%1$d archivos de proyecto no se pudieron leer. Se conservaron: restáuralos desde una copia de seguridad o elimínalos abajo para liberar los cuartos.</item>
     </plurals>
+    <string name="home_damaged_title">Archivos que esta versión no puede leer</string>
+    <string name="home_damaged_delete">Eliminar archivo</string>
+    <string name="home_damaged_body">¿Eliminar «%1$s»? Esta versión no puede leer el archivo, así que no puede mostrar el cuarto que contiene. Al eliminarlo se libera el cuarto que ocupa. No se puede deshacer.</string>
     <plurals name="ar_points">
         <item quantity="one">%1$d punto</item>
         <item quantity="other">%1$d puntos</item>

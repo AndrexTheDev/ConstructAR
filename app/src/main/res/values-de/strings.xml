@@ -134,9 +134,12 @@
         <item quantity="other">%1$d Trassen</item>
     </plurals>
     <plurals name="home_unreadable">
-        <item quantity="one">1 Projektdatei konnte nicht gelesen werden. Die Datei wurde behalten - spiele sie aus einer Sicherung zurück.</item>
-        <item quantity="other">%1$d Projektdateien konnten nicht gelesen werden. Die Dateien wurden behalten - spiele sie aus einer Sicherung zurück.</item>
+        <item quantity="one">1 Projektdatei konnte nicht gelesen werden. Die Datei wurde behalten - spiele sie aus einer Sicherung zurück oder lösche sie unten, um den Raum freizugeben.</item>
+        <item quantity="other">%1$d Projektdateien konnten nicht gelesen werden. Die Dateien wurden behalten - spiele sie aus einer Sicherung zurück oder lösche sie unten, um die Räume freizugeben.</item>
     </plurals>
+    <string name="home_damaged_title">Dateien, die diese Version nicht lesen kann</string>
+    <string name="home_damaged_delete">Datei löschen</string>
+    <string name="home_damaged_body">„%1$s“ löschen? Diese Version kann die Datei nicht lesen und den Raum darin nicht anzeigen. Mit dem Löschen wird der Raum frei, den sie belegt. Das lässt sich nicht rückgängig machen.</string>
     <plurals name="ar_points">
         <item quantity="one">%1$d Punkt</item>
         <item quantity="other">%1$d Punkte</item>

@@ -96,17 +96,27 @@ class ProjectRepository(private val context: Context) {
         val projects: List<ProjectSummary> = emptyList(),
         /** Files in the projects folder that could not be read as a project. */
         val unreadable: Int = 0,
+        /**
+         * The names of those files, sorted.
+         *
+         * A count alone told the operator that something was wrong and nothing about what to do
+         * with it. A damaged file occupies a room on the free plan (finding 126) and cannot be
+         * opened, exported or restored over - so without its name there is no way to free the
+         * slot at all, and the app's only advice ("restore it from a backup") was refused by the
+         * same plan (finding 150).
+         */
+        val unreadableNames: List<String> = emptyList(),
     )
 
     /** Lists projects, newest first. Corrupt files are reported, never fatal. */
     suspend fun list(): Listing = withContext(Dispatchers.IO) {
         val files = directory.listFiles { file -> file.extension == "json" }.orEmpty()
         val summaries = ArrayList<ProjectSummary>(files.size)
-        var unreadable = 0
+        val unreadableNames = ArrayList<String>()
         for (file in files) {
             val project = readProject(file)
             if (project == null) {
-                unreadable++
+                unreadableNames += file.name
             } else {
                 summaries += ProjectSummary(
                     id = project.id,
@@ -121,11 +131,34 @@ class ProjectRepository(private val context: Context) {
                 )
             }
         }
-        Listing(projects = summaries.sortedByDescending { it.updatedAtEpochMs }, unreadable = unreadable)
+        Listing(
+            projects = summaries.sortedByDescending { it.updatedAtEpochMs },
+            unreadable = unreadableNames.size,
+            unreadableNames = unreadableNames.sorted(),
+        )
     }
 
     suspend fun load(id: String): ProjectRecord? = withContext(Dispatchers.IO) {
         readProject(fileFor(id))
+    }
+
+    /**
+     * Deletes one project file this build cannot read - the only way its room becomes free.
+     *
+     * The name comes from [Listing.unreadableNames], and everything about it is re-checked here
+     * rather than trusted: a name that is not a plain token plus `.json` cannot be a file in this
+     * folder (finding 19's lesson), and a file that *does* parse is refused, because a room is
+     * deleted from the screen that names the room, its photos and its hours (finding 125). This
+     * path exists for exactly the file that screen cannot show.
+     *
+     * Returns whether the file is gone.
+     */
+    suspend fun deleteUnreadable(name: String): Boolean = withContext(Dispatchers.IO) {
+        if (!name.endsWith(".json") || !isSafeToken(name.removeSuffix(".json"))) return@withContext false
+        val file = File(directory, name)
+        if (!file.isFile) return@withContext false
+        if (readProject(file) != null) return@withContext false
+        file.delete()
     }
 
     /** Creates a project and returns it; the name is used verbatim (it is user content). */

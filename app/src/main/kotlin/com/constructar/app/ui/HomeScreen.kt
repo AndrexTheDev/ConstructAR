@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Cable
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
@@ -86,10 +87,22 @@ fun HomeScreen(
      * project looks exactly like a deleted one.
      */
     unreadableProjects: Int = 0,
+    /**
+     * The same files by name, so each one can be deleted.
+     *
+     * A count told the operator that his data was still on the phone and gave him nothing to do
+     * about it: the file takes the free room (finding 126), the create gate counts it (finding
+     * 149) and no other screen can show it. Deleting is the one action that frees the slot, and
+     * it is offered here, next to the sentence that says the file was kept (finding 150).
+     */
+    unreadableFiles: List<String> = emptyList(),
+    onDeleteUnreadable: (String) -> Unit = {},
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var newName by rememberSaveable { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
+    // The file the operator has asked to delete, pending the question that names it.
+    var damagedToDelete by rememberSaveable { mutableStateOf("") }
     // A file this build cannot read is still a room on the phone: it occupies the one free
     // slot just like a healthy one (finding 126). Asked through `ProjectSlots` because the gate
     // behind this button has to answer with the same count (finding 149).
@@ -130,6 +143,14 @@ fun HomeScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = SiteColors.warning,
                         modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+            if (unreadableFiles.isNotEmpty()) {
+                item {
+                    DamagedFilesCard(
+                        names = unreadableFiles,
+                        onDelete = { name -> damagedToDelete = name },
                     )
                 }
             }
@@ -279,6 +300,71 @@ fun HomeScreen(
                 ) { Text(stringResource(R.string.home_cancel)) }
             },
         )
+    }
+
+    // Deleting a file the app cannot read is deleting the operator's own data: the question names
+    // the file, says what this version could and could not read, and says what becomes free.
+    if (damagedToDelete.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { damagedToDelete = "" },
+            title = { Text(stringResource(R.string.home_damaged_title)) },
+            text = { Text(stringResource(R.string.home_damaged_body, damagedToDelete)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val name = damagedToDelete
+                        damagedToDelete = ""
+                        onDeleteUnreadable(name)
+                    },
+                ) { Text(stringResource(R.string.home_damaged_delete)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { damagedToDelete = "" }) {
+                    Text(stringResource(R.string.home_cancel))
+                }
+            },
+        )
+    }
+}
+
+/**
+ * The files this version cannot read, each with the one action that helps.
+ *
+ * Not a row in the room list: that list is built from rooms the app could parse, and a file that
+ * cannot be parsed is exactly the one it cannot draw. A separate card says what these files are,
+ * keeps them visible, and lets the operator free the room they occupy (finding 150).
+ */
+@Composable
+private fun DamagedFilesCard(names: List<String>, onDelete: (String) -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Jamaica.SurfaceHigh),
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                stringResource(R.string.home_damaged_title),
+                style = MaterialTheme.typography.labelMedium,
+                color = SiteColors.warning,
+            )
+            names.forEach { name ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = { onDelete(name) }) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = stringResource(R.string.home_damaged_delete),
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

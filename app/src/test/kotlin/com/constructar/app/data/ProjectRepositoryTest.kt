@@ -220,6 +220,55 @@ class ProjectRepositoryTest {
     }
 
     @Test
+    fun `the files that cannot be read are named, not only counted`(): Unit = runBlocking {
+        // A count told the operator something was wrong and gave him nothing to do about it; on
+        // the free plan a damaged file holds the only room, so its name is the way out
+        // (finding 150).
+        repository.save(room())
+        File(projectsDirectory, "broken-a.json").writeText("{ not json")
+        File(projectsDirectory, "broken-b.json").writeText("")
+
+        val listing = repository.list()
+
+        assertEquals(listOf("broken-a.json", "broken-b.json"), listing.unreadableNames)
+        assertEquals(2, listing.unreadable)
+    }
+
+    @Test
+    fun `deleting a damaged file frees its room, and the list says so`(): Unit = runBlocking {
+        // The folder is created by the repository's first touch, not by the constructor.
+        projectsDirectory.mkdirs()
+        File(projectsDirectory, "broken.json").writeText("{ not json")
+
+        assertTrue(repository.deleteUnreadable("broken.json"))
+        assertFalse(File(projectsDirectory, "broken.json").exists())
+        assertEquals(0, repository.list().unreadable)
+        assertTrue(repository.list().unreadableNames.isEmpty())
+    }
+
+    @Test
+    fun `a file that can be read is not deleted through the damaged-file path`(): Unit = runBlocking {
+        // A room is deleted from the screen that names the room, its photos and its hours
+        // (finding 125). This path exists for the file that screen cannot show.
+        repository.save(room())
+
+        assertFalse(repository.deleteUnreadable("room-1.json"))
+        assertTrue(File(projectsDirectory, "room-1.json").exists())
+        assertEquals(1, repository.list().projects.size)
+    }
+
+    @Test
+    fun `a name that is not a plain file name in this folder is refused`(): Unit = runBlocking {
+        val outside = File(context.filesDir, "outside.json").apply { writeText("{ not json") }
+
+        assertFalse(repository.deleteUnreadable("../outside.json"))
+        assertFalse(repository.deleteUnreadable("outside.json"))
+        assertFalse(repository.deleteUnreadable("broken.txt"))
+        assertFalse(repository.deleteUnreadable(""))
+        assertTrue(outside.exists(), "nothing outside the projects folder is touched")
+    }
+
+    @Test
     fun `a temporary file left behind by a kill is swept on first use, the room is not`(): Unit = runBlocking {
         repository.save(room())
         val stale = File(projectsDirectory, "room-2.json${SafeFiles.TEMPORARY_SUFFIX}")

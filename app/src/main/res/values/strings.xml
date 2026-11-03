@@ -134,9 +134,12 @@
         <item quantity="other">%1$d runs</item>
     </plurals>
     <plurals name="home_unreadable">
-        <item quantity="one">1 project file could not be read. It was kept - restore it from a backup.</item>
-        <item quantity="other">%1$d project files could not be read. They were kept - restore them from a backup.</item>
+        <item quantity="one">1 project file could not be read. It was kept - restore it from a backup, or delete it below to free the room.</item>
+        <item quantity="other">%1$d project files could not be read. They were kept - restore them from a backup, or delete them below to free the rooms.</item>
     </plurals>
+    <string name="home_damaged_title">Files this version cannot read</string>
+    <string name="home_damaged_delete">Delete file</string>
+    <string name="home_damaged_body">Delete “%1$s”? This version cannot read the file, so it cannot show the room inside it. Deleting it frees the room it occupies. This cannot be undone.</string>
     <plurals name="ar_points">
         <item quantity="one">%1$d point</item>
         <item quantity="other">%1$d points</item>
