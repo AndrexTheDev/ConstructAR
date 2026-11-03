@@ -8,6 +8,7 @@ package com.constructar.app.billing
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.constructar.core.licence.Entitlements
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
