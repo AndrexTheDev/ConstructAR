@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
@@ -589,11 +590,15 @@ private fun DefectRow(
         severity,
         resolvedLabel.takeIf { defect.resolved },
     ).joinToString(" · ")
+    // The tick only means "close this" while the defect is open. On a resolved row the same tick
+    // reopened it, silently, on the row he is most likely to tap while reading the punch list
+    // (finding 136) - so the symbol and the sentence follow the direction of the tap.
+    val toggle = DefectToggle.action(defect.resolved)
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         IconButton(onClick = onToggle, modifier = Modifier.size(52.dp)) {
             Icon(
-                Icons.Default.Check,
-                contentDescription = stringResource(R.string.field_defect_toggle),
+                if (toggle == DefectToggle.Action.REOPEN) Icons.Default.Undo else Icons.Default.Check,
+                contentDescription = stringResource(DefectToggle.labelRes(toggle)),
                 tint = accent,
             )
         }

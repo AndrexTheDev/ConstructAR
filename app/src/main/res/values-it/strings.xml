@@ -343,11 +343,10 @@
     <string name="field_defect_location_hint">Dove? (stanza, parete, quadro)</string>
     <string name="field_defect_add">Aggiungi difetto</string>
     <string name="field_defect_empty">Nessun difetto registrato.</string>
-    <string name="field_defect_toggle">Segna come risolto / riapri</string>
     <string name="field_delete">Elimina</string>
     <string name="field_open_count">%1$d aperti</string>
     <string name="field_resolved_count">%1$d risolti</string>
-    <string name="field_list_more">%1$d voci più vecchie non sono mostrate qui; il protocollo le contiene tutte.</string>
+    <string name="field_list_more">%1$d altre voci non sono mostrate qui; il protocollo le contiene tutte.</string>
     <string name="severity_low">Lieve</string>
     <string name="severity_medium">Importante</string>
     <string name="severity_high">Critico</string>
@@ -445,4 +444,6 @@
         <item quantity="one">Prova attiva, %1$d giorno rimasto</item>
         <item quantity="other">Prova attiva, %1$d giorni rimasti</item>
     </plurals>
+    <string name="field_defect_resolve">Segna come risolto</string>
+    <string name="field_defect_reopen">Riapri</string>
 </resources>

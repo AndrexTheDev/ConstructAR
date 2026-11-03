@@ -343,11 +343,10 @@
     <string name="field_defect_location_hint">¿Dónde? (estancia, pared, cuadro)</string>
     <string name="field_defect_add">Añadir defecto</string>
     <string name="field_defect_empty">No hay defectos registrados.</string>
-    <string name="field_defect_toggle">Marcar como resuelto / reabrir</string>
     <string name="field_delete">Eliminar</string>
     <string name="field_open_count">%1$d abiertos</string>
     <string name="field_resolved_count">%1$d resueltos</string>
-    <string name="field_list_more">%1$d entradas más antiguas no se muestran aquí; el protocolo las incluye todas.</string>
+    <string name="field_list_more">%1$d entradas más no se muestran aquí; el protocolo las incluye todas.</string>
     <string name="severity_low">Leve</string>
     <string name="severity_medium">Importante</string>
     <string name="severity_high">Crítico</string>
@@ -445,4 +444,6 @@
         <item quantity="one">Prueba activa, queda %1$d día</item>
         <item quantity="other">Prueba activa, quedan %1$d días</item>
     </plurals>
+    <string name="field_defect_resolve">Marcar como resuelto</string>
+    <string name="field_defect_reopen">Reabrir</string>
 </resources>

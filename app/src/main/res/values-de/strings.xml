@@ -343,11 +343,10 @@
     <string name="field_defect_location_hint">Wo? (Raum, Wand, Verteiler)</string>
     <string name="field_defect_add">Mangel erfassen</string>
     <string name="field_defect_empty">Keine Mängel erfasst.</string>
-    <string name="field_defect_toggle">Als erledigt markieren / wieder öffnen</string>
     <string name="field_delete">Löschen</string>
     <string name="field_open_count">%1$d offen</string>
     <string name="field_resolved_count">%1$d erledigt</string>
-    <string name="field_list_more">%1$d ältere Einträge werden hier nicht angezeigt, sie stehen im Protokoll.</string>
+    <string name="field_list_more">%1$d weitere Einträge werden hier nicht angezeigt, sie stehen im Protokoll.</string>
     <string name="severity_low">Gering</string>
     <string name="severity_medium">Wichtig</string>
     <string name="severity_high">Kritisch</string>
@@ -445,4 +444,6 @@
         <item quantity="one">Testversion aktiv, noch %1$d Tag</item>
         <item quantity="other">Testversion aktiv, noch %1$d Tage</item>
     </plurals>
+    <string name="field_defect_resolve">Als erledigt markieren</string>
+    <string name="field_defect_reopen">Wieder öffnen</string>
 </resources>

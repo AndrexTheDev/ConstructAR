@@ -355,11 +355,10 @@
     <string name="field_defect_location_hint">Gdzie? (pomieszczenie, ściana, rozdzielnica)</string>
     <string name="field_defect_add">Dodaj usterkę</string>
     <string name="field_defect_empty">Brak zapisanych usterek.</string>
-    <string name="field_defect_toggle">Oznacz jako naprawione / otwórz ponownie</string>
     <string name="field_delete">Usuń</string>
     <string name="field_open_count">%1$d otwartych</string>
     <string name="field_resolved_count">%1$d naprawionych</string>
-    <string name="field_list_more">%1$d starszych wpisów nie jest tu pokazanych; protokół zawiera je wszystkie.</string>
+    <string name="field_list_more">%1$d dalszych wpisów nie jest tu pokazanych; protokół zawiera je wszystkie.</string>
     <string name="severity_low">Drobna</string>
     <string name="severity_medium">Ważna</string>
     <string name="severity_high">Krytyczna</string>
@@ -467,4 +466,6 @@
         <item quantity="many">Próba aktywna, pozostało %1$d dni</item>
         <item quantity="other">Próba aktywna, pozostało %1$d dnia</item>
     </plurals>
+    <string name="field_defect_resolve">Oznacz jako naprawione</string>
+    <string name="field_defect_reopen">Otwórz ponownie</string>
 </resources>
