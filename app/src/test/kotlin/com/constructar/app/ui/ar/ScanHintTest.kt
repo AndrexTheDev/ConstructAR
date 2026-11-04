@@ -53,6 +53,64 @@ class ScanHintTest {
         )
     }
 
+    /**
+     * The queue, not the volume: `ScanState.framesDropped` counts frames the integrator refused,
+     * and until finding 170 nothing on the screen said so.
+     */
+    @Test
+    fun `a queue that cannot keep up is said out loud`() {
+        assertEquals(
+            ScanHint.BEHIND,
+            scanHint(
+                showScanner = true,
+                ready = true,
+                hitBlockBudget = false,
+                meshVersion = 9,
+                droppedShare = 0.4f,
+            ),
+        )
+    }
+
+    @Test
+    fun `a spent volume outranks a slow queue, and a first frame is still an instruction`() {
+        assertEquals(
+            ScanHint.FULL,
+            scanHint(
+                showScanner = true,
+                ready = true,
+                hitBlockBudget = true,
+                meshVersion = 9,
+                droppedShare = 0.4f,
+            ),
+        )
+        assertEquals(
+            ScanHint.INSTRUCTION,
+            scanHint(
+                showScanner = true,
+                ready = true,
+                hitBlockBudget = false,
+                meshVersion = 0,
+                droppedShare = 0.4f,
+            ),
+        )
+    }
+
+    @Test
+    fun `the ordinary drop of a walking scan is not a warning`() {
+        // One frame in ten is what a phone of this class loses while the operator walks; a
+        // sentence that appears on every scan is a sentence nobody reads.
+        assertEquals(
+            ScanHint.PROGRESS,
+            scanHint(
+                showScanner = true,
+                ready = true,
+                hitBlockBudget = false,
+                meshVersion = 4,
+                droppedShare = 0.1f,
+            ),
+        )
+    }
+
     @Test
     fun `a healthy scan shows the instruction once and then the gauge`() {
         assertEquals(

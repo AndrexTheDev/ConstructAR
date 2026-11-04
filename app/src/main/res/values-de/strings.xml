@@ -64,6 +64,7 @@
     <string name="ar_no_surface">Keine Fläche gefunden. Ziele auf Wand oder Boden.</string>
     <string name="ar_scan_progress">Detail %1$d %% · %2$d k Dreiecke</string>
     <string name="ar_scan_full">Scan-Limit erreicht - erfasst ist nur ein Teil des Raums. Deine Strecken zählen trotzdem.</string>
+    <string name="ar_scan_behind">Das Telefon kommt nicht mit: %1$d %% der Bilder nicht gescannt. Geh langsamer.</string>
     <string name="ar_scan_unavailable">Netz-Scan nicht verfügbar. Messen funktioniert weiterhin.</string>
     <string name="ar_session_failed">AR-Sitzung fehlgeschlagen: %1$s</string>
     <string name="ar_session_retry">Erneut versuchen</string>

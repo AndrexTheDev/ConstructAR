@@ -64,6 +64,7 @@
     <string name="ar_no_surface">No surface found. Aim at a wall or the floor.</string>
     <string name="ar_scan_progress">Detail %1$d %% · %2$d k triangles</string>
     <string name="ar_scan_full">Scan limit reached - only part of the room is captured. Your runs still count.</string>
+    <string name="ar_scan_behind">The phone is behind: %1$d %% of frames not scanned. Walk slower.</string>
     <string name="ar_scan_unavailable">Mesh scanning unavailable. Measuring still works.</string>
     <string name="ar_session_failed">AR session failed: %1$s</string>
     <string name="ar_session_retry">Try again</string>

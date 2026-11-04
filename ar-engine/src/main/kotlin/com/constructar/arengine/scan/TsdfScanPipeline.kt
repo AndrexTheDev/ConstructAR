@@ -107,6 +107,22 @@ class TsdfScanPipeline(
          */
         val detailFraction: Float
             get() = (triangleCount / 68_000f).coerceIn(0f, 1f)
+
+        /**
+         * Share of the frames that were offered to the integrator and never reached it, 0..1.
+         *
+         * The denominator is integrated **plus** dropped, not every camera frame: a frame the
+         * thermal gate skips (finding 169) never joined the queue and is a deliberate reduction,
+         * while a frame the queue refused is geometry the room will be missing. Until finding
+         * 170 the pipeline counted both and no screen read either, so the documents promising
+         * that "the scan looks sparse" is distinguishable from "the device is overloaded"
+         * described a number nobody could see.
+         */
+        val droppedFraction: Float
+            get() {
+                val offered = framesIntegrated + framesDropped
+                return if (offered <= 0) 0f else framesDropped.toFloat() / offered
+            }
     }
 
     enum class ThrottleMode { NOMINAL, WARM, THROTTLED }

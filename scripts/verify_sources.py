@@ -1896,6 +1896,32 @@ def check_thermal_down_sampling_counts_frames() -> None:
         add(gate, "the frame-counting gate is missing, so nothing decides the throttled cadence "
                   "(finding 169)")
 
+def check_the_dropped_frames_reach_a_screen() -> None:
+    """The frames the integrator refused are on the screen, not only in the state (finding 170).
+
+    `TsdfScanPipeline` counts `framesDropped` on every refused frame, and `docs/ARCHITECTURE.md`
+    and `docs/PERFORMANCE.md` both promise that this is what makes "the scan looks sparse"
+    distinguishable from "the device is overloaded" - but no screen read the number, so the
+    promise was about a field only a debugger could see. The share is `ScanState.droppedFraction`
+    and the overlay says it out loud above one offered frame in six.
+    """
+    state = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" / "arengine" /
+             "scan" / "TsdfScanPipeline.kt")
+    if "val droppedFraction" not in state.read_text(encoding="utf-8"):
+        add(state, "`ScanState` no longer derives the share of refused frames, so the counters "
+                   "the documents promise are visible to nothing (finding 170)")
+    hint = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" / "ar" / "ScanHint.kt"
+    if "BEHIND" not in hint.read_text(encoding="utf-8"):
+        add(hint, "the overlay has no state for a queue that cannot keep up, so a slow scan and "
+                  "a saturated one read the same (finding 170)")
+    screen = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" / "ar" / "ArMeasureScreen.kt"
+    screen_text = screen.read_text(encoding="utf-8")
+    if "scanState.droppedFraction" not in screen_text:
+        add(screen, "the AR screen never asks for the dropped share, so the operator cannot tell a "
+                    "slow scan from a phone that is not keeping up (finding 170)")
+    if "R.string.ar_scan_behind" not in screen_text:
+        add(screen, "the AR screen has no sentence for a queue that cannot keep up (finding 170)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1943,6 +1969,7 @@ def main() -> int:
     check_ply_layout_is_decided_once()
     check_depth_arrays_go_back_to_the_pool_by_themselves()
     check_thermal_down_sampling_counts_frames()
+    check_the_dropped_frames_reach_a_screen()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

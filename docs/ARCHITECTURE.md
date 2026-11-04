@@ -44,7 +44,8 @@ Back-pressure is explicit: the integration channel holds **one** frame and refus
 that arrives while one is queued, returning its depth array to the pool on the spot (it used to
 drop the *queued* frame, whose buffer nothing ever returned). A refused frame increments
 `ScanState.framesDropped`, so "the scan looks sparse" is distinguishable from "the device is
-overloaded".
+overloaded" — the overlay switches to `ScanHint.BEHIND`, with the share in the sentence, once
+one offered frame in six is lost (finding 170).
 
 The depth array itself is reference counted (`DepthFrameSnapshot.retain`/`release`, finding 168):
 one frame is published to the hit cascade *and* handed to the pipe worker, so it goes back to

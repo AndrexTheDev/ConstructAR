@@ -367,11 +367,19 @@ fun ArMeasureScreen(
     // Said out loud, because a stuck scan and a slow one look the same from the outside
     // (finding 97).
     val scanFullText = stringResource(R.string.ar_scan_full)
+    // ...and the queue: the pipeline refuses frames it cannot integrate, which is the difference
+    // between a room that is filling in slowly and a phone that is not keeping up at all
+    // (finding 170).
+    val scanBehindText = stringResource(
+        R.string.ar_scan_behind,
+        PercentText.of(scanState.droppedFraction),
+    )
     val hint = scanHint(
         showScanner = showScanner,
         ready = scanState.ready,
         hitBlockBudget = scanState.hitBlockBudget,
         meshVersion = scanState.meshVersion,
+        droppedShare = scanState.droppedFraction,
     )
 
     Box(
@@ -582,6 +590,7 @@ fun ArMeasureScreen(
                     ScanHint.UNAVAILABLE -> scanUnavailableText
                     ScanHint.FULL -> scanFullText
                     ScanHint.INSTRUCTION -> scanInstructionText
+                    ScanHint.BEHIND -> scanBehindText
                     ScanHint.PROGRESS -> scanProgressText
                 }
                 statusLine?.let { line ->
@@ -590,7 +599,7 @@ fun ArMeasureScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = when {
                             warningText != null -> SiteColors.warning
-                            hint == ScanHint.FULL -> SiteColors.warning
+                            hint == ScanHint.FULL || hint == ScanHint.BEHIND -> SiteColors.warning
                             tracking.quality == TrackingQuality.NOT_TRACKING -> SiteColors.danger
                             else -> HudStyle.text
                         },

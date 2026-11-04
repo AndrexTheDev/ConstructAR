@@ -69,7 +69,8 @@ Consequences that are enforced in code:
 
 * the integration channel holds **one** snapshot and drops the oldest — a slow device lowers
   scan *coverage*, never frame rate;
-* `ScanState.framesDropped` is surfaced, so "sparse scan" can be diagnosed rather than guessed;
+* `ScanState.framesDropped` is surfaced — `ScanHint.BEHIND` above one offered frame in six, with
+  the share in the sentence (finding 170) — so "sparse scan" can be diagnosed rather than guessed;
 * nothing in the frame callback allocates after warm-up (pooled depth, cached plane list,
   reused `HitRequest` fields).
 
