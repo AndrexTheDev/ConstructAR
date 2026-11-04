@@ -60,6 +60,16 @@ UW track top and bottom, 29 screws per square metre of installed board, and 10 %
 everything that gets cut. An opening that does not fit its wall is clipped *and counted*, with the
 reason enumerated, rather than quietly absorbed.
 
+**DIN 18015 zones and clash detection** (`core/.../wall`, same package — **no screen calls them
+yet**): a measured height is snapped to the socket line (30 cm), the switch line (105 cm) or the
+ceiling outlet (15 cm below the ceiling, so it follows the room), and refused outside a 10 cm
+tolerance with the nearest line still named — a point 25 cm off the socket line is not silently
+drawn as a socket at 30 cm. Clash detection answers the other question a run has to pass: the
+measured polyline against boxes standing for walls, beams and services, with a proper slab
+intersection (a segment through the *middle* of a beam touches none of its twelve edges, so an
+edge-only check calls a penetration "0.5 m clear"), exact segment-to-box distances, and the default
+or per-obstacle clearance enforced.
+
 **Depth fusion policy.** ARCore depth is metric but holey; the network is dense but only
 relative. `AiDepthFusion` therefore lets the network **fill holes only** — a confident ARCore
 sample is never overwritten — after `MetricDepthCalibrator` fits `1/z = s·d + t` against
@@ -446,7 +456,9 @@ Known limitations, deliberately documented rather than hidden:
   that update escapes the shard lock (finding 181). It reports none.
 * **JVM (`:core`)** — transform maths, plane fits and polygon containment, fillet smoothing,
   measurement, net wall area with openings subtracted as a union (the overlap case included),
-  the drywall take-off's arithmetic (boards, studs per run, tracks, screws, waste),
+  the drywall take-off's arithmetic (boards, studs per run, tracks, screws, waste), DIN 18015 zone
+  snapping (refusals, tie-break, a room with no ceiling zone), clash geometry (segment–box slab
+  clip, exact distances, segment–segment),
   tube/duct mesh invariants, BOM aggregation, the working-time clock, the money
   arithmetic (`Pricing`: rounding, both decimal separators, thousand dots, euro forced on a
   `pl-PL` phone), the photo-token naming contract and the third-party notice list the Help screen
@@ -578,7 +590,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 735 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 763 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 272 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 272 checks, 0 failures, no data race reported |

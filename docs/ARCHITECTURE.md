@@ -177,6 +177,23 @@ that is cut. A spec that cannot be built - zero spacing, zero board - returns `v
 every number zero rather than dividing by it. Both entry points are pure and unit-tested; **nothing
 in `:app` calls them yet**, and this paragraph says so.
 
+**DIN 18015 zones and clash detection** (`core/.../wall`). Two checks that stand between a
+measured run and a drawing. A tap in AR lands where the reticle rests, not where the standard says,
+so `snapToInstallationZone` assigns a height to the socket line (30 cm), the switch line (105 cm) or
+the ceiling outlet (ceiling − 15 cm, so it follows the room rather than being a fixed number) and
+refuses anything more than the tolerance away - naming the line it was nearest, because "25 cm above
+the socket line" is a sentence the operator can act on and a silent snap is a socket at 55 cm on a
+drawing that claims the standard. Ties within 1e-4 go to the lower zone: the lines are 75 cm apart,
+so a tie means the point is not between two of them. `checkClearance` then holds the measured
+polyline against boxes that stand for walls, beams and services, with three deliberate choices: the
+intersection test is a real slab clip, because a segment through the *middle* of a beam touches none
+of its twelve edges and an edge-only check reports a penetration as half a metre clear; the
+non-intersecting distance is closed-form (both endpoints, then the twelve edge-to-segment distances),
+never sampled, because a step size that cannot miss a crossing is finer than the clearances being
+asked about; and invalid input - a non-finite point, a route of one point, an inside-out box -
+returns `valid = false` with no hits, since "clear" computed from nonsense is worse than no answer.
+Both are pure and unit-tested, and **nothing in `:app` calls them yet**.
+
 **Manhattan-World frame** (`geometry/manhattan_world.cpp`). A room is meant to be orthogonal;
 the planes fitted from depth are not, because each carries its own noise and the pose graph's
 drift, and the error is systematic - two walls that should be 4.00 m apart read 4.03 m and the
