@@ -8,6 +8,7 @@ package com.constructar.core.model
 
 import com.constructar.core.math.Vec3
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 /**
  * Which tier of the hit-test cascade produced a node. Persisted so a reviewer can tell a
@@ -81,10 +82,11 @@ object HitConfidence {
 /**
  * One vertex of a routed conduit, in ARCore world space (metres).
  *
- * The live, runtime position is not read from here: every node is bound to an ARCore
- * `Anchor`, and the anchor's refined pose is what the renderer and the measuring engine
- * consume. This record is the durable fallback (and what gets exported when anchors are
- * gone after the session ends).
+ * While the run is being measured every node is also bound to an ARCore `Anchor`, and it is the
+ * anchor's refined pose that the renderer and the measuring engine consume - that is how a run
+ * keeps following the tracker. This record is what endures: at `finish()` the run's anchors are
+ * released (finding 164) and the positions copied here are what every document, export and total
+ * is computed from.
  */
 @Serializable
 data class RouteNodeRecord(
@@ -93,7 +95,18 @@ data class RouteNodeRecord(
     val normal: Vec3,
     val surface: SurfaceKind,
     val hitSource: HitSource,
-    /** Runtime anchor identifier; not the ARCore `Anchor` itself (not serialisable). */
+    /**
+     * The ARCore anchor this node sits on, for as long as the session that placed it is alive -
+     * `null` for a node read from disk.
+     *
+     * `@Transient` because it is a **runtime handle, not data**: an ARCore anchor does not survive
+     * its session, and this app releases a run's anchors the moment the run is finished, so a
+     * saved id could only ever name something that is gone. Every project file used to carry one
+     * per node anyway - a few kilobytes of dead uuid per flat - and a stored id is an invitation
+     * to look one up later, which is exactly what the draft path already refuses to write
+     * (finding 165). Position, normal, surface, source and confidence are the durable facts.
+     */
+    @Transient
     val anchorId: String? = null,
     /** Surface confidence at capture time (depth confidence or plane quality), 0..1. */
     val confidence: Float = 1f,

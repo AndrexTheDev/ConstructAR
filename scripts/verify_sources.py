@@ -1758,6 +1758,27 @@ def check_finished_runs_release_their_anchors() -> None:
                     "finished run's anchors - the accessor promised a lookup that does not exist "
                     "(finding 164)")
 
+def check_anchor_id_is_transient() -> None:
+    """An anchor id is a runtime handle and must not be written to the project (finding 165).
+
+    An ARCore anchor does not survive its session, and this app releases a run's anchors the
+    moment the run is finished (finding 164), so a stored id can only ever name something that is
+    gone. Every project file carried one per node anyway, and the draft path already stripped them
+    by hand with the comment "a dangling id invites a later caller to look one up". The field is
+    `@Transient` now, which is the same guarantee for every path.
+    """
+    source = ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" / "model" / "Route.kt"
+    lines = source.read_text(encoding="utf-8").splitlines()
+    index = next((i for i, line in enumerate(lines) if "val anchorId:" in line), None)
+    if index is None:
+        add(source, "`anchorId` is gone; this rule has nothing to check")
+        return
+    above = [line.strip() for line in lines[max(0, index - 6):index] if line.strip()]
+    if not any(line.startswith("@Transient") for line in above):
+        add(source, "`anchorId` is serialised into the project file, where it names an anchor the "
+                    "app has already released - a dead handle per node of every saved run "
+                    "(finding 165)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1800,6 +1821,7 @@ def main() -> int:
     check_live_route_is_drawn()
     check_only_posed_frames_are_placed()
     check_finished_runs_release_their_anchors()
+    check_anchor_id_is_transient()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

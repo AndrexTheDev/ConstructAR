@@ -61,9 +61,11 @@ data class RouteDraft(
             id = id,
             label = label,
             spec = spec,
-            // The anchor ids belong to the ARCore session that measured them; that session is
-            // gone, and a dangling id invites a later caller to look one up.
-            nodes = nodes.map { it.copy(anchorId = null) },
+            // `anchorId` is transient on the model, so a draft read back from disk carries none:
+            // the anchors of the session that measured it are gone with it (finding 165). The
+            // stripping that used to happen here is now the model's own guarantee, for drafts and
+            // for finished runs alike.
+            nodes = nodes,
             createdAtEpochMs = createdAtEpochMs,
             closedLoop = closedLoop,
             recovered = true,
