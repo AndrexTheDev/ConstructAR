@@ -12,6 +12,7 @@
 //       native-slam/src/main/cpp/tsdf/volume.cpp
 //       native-slam/src/main/cpp/tsdf/surface_nets.cpp
 //       native-slam/src/main/cpp/slam/pose_graph.cpp
+//       native-slam/src/main/cpp/geometry/manhattan_world.cpp
 //       native-slam/src/main/cpp/slam/rtabmap_bridge.cpp
 //       native-slam/src/main/cpp/tests/host_tests.cpp -o /tmp/constructar_host_tests
 //   /tmp/constructar_host_tests
@@ -33,6 +34,7 @@
 #include <vector>
 
 #include "../core/types.hpp"
+#include "../geometry/manhattan_world.hpp"
 #include "../slam/pose_graph.hpp"
 #include "../slam/rtabmap_bridge.hpp"
 #include "../tsdf/volume.hpp"
@@ -682,6 +684,187 @@ void testVoxelFusionUnderConcurrency() {
  * link - which is why its shape is checked by compiling it against the upstream-shaped stubs in
  * `tests/rtabmap-stubs` (see `native-tests.yml`).
  */
+
+/**
+ * The room every Manhattan test is about: 4.00 × 3.00 m, 2.50 m high, with one wall 8° off square
+ * (drift, must be snapped) and one bay window 35° off (a real feature, must be left alone).
+ * `turnDegrees` rotates the whole room about the vertical, so the solver cannot accidentally
+ * privilege the world axes.
+ */
+std::vector<constructar::PlaneObservation> makeRoom(float turnDegrees) {
+  const float turn = turnDegrees * constructar::kPi / 180.f;
+  const float c = std::cos(turn);
+  const float s = std::sin(turn);
+  const auto rotY = [c, s](constructar::Vec3 n) {
+    return constructar::Vec3(n.x * c + n.z * s, n.y, -n.x * s + n.z * c);
+  };
+  const auto rotPoint = [c, s](constructar::Vec3 p) {
+    return constructar::Vec3(p.x * c + p.z * s, p.y, -p.x * s + p.z * c);
+  };
+  const auto plane = [&](constructar::Vec3 n, constructar::Vec3 centroid, int inliers) {
+    const constructar::Vec3 rn = rotY(n);
+    const constructar::Vec3 rc = rotPoint(centroid);
+    return constructar::PlaneObservation(rn, rn.dot(rc), inliers, rc);
+  };
+  const float tilt = 8.f * constructar::kPi / 180.f;
+  const float bay = 35.f * constructar::kPi / 180.f;
+  std::vector<constructar::PlaneObservation> planes;
+  planes.push_back(plane({0.f, 1.f, 0.f}, {2.f, 0.f, 1.5f}, 40000));           // floor
+  planes.push_back(plane({0.f, -1.f, 0.f}, {2.f, 2.5f, 1.5f}, 36000));         // ceiling
+  planes.push_back(plane({1.f, 0.f, 0.f}, {0.f, 1.25f, 1.5f}, 26000));         // x = 0
+  planes.push_back(plane({-1.f, 0.f, 0.f}, {4.f, 1.25f, 1.5f}, 24000));        // x = 4
+  planes.push_back(plane({0.f, 0.f, 1.f}, {2.f, 1.25f, 0.f}, 22000));          // z = 0
+  planes.push_back(plane({0.f, 0.f, -1.f}, {2.f, 1.25f, 3.f}, 20000));         // z = 3
+  planes.push_back(plane({std::cos(tilt), 0.f, std::sin(tilt)}, {4.f, 1.25f, 1.5f}, 3000));
+  planes.push_back(plane({std::cos(bay), 0.f, std::sin(bay)}, {4.f, 1.25f, 0.5f}, 8000));
+  return planes;
+}
+
+/** Index of the frame axis closest to `expected`, or -1 when the frame does not have it. */
+int axisFor(const constructar::ManhattanFrame& frame, constructar::Vec3 expected) {
+  const constructar::Vec3 unit = expected.normalized();
+  int best = -1;
+  float bestAlignment = 0.f;
+  for (int i = 0; i < 3; ++i) {
+    const float alignment = std::fabs(frame.axes[i].direction.dot(unit));
+    if (alignment > bestAlignment) {
+      bestAlignment = alignment;
+      best = i;
+    }
+  }
+  return bestAlignment > 0.999f ? best : -1;
+}
+
+void testManhattanFrame() {
+  section("Manhattan-World frame: the room the planes are trying to be");
+  const auto planes = makeRoom(0.f);
+  const auto frame = constructar::solveManhattanFrame(planes, {});
+  check(frame.valid, "a room with a floor and four walls determines a frame");
+  check(axisFor(frame, {0.f, 1.f, 0.f}) >= 0, "the vertical axis is recovered");
+  check(axisFor(frame, {1.f, 0.f, 0.f}) >= 0, "the first horizontal axis is recovered");
+  check(axisFor(frame, {0.f, 0.f, 1.f}) >= 0, "the second horizontal axis is recovered");
+
+  const constructar::Vec3 a0 = frame.axes[0].direction;
+  const constructar::Vec3 a1 = frame.axes[1].direction;
+  const constructar::Vec3 a2 = frame.axes[2].direction;
+  checkNear(a0.length(), 1.0, 1e-5, "axes are unit length");
+  checkNear(a1.length(), 1.0, 1e-5, "second axis is unit length");
+  checkNear(a2.length(), 1.0, 1e-5, "third axis is unit length");
+  check(std::fabs(a0.dot(a1)) < 1e-5 && std::fabs(a0.dot(a2)) < 1e-5 &&
+            std::fabs(a1.dot(a2)) < 1e-5,
+        "the three axes are exactly orthogonal, not nearly so");
+  check(a0.cross(a1).dot(a2) > 0.999f, "the frame is right-handed");
+  check(frame.residualDegrees < 2.f,
+        "the residual is the crooked wall's share of the evidence, not the whole room's");
+
+  const auto snapped = constructar::snapPlanes(planes, frame, {});
+  check(snapped.size() == planes.size(), "one result per plane, so callers can index by plane");
+  check(snapped[0].snapped && snapped[0].axis == axisFor(frame, {0.f, 1.f, 0.f}),
+        "the floor snaps to the vertical axis");
+  checkNear(snapped[0].offset, 0.0, 1e-6, "an aligned plane keeps its offset exactly");
+  // The frame itself is 0.2° off square, because the crooked wall has a vote (that is what
+  // least squares means) - so a square wall 4 m out lands 5 mm from 4.000 m, not on it. The
+  // exact identity is checked below on a room with no crooked plane in it.
+  checkNear(snapped[3].offset, -4.0, 0.02,
+            "a square wall keeps the distance it was measured at, to the frame's own tilt");
+  check(snapped[2].normal.dot(constructar::Vec3(1.f, 0.f, 0.f)) > 0.999f,
+        "a normal keeps the sign it was measured with");
+  check(snapped[5].normal.dot(constructar::Vec3(0.f, 0.f, -1.f)) > 0.999f,
+        "a wall facing -z is not flipped into the room by the snap");
+  check(snapped[0].roomId == 0 && snapped[6].roomId == 0, "the room id is carried through");
+
+  // The 8° wall: drift, so it is squared — about its own points, which is what keeps the wall
+  // at x = 4.00 m instead of at 4.00·cos(8°).
+  check(snapped[6].snapped, "a wall 8° off square is treated as drift");
+  checkNear(snapped[6].angleDegrees, 8.0, 0.6, "the reported angle is the angle it was off by");
+  checkNear(snapped[6].offset, 4.0, 0.02,
+            "the squared wall stays where its own inliers are, not at their cosine");
+
+  // The 35° bay: a real feature. Forcing it square would invent a room that does not exist.
+  check(!snapped[7].snapped && snapped[7].axis == -1, "a 35° bay window is left alone");
+  check(snapped[7].normal.x == planes[7].normal.x && snapped[7].offset == planes[7].offset,
+        "an unsnapped plane is copied bit-for-bit");
+
+  // The same room with every plane square: now the frame is exact, and so is the snap - the
+  // plane passes through its own centroid and nowhere else.
+  std::vector<constructar::PlaneObservation> square;
+  for (int i = 0; i < 6; ++i) square.push_back(planes[i]);
+  const auto squareFrame = constructar::solveManhattanFrame(square, {});
+  const auto squareSnapped = constructar::snapPlanes(square, squareFrame, {});
+  check(std::fabs(squareFrame.axes[1].direction.dot(constructar::Vec3(1.f, 0.f, 0.f))) > 0.999999f ||
+            std::fabs(squareFrame.axes[2].direction.dot(constructar::Vec3(1.f, 0.f, 0.f))) >
+                0.999999f,
+        "a room with no crooked plane gives a frame on the world axes");
+  checkNear(squareSnapped[3].offset, -4.0, 1e-3,
+            "a square wall is where it was measured, to the millimetre");
+  checkNear(squareSnapped[1].offset, -2.5, 1e-3, "the ceiling keeps its height to the millimetre");
+
+  // Without a centroid the plane can only be turned about its closest point to the origin.
+  std::vector<constructar::PlaneObservation> noCentroid = planes;
+  for (auto& plane : noCentroid) plane.hasCentroid = false;
+  const auto footPoint = constructar::snapPlanes(noCentroid,
+                                                 constructar::solveManhattanFrame(noCentroid, {}),
+                                                 {});
+  check(footPoint[6].snapped, "the fallback still snaps the plane");
+  checkNear(footPoint[6].offset,
+            static_cast<double>(planes[6].offset) * std::cos(snapped[6].angleDegrees *
+                                                            constructar::kPi / 180.f),
+            1e-3, "without a centroid the offset is the foot-point rotation d·cos(angle)");
+
+  // Turning the room must turn the frame: the solver may not assume the world is square.
+  const float turn = 30.f * constructar::kPi / 180.f;
+  const auto turned = makeRoom(30.f);
+  const auto turnedFrame = constructar::solveManhattanFrame(turned, {});
+  check(turnedFrame.valid, "a room turned 30° about the vertical still determines a frame");
+  check(axisFor(turnedFrame, {std::cos(turn), 0.f, -std::sin(turn)}) >= 0,
+        "the frame turns with the room instead of staying on the world axes");
+  const auto turnedSnapped = constructar::snapPlanes(turned, turnedFrame, {});
+  check(turnedSnapped[6].snapped && !turnedSnapped[7].snapped,
+        "the same wall is drift and the same bay is a feature, whatever the heading");
+  checkNear(turnedSnapped[6].offset, 4.0, 0.02,
+            "the squared wall is still 4 m from the room's own axis after the turn");
+
+  section("Manhattan-World frame: what it refuses to invent");
+  const std::vector<constructar::PlaneObservation> parallel{planes[0], planes[1]};
+  const auto flat = constructar::solveManhattanFrame(parallel, {});
+  check(!flat.valid, "a floor and a ceiling are one direction, not a frame");
+  const auto untouched = constructar::snapPlanes(parallel, flat, {});
+  check(!untouched[0].snapped && untouched[1].snapped == false,
+        "an invalid frame changes nothing");
+  check(untouched[0].normal.y == 1.f && untouched[1].offset == -2.5f,
+        "the planes come back exactly as measured");
+
+  const auto empty = constructar::solveManhattanFrame({}, {});
+  check(!empty.valid, "no planes, no frame");
+  check(constructar::snapPlanes({}, empty, {}).empty(), "no planes, no results");
+
+  std::vector<constructar::PlaneObservation> noisy = planes;
+  noisy[0].inliers = 2;  // below minInliers: not evidence
+  const auto thin = constructar::solveManhattanFrame(noisy, {});
+  check(thin.valid, "dropping one plane does not invalidate the room");
+  check(thin.axes[axisFor(thin, {0.f, 1.f, 0.f})].supportingPlanes == 1,
+        "a plane below the inlier floor is not counted as support");
+
+  std::vector<constructar::PlaneObservation> broken = planes;
+  broken.push_back(constructar::PlaneObservation(
+      {std::nanf(""), 0.f, 0.f}, 1.f, 50000, constructar::Vec3(0.f, 0.f, 0.f)));
+  broken.push_back(constructar::PlaneObservation({0.f, 0.f, 0.f}, 1.f, 50000));
+  const auto guarded = constructar::solveManhattanFrame(broken, {});
+  check(guarded.valid, "a NaN normal and a zero normal do not poison the frame");
+  const auto guardedSnap = constructar::snapPlanes(broken, guarded, {});
+  check(guardedSnap.size() == broken.size() && !guardedSnap[8].snapped &&
+            !guardedSnap[9].snapped,
+        "unusable normals are copied through, not replaced by an axis");
+
+  // Determinism: the same input twice is the same frame, bit for bit. A solver whose answer
+  // depends on iteration order cannot be regression-tested, and the app caches by input.
+  const auto again = constructar::solveManhattanFrame(planes, {});
+  check(std::memcmp(&frame.axes[0].direction, &again.axes[0].direction, sizeof(float) * 3) == 0 &&
+            std::memcmp(&frame.axes[2].direction, &again.axes[2].direction,
+                        sizeof(float) * 3) == 0,
+        "solving the same planes twice gives the same axes");
+}
+
 void testRtabMapBridgeWithoutTheBackEnd() {
   section("RTAB-Map bridge: what a build without the back-end promises");
   constructar::RtabMapBridge bridge;
@@ -732,6 +915,7 @@ int main() {
   testBlockBudgetUnderConcurrency();
   testBlocksAllocatedPerFrame();
   testVoxelFusionUnderConcurrency();
+  testManhattanFrame();
   testRtabMapBridgeWithoutTheBackEnd();
   testInvalidInput();
 

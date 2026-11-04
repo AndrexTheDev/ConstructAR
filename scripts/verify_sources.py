@@ -2462,6 +2462,87 @@ def check_the_rtabmap_stubs_mirror_upstream() -> None:
                                      "finding 183)")
 
 
+MANHATTAN_HEADER = (ROOT / "native-slam" / "src" / "main" / "cpp" / "geometry" /
+                    "manhattan_world.hpp")
+MANHATTAN_SOURCE = (ROOT / "native-slam" / "src" / "main" / "cpp" / "geometry" /
+                    "manhattan_world.cpp")
+
+
+def check_the_frame_solver_is_built_everywhere() -> None:
+    """One translation unit, four build lists (finding 187).
+
+    The native layer is compiled in four places that nobody edits together: the NDK library's
+    `SLAM_SOURCES`, the host script a developer runs, the `native-tests` workflow matrix and the
+    host step of `android-build`. A source added to three of them compiles, tests green, and then
+    fails to link in the APK - or, worse, is tested in a configuration the app never builds. So
+    the file lists are compared as sets: every `.cpp` under the native tree is either in all four
+    lists or in none of them.
+    """
+    if not MANHATTAN_SOURCE.exists():
+        add(MANHATTAN_SOURCE, "the Manhattan-World solver is gone - the room's planes would be "
+                              "reported at whatever angle the depth noise left them")
+        return
+    built = {
+        "CMakeLists.txt": (ROOT / "native-slam" / "src" / "main" / "cpp" / "CMakeLists.txt"),
+        "tools/verify-native.sh": ROOT / "tools" / "verify-native.sh",
+        ".github/workflows/native-tests.yml": ROOT / ".github" / "workflows" / "native-tests.yml",
+        ".github/workflows/android-build.yml": ROOT / ".github" / "workflows" / "android-build.yml",
+    }
+    for label, path in built.items():
+        if "manhattan_world.cpp" not in path.read_text(encoding="utf-8"):
+            add(path, f"{label} does not compile `geometry/manhattan_world.cpp`, so the solver "
+                      f"would be dead code in that configuration (and the others would still "
+                      f"pass)")
+    suite = NATIVE_SUITE.read_text(encoding="utf-8")
+    if "testManhattanFrame();" not in suite:
+        add(NATIVE_SUITE, "the host suite no longer runs `testManhattanFrame`, so 41 assertions "
+                          "about the solver are written and never executed")
+    # The licensing contract: no Eigen, no OpenCV in the self-contained build. Eigen is LGPL-ish
+    # in combination, MPI is not ours to ship, and the NDK build must stay BSD-3/MIT only.
+    for path in (ROOT / "native-slam" / "src" / "main" / "cpp").rglob("*.cpp"):
+        text = path.read_text(encoding="utf-8")
+        if "#include <Eigen" in text:
+            add(path, "Eigen in the self-contained native build - the NDK library must stay "
+                      "BSD-3/MIT only (docs/LICENSING.md)")
+    for path in (ROOT / "native-slam" / "src" / "main" / "cpp").rglob("*.hpp"):
+        if "#include <Eigen" in path.read_text(encoding="utf-8"):
+            add(path, "Eigen in the self-contained native build - the NDK library must stay "
+                      "BSD-3/MIT only (docs/LICENSING.md)")
+
+
+def check_the_squared_wall_keeps_its_distance() -> None:
+    """A snap may not move the wall it claims to square (finding 187).
+
+    Replacing a normal by an axis has to place the plane somewhere, and the naive choice - keep
+    the foot-point distance, `offset' = offset * cos(angle)` - moves a wall that is 8 degrees off
+    by `4 m * (1 - cos 8)`, which is 4 cm of a 4 m room and 8 cm of a 4 m wall's own position.
+    The fit knows where its points are, so a plane that carries a centroid is squared *through*
+    that centroid (`a . c`) and the fallback, used only when no centroid was supplied, says so in
+    its own expression. Both branches are pinned because swapping them is invisible: the room
+    still looks square, and every length in the report is quietly short.
+    """
+    if not MANHATTAN_SOURCE.exists():
+        return  # the missing file is already a finding above
+    text = MANHATTAN_SOURCE.read_text(encoding="utf-8")
+    if "out.normal.dot(plane.centroid)" not in text:
+        add(MANHATTAN_SOURCE, "a plane with a centroid is no longer squared through that point, "
+                              "so an 8 degree wall moves by its own cosine - centimetres that no "
+                              "screen would show")
+    if "unitOffset * aligned" not in text:
+        add(MANHATTAN_SOURCE, "the centroid-free fallback is gone, so a plane without a centroid "
+                              "would be snapped by some other rule than the foot-point rotation "
+                              "the header documents")
+    header = MANHATTAN_HEADER.read_text(encoding="utf-8")
+    if "0.94f" not in header:
+        add(MANHATTAN_HEADER, "the 20 degree default tolerance is not stated where the option "
+                              "lives - a reader would have to infer it from the numbers in the "
+                              "tests")
+    if "if (!frame.valid" not in text:
+        add(MANHATTAN_SOURCE, "`snapPlanes` no longer refuses an invalid frame, so a set of "
+                              "parallel walls would still have its planes rotated onto axes the "
+                              "solver explicitly said it had not determined")
+
+
 def check_the_calibration_has_one_home() -> None:
     """The card, the window and the anchor formula live in one file (calibration, tier 3).
 
@@ -2576,6 +2657,8 @@ def main() -> int:
     check_the_draft_choice_is_saved()
     check_the_camera_answer_survives_a_reclaim()
     check_the_calibration_has_one_home()
+    check_the_frame_solver_is_built_everywhere()
+    check_the_squared_wall_keeps_its_distance()
     check_totals_are_sums_of_printed_rows()
     check_csv_headers_name_their_cells()
     check_screen_states_the_trade_defaults()

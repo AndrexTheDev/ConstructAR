@@ -99,6 +99,24 @@ an explicit "ghost removal" pass.
 crossings; one quad per sign-changing edge, split into two triangles with a winding consistent
 with the SDF gradient. Output is un-welded per face, which is what both Filament and glTF want.
 
+**Manhattan-World frame** (`geometry/manhattan_world.cpp`). A room is meant to be orthogonal;
+the planes fitted from depth are not, because each carries its own noise and the pose graph's
+drift, and the error is systematic - two walls that should be 4.00 m apart read 4.03 m and the
+corner reads 87.6°. The solver finds the frame the room is trying to be and snaps to it only the
+planes that are already close: the dominant direction is the top eigenvector of Σ w·n·nᵀ, the
+remaining degree of freedom is one turn angle in the plane perpendicular to it, found by a 1-D
+search of a Tukey-weighted inlier score, and the third axis is the cross product. Both the search
+and the kernel are the finding (187): in a square room the two horizontal families carry nearly
+equal weight, so the eigen-decomposition's second direction is ill-conditioned and a single
+crooked wall tilted the "square" pair by 15.7°; and a hard tolerance cut is a cliff the search
+walks into, where a bay window 35° off square was worth enough at 19.4° to tilt the room by 15°
+again. A plausible-looking wrong answer, on a
+problem nothing else in the app checks. A plane with a centroid is squared *through* that
+centroid, so a wall 8° off stays at the distance it was measured at instead of moving by its
+cosine; a plane more than 20° off (a bay window, a chamfer) is returned untouched, bit for bit,
+and a set of parallel walls produces no frame at all rather than an invented one. The solver
+decides geometry only: no length, no node position and no fitting count passes through it.
+
 **Pose graph** (`slam/pose_graph.cpp`). Gauss–Newton on SE(3) with central-difference Jacobians,
 block-sparse Hessian solved by preconditioned conjugate gradient, backtracking line search (a
 full step overshoots on a room with one closure), snapshot/rollback so a diverging iteration can

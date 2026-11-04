@@ -27,6 +27,7 @@ set(SLAM_SOURCES
     tsdf/volume.cpp
     tsdf/surface_nets.cpp
     slam/pose_graph.cpp
+    geometry/manhattan_world.cpp
     slam/rtabmap_bridge.cpp
 )
 
