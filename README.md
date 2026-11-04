@@ -45,7 +45,7 @@ a 3D model for BIM — **without a single byte leaving the device**.
 | **D** | Polyline length `L = Σ‖Pᵢ − Pᵢ₊₁‖`, every node bound to an ARCore `Anchor`, live HUD label from the `hud_length` resource (`%1$s m`, the digits from `LengthFormatter`) | `ar-engine/.../route`, `core/.../geo/PolylineMetrics.kt`, `app/src/main/res/values*/strings.xml` | Measured on the **surface** points, never the offset centreline |
 | **D2** | Crosshair snapping: a tap - or the resting reticle, so the HUD already shows the committed length - within 4 cm of a corner the run already has **is** that corner | `ar-engine/.../route/RouteSession.kt` | Exact geometry and an exact fitting count when a run returns to a corner or closes a ring on its start; the last node is never a target, and a snap that would land inside the 2 cm spacing guard is refused |
 | **E** | Local export: PDF protocol, CSV material list, `.glb` (glTF 2.0 binary) and `.ply` | `export/` | Written through the Storage Access Framework; no media storage permission, no share-to-cloud |
-| **F** | Reference calibration against a known object: an ISO/IEC 7810 ID-1 bank card (85.60 x 53.98 mm) or a folding rule at the 1 m / 2 m mark, `S = d_real / ||P2 - P1||`, refused outside `[0.85, 1.15]`, applied about the reference point rather than the world origin | `core/.../calib`, `app/.../ui` | Arithmetic and its unit tests are in place (docs/CALIBRATION.md); the two-tap sweep and the anchor arithmetic are built and tested; what follows is the AR screen that drives them and the factor applied to lengths |
+| **F** | Reference calibration against a known object: an ISO/IEC 7810 ID-1 bank card (85.60 x 53.98 mm) or a folding rule at the 1 m / 2 m mark, `S = d_real / ||P2 - P1||`, refused outside `[0.85, 1.15]`, applied about the reference point rather than the world origin | `core/.../calib`, `app/.../ui` | Arithmetic and its unit tests are in place (docs/CALIBRATION.md); arithmetic, sweep, storage and the reported metres are in place (`calibrationScale` on the project, applied once to every printed length and to the bill of materials, never to the geometry); the AR button that sets it is the last step |
 
 Plus: auto-torch with hysteresis, monocular depth (Depth Anything V2 Small) fused into the
 metric depth field, a loop-closure pose graph (built and host-tested — *not yet driven by the
@@ -512,7 +512,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 708 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 713 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 75 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 75 checks, 0 failures, no data race reported |

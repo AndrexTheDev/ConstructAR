@@ -19,6 +19,7 @@ import com.constructar.app.data.SiteSettings
 import com.constructar.app.data.UiPreferences
 import com.constructar.app.ui.FieldPhotos
 import com.constructar.app.ui.ProjectSlots
+import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.bom.MaterialListBuilder
 import com.constructar.core.bom.MaterialListOptions
@@ -563,6 +564,23 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun updatePricing(hourlyRateCents: Int?, materialLumpSumCents: Long, onSaved: (ProjectRecord?) -> Unit = {}) {
         val project = mutableState.value.openProject ?: return
         mutate(project.withPricing(hourlyRateCents, materialLumpSumCents), onSaved)
+    }
+
+    /**
+     * Stores the factor a reference calibration produced, or refuses it.
+     *
+     * The window is decided in `:core` (`ReferenceCalibration.accepted`), not here: a screen that
+     * could store a factor of 1.43 would put a document labelled *calibrated* over a measurement
+     * nobody checked, and a second copy of `[0.85, 1.15]` in the view model is a second definition
+     * of what counts as a measurement. Returns the project as it now stands, or `null` when no
+     * project is open or the factor was refused.
+     */
+    fun setCalibration(scale: Double, onSaved: (ProjectRecord?) -> Unit = {}): ProjectRecord? {
+        val project = mutableState.value.openProject ?: return null
+        if (!ReferenceCalibration.accepted(scale)) return null
+        val updated = project.copy(calibrationScale = scale)
+        mutate(updated, onSaved)
+        return updated
     }
 
     /** The rate this project bills at: its own override, or the firm's default. */

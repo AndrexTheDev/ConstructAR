@@ -2465,6 +2465,27 @@ def check_the_calibration_has_one_home() -> None:
         add(calibration, "the correction no longer scales about the reference point: `P' = P_ref + "
                          "S * (P - P_ref)` is the only form that leaves the measured object where "
                          "it was and moves what was measured relative to it")
+    project_model = (ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" /
+                     "model" / "Project.kt")
+    model_text = project_model.read_text(encoding="utf-8")
+    if "get() = (routes.sumOf { it.polylineLengthMeters.toDouble() } * calibrationScale).toFloat()" not in model_text:
+        add(project_model, "`totalLengthMeters` no longer applies `calibrationScale`, so the room "
+                           "screen and the protocol would report uncorrected metres")
+    if "fun calibratedMeters(" not in model_text:
+        add(project_model, "`calibratedMeters` is gone - a caller would multiply a route length by "
+                           "the factor itself, which is the second definition this rule exists for")
+    bom = (ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" / "bom" /
+           "MaterialList.kt")
+    if "project.calibrationScale" not in bom.read_text(encoding="utf-8"):
+        add(bom, "the bill of materials ignores the project's calibration, so the order sheet "
+                 "would disagree with the room screen")
+    for path in kotlin_sources("core") + kotlin_sources("ar-engine") + kotlin_sources("app"):
+        source = path.read_text(encoding="utf-8")
+        if "calibrationScale" in source and path.name in ("Route.kt", "RouteGeometry.kt",
+                                                          "TubeMeshGenerator.kt",
+                                                          "DuctMeshGenerator.kt"):
+            add(path, "the calibration factor has reached the geometry - it must only ever scale "
+                      "reported metres, or a better calibration could not correct the project")
     for path in kotlin_sources("app") + kotlin_sources("ar-engine") + kotlin_sources("export"):
         source = path.read_text(encoding="utf-8")
         for literal in ("0.0856", "0.05398"):

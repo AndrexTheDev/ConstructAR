@@ -177,7 +177,7 @@ class ExportService(
 
         if (request.includeCsv) {
             val runDetails = request.project.routes.map { route ->
-                Triple(route.label, route.spec.sizeLabel, route.polylineLengthMeters)
+                Triple(route.label, route.spec.sizeLabel, request.project.calibratedMeters(route))
             }
             val csv = MaterialCsvWriter.write(
                 materialList = request.materialList,

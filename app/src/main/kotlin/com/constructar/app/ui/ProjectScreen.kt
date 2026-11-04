@@ -63,6 +63,7 @@ import androidx.core.content.FileProvider
 import com.constructar.app.R
 import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
+import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ProjectRecord
@@ -385,6 +386,20 @@ fun ProjectScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // A corrected number has to say that it is one. Every metre on this screen and in
+                // the protocol is the measured value multiplied by the operator's reference
+                // calibration, and a document that quietly reports 5.25 m for a run the phone
+                // measured as 5.00 m is a document nobody can check.
+                if (project.isCalibrated) {
+                    Text(
+                        stringResource(
+                            R.string.calib_success_toast,
+                            ReferenceCalibration.formatScale(project.calibrationScale),
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Jamaica.Lime,
+                    )
+                }
                 materialList?.let { list ->
                     Text(
                         stringResource(R.string.export_order_length, LengthFormatter.format(list.totalWithWasteMeters)),

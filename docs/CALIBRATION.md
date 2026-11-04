@@ -19,7 +19,7 @@ drifts.
 |---|---|---|
 | 1 | ARCore VIO + Raw Depth (+ AI depth fused into holes, when the model asset ships) | ARCore and Raw Depth path **built**; the AI fusion is coded and unit-tested but **not wired** — `MonocularDepthEstimator` is never constructed in `:app`/`:ar-engine` and `app/src/main/assets/models/*.tflite` is not in the repository |
 | 2 | Passive marker detection (AprilTag 3 / ArUco) in a native worker | **Not built.** A background detector needs a decoder (its own vendored source and license entry) and cannot be built or verified in the development sandbox; see "Not built" below |
-| 3 | Active reference calibration: bank card or folding rule | **Arithmetic and the two-tap sweep are built and tested** (`core/.../calib/ReferenceCalibration.kt`, `CalibrationSweep.kt`), strings planted in all six locales. What follows: the AR screen that drives the sweep, the factor stored on the project and applied to reported metres, and the calibration line in the protocol |
+| 3 | Active reference calibration: bank card or folding rule | **Arithmetic, sweep, storage and application are built and tested** (`core/.../calib/ReferenceCalibration.kt`, `CalibrationSweep.kt`, `ProjectRecord.calibrationScale`), strings in all six locales, a correction notice on the room screen. What follows: the AR button that drives the sweep and the calibration line in the protocol header |
 
 ## Tier 3 — the arithmetic
 
@@ -49,6 +49,20 @@ implementation detail, and it is not taken here.
 `P' = P_ref + S · (P - P_ref)` leaves the measured object where it stands and moves only what was
 measured relative to it. `apply` returns the point unchanged to the bit when `S == 1.0`, so a
 project that never calibrated cannot pick up rounding noise on its way out.
+
+**Where the factor is applied — and where it is not.** `ProjectRecord.calibrationScale` (default
+`1.0`) is the stored factor. It is multiplied into exactly two places, both of them *reporting*:
+`ProjectRecord.totalLengthMeters` / `calibratedMeters(route)` (the room screen, the protocol tables,
+the CSV run details) and the metre totals in `MaterialListBuilder.build`. It is deliberately **not**
+applied to:
+
+* `route.nodes` — the geometry is what the anchors, the overlay and the 3D export are built from,
+  and a factor multiplied in could not be corrected by a better one tomorrow;
+* the fitting counts — a clip is "one per spacing", and length and spacing were measured in the
+  same, equally short, metre, so the ratio and therefore the count is unchanged. A certified
+  calibration changes what the customer is charged for in metres, not how many clips are needed;
+* the AR HUD while measuring — the operator measures what the phone sees; the paperwork is where
+  the correction belongs, and the room screen says so in words when a factor is in force.
 
 **Where the number goes.** `formatScale` prints three decimals in the root locale: it is a ratio,
 not a measurement, and a German phone must not write `1,053` inside a sentence that already calls

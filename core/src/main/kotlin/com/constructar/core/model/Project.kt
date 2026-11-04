@@ -72,6 +72,22 @@ data class ProjectRecord(
     val hourlyRateCents: Int? = null,
     /** Lump sum for material, in cents. The app never invents a material price. */
     val materialLumpSumCents: Long = 0L,
+    /**
+     * What every measured metre is multiplied by, from a reference calibration (1.0 = none).
+     *
+     * ARCore's metre is metric on its own; this factor is the operator's check of it against an
+     * object of known size - an ISO/IEC 7810 bank card or a folding rule at the 1 m / 2 m mark
+     * (`ReferenceCalibration`). It is stored on the project rather than baked into the node
+     * positions for one reason: a factor that has been multiplied into the geometry cannot be
+     * corrected by a better one tomorrow, and the nodes are also what the 3D overlay and the
+     * anchors are built from.
+     *
+     * Defaults to `1.0`, so a project written before this field existed loads and reports exactly
+     * what it always did. Only the *reported* metres scale: this number never reaches
+     * `route.nodes`, never reaches the mesh, and never reaches the AR HUD while measuring - the
+     * operator measures what the phone sees, and the paperwork says what the calibration says.
+     */
+    val calibrationScale: Double = 1.0,
     val schemaVersion: Int = SCHEMA_VERSION,
 ) {
     /** Defects still to be fixed — the number the project screen shows in red. */
@@ -87,8 +103,23 @@ data class ProjectRecord(
      * rows (finding 81). Anything that shows a duration to a human belongs there.
      */
     fun totalWorkMillis(nowMs: Long = System.currentTimeMillis()): Long = WorkTime.totalMillis(sessions, nowMs)
+    /**
+     * The metres this project reports: the runs added up, then corrected by [calibrationScale].
+     *
+     * One number for every reader - the room screen, the protocol table, the bill of materials -
+     * so a calibrated project cannot print 40.0 m in one place and 41.2 m in another. With the
+     * default factor of 1.0 this is exactly the sum of the runs, which is what it always was.
+     */
     val totalLengthMeters: Float
-        get() = routes.sumOf { it.polylineLengthMeters.toDouble() }.toFloat()
+        get() = (routes.sumOf { it.polylineLengthMeters.toDouble() } * calibrationScale).toFloat()
+
+    /** One run's length as it is reported: measured by the phone, corrected by the calibration. */
+    fun calibratedMeters(route: ConduitRoute): Float =
+        (route.polylineLengthMeters.toDouble() * calibrationScale).toFloat()
+
+    /** True when a reference calibration has been applied to this project. */
+    val isCalibrated: Boolean
+        get() = calibrationScale != 1.0
 
     fun routeById(routeId: String): ConduitRoute? = routes.firstOrNull { it.id == routeId }
 
