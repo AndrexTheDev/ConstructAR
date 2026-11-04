@@ -2246,6 +2246,34 @@ def check_the_native_engine_is_freed_once() -> None:
                       "is the only closer again (finding 182)")
 
 
+def check_the_camera_answer_survives_a_reclaim() -> None:
+    """Every `TakePicture` launcher restores what it sent out from saved state (finding 186).
+
+    The camera is a separate app; to make room for it Android may reclaim this one, and a screen
+    that has just been measuring with AR is the first candidate. The field book learned this in
+    finding 137 and keeps the capture as three strings in `rememberSaveable`; the project screen
+    kept it as one `Uri?` in a plain `remember`, so a picture taken after a reclaim came back to a
+    callback whose pending field was `null` - dropped silently, nothing copied into private
+    storage, the room's documentation photo gone. The rule is stated over the launcher rather than
+    over one screen, because a third screen with a camera will be written one day.
+    """
+    for path in kotlin_sources("app"):
+        if "/src/test/" in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "ActivityResultContracts.TakePicture()" not in text:
+            continue
+        if "PendingCapture.restore(" not in text:
+            add(path, "a `TakePicture` result is claimed without `PendingCapture.restore`, so a "
+                      "process reclaim while the camera is in front drops the picture (finding 186)")
+        loose = re.search(r"var \w+ by remember \{ mutableStateOf<Uri\?>\(null\) \}", text)
+        if loose is not None:
+            line = text[: loose.start()].count("\n") + 1
+            add(path, f"line {line}: the URI the camera is writing into is a plain `remember`, so "
+                      f"it is gone after a recreation - the picture is taken and dropped "
+                      f"(finding 186)")
+
+
 def check_the_draft_choice_is_saved() -> None:
     """Every part of the field-book draft is `rememberSaveable` (finding 185).
 
@@ -2429,6 +2457,7 @@ def main() -> int:
     check_backup_copies_bytes()
     check_the_skipped_counts_name_the_total()
     check_the_draft_choice_is_saved()
+    check_the_camera_answer_survives_a_reclaim()
     check_totals_are_sums_of_printed_rows()
     check_csv_headers_name_their_cells()
     check_screen_states_the_trade_defaults()

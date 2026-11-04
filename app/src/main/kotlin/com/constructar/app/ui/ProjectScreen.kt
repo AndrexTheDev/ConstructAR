@@ -97,7 +97,13 @@ fun ProjectScreen(
     firmHourlyRateCents: Int,
     onSavePricing: (hourlyRateCents: Int?, materialLumpSumCents: Long) -> Unit,
     photo: Bitmap?,
-    onPhoto: (Uri) -> Unit,
+    /**
+     * Copies the camera's picture into private storage and answers whether that copy happened.
+     *
+     * The answer is not a detail: when it is `false` the cache file is the only copy there is, so
+     * the screen must not delete it (finding 128's rule, applied here).
+     */
+    onPhoto: (Uri, (Boolean) -> Unit) -> Unit,
     onDelete: () -> Unit,
 ) {
     var renameOpen by remember { mutableStateOf(false) }
@@ -116,10 +122,37 @@ fun ProjectScreen(
     var notesSaved by remember(project.id) { mutableStateOf(false) }
     var technicianDraft by rememberSaveable(project.id) { mutableStateOf(project.technician) }
     val context = LocalContext.current
-    var pendingCapture by remember { mutableStateOf<Uri?>(null) }
+    // The camera is a *separate app*, and to make room for it Android is entitled to reclaim this
+    // one - a screen that has just been measuring with AR (native buffers, a depth model, a
+    // rendered scene) is the first candidate. This capture used to be one `Uri` in a plain
+    // `remember`, so a picture taken after such a reclaim came back to a screen whose pending
+    // field was `null`: the callback dropped it, nothing was copied into private storage, and the
+    // room's documentation photo - the one the protocol prints and the customer signs - was gone
+    // without a sentence. It is the same defect the field book had (finding 137), in the last
+    // screen that still had it: three strings in saved state and the same tested decision function
+    // (finding 186).
+    var pendingToken by rememberSaveable(project.id) { mutableStateOf("") }
+    var pendingUri by rememberSaveable(project.id) { mutableStateOf("") }
+    var pendingPath by rememberSaveable(project.id) { mutableStateOf("") }
     val captureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
-        val target = pendingCapture
-        if (captured && target != null) onPhoto(target)
+        val target = PendingCapture.restore(pendingToken, pendingUri, pendingPath)
+        pendingToken = ""
+        pendingUri = ""
+        pendingPath = ""
+        when (captureOutcome(target, captured)) {
+            CaptureOutcome.ATTACH -> if (target != null) {
+                onPhoto(Uri.parse(target.uriString)) { attached ->
+                    // Deleted only when the copy into private storage succeeded: on a failure this
+                    // cache file is the only picture that exists (finding 128).
+                    if (CaptureFile.shouldDelete(captured = true, attached = attached)) {
+                        java.io.File(target.path).delete()
+                    }
+                }
+            }
+            // The operator cancelled: the empty file the camera left in the cache goes.
+            CaptureOutcome.DISCARD -> if (target != null) java.io.File(target.path).delete()
+            CaptureOutcome.NOTHING -> Unit
+        }
     }
 
     val scanned = (project.scan?.meshTriangleCount ?: 0) > 0
@@ -323,7 +356,11 @@ fun ProjectScreen(
                             context.packageName + ".fileprovider",
                             target,
                         )
-                        pendingCapture = uri
+                        // All three, because the screen may be rebuilt before the camera answers
+                        // (finding 186). The token is the room: this photo belongs to the project.
+                        pendingToken = project.id
+                        pendingUri = uri.toString()
+                        pendingPath = target.absolutePath
                         captureLauncher.launch(uri)
                     },
                     modifier = Modifier.fillMaxWidth(),

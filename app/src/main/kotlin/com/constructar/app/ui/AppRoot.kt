@@ -203,7 +203,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                                 viewModel.updatePricing(rate, material)
                             },
                             photo = state.photo,
-                            onPhoto = { uri -> viewModel.attachPhoto(uri) },
+                            onPhoto = { uri, onDone -> viewModel.attachPhoto(uri, onDone) },
                             onDelete = {
                                 viewModel.deleteProject(project.id) {
                                     navController.popBackStack(Routes.HOME, inclusive = false)
