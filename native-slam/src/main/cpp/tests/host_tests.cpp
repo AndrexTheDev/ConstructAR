@@ -1519,6 +1519,7 @@ void testFloorplanVectorise() {
   check(!partial.valid, "two walls cannot close a room");
   check(partial.occupiedCells > 50, "the two walls were still seen");
 
+
   std::vector<SlicePoint> poisoned = sampleWallLoop({{0.f, 0.f}, {2.f, 0.f}, {2.f, 2.f}});
   poisoned.push_back({std::nanf(""), 1.f});
   poisoned.push_back({1.f, std::nanf("")});
@@ -1545,6 +1546,72 @@ void testFloorplanVectorise() {
              sampleWallLoop({{0.f, 0.f}, {2.f, 0.f}, {2.f, 2.f}, {0.f, 2.f}}), coarse)
              .valid,
         "a room whose walls are all below the minimum segment length is not a floorplan");
+}
+
+/**
+ * The JNI payload is the one place where C++ and Kotlin have to agree without either compiler
+ * seeing the other. Every failure here is silent in the product: a header that is one float short
+ * makes every segment read a loop length, and the room on the home screen becomes a different room
+ * with plausible numbers. So the layout is pinned value by value.
+ */
+void testFloorplanPayload() {
+  section("Floorplan: the JNI payload");
+
+  check(constructar::kFloorplanPayloadHeader == 8,
+        "the payload header is eight floats (Kotlin's FloorplanPayload.HEADER)");
+
+  constructar::Floorplan plan;
+  plan.valid = true;
+  plan.closed = true;
+  plan.areaSquareMetres = 12.f;
+  plan.perimeterMetres = 14.f;
+  plan.occupiedCells = 431;
+  plan.segments.push_back({{0.f, 0.f}, {4.f, 0.f}});
+  plan.segments.push_back({{4.f, 0.f}, {4.f, 3.f}});
+  plan.outline = {{0.f, 0.f}, {4.f, 0.f}, {4.f, 3.f}, {0.f, 3.f}};
+  plan.loopLengths = {4};
+  plan.loopClosed = {1};
+
+  const std::vector<float> payload = constructar::packFloorplanPayload(plan);
+  const size_t header = static_cast<size_t>(constructar::kFloorplanPayloadHeader);
+  check(payload.size() == header + 2 * 4 + 1 * 2 + 4 * 2,
+        "payload length is header + 4 per segment + 2 per loop + 2 per outline point");
+  check(payload[0] == 1.f && payload[1] == 1.f, "valid and closed lead the payload");
+  checkNear(payload[2], 12.0, 1e-6, "area at [2]");
+  checkNear(payload[3], 14.0, 1e-6, "perimeter at [3]");
+  check(payload[4] == 2.f && payload[5] == 1.f && payload[6] == 4.f && payload[7] == 431.f,
+        "segmentCount, loopCount, pointCount and occupiedCells at [4..7]");
+  check(payload[header] == 0.f && payload[header + 1] == 0.f && payload[header + 2] == 4.f &&
+            payload[header + 3] == 0.f,
+        "the first segment is startX, startZ, endX, endZ");
+  check(payload[header + 4] == 4.f && payload[header + 7] == 3.f,
+        "the second segment follows immediately and keeps its own end");
+  const size_t loopsAt = header + 8;
+  check(payload[loopsAt] == 4.f && payload[loopsAt + 1] == 1.f,
+        "the loop length comes first, then its closure flag");
+  const size_t outlineAt = loopsAt + 2;
+  check(payload[outlineAt] == 0.f && payload[outlineAt + 1] == 0.f &&
+            payload[outlineAt + 5] == 3.f,
+        "the outline follows as x/z pairs in order");
+
+  // A closure array shorter than the length array is padded open rather than read past its end.
+  constructar::Floorplan ragged = plan;
+  ragged.loopLengths = {4, 4};
+  ragged.loopClosed = {1};
+  const std::vector<float> padded = constructar::packFloorplanPayload(ragged);
+  const size_t raggedLoops = header + ragged.segments.size() * 4;
+  check(padded.size() == header + 8 + 4 + 8, "a second loop widens the payload by four floats");
+  check(padded[raggedLoops] == 4.f && padded[raggedLoops + 1] == 4.f,
+        "both loop lengths are written");
+  check(padded[raggedLoops + 2] == 1.f && padded[raggedLoops + 3] == 0.f,
+        "a missing closure flag is padded open, not skipped");
+
+  // An empty volume still produces a well-formed header, so the Kotlin side can say "no plan"
+  // from the same array shape it always gets.
+  const std::vector<float> bare = constructar::packFloorplanPayload(constructar::Floorplan{});
+  check(bare.size() == header, "an empty plan is a bare header");
+  check(bare[0] == 0.f && bare[1] == 0.f && bare[4] == 0.f,
+        "an empty plan says invalid, unclosed and carries no segments");
 }
 
 /**
@@ -1784,6 +1851,7 @@ int main() {
   testRtabMapBridgeWithoutTheBackEnd();
   testSurfaceSliceAtHeight();
   testFloorplanVectorise();
+  testFloorplanPayload();
   testObservationWeight();
   testSurfaceMask();
   testInvalidInput();

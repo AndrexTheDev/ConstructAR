@@ -143,6 +143,22 @@ reason. A doorway leaves the ring open; the call then reports no area and no seg
 joining the last wall run to the first, which would draw a wall across the doorway. Manhattan angle
 snapping and door/window classification are the next step and are not claimed.
 
+**The plan crossing the bridge.** `nativeFloorplan(handle, height, band, cell, rdpEpsilon,
+minSegment)` slices the volume, masks the horizontal surfaces and vectorises what is left, and
+returns one `float[]`. The mask lives on the native side because it needs the point normals, which
+only exist there; doing it in Kotlin would mean shipping a slice *and* its normals across the bridge
+to throw half of them away. The call takes the volume lock, which is why it belongs on the scan
+worker and not on a screen: from the UI thread it would stall integration and drop frames.
+
+The payload is a contract neither compiler can check, so it is pinned three ways - the packer is a
+plain function with fifteen host assertions on its exact layout, the header size is a named constant
+on both sides (`kFloorplanPayloadHeader` / `FloorplanPayload.HEADER`) and
+`scripts/verify_sources.py` compares them, and the Kotlin parser refuses any payload whose length
+does not prove its own header: a truncated array read field by field returns zeros, and a room with
+zero-length walls is a plan that draws and is wrong. Parameters are validated natively (band in
+`(0, 1] m`, cell in `[0.01, 1] m`, non-negative tolerances, NaN refused by every comparison) and
+answered with `null` rather than a division by zero.
+
 **Semantic masking** (`geometry/surface_mask.cpp`) sits between the slice and the vectoriser,
 because a waist-height cut is not a cut through walls: it also crosses every table, counter and
 workbench in the room, and a horizontal patch handed to a 2D vectoriser becomes a wall through the
@@ -304,11 +320,10 @@ would be a length of conduit floating somewhere in the room.
 `thumbnail.svg` for the home screen's card — a few hundred bytes of polygon instead of a camera
 frame, drawn by `:export`'s `FloorplanSvg` from the outline in world metres (one scale for both
 axes, plan view: world `x` right, world `z` down, walls 10 cm thick to scale with a 1 px floor).
-The generator is in place and tested; **nothing writes the file yet**, because no part of the app
-produces a room outline: the native floorplan vectoriser exists but is not exposed over JNI, so
-`ReticleSnap` can give a run exact corners without anyone having asked for the *closed* outline a
-thumbnail needs. That is the next wiring step, and until it happens the card has no picture and
-the README says so.
+Both halves exist now: `NativeSlamEngine.floorplan()` returns the vectorised outline over JNI and
+`FloorplanSvg` draws one. What is missing is the caller - the scan worker has to ask for a plan when
+a scan ends and the repository has to write the file - so **nothing writes `thumbnail.svg` yet** and
+the card has no picture.
 
 Schema version `1`; `ProjectMigrations` is the place for the next one.
 

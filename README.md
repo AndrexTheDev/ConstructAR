@@ -88,8 +88,9 @@ room's geometry; the 4 cm crosshair snap above is a different rule, and still sn
 *run* already has.
 
 **Room thumbnails** (`export/.../svg` — the generator, its figures and its refusals; **nothing
-calls it yet**, because the outline a card would draw has no producer: the native floorplan
-vectoriser is not exposed over JNI, so `:app` writes no `thumbnail.svg` today): the home screen's
+calls it yet**: the outline now *has* a producer — `NativeSlamEngine.floorplan()` returns the
+vectorised plan over JNI — but the scan worker does not ask for one and `:app` writes no
+`thumbnail.svg` today): the home screen's
 card wants a picture of *that* room, and a JPEG of the camera frame is the wrong answer twice over
 — it carries the customer's kitchen into a file list, and it is 40 kB of pixels to say "4 x 3 m".
 `FloorplanSvg` writes a standalone SVG of the outline instead: a few hundred bytes, sharp at any
@@ -432,7 +433,7 @@ Known limitations, deliberately documented rather than hidden:
 
 ## Testing
 
-* **Native (C++) — 272 assertions, all green**, exercised with plain `g++` (no Android SDK):
+* **Native (C++) — 287 assertions, all green**, exercised with plain `g++` (no Android SDK):
   SE(3) exp/log round trip, TSDF integration on synthetic depth, sphere/wall reconstruction
   areas and extents, a 30°-tilted plane (which pins the depth convention), free-space carving
   (a ghost disappears, the real wall does not), triangle budget, invalid input, pose-graph
@@ -467,6 +468,18 @@ Known limitations, deliberately documented rather than hidden:
   suite's tolerance is one-sided because reading *low* would mean a lost wall; and a doorway opens
   the ring, so a scan with the door open reports **no** area and **no** segments rather than
   closing the gap with a wall that is not there. Gap classification is the next step.
+* **The plan reaches Kotlin** (`jni/slam_jni.cpp` → `nativebridge/FloorplanPayload.kt`) — one
+  `float[]` per call: eight floats of header (valid, closed, area, perimeter, three counts and the
+  occupied cells), then the wall runs as `x/z` pairs, the loop lengths with their closure flags and
+  the outline. The pipeline (slice → mask → vectorise) runs entirely on the native side, because
+  the mask needs the point normals and the normals never cross the bridge; a table top in the slice
+  becomes a floorplan of the table the operator walked around. The *packer* is a plain function in
+  `geometry/floorplan.cpp` with fifteen host assertions on its exact layout, so the payload is
+  tested even though the JNI call itself cannot be. The Kotlin parser refuses anything the length
+  does not prove — a truncated array read field by field yields zeros, and a room with zero-length
+  walls is a plan that draws and is wrong — and a count that is fractional, negative or larger than
+  the array is a broken writer rather than a rounding. Nothing calls `floorplan()` from `:app` yet:
+  it belongs on the scan worker, not on a screen, and the caller is the next step.
 * **Semantic masking and distance-weighted fusion** — two pieces the slice needs to be usable. A
   waist-height cut crosses tables, counters and workbenches as well as walls, and a horizontal
   patch drawn as a wall puts a partition through the middle of the room: `maskVerticalSurfaces`
@@ -629,10 +642,10 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 803 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 823 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
-| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 272 checks, 0 failures |
-| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 272 checks, 0 failures, no data race reported |
+| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 287 checks, 0 failures |
+| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 287 checks, 0 failures, no data race reported |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
 | APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |

@@ -2844,6 +2844,74 @@ PROJECT_IMPORT = re.compile(
 )
 
 
+JNI_SOURCE = ROOT / "native-slam/src/main/cpp/jni/slam_jni.cpp"
+JNI_ENGINE = ROOT / "native-slam/src/main/kotlin/com/constructar/nativebridge/NativeSlamEngine.kt"
+JNI_CLASS_PREFIX = "Java_com_constructar_nativebridge_NativeSlamEngine_"
+FLOORPLAN_HEADER_HPP = ROOT / "native-slam/src/main/cpp/geometry/floorplan.hpp"
+FLOORPLAN_PAYLOAD_KT = ROOT / "native-slam/src/main/kotlin/com/constructar/nativebridge/FloorplanPayload.kt"
+
+
+def check_every_external_function_has_a_symbol() -> None:
+    """A JNI name that does not match its C symbol is a runtime crash, not a compile error (finding 195).
+
+    `external fun nativeFoo` binds to `Java_<package>_<Class>_nativeFoo` by *convention*: nothing in
+    Kotlin, nothing in C++ and nothing in this repository's five host suites compares the two
+    strings. A mismatch compiles clean on both sides and fails the first time an operator opens the
+    scan screen, with `UnsatisfiedLinkError` in a stack trace on a device that is on site - the one
+    place a developer is not. The mapping is mechanical, so it is checked mechanically, in both
+    directions: a symbol with no `external fun` is dead native code that will quietly rot.
+    """
+    if not JNI_SOURCE.exists() or not JNI_ENGINE.exists():
+        return  # a missing file is already a finding above
+    kotlin = JNI_ENGINE.read_text(encoding="utf-8")
+    cpp = JNI_SOURCE.read_text(encoding="utf-8")
+    declared = set(re.findall(r"external fun (\w+)\(", kotlin))
+    for name in sorted(declared):
+        symbol = JNI_CLASS_PREFIX + name.replace("_", "_1")
+        if symbol not in cpp:
+            add(JNI_SOURCE, f"`external fun {name}` has no `{symbol}` - Kotlin binds by convention "
+                            f"only, so this compiles and fails with UnsatisfiedLinkError on the "
+                            f"first device that calls it")
+    for symbol in sorted(set(re.findall(re.escape(JNI_CLASS_PREFIX) + r"(\w+)", cpp))):
+        name = symbol.replace("_1", "_")
+        if name in declared:
+            continue
+        add(JNI_SOURCE, f"`{JNI_CLASS_PREFIX}{symbol}` has no `external fun` in NativeSlamEngine - "
+                        f"dead native code keeps building, keeps passing the host suite and is "
+                        f"never executed (the Kotlin name would be `{name}`)")
+
+
+def check_the_floorplan_payload_header_matches() -> None:
+    """The two sides of the payload header are compared, because neither compiler can (finding 195).
+
+    `nativeFloorplan` returns one `float[]`. The C++ packer writes eight floats of header and the
+    Kotlin parser reads eight, and if the two disagree the payload still *parses*: every segment
+    reads a loop length, every loop reads an outline point, and the room on the card is a different
+    room with plausible numbers. There is no error anywhere and no test in either language that can
+    see the other side's constant. So the constants are read out of the two sources and compared.
+    """
+    if not FLOORPLAN_HEADER_HPP.exists() or not FLOORPLAN_PAYLOAD_KT.exists():
+        return  # a missing file is already a finding above
+    native = re.search(r"kFloorplanPayloadHeader\s*=\s*(\d+)",
+                       FLOORPLAN_HEADER_HPP.read_text(encoding="utf-8"))
+    kotlin = re.search(r"const val HEADER\s*=\s*(\d+)",
+                       FLOORPLAN_PAYLOAD_KT.read_text(encoding="utf-8"))
+    if native is None:
+        add(FLOORPLAN_HEADER_HPP, "`kFloorplanPayloadHeader` is gone - the payload layout has no "
+                                  "single written-down header size, so the parser has nothing to "
+                                  "agree with")
+        return
+    if kotlin is None:
+        add(FLOORPLAN_PAYLOAD_KT, "`FloorplanPayload.HEADER` is gone - the parser would read its "
+                                  "own idea of the layout while C++ writes another")
+        return
+    if native.group(1) != kotlin.group(1):
+        add(FLOORPLAN_PAYLOAD_KT, f"`HEADER = {kotlin.group(1)}` against `kFloorplanPayloadHeader = "
+                                  f"{native.group(1)}` in geometry/floorplan.hpp: the payload would "
+                                  f"parse, and every field after the header would be the wrong "
+                                  f"one - a room that draws and is not the room")
+
+
 def check_project_imports_are_used() -> None:
     """An `import com.constructar.…` with no use is a rename that was half done (finding 194).
 
@@ -3065,6 +3133,8 @@ def main() -> int:
     check_the_reticle_snap_stays_wired()
     check_exported_numbers_use_the_c_locale()
     check_project_imports_are_used()
+    check_every_external_function_has_a_symbol()
+    check_the_floorplan_payload_header_matches()
     check_kotlin_structure()
     check_resource_xml()
     check_licence_key()

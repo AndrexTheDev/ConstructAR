@@ -38,9 +38,10 @@
 // Both are the next step and both need this output first - a segment list and a loop - which is
 // what this file produces.
 //
-// **Not wired.** No JNI symbol exposes this and no screen calls it: the app has no floorplan
-// thumbnail yet (section 4.B), and `docs/CALIBRATION.md`-style honesty applies here too - the
-// engine is host-tested, the product does not use it.
+// **Exposed over JNI, not yet on a screen.** `nativeFloorplan` in `jni/slam_jni.cpp` slices the
+// volume, masks the horizontal surfaces and returns this plan as a packed `float[]`; the Kotlin
+// side parses it into `FloorplanPayload`. Nothing in `:app` asks for it yet, so no thumbnail and no
+// floorplan page exist - the engine and the bridge are ready, the screen is not.
 #pragma once
 
 #include <vector>
@@ -123,5 +124,38 @@ Floorplan vectoriseFloorplan(const std::vector<Vec3>& slicePoints,
                              const FloorplanOptions& options = {});
 Floorplan vectoriseFloorplan(const std::vector<SlicePoint>& points,
                              const FloorplanOptions& options = {});
+
+/**
+ * Floats before the variable-length part of the JNI payload.
+ *
+ * The number is a **contract with Kotlin** (`FloorplanPayload.HEADER` in
+ * `nativebridge/FloorplanPayload.kt`): JNI returns one `float[]`, and if the two sides disagree
+ * about where the header ends, every segment reads a loop length and the plan on screen is a room
+ * that does not exist. Neither compiler can see the other side, so the host suite pins the layout
+ * here and `scripts/verify_sources.py` compares the two constants.
+ */
+constexpr int kFloorplanPayloadHeader = 8;
+
+/**
+ * Packs a [Floorplan] into the JNI payload.
+ *
+ * Layout (all floats, counts included - a count above 2^24 would lose precision, and a floorplan
+ * with sixteen million corners is not a room):
+ *
+ * ```
+ * [0] valid (0/1)        [1] closed (0/1)
+ * [2] area m2            [3] perimeter m
+ * [4] segmentCount       [5] loopCount
+ * [6] pointCount         [7] occupiedCells
+ * [8 ..]                 segmentCount x (startX, startZ, endX, endZ)
+ * [..]                   loopCount x loopLength, loopCount x loopClosed (0/1)
+ * [..]                   pointCount x (x, z)  - the loops concatenated, in order
+ * ```
+ *
+ * A `loopClosed` shorter than `loopLengths` is padded with 0 (open) rather than read past the end:
+ * a truncated array here once meant a doorway drawn as a wall, and the padding at least keeps the
+ * geometry of the loops that do exist.
+ */
+std::vector<float> packFloorplanPayload(const Floorplan& plan);
 
 }  // namespace constructar

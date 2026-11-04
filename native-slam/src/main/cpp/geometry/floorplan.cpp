@@ -353,4 +353,39 @@ Floorplan vectoriseFloorplan(const std::vector<SlicePoint>& points,
   return plan;
 }
 
+std::vector<float> packFloorplanPayload(const Floorplan& plan) {
+  const size_t segments = plan.segments.size();
+  const size_t loops = plan.loopLengths.size();
+  const size_t points = plan.outline.size();
+
+  std::vector<float> payload;
+  payload.reserve(static_cast<size_t>(kFloorplanPayloadHeader) + segments * 4 + loops * 2 + points * 2);
+
+  payload.push_back(plan.valid ? 1.f : 0.f);
+  payload.push_back(plan.closed ? 1.f : 0.f);
+  payload.push_back(plan.areaSquareMetres);
+  payload.push_back(plan.perimeterMetres);
+  payload.push_back(static_cast<float>(segments));
+  payload.push_back(static_cast<float>(loops));
+  payload.push_back(static_cast<float>(points));
+  payload.push_back(static_cast<float>(plan.occupiedCells));
+
+  for (const WallSegment& segment : plan.segments) {
+    payload.push_back(segment.start.x);
+    payload.push_back(segment.start.z);
+    payload.push_back(segment.end.x);
+    payload.push_back(segment.end.z);
+  }
+  for (const int length : plan.loopLengths) payload.push_back(static_cast<float>(length));
+  for (size_t i = 0; i < loops; ++i) {
+    const bool closed = i < plan.loopClosed.size() && plan.loopClosed[i] != 0;
+    payload.push_back(closed ? 1.f : 0.f);
+  }
+  for (const SlicePoint& point : plan.outline) {
+    payload.push_back(point.x);
+    payload.push_back(point.z);
+  }
+  return payload;
+}
+
 }  // namespace constructar
