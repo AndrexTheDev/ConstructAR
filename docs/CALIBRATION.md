@@ -19,7 +19,7 @@ drifts.
 |---|---|---|
 | 1 | ARCore VIO + Raw Depth (+ AI depth fused into holes, when the model asset ships) | ARCore and Raw Depth path **built**; the AI fusion is coded and unit-tested but **not wired** — `MonocularDepthEstimator` is never constructed in `:app`/`:ar-engine` and `app/src/main/assets/models/*.tflite` is not in the repository |
 | 2 | Passive marker detection (AprilTag 3 / ArUco) in a native worker | **Not built.** A background detector needs a decoder (its own vendored source and license entry) and cannot be built or verified in the development sandbox; see "Not built" below |
-| 3 | Active reference calibration: bank card or folding rule | **Arithmetic, sweep, storage and application are built and tested** (`core/.../calib/ReferenceCalibration.kt`, `CalibrationSweep.kt`, `ProjectRecord.calibrationScale`), strings in all six locales, a correction notice on the room screen. What follows: the AR button that drives the sweep and the calibration line in the protocol header |
+| 3 | Active reference calibration: bank card or folding rule | **Complete in the app**: arithmetic, sweep, storage and application (`core/.../calib`, `ProjectRecord.calibrationScale`), a *Calibrate* button and dialog on the AR screen that takes the reticle point twice, six locales, and a correction notice on the room screen. What still follows: the calibration line in the protocol header and the CSV preamble |
 
 ## Tier 3 — the arithmetic
 
@@ -83,6 +83,18 @@ behaves on site:
   with the new reference, so "measure it again" never means "measure from the wrong end".
 * **Two taps on the same end are `Unmeasurable`, not `Infinity`.** The sweep answers with the same
   three-valued outcome the arithmetic does, so the screen has one thing to render.
+
+## The dialog
+
+*Calibrate* sits under the AR viewfinder. It offers the four references, takes the point under the
+reticle twice (`Take point`, disabled while the reticle has no hit), and shows the factor the
+sweep produced. Only an `Accepted` outcome enables `Apply`; a `Rejected` one shows the factor and
+the window it missed, in the danger colour, and cannot be applied — the dialog and the view model
+both refuse it, and the *refusal* is decided in `:core`, not in the screen.
+
+The sweep itself is not saved state: a rotation ends the measurement, which costs two taps and
+never a stored number. A calibration that has been applied is different — it is written to the
+project file, which is why it survives the phone being put in a pocket.
 
 ## Not built, and why
 

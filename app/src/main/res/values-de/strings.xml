@@ -49,6 +49,9 @@
     <string name="calib_zollstock">Zollstock · %1$s</string>
     <string name="calib_success_toast">Kalibriert: Faktor %1$s</string>
     <string name="calib_rejected_toast">Nicht übernommen: Faktor %1$s liegt außerhalb %2$s–%3$s</string>
+    <string name="calib_hint">Tippe nacheinander auf beide Enden.</string>
+    <string name="calib_take_point">Punkt übernehmen</string>
+    <string name="calib_apply">Übernehmen</string>
     <string name="ar_add_point">Punkt in der Mitte</string>
     <string name="ar_undo">Zurück</string>
     <string name="ar_close_loop">Schließen</string>

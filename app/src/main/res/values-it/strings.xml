@@ -49,6 +49,9 @@
     <string name="calib_credit_card">Carta bancaria · %1$s</string>
     <string name="calib_success_toast">Calibrato: fattore %1$s</string>
     <string name="calib_rejected_toast">Non applicato: il fattore %1$s è fuori da %2$s–%3$s</string>
+    <string name="calib_hint">Tocca i due estremi, uno dopo l’altro.</string>
+    <string name="calib_take_point">Prendi punto</string>
+    <string name="calib_apply">Applica</string>
     <string name="ar_add_point">Aggiungi punto al centro</string>
     <string name="ar_undo">Annulla</string>
     <string name="ar_close_loop">Chiudi</string>

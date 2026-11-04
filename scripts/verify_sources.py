@@ -443,6 +443,21 @@ def check_pdf_accuracy_note() -> None:
     six locales, with the figures a reader can act on and the placeholder the writer fills the
     confidence bar into, so a translator cannot quietly reduce it to "accurate measurement".
     """
+    ar_screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+                 "ar" / "ArMeasureScreen.kt")
+    ar_text = ar_screen.read_text(encoding="utf-8")
+    if "CalibrationSweep" not in ar_text or "onCalibration" not in ar_text:
+        add(ar_screen, "the AR screen no longer drives the calibration sweep, so the factor has no "
+                       "producer and the two-tap flow has no user")
+    elif "ReferenceCalibration.accepted" in strip_kotlin(ar_text):
+        add(ar_screen, "the screen decides the acceptance window itself - that decision belongs to "
+                       "`:core`, or the dialog and the file can disagree about what counts")
+    root_file = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+                 "AppRoot.kt")
+    root_text = root_file.read_text(encoding="utf-8")
+    if "viewModel.setCalibration(" not in root_text:
+        add(root_file, "nothing hands the calibrated factor to the view model, so the AR dialog "
+                       "would measure a factor and throw it away")
     for folder in LOCALES:
         path = RES_DIR / folder / "strings.xml"
         if not path.exists():

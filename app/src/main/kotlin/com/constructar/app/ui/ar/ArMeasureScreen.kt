@@ -38,6 +38,8 @@ import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Straighten
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -53,6 +55,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,10 +93,15 @@ import com.constructar.arengine.render.ArScene
 import com.constructar.arengine.session.ArReadiness
 import com.constructar.arengine.tracking.TrackingQuality
 import com.google.ar.core.Config
+import com.constructar.core.calib.CalibrationOutcome
+import com.constructar.core.calib.CalibrationReference
+import com.constructar.core.calib.CalibrationSweep
+import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.model.ConduitPresets
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.units.LengthFormatter
+import com.constructar.core.units.LengthUnit
 import com.constructar.core.units.PercentText
 import com.constructar.core.model.RouteDraft
 import com.constructar.core.model.RouteLabels
@@ -128,12 +136,26 @@ fun ArMeasureScreen(
     onDraftChanged: (RouteDraft?) -> Unit = {},
     onDraftRecovered: (RouteDraft) -> Unit = {},
     onDraftDiscarded: () -> Unit = {},
+    /**
+     * Stores the factor a reference calibration produced, or refuses it (the view model asks
+     * `ReferenceCalibration.accepted` before it writes anything).
+     *
+     * The screen does not keep the result: a factor that lived only in this composable would be
+     * forgotten the moment the operator leaves the AR view, and the metres he takes to the
+     * customer would be the uncorrected ones.
+     */
+    onCalibration: (Double) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val controller = remember { ArMeasureController(context) }
     val activity = remember(context) { context.findActivity() }
+    // The two-tap calibration sweep (see `CalibrationSweep`): one value instead of three
+    // nullables, so a third tap cannot move the factor the operator is reading. Not saved state:
+    // a rotation ends the sweep, which costs two taps and never a stored number.
+    var calibrationSweep by remember { mutableStateOf<CalibrationSweep>(CalibrationSweep.Idle) }
+    var calibrationOpen by rememberSaveable { mutableStateOf(false) }
 
     fun cameraGranted(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
@@ -735,6 +757,103 @@ fun ArMeasureScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            // ── Reference calibration ────────────────────────────────────────────────
+            // ARCore's metre is metric on its own; this is the operator's check of it against an
+            // object of known size, and the factor it produces is applied to the metres that are
+            // reported (`.//docs/CALIBRATION.md`), never to the geometry.
+            GloveButton(
+                label = stringResource(R.string.calib_title),
+                icon = Icons.Default.Straighten,
+                tone = ActionTone.SECONDARY,
+                onClick = {
+                    calibrationSweep = CalibrationSweep.Idle
+                    calibrationOpen = true
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            if (calibrationOpen) {
+                val sweep = calibrationSweep
+                AlertDialog(
+                    onDismissRequest = {
+                        calibrationSweep = CalibrationSweep.Idle
+                        calibrationOpen = false
+                    },
+                    title = { Text(stringResource(R.string.calib_title)) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                text = stringResource(R.string.calib_hint),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            CalibrationReference.values().forEach { reference ->
+                                GloveButton(
+                                    label = calibrationLabel(reference),
+                                    icon = Icons.Default.Straighten,
+                                    tone = if (sweep.reference == reference) ActionTone.PRIMARY else ActionTone.SECONDARY,
+                                    onClick = { calibrationSweep = calibrationSweep.start(reference) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                            GloveButton(
+                                label = stringResource(R.string.calib_take_point),
+                                icon = Icons.Default.Add,
+                                tone = ActionTone.SECONDARY,
+                                enabled = sweep.step.collecting && lastHit?.hit != null,
+                                onClick = {
+                                    lastHit?.hit?.let { hit ->
+                                        calibrationSweep = calibrationSweep.tap(hit.point)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            when (val outcome = sweep.outcome) {
+                                is CalibrationOutcome.Accepted -> Text(
+                                    text = stringResource(
+                                        R.string.calib_success_toast,
+                                        ReferenceCalibration.formatScale(outcome.scale),
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Jamaica.Lime,
+                                )
+                                is CalibrationOutcome.Rejected -> Text(
+                                    text = stringResource(
+                                        R.string.calib_rejected_toast,
+                                        ReferenceCalibration.formatScale(outcome.scale),
+                                        ReferenceCalibration.formatScale(ReferenceCalibration.MIN_SCALE),
+                                        ReferenceCalibration.formatScale(ReferenceCalibration.MAX_SCALE),
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = SiteColors.danger,
+                                )
+                                // No measurement at all: the hint above is the whole answer, and
+                                // a factor printed here would be a number nobody measured.
+                                CalibrationOutcome.Unmeasurable, null -> Unit
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        val accepted = sweep.outcome as? CalibrationOutcome.Accepted
+                        TextButton(
+                            enabled = accepted != null,
+                            onClick = {
+                                accepted?.let { onCalibration(it.scale) }
+                                calibrationSweep = CalibrationSweep.Idle
+                                calibrationOpen = false
+                            },
+                        ) { Text(stringResource(R.string.calib_apply)) }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                calibrationSweep = CalibrationSweep.Idle
+                                calibrationOpen = false
+                            },
+                        ) { Text(stringResource(R.string.home_cancel)) }
+                    },
+                )
+            }
         }
     }
 
@@ -917,4 +1036,22 @@ private fun Context.findActivity(): Activity? {
         current = current.baseContext
     }
     return null
+}
+
+/**
+ * What the calibration dialog calls the object to hold: a localised name and the size from
+ * `:core`, formatted by the one formatter the app uses for lengths.
+ *
+ * The number is not in the string table on purpose - six translations of "85.60 mm" is six
+ * chances to disagree about how long a bank card is, and `ReferenceCalibration` is the only
+ * place that fact is allowed to live.
+ */
+@Composable
+private fun calibrationLabel(reference: CalibrationReference): String = if (reference.isCard) {
+    stringResource(
+        R.string.calib_credit_card,
+        LengthFormatter.format(reference.realMetres.toFloat(), LengthUnit.CENTIMETER, 1),
+    )
+} else {
+    stringResource(R.string.calib_zollstock, LengthFormatter.format(reference.realMetres.toFloat()))
 }

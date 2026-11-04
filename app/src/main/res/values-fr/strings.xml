@@ -49,6 +49,9 @@
     <string name="calib_zollstock">Mètre pliant · %1$s</string>
     <string name="calib_success_toast">Calibré : facteur %1$s</string>
     <string name="calib_rejected_toast">Non appliqué : le facteur %1$s sort de %2$s–%3$s</string>
+    <string name="calib_hint">Touche les deux extrémités l’une après l’autre.</string>
+    <string name="calib_take_point">Prendre le point</string>
+    <string name="calib_apply">Appliquer</string>
     <string name="ar_add_point">Ajouter un point au centre</string>
     <string name="ar_undo">Annuler</string>
     <string name="ar_close_loop">Fermer</string>

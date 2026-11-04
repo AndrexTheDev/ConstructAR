@@ -49,6 +49,9 @@
     <string name="calib_zollstock">Metro plegable · %1$s</string>
     <string name="calib_success_toast">Calibrado: factor %1$s</string>
     <string name="calib_rejected_toast">No aplicado: el factor %1$s queda fuera de %2$s–%3$s</string>
+    <string name="calib_hint">Toca los dos extremos, uno tras otro.</string>
+    <string name="calib_take_point">Tomar punto</string>
+    <string name="calib_apply">Aplicar</string>
     <string name="ar_add_point">Añadir punto en el centro</string>
     <string name="ar_undo">Deshacer</string>
     <string name="ar_close_loop">Cerrar</string>

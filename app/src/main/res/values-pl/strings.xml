@@ -49,6 +49,9 @@
     <string name="calib_zollstock">Miara składana · %1$s</string>
     <string name="calib_success_toast">Skalibrowano: współczynnik %1$s</string>
     <string name="calib_rejected_toast">Nie zastosowano: współczynnik %1$s jest poza %2$s–%3$s</string>
+    <string name="calib_hint">Dotknij kolejno obu końców.</string>
+    <string name="calib_take_point">Przyjmij punkt</string>
+    <string name="calib_apply">Zastosuj</string>
     <string name="ar_add_point">Dodaj punkt na środku</string>
     <string name="ar_undo">Cofnij</string>
     <string name="ar_close_loop">Zamknij</string>

@@ -236,6 +236,9 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onDraftChanged = { draft -> viewModel.saveDraft(draft) },
                             onDraftRecovered = { draft -> viewModel.recoverDraft(draft) },
                             onDraftDiscarded = { viewModel.discardDraft() },
+                            // The factor lands on the project, which is what the protocol, the
+                            // bill of materials and the room screen read (calibration, tier 3).
+                            onCalibration = { scale -> viewModel.setCalibration(scale) },
                         )
                     }
                 }
