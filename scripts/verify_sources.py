@@ -1855,8 +1855,9 @@ def check_depth_arrays_go_back_to_the_pool_by_themselves() -> None:
                           "(finding 168)")
     capture = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
                "arengine" / "scan" / "DepthCapture.kt")
-    if "onLastRelease = pool::release" not in capture.read_text(encoding="utf-8"):
-        add(capture, "the captured snapshot does not know its own pool, so the array can only "
+    capture_text = capture.read_text(encoding="utf-8")
+    if "onLastRelease = {" not in capture_text or "pool.release(target)" not in capture_text:
+        add(capture, "the captured snapshot does not know its own pool, so the arrays can only "
                       "be returned by a caller guessing that it was the last one (finding 168)")
 
     pipeline = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
@@ -1945,6 +1946,25 @@ def check_the_hud_state_holds_only_what_is_read() -> None:
         add(pipeline, "the per-frame merge of the block-budget flag is hand-written again, which "
                       "is how a failed call cleared it (finding 171)")
 
+def check_the_confidence_plane_is_pooled() -> None:
+    """The confidence plane comes out of the pool too (finding 172).
+
+    `DepthCapture` documents itself as the class that does not allocate in the render loop, and
+    its depth plane was pooled while the confidence plane was a fresh `ByteArray` on every frame:
+    19 kB, thirty times a second, 0.6 MB/s of garbage in the one thread the app cannot afford to
+    stall. [DepthBufferPool] holds both planes now.
+    """
+    capture = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
+               "arengine" / "scan" / "DepthCapture.kt")
+    text = capture.read_text(encoding="utf-8")
+    if "ByteArray(confidenceRowStride" in text:
+        add(capture, "the confidence plane is allocated per frame again, in the class whose "
+                     "comment promises it never allocates in the render loop (finding 172)")
+    if "acquireConfidence(" not in text:
+        add(capture, "the confidence plane does not come from the pool (finding 172)")
+    if "releaseConfidence" not in text:
+        add(capture, "the confidence plane is never returned to the pool (finding 172)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1994,6 +2014,7 @@ def main() -> int:
     check_thermal_down_sampling_counts_frames()
     check_the_dropped_frames_reach_a_screen()
     check_the_hud_state_holds_only_what_is_read()
+    check_the_confidence_plane_is_pooled()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

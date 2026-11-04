@@ -22,7 +22,7 @@ import org.junit.Test
  */
 class DepthBufferLifetimeTest {
 
-    private fun snapshot(onLastRelease: (ShortArray) -> Unit): DepthFrameSnapshot =
+    private fun snapshot(onLastRelease: () -> Unit): DepthFrameSnapshot =
         DepthFrameSnapshot(
             depthMm = ShortArray(4) { 1_000.toShort() },
             width = 2,
@@ -58,6 +58,40 @@ class DepthBufferLifetimeTest {
         assertEquals("the last holder returns the array", 1, returns)
     }
 
+    /**
+     * Both planes of a frame belong to the pool, and both go back with the same release
+     * (finding 172): the confidence image was a fresh `ByteArray` on every frame.
+     */
+    @Test
+    fun `the confidence plane is pooled and comes back with the depth plane`() {
+        val pool = DepthBufferPool(capacity = 2, initialPixels = 4)
+        val depth = pool.acquire(4)
+        val confidence = pool.acquireConfidence(6)
+        val snapshot = DepthFrameSnapshot(
+            depthMm = depth,
+            width = 2,
+            height = 2,
+            rowStride = 2,
+            confidence = confidence,
+            confidenceWidth = 2,
+            confidenceHeight = 3,
+            confidenceRowStride = 2,
+            onLastRelease = {
+                pool.release(depth)
+                pool.releaseConfidence(confidence)
+            },
+        )
+        snapshot.release()
+        assertTrue(
+            "the depth plane never came back",
+            listOf(pool.acquire(4), pool.acquire(4)).any { it === depth },
+        )
+        assertTrue(
+            "the confidence plane never came back",
+            listOf(pool.acquireConfidence(6), pool.acquireConfidence(6)).any { it === confidence },
+        )
+    }
+
     @Test
     fun `an array is never returned twice`() {
         var returns = 0
@@ -81,7 +115,7 @@ class DepthBufferLifetimeTest {
             width = 2,
             height = 2,
             rowStride = 2,
-            onLastRelease = pool::release,
+            onLastRelease = { pool.release(held) },
         )
 
         val next = pool.acquire(4)
