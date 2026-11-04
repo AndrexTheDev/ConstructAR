@@ -114,7 +114,13 @@ fun FieldBookScreen(
     var diaryDraft by rememberSaveable(project.id) { mutableStateOf("") }
     var defectTitle by rememberSaveable(project.id) { mutableStateOf("") }
     var defectLocation by rememberSaveable(project.id) { mutableStateOf("") }
-    var defectSeverity by remember(project.id) { mutableStateOf(DefectSeverity.MEDIUM) }
+    // The severity is the fourth part of the same draft: the title and the location beside it have
+    // been `rememberSaveable` since the signature-pad lesson (findings 77, 83), and this one was
+    // not: a rotation, or the process Android rebuilds while the camera is in front, brought the
+    // typed text back with the chip silently reset to MEDIUM, so the next tap on "add" wrote a HIGH
+    // defect into the file as a medium one. A lost *selection that is about to be persisted* is not
+    // a lost tap (finding 185).
+    var defectSeverity by rememberSaveable(project.id) { mutableStateOf(DefectSeverity.MEDIUM) }
     // A diary line is typed with one thumb in the rain and the screen holds it in a draft until
     // "add" is pressed; the back arrow and the gesture used to take it without a word. The same
     // question the project screen asks since findings 124 and 142 (finding 143).

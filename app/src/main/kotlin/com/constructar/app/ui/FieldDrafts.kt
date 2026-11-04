@@ -11,7 +11,9 @@ package com.constructar.app.ui
  *
  * The site diary is written on a wet scaffold with one thumb: a paragraph about the missing
  * Schlitze, a defect title, the location it belongs to. All three live in `rememberSaveable`
- * drafts, which survive a rotation - and only a rotation. The back arrow and the system back
+ * drafts, which survive a rotation - and only a rotation. (The severity chip in that same draft
+ * joined them in finding 185: it was the one part of the draft that a rotation reset, silently,
+ * to MEDIUM.) The back arrow and the system back
  * gesture left the screen outright, so a diary line went with them without a question, on the one
  * screen in the app whose entire purpose is that the day gets written down (finding 143).
  *

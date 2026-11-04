@@ -2246,6 +2246,34 @@ def check_the_native_engine_is_freed_once() -> None:
                       "is the only closer again (finding 182)")
 
 
+def check_the_draft_choice_is_saved() -> None:
+    """Every part of the field-book draft is `rememberSaveable` (finding 185).
+
+    `diaryDraft`, `defectTitle` and `defectLocation` are saved state because of findings 137 and
+    143, and `defectSeverity` - the chip that decides which of three colours the defect gets in the
+    protocol, and in what order it is printed - was the one part of that draft held by a plain
+    `remember`. A rotation, or the process Android rebuilds while the camera app is in front, put
+    the typed title back with the chip silently on MEDIUM, so the next tap on "add" wrote a HIGH
+    defect into the project file as a medium one: not a lost tap, a wrong value in the file.
+
+    `pendingDelete` right above it is deliberately *not* in this list: losing a confirmation costs
+    one tap and deletes nothing, which is the safe direction. The distinction is the point of the
+    rule, so the list is by name and the reason is written here.
+    """
+    screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+              "FieldBookScreen.kt")
+    text = screen.read_text(encoding="utf-8")
+    for field in ("diaryDraft", "defectTitle", "defectLocation", "defectSeverity"):
+        if f"var {field} by rememberSaveable(" not in text:
+            if f"var {field} by remember(" in text:
+                add(screen, f"`{field}` is held by `remember`, so a rotation throws this part of "
+                            f"the draft away - and it is the part that is written to the project "
+                            f"file (finding 185)")
+            else:
+                add(screen, f"`{field}` is no longer a `rememberSaveable` draft - check how the "
+                            f"field book holds it now (finding 185)")
+
+
 def check_the_skipped_counts_name_the_total() -> None:
     """The backup card's "N of M" lines count the job, not the copies (finding 184).
 
@@ -2400,6 +2428,7 @@ def main() -> int:
     check_order_list_states_its_waste()
     check_backup_copies_bytes()
     check_the_skipped_counts_name_the_total()
+    check_the_draft_choice_is_saved()
     check_totals_are_sums_of_printed_rows()
     check_csv_headers_name_their_cells()
     check_screen_states_the_trade_defaults()
