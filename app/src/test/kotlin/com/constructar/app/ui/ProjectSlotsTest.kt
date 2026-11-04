@@ -42,14 +42,34 @@ class ProjectSlotsTest {
 
     @Test
     fun `the free plan stops at one room however that room is stored`() {
-        assertTrue(free.allowsAnotherProject(ProjectSlots.used(readable = 0, unreadable = 0)))
-        assertFalse(free.allowsAnotherProject(ProjectSlots.used(readable = 1, unreadable = 0)))
-        assertFalse(free.allowsAnotherProject(ProjectSlots.used(readable = 0, unreadable = 1)))
+        // Asked through the gate the app actually uses. `core` used to carry a second
+        // implementation of this rule (`Entitlements.allowsAnotherProject(count)`), which took one
+        // number and could therefore only ever see the readable rooms - the count findings 126 and
+        // 149 were about (finding 166).
+        assertTrue(ProjectSlots.allowsAnother(free, readable = 0, unreadable = 0))
+        assertFalse(ProjectSlots.allowsAnother(free, readable = 1, unreadable = 0))
+        assertFalse(ProjectSlots.allowsAnother(free, readable = 0, unreadable = 1))
     }
 
     @Test
     fun `a licence does not count them at all`() {
-        assertTrue(pro.allowsAnotherProject(ProjectSlots.used(readable = 40, unreadable = 3)))
+        assertTrue(ProjectSlots.allowsAnother(pro, readable = 40, unreadable = 3))
+    }
+
+    @Test
+    fun `the button and the gate behind it agree`() {
+        // The home screen asks `allowsAnother`, the create and restore paths ask `remaining`; a
+        // room the button offers and the gate then refuses (or the other way round) is how finding
+        // 126's two-room install came about.
+        for (readable in 0..3) {
+            for (unreadable in 0..2) {
+                assertEquals(
+                    "readable=$readable unreadable=$unreadable",
+                    ProjectSlots.remaining(free, readable, unreadable) > 0,
+                    ProjectSlots.allowsAnother(free, readable, unreadable),
+                )
+            }
+        }
     }
 
     @Test

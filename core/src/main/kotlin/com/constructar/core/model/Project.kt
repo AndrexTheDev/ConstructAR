@@ -78,9 +78,9 @@ data class ProjectRecord(
     val openDefectCount: Int
         get() = defects.count { !it.resolved }
 
-    /** Everything recorded on site, including a session that has not been stopped yet. */
     /**
-     * Raw working time, milliseconds, nothing rounded - the truth about how long he was there.
+     * Everything recorded on site, including a session that has not been stopped yet: raw working
+     * time, milliseconds, nothing rounded - the truth about how long he was there.
      *
      * Not the number anything printed or billed uses: the protocol's table, its labour line and the
      * room screen's preview all take `WorkTime.billableMillis`, which adds up the rounded session

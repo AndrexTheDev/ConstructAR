@@ -66,7 +66,17 @@ data class Entitlements(
 
     val isTrial: Boolean get() = plan == Plan.TRIAL
 
-    /** A free build may keep one room. Deleting it frees the slot — nothing is ever locked away. */
+    /**
+     * A free build may keep one room. Deleting it frees the slot — nothing is ever locked away.
+     *
+     * This is the **number**, not the decision. Whether another room may be created depends on
+     * what is actually on the phone — a room file this build cannot read still holds a slot
+     * (findings 126 and 149) — and that question needs the file list, which this module does not
+     * have. `ProjectSlots.allowsAnother`/`remaining` in the app is the single place that answers
+     * it. It used to have a second home here, as `allowsAnotherProject(currentCount: Int)`: one
+     * implementation of the rule that could only ever see the readable rooms, which is the count
+     * both of those findings were about (finding 166).
+     */
     val maxProjects: Int get() = if (isPro) Int.MAX_VALUE else FREE_PROJECTS
 
     /** Runs per project are never limited: a half-measured room is worse than useless. */
@@ -82,8 +92,6 @@ data class Entitlements(
 
     /** The CSV bill of materials is free: it is the number the customer asks for. */
     val canExportCsv: Boolean get() = true
-
-    fun allowsAnotherProject(currentCount: Int): Boolean = currentCount < maxProjects
 
     companion object {
         const val FREE_PROJECTS: Int = 1

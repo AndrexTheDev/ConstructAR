@@ -1779,6 +1779,41 @@ def check_anchor_id_is_transient() -> None:
                     "app has already released - a dead handle per node of every saved run "
                     "(finding 165)")
 
+def check_one_home_for_the_room_limit() -> None:
+    """The one-room rule is answered in exactly one place (finding 166).
+
+    The free plan allows one room, and "may another one be created" depends on what is on the
+    phone: a room file this build cannot read still holds a slot (findings 126 and 149). That
+    question needs the file list, so it is answered in the app's `ProjectSlots` - it used to be
+    answered in `core` as well, by `Entitlements.allowsAnotherProject(currentCount: Int)`, which
+    took a single number and could therefore only ever see the readable rooms. Nothing in the app
+    called it; the tests did, which is how a fixed bug is kept alive in a second implementation.
+    """
+    second_home = []
+    for source in ROOT.rglob("*.kt"):
+        text = source.read_text(encoding="utf-8")
+        if "fun allowsAnotherProject(" in text:
+            second_home.append(source)
+    for source in second_home:
+        add(source, "a second implementation of the free plan's one-room rule - it takes one count "
+                    "and cannot see a room file that does not parse, the exact count findings 126 "
+                    "and 149 were about (finding 166)")
+
+    app = ROOT / "app" / "src" / "main" / "kotlin"
+    asks = 0
+    gates = 0
+    for source in app.rglob("*.kt"):
+        text = source.read_text(encoding="utf-8")
+        asks += text.count("ProjectSlots.allowsAnother(")
+        gates += text.count("ProjectSlots.remaining(")
+    if asks < 2:
+        add(app, "the home screen's button and the create gate must both ask "
+                 "`ProjectSlots.allowsAnother` - a gate that counts rooms by itself is how a free "
+                 "install reached two room files (findings 126, 149)")
+    if gates < 1:
+        add(app, "the restore gate must ask `ProjectSlots.remaining` - a restore brings rooms in "
+                 "bulk and is the other way past the limit (finding 149)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1822,6 +1857,7 @@ def main() -> int:
     check_only_posed_frames_are_placed()
     check_finished_runs_release_their_anchors()
     check_anchor_id_is_transient()
+    check_one_home_for_the_room_limit()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
