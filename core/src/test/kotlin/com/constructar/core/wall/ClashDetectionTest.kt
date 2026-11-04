@@ -229,7 +229,10 @@ class ClashDetectionTest {
 
     @Test
     fun `a run with no obstacles is checked and says it found nothing`() {
-        val report = checkClearance(listOf(Vec3(0f, 0f, 0f), Vec3(1f, 0f, 0f), Vec3(2f, 0f, 0f)))
+        val report = checkClearance(
+            listOf(Vec3(0f, 0f, 0f), Vec3(1f, 0f, 0f), Vec3(2f, 0f, 0f)),
+            emptyList(),
+        )
         assertTrue(report.valid)
         assertTrue(report.hits.isEmpty())
         assertEquals(2, report.checkedSegments)
