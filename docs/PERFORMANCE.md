@@ -153,7 +153,8 @@ dropping depth, rendering or the room scan.
 ## 5. What to re-measure on hardware
 
 1. Integration time per frame on the target SoC with `depthMode = RAW_DEPTH_ONLY`
-   (`ScanState.lastIntegrationMillis` is already in the HUD state).
+   (`ScanState.lastIntegrationMillis` carries it; the overlay does not print it yet — finding 171
+   removed the fields in that state that no screen read, not the instrumentation).
 2. Whether `pixelStep = 3` keeps integration under ~12 ms; if not, raise the step before
    touching the voxel size — resolution is what makes the tool useful.
 3. Filament upload cost at 30 k / 100 k / 300 k triangles (`SceneMeshRenderer.upload`).

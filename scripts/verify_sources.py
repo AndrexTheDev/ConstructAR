@@ -1922,6 +1922,29 @@ def check_the_dropped_frames_reach_a_screen() -> None:
     if "R.string.ar_scan_behind" not in screen_text:
         add(screen, "the AR screen has no sentence for a queue that cannot keep up (finding 170)")
 
+def check_the_hud_state_holds_only_what_is_read() -> None:
+    """`ScanState` is the HUD's contract, so every field in it is read (finding 171).
+
+    The state carried six fields nobody could see: `integrating` (only ever assigned `false`, so
+    a spinner bound to it would never appear), `vertexCount` and `blockCount` (the renderer and
+    the exporters ask the mesh, and the flag that matters is `hitBlockBudget`), and `error` (an
+    English sentence no screen printed and no log recorded). A field in a state object whose
+    whole purpose is to be displayed, but which nothing displays, is a promise - and the
+    integration copy also merged the block-budget flag as `?: false`, so a failed call cleared
+    the one warning that *is* on screen (finding 97).
+    """
+    pipeline = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
+                "arengine" / "scan" / "TsdfScanPipeline.kt")
+    text = pipeline.read_text(encoding="utf-8")
+    for gone in ("val integrating: Boolean", "val vertexCount: Int", "val blockCount: Int",
+                 "val error: String?"):
+        if gone in text:
+            add(pipeline, f"`ScanState` carries `{gone.split(':')[0].replace('val ', '')}` again, "
+                          "a state field nothing reads (finding 171)")
+    if "fun afterIntegration(" not in text:
+        add(pipeline, "the per-frame merge of the block-budget flag is hand-written again, which "
+                      "is how a failed call cleared it (finding 171)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1970,6 +1993,7 @@ def main() -> int:
     check_depth_arrays_go_back_to_the_pool_by_themselves()
     check_thermal_down_sampling_counts_frames()
     check_the_dropped_frames_reach_a_screen()
+    check_the_hud_state_holds_only_what_is_read()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

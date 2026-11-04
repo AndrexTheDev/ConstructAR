@@ -77,21 +77,31 @@ class TsdfScanPipeline(
         .asCoroutineDispatcher(),
     private val onMesh: ((ScanMesh) -> Unit)? = null,
 ) {
-    /** Live state for the HUD: the detail budget, mesh stats, latency, thermal mode. */
+    /**
+     * Live state for the HUD: the detail budget, the frame queue, the volume limit, the thermal
+     * mode.
+     *
+     * Everything here is read by a screen, a document or a test — that is the whole point of a
+     * state object. Until finding 171 it also carried six fields that were none of those:
+     * `integrating` (only ever assigned `false`, so a spinner bound to it would never appear),
+     * `vertexCount` and `blockCount` (nothing read them; the renderer and the exporters ask the
+     * mesh, and the flag that matters is [hitBlockBudget]), and `error` (an English sentence
+     * that neither a screen printed nor the log recorded — the screen keys off [ready] and says
+     * its own localized sentence). A field in the HUD's contract that nothing can see is a
+     * promise, and the operator was paying for it in copies of the state on every frame.
+     */
     data class ScanState(
         val ready: Boolean = false,
-        val integrating: Boolean = false,
         val framesIntegrated: Int = 0,
         val framesDropped: Int = 0,
+        /** How long the last integration call took. Instrumentation — no screen shows it yet. */
         val lastIntegrationMillis: Int = 0,
+        /** How long the last mesh extraction took. Instrumentation — no screen shows it yet. */
         val lastExtractionMillis: Int = 0,
         val triangleCount: Int = 0,
-        val vertexCount: Int = 0,
-        val blockCount: Int = 0,
         val hitBlockBudget: Boolean = false,
         val throttleMode: ThrottleMode = ThrottleMode.NOMINAL,
         val meshVersion: Int = 0,
-        val error: String? = null,
     ) {
         /**
          * How much of the reference **detail** budget the mesh fills, 0..1 (68 k triangles ≈ a
@@ -123,6 +133,24 @@ class TsdfScanPipeline(
                 val offered = framesIntegrated + framesDropped
                 return if (offered <= 0) 0f else framesDropped.toFloat() / offered
             }
+
+        /**
+         * The state after one integration call, however that call went.
+         *
+         * A `null` result means the call failed or the engine was already gone — nothing
+         * *known*, not "the volume is fine". The flag is therefore sticky: a spent block budget
+         * never comes back (the volume has no deallocation), and the old `?: false` cleared it on
+         * the first failed call, which silently took the "scan limit reached" sentence off the
+         * screen and out of the protocol's `scanLimited` note (findings 97, 171).
+         *
+         * [framesIntegrated] counts frames that were *offered* to the integrator, not frames
+         * that succeeded, because that is the denominator of [droppedFraction].
+         */
+        fun afterIntegration(result: IntegrationResult?, millis: Int): ScanState = copy(
+            framesIntegrated = framesIntegrated + 1,
+            lastIntegrationMillis = millis,
+            hitBlockBudget = hitBlockBudget || result?.hitBlockBudget == true,
+        )
     }
 
     enum class ThrottleMode { NOMINAL, WARM, THROTTLED }
@@ -184,10 +212,10 @@ class TsdfScanPipeline(
         engine = NativeSlamEngine.create(config)
         val created = engine
         if (created == null) {
-            mutableState.value = mutableState.value.copy(
-                ready = false,
-                error = "Native SLAM library unavailable on this ABI — scanning disabled, measuring still works.",
-            )
+            // The screen says its own localized sentence off `ready`; the reason belongs in the
+            // log, where a support call can find it (finding 171).
+            Log.w(TAG, "native SLAM library unavailable on this ABI — scanning disabled, measuring still works")
+            mutableState.value = mutableState.value.copy(ready = false)
             return
         }
         mutableState.value = mutableState.value.copy(ready = true)
@@ -306,13 +334,7 @@ class TsdfScanPipeline(
             null
         }
         val integrationMillis = ((System.nanoTime() - startedNanos) / 1_000_000L).toInt()
-        mutableState.value = mutableState.value.copy(
-            integrating = false,
-            framesIntegrated = mutableState.value.framesIntegrated + 1,
-            lastIntegrationMillis = integrationMillis,
-            blockCount = result?.blocksTotal ?: mutableState.value.blockCount,
-            hitBlockBudget = result?.hitBlockBudget ?: false,
-        )
+        mutableState.value = mutableState.value.afterIntegration(result, integrationMillis)
 
         // ── Extraction, throttled to 300 ms (700 ms when throttled) ─────────────────────
         val now = System.nanoTime()
@@ -329,7 +351,6 @@ class TsdfScanPipeline(
                 mutableState.value = mutableState.value.copy(
                     lastExtractionMillis = extractMs,
                     triangleCount = extracted.triangleCount,
-                    vertexCount = extracted.vertexCount,
                     meshVersion = mutableState.value.meshVersion + 1,
                 )
             } else {
@@ -370,8 +391,6 @@ class TsdfScanPipeline(
             framesIntegrated = 0,
             framesDropped = 0,
             triangleCount = 0,
-            vertexCount = 0,
-            blockCount = 0,
             meshVersion = 0,
         )
     }
