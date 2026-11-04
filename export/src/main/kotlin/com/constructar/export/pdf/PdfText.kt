@@ -23,14 +23,24 @@ object PdfText {
     /**
      * [value] shortened with an ellipsis until [measure] says it fits [maxWidth].
      *
-     * Never returns something wider than asked for; returns the value untouched when it already
-     * fits, which is the common case and must not be rewritten (a name that fits should not be
-     * flattened or trimmed).
+     * Returns the value untouched when it already fits, which is the common case and must not be
+     * rewritten (a name that fits should not be flattened or trimmed). Otherwise the result fits
+     * [maxWidth] too - except in the degenerate case where not even one character and the ellipsis
+     * fit, which is why the loop stops at `end > 1`: a column that narrow does not exist in the
+     * protocol, and returning `""` would be worse than one character too many.
+     *
+     * The cut never lands **inside a character**: a room called "Wohnzimmer 🏗 Erdgeschoss" cut
+     * between the two halves of the emoji leaves a lone surrogate in the string, and every text
+     * renderer draws that as the replacement glyph - the box this file exists to keep off the
+     * protocol (finding 177). `ExportService.slug` has guarded a file name against exactly this
+     * since finding 122; the text that goes *on the page* was not.
      */
     fun ellipsize(value: String, maxWidth: Float, measure: (String) -> Float): String {
         if (measure(value) <= maxWidth) return value
         var end = value.length
         while (end > 1 && measure(value.substring(0, end) + "…") > maxWidth) end--
+        // A high surrogate at the cut means its low half stays behind: drop the whole character.
+        if (end > 0 && value[end - 1].isHighSurrogate()) end--
         return value.substring(0, end) + "…"
     }
 

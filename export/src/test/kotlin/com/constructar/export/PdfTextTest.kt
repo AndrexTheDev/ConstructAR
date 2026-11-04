@@ -8,6 +8,7 @@ package com.constructar.export
 
 import com.constructar.export.pdf.PdfText
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -45,6 +46,57 @@ class PdfTextTest {
         // "B…" even when that is still wider than the space offered. A column that narrow does
         // not exist in the protocol (the narrowest is 60 pt), and cutting to "" would be worse.
         assertEquals("B…", PdfText.ellipsize("Bad", 5f, measureTenPerCharacter))
+    }
+
+    /**
+     * Finding 177: the cut was made by UTF-16 unit, so it could land between the two halves of an
+     * emoji and leave a lone surrogate in the string - which every renderer draws as the
+     * replacement glyph, the box [PdfText] exists to keep off the protocol. `ExportService.slug`
+     * has backed off one unit for a file name since finding 122; the page had no such guard.
+     */
+    @Test
+    fun `an ellipsis never cuts a character in half`() {
+        val room = "Wohnzimmer \uD83C\uDFD7 Erdgeschoss"
+        // 13 units of 10 pt: the cut lands between the two halves of the emoji. Before the fix the
+        // result ended with a high surrogate; now the whole character goes.
+        val clamped = PdfText.ellipsize(room, 130f, measureTenPerCharacter)
+
+        assertEquals("Wohnzimmer …", clamped)
+        assertFalse(
+            "a lone high surrogate is a replacement glyph in the document: $clamped",
+            clamped.lastOrNull()?.isHighSurrogate() == true,
+        )
+    }
+
+    @Test
+    fun `no column width can leave half a character behind`() {
+        val hammering = "\uD83D\uDEE0".repeat(12)
+        for (width in 5..230) {
+            val clamped = PdfText.ellipsize(hammering, width.toFloat(), measureTenPerCharacter)
+            val tail = clamped.dropLast(1)
+            assertFalse(
+                "width $width produced a lone surrogate: $clamped",
+                tail.lastOrNull()?.isHighSurrogate() == true,
+            )
+            assertTrue("width $width lost the ellipsis: $clamped", clamped.endsWith("…"))
+        }
+    }
+
+    @Test
+    fun `a long word with an emoji in it wraps without a broken character`() {
+        // The paragraph path hands an over-wide word to `ellipsize`, so the guard has to hold there
+        // too - a pasted link or part number is exactly the kind of text that arrives long.
+        val pasted = "siehe \uD83D\uDCCE\uD83D\uDCCE\uD83D\uDCCE https://example.invalid/plan/erdgeschoss-links"
+        val lines = PdfText.wrap(pasted, 120f, measureTenPerCharacter) +
+            PdfText.wrap("\uD83D\uDCCE".repeat(20), 120f, measureTenPerCharacter)
+
+        assertTrue("nothing was drawn: $lines", lines.isNotEmpty())
+        for (line in lines) {
+            val broken = line.lastOrNull()?.isHighSurrogate() == true || line.zipWithNext().any { (a, b) ->
+                a.isHighSurrogate() && !b.isLowSurrogate()
+            }
+            assertFalse("a wrapped line holds half a character: $line", broken)
+        }
     }
 
     @Test

@@ -2050,6 +2050,22 @@ def check_a_failed_save_keeps_the_room() -> None:
                         "(finding 176)")
 
 
+def check_the_ellipsis_does_not_cut_a_character() -> None:
+    """The PDF text clamp backs off a whole character, never half of one (finding 177).
+
+    `PdfText.ellipsize` cuts user text to the width of a cell, and it cut by UTF-16 unit: a room
+    called "Wohnzimmer 🏗 Erdgeschoss" could be cut between the two halves of the emoji,
+    which leaves a lone surrogate in the string handed to `Canvas.drawText` - the replacement
+    glyph, i.e. the box `PdfText` exists to keep off the protocol. `ExportService.slug` has
+    guarded a file name against exactly this since finding 122; the page did not.
+    """
+    pdf_text = ROOT / "export" / "src" / "main" / "kotlin" / "com" / "constructar" / "export" / "pdf" / "PdfText.kt"
+    text = pdf_text.read_text(encoding="utf-8")
+    if "isHighSurrogate()" not in text:
+        add(pdf_text, "the clamp cuts by UTF-16 unit again, so half an emoji can reach the page "
+                      "(finding 177)")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -2104,6 +2120,7 @@ def main() -> int:
     check_the_protocol_notes_can_turn_the_page()
     check_the_appendix_prints_the_photos_the_screen_holds()
     check_a_failed_save_keeps_the_room()
+    check_the_ellipsis_does_not_cut_a_character()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
