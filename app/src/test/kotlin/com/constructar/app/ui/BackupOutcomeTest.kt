@@ -119,7 +119,7 @@ class BackupOutcomeTest {
         val saved = BackupOutcome.of(report(available = 5, written = 2), nothing, failed)
             as BackupOutcome.Saved
 
-        assertEquals(BackupOutcome.Saved(projects = 2, projectsSkipped = 3), saved)
+        assertEquals(BackupOutcome.Saved(projects = 2, photos = 0, projectsSkipped = 3), saved)
         assertEquals(5, saved.projectsTotal)
     }
 
