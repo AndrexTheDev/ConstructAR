@@ -1075,11 +1075,13 @@ struct SyntheticNoise {
 std::vector<constructar::Vec3> makeRoomCloud() {
   SyntheticNoise noise;
   std::vector<constructar::Vec3> cloud;
-  const float amplitude = 0.003f;
-  const int perSurface = 800;
+  // `constexpr`, so the lambda below can use them without capturing them: a captured constant is
+  // an unused capture to clang, and `-Werror` makes that a build failure (finding 190).
+  constexpr float amplitude = 0.003f;
+  constexpr int perSurface = 800;
 
   // A patch on the plane through `centre` spanned by `u` and `v`.
-  const auto surface = [&cloud, &noise, amplitude, perSurface](
+  const auto surface = [&cloud, &noise](
                            constructar::Vec3 centre, constructar::Vec3 u, constructar::Vec3 v,
                            float halfU, float halfV) {
     for (int i = 0; i < perSurface; ++i) {
