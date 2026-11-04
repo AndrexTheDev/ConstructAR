@@ -10,6 +10,7 @@ import com.constructar.arengine.tracking.Guidance
 import com.constructar.arengine.tracking.TrackingMonitor
 import com.constructar.arengine.tracking.TrackingQuality
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -37,6 +38,29 @@ class TrackingMonitorTest {
         depthSupported = true,
         ambientLux = lux,
     )
+
+    @Test
+    fun `only a frame with its own pose may be placed`() {
+        // ARCore's PAUSED reports the pose it last had and STOPPED the pose it last ever had. A
+        // frame like that must not be integrated, and must not answer a tap: the geometry would
+        // be stamped where the camera was when the tracker gave up (finding 163).
+        assertTrue("a tracked frame has a pose of its own", monitor.canPlaceFrame(TrackingQuality.GOOD))
+        assertFalse("a paused frame has the previous one's", monitor.canPlaceFrame(TrackingQuality.LIMITED))
+        assertFalse("a stopped frame has the last one it ever had", monitor.canPlaceFrame(TrackingQuality.NOT_TRACKING))
+    }
+
+    @Test
+    fun `weak depth does not make a tracked frame unplaceable`() {
+        // The two verdicts answer different questions: "is this frame's pose usable" (gate the
+        // work) and "can this measurement be trusted" (tell the operator). Folding them together
+        // would stop integrating exactly when the room is merely hard to see (finding 163).
+        frame(lux = 300f, confidence = 10)
+        assertEquals("the depth verdict is limited", TrackingQuality.LIMITED, monitor.status.value.quality)
+        assertTrue(
+            "and the frame can still be placed",
+            monitor.canPlaceFrame(TrackingQuality.GOOD),
+        )
+    }
 
     @Test
     fun `a frame that changes nothing publishes nothing`() {

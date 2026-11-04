@@ -169,8 +169,22 @@ class TrackingMonitor {
         )
     }
 
-    /** True when tracking has been lost long enough to require a full relocalisation. */
-    fun requiresRelocalisation(): Boolean = consecutiveLosses > RELOCALISE_AFTER_FRAMES
+    /**
+     * Whether **this frame's pose** may be used to place anything: integrate its depth into the
+     * scan, or answer a tap with it.
+     *
+     * Only ARCore's `TRACKING` has a pose for the frame in hand. `PAUSED` - a covered lens, motion
+     * too fast, the warm-up before the first tracked frame, a backgrounded session - reports the
+     * last pose it had, and `STOPPED` reports the last one it ever had. Placing geometry with
+     * either is how a room gets a smear of the corridor the operator walked down while the camera
+     * was not tracking, and how a tap lands on a wall the phone is no longer pointing at
+     * (finding 163).
+     *
+     * Feed this the **raw** mapping of ARCore's `TrackingState` (see `ArMeasureController`), not
+     * the depth-folded verdict in [status]: a "limited" verdict because the depth is weak is a
+     * reason to distrust the *measurement*, not a reason to throw the frame away.
+     */
+    fun canPlaceFrame(quality: TrackingQuality): Boolean = quality == TrackingQuality.GOOD
 
     fun reset() {
         consecutiveLosses = 0
@@ -205,6 +219,5 @@ class TrackingMonitor {
 
         const val DARK_LUX = 15f
         private const val LOST_FRAMES = 3
-        private const val RELOCALISE_AFTER_FRAMES = 25
     }
 }

@@ -1706,6 +1706,32 @@ def check_live_route_is_drawn() -> None:
                         "changes when the reticle moves without a node being added - the drawn "
                         "run trails the operator by one node (finding 162)")
 
+def check_only_posed_frames_are_placed() -> None:
+    """A frame is integrated only when it has a pose of its own (finding 163).
+
+    `ArMeasureController.onFrame` used to call `pipeline.onFrame` first thing, before it had looked
+    at `frame.camera.trackingState` at all, and `ArInteraction.onFrameEnter` answered taps with the
+    same pose. ARCore's `PAUSED` (covered lens, fast motion, warm-up, backgrounded session) reports
+    the pose it last had and `STOPPED` the pose it last ever had, so the scan smeared the current
+    view into the old camera position and a tap landed on a wall the phone was no longer looking
+    at. `TrackingMonitor.requiresRelocalisation` was written for this and read by nobody; the gate
+    is `canPlaceFrame`, and a pending tap is dropped with `clearTap`.
+    """
+    controller = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" / "ar" / "ArMeasureController.kt"
+    text = controller.read_text(encoding="utf-8")
+    start = text.find("pipeline.onFrame(")
+    if start < 0:
+        add(controller, "`pipeline.onFrame` is gone; this rule has nothing to check")
+        return
+    guard = text.rfind("canPlaceFrame(", max(0, start - 400), start)
+    if guard < 0:
+        add(controller, "the scan is integrated before the frame's pose has been checked - a "
+                        "paused or stopped tracker reports the pose it last had, so depth lands "
+                        "where the camera used to be (finding 163)")
+    if "clearTap(" not in text:
+        add(controller, "a tap waiting for a frame is never dropped, so one made while the tracker "
+                        "was lost is answered by the first frame after it comes back (finding 163)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1746,6 +1772,7 @@ def main() -> int:
     check_block_touch_is_locked()
     check_excluded_runs_are_recorded()
     check_live_route_is_drawn()
+    check_only_posed_frames_are_placed()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

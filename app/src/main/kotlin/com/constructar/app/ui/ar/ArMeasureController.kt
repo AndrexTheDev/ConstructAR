@@ -209,7 +209,33 @@ class ArMeasureController(private val context: Context) {
     fun onFrame(session: Session, frame: Frame, viewWidth: Int, viewHeight: Int) {
         onSessionCreated(session)
         val thermalStatus = powerManager?.currentThermalStatus ?: PowerManager.THERMAL_STATUS_NONE
-        pipeline.onFrame(frame, thermalStatus)
+
+        val camera = frame.camera
+        // ARCore's TrackingState has exactly three values. PAUSED covers both the warm-up
+        // before the first tracked frame and a backgrounded session, so it maps to LIMITED
+        // ("hold still") rather than to a loss the operator has to react to.
+        val quality = when (camera.trackingState) {
+            TrackingState.TRACKING -> TrackingQuality.GOOD
+            TrackingState.PAUSED -> TrackingQuality.LIMITED
+            TrackingState.STOPPED -> TrackingQuality.NOT_TRACKING
+        }
+        // Nothing is placed with a frame that has no pose of its own (finding 163). This used to
+        // run for every frame: the depth was integrated at the last good camera position while
+        // the operator kept walking - a smear of wherever the phone was pointing when the tracker
+        // gave up - and a tap was answered against that same frozen pose, putting a node on a
+        // wall the phone was no longer looking at. `requiresRelocalisation()` was written to
+        // express this and was read by nobody; the condition is simply "this frame has a pose".
+        val poseUsable = tracking.canPlaceFrame(quality)
+        if (poseUsable) {
+            pipeline.onFrame(frame, thermalStatus)
+        } else {
+            // A tap made now must not wait for the next live frame to be answered: the pixel it
+            // names is meaningless by then, and `ArInteraction` would resolve it against whatever
+            // the camera has found in the meantime.
+            interaction?.clearTap()
+            hitStabilizer.reset()
+            stability.value = null
+        }
 
         val activeInteraction = interaction
         if (activeInteraction != null) {
@@ -222,28 +248,27 @@ class ArMeasureController(private val context: Context) {
             reticleCentre.update(viewWidth, viewHeight)?.let { centre ->
                 activeInteraction.reticlePoint = centre
             }
-            activeInteraction.onFrameEnter(frame, viewWidth, viewHeight, SystemClock.uptimeMillis())
+            if (poseUsable) {
+                activeInteraction.onFrameEnter(frame, viewWidth, viewHeight, SystemClock.uptimeMillis())
+            }
             // Live preview follows the reticle (throttled inside ArInteraction to 12 Hz).
             val reticleHit = activeInteraction.reticle.value
             routeSession.setLivePoint(reticleHit)
-            stability.value = hitStabilizer.sample(reticleHit, SystemClock.uptimeMillis())
+            if (poseUsable) {
+                stability.value = hitStabilizer.sample(reticleHit, SystemClock.uptimeMillis())
+            }
         }
 
         routeSession.onFrame()
         updateHudPosition(frame, viewWidth, viewHeight)
 
-        // Monocular depth: throttled internally to ~2 Hz; copies what it needs immediately.
-        pipeline.latestSnapshot?.let { snapshot -> monocularDepth?.onFrame(frame, snapshot) }
-
-        val camera = frame.camera
-        // ARCore's TrackingState has exactly three values. PAUSED covers both the warm-up
-        // before the first tracked frame and a backgrounded session, so it maps to LIMITED
-        // ("hold still") rather than to a loss the operator has to react to.
-        val quality = when (camera.trackingState) {
-            TrackingState.TRACKING -> TrackingQuality.GOOD
-            TrackingState.PAUSED -> TrackingQuality.LIMITED
-            TrackingState.STOPPED -> TrackingQuality.NOT_TRACKING
+        // Monocular depth: throttled internally to ~2 Hz; copies what it needs immediately. Also
+        // only for a frame that can be placed - it exists to densify depth *for integration*, and
+        // a frame that will not be integrated has nothing to densify (finding 163).
+        if (poseUsable) {
+            pipeline.latestSnapshot?.let { snapshot -> monocularDepth?.onFrame(frame, snapshot) }
         }
+
         val stats = pipeline.depthStats
         val ambientLux = ambientLuxOf(frame.lightEstimate, colorCorrection)
         // The automatic torch path can switch the light on and can be refused by the camera, so
