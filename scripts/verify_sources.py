@@ -2453,6 +2453,14 @@ def check_the_calibration_has_one_home() -> None:
         if needle not in text:
             add(calibration, f"{why} is not stated here - the reference would be defined somewhere "
                              f"a reader does not look")
+    sweep = (ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" /
+             "calib" / "CalibrationSweep.kt")
+    if not sweep.exists():
+        add(sweep, "the two-tap sweep is gone - the screen would have to keep the first point in a "
+                    "bare nullable again")
+    elif sweep.read_text(encoding="utf-8").count("override fun tap(point: Vec3): CalibrationSweep = this") < 1:
+        add(sweep, "a finished sweep no longer ignores taps, so a tap while the operator reads the "
+                    "factor recomputes it from the last two taps")
     if "reference + (point - reference) * factor" not in text:
         add(calibration, "the correction no longer scales about the reference point: `P' = P_ref + "
                          "S * (P - P_ref)` is the only form that leaves the measured object where "

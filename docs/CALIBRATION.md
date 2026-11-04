@@ -19,7 +19,7 @@ drifts.
 |---|---|---|
 | 1 | ARCore VIO + Raw Depth (+ AI depth fused into holes, when the model asset ships) | ARCore and Raw Depth path **built**; the AI fusion is coded and unit-tested but **not wired** — `MonocularDepthEstimator` is never constructed in `:app`/`:ar-engine` and `app/src/main/assets/models/*.tflite` is not in the repository |
 | 2 | Passive marker detection (AprilTag 3 / ArUco) in a native worker | **Not built.** A background detector needs a decoder (its own vendored source and license entry) and cannot be built or verified in the development sandbox; see "Not built" below |
-| 3 | Active reference calibration: bank card or folding rule | **Arithmetic built and tested** (`core/.../calib/ReferenceCalibration.kt`), strings planted in all six locales. The AR sweep that feeds it and the factor applied to lengths are the next round |
+| 3 | Active reference calibration: bank card or folding rule | **Arithmetic and the two-tap sweep are built and tested** (`core/.../calib/ReferenceCalibration.kt`, `CalibrationSweep.kt`), strings planted in all six locales. What follows: the AR screen that drives the sweep, the factor stored on the project and applied to reported metres, and the calibration line in the protocol |
 
 ## Tier 3 — the arithmetic
 
@@ -55,6 +55,20 @@ not a measurement, and a German phone must not write `1,053` inside a sentence t
 it a factor. The localised *label* for a protocol header ("Metric: Folding rule, factor 1.053")
 will be assembled in `:app` and passed to `:export` — the export module has no string table by
 design — once the dialog that produces it exists.
+
+## The sweep — why it is a state and not two nullables
+
+`CalibrationSweep` is the sequence around the division, written once as a value: `Idle` →
+`FirstPoint` → `SecondPoint` → `Finished`. Three of those steps exist because of how a person
+behaves on site:
+
+* **A third tap must not recompute.** While the dialog says *factor 1.053 — apply?*, a tap on the
+  scene is a dismissal, not a new measurement; `Finished.tap` returns itself, so the number under
+  the operator's thumb cannot change while he decides.
+* **A mis-tap is not undone, it is restarted.** `start` from any state goes back to `FirstPoint`
+  with the new reference, so "measure it again" never means "measure from the wrong end".
+* **Two taps on the same end are `Unmeasurable`, not `Infinity`.** The sweep answers with the same
+  three-valued outcome the arithmetic does, so the screen has one thing to render.
 
 ## Not built, and why
 
