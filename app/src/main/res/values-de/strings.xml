@@ -44,6 +44,11 @@
     <string name="tier_depth_point">Tiefenpunkt</string>
     <string name="tier_direct_depth">Tiefenstrahl</string>
     <string name="tier_feature_point">Merkmalspunkt</string>
+    <string name="calib_title">Kalibrieren</string>
+    <string name="calib_credit_card">Scheckkarte · %1$s</string>
+    <string name="calib_zollstock">Zollstock · %1$s</string>
+    <string name="calib_success_toast">Kalibriert: Faktor %1$s</string>
+    <string name="calib_rejected_toast">Nicht übernommen: Faktor %1$s liegt außerhalb %2$s–%3$s</string>
     <string name="ar_add_point">Punkt in der Mitte</string>
     <string name="ar_undo">Zurück</string>
     <string name="ar_close_loop">Schließen</string>

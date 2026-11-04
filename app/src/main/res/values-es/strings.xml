@@ -44,6 +44,11 @@
     <string name="tier_depth_point">Punto de profundidad</string>
     <string name="tier_direct_depth">Rayo de profundidad</string>
     <string name="tier_feature_point">Punto característico</string>
+    <string name="calib_title">Calibrar</string>
+    <string name="calib_credit_card">Tarjeta bancaria · %1$s</string>
+    <string name="calib_zollstock">Metro plegable · %1$s</string>
+    <string name="calib_success_toast">Calibrado: factor %1$s</string>
+    <string name="calib_rejected_toast">No aplicado: el factor %1$s queda fuera de %2$s–%3$s</string>
     <string name="ar_add_point">Añadir punto en el centro</string>
     <string name="ar_undo">Deshacer</string>
     <string name="ar_close_loop">Cerrar</string>

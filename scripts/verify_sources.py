@@ -2424,6 +2424,56 @@ def check_the_rtabmap_stubs_mirror_upstream() -> None:
                                      "finding 183)")
 
 
+def check_the_calibration_has_one_home() -> None:
+    """The card, the window and the anchor formula live in one file (calibration, tier 3).
+
+    The reference calibration turns "the operator measured a known object" into the factor every
+    measured metre is multiplied by. Three numbers decide it - the ISO/IEC 7810 ID-1 edges and the
+    acceptance window - and all three are physical facts, not preferences: a second copy of
+    `0.0856` in a screen, or a second `1.15` in a dialog, is a second definition of a centimetre,
+    and the protocol would then print a factor that a different part of the app disagrees with.
+
+    The anchor rule is checked as a shape too, because getting it wrong is silent: scaling a point
+    about the world origin instead of about the reference moves a node 20 m away by 20 m x (S - 1),
+    which is centimetres nobody asked for and no test would notice on a 2 m room.
+    """
+    calibration = (ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" /
+                   "calib" / "ReferenceCalibration.kt")
+    if not calibration.exists():
+        add(calibration, "the calibration arithmetic is gone - every screen would have to invent "
+                         "its own factor")
+        return
+    text = calibration.read_text(encoding="utf-8")
+    for needle, why in (
+        ("CREDIT_CARD_LONG(0.0856)", "the ISO/IEC 7810 ID-1 long edge (85.60 mm)"),
+        ("CREDIT_CARD_SHORT(0.05398)", "the ISO/IEC 7810 ID-1 short edge (53.98 mm)"),
+        ("MIN_SCALE: Double = 0.85", "the lower edge of the acceptance window"),
+        ("MAX_SCALE: Double = 1.15", "the upper edge of the acceptance window"),
+    ):
+        if needle not in text:
+            add(calibration, f"{why} is not stated here - the reference would be defined somewhere "
+                             f"a reader does not look")
+    if "reference + (point - reference) * factor" not in text:
+        add(calibration, "the correction no longer scales about the reference point: `P' = P_ref + "
+                         "S * (P - P_ref)` is the only form that leaves the measured object where "
+                         "it was and moves what was measured relative to it")
+    for path in kotlin_sources("app") + kotlin_sources("ar-engine") + kotlin_sources("export"):
+        source = path.read_text(encoding="utf-8")
+        for literal in ("0.0856", "0.05398"):
+            if literal in source:
+                add(path, f"`{literal}` is a second copy of the credit card's edge; it belongs in "
+                          f"`ReferenceCalibration` so screen and export cannot disagree")
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if not path.exists():
+            continue
+        for key in ("calib_title", "calib_credit_card", "calib_zollstock", "calib_success_toast",
+                    "calib_rejected_toast"):
+            if f'name="{key}"' not in path.read_text(encoding="utf-8"):
+                add(path, f"'{key}' is missing - the calibration dialog of one language would "
+                          f"fall back to English mid-sentence")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -2458,6 +2508,7 @@ def main() -> int:
     check_the_skipped_counts_name_the_total()
     check_the_draft_choice_is_saved()
     check_the_camera_answer_survives_a_reclaim()
+    check_the_calibration_has_one_home()
     check_totals_are_sums_of_printed_rows()
     check_csv_headers_name_their_cells()
     check_screen_states_the_trade_defaults()

@@ -44,6 +44,11 @@
     <string name="tier_depth_point">Depth point</string>
     <string name="tier_direct_depth">Depth ray</string>
     <string name="tier_feature_point">Feature point</string>
+    <string name="calib_title">Calibrate</string>
+    <string name="calib_credit_card">Bank card · %1$s</string>
+    <string name="calib_zollstock">Folding rule · %1$s</string>
+    <string name="calib_success_toast">Calibrated: factor %1$s</string>
+    <string name="calib_rejected_toast">Not applied: factor %1$s is outside %2$s–%3$s</string>
     <string name="ar_add_point">Add point at centre</string>
     <string name="ar_undo">Undo</string>
     <string name="ar_close_loop">Close loop</string>

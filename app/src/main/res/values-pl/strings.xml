@@ -44,6 +44,11 @@
     <string name="tier_depth_point">Punkt głębi</string>
     <string name="tier_direct_depth">Promień głębi</string>
     <string name="tier_feature_point">Punkt charakterystyczny</string>
+    <string name="calib_title">Kalibrować</string>
+    <string name="calib_credit_card">Karta bankowa · %1$s</string>
+    <string name="calib_zollstock">Miara składana · %1$s</string>
+    <string name="calib_success_toast">Skalibrowano: współczynnik %1$s</string>
+    <string name="calib_rejected_toast">Nie zastosowano: współczynnik %1$s jest poza %2$s–%3$s</string>
     <string name="ar_add_point">Dodaj punkt na środku</string>
     <string name="ar_undo">Cofnij</string>
     <string name="ar_close_loop">Zamknij</string>
