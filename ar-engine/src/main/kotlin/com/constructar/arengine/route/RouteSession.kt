@@ -161,9 +161,18 @@ class RouteSession(
 
     // ── Editing ─────────────────────────────────────────────────────────────────────────
 
-    /** Switches the conduit being routed. Existing nodes are kept (re-swept with the new spec). */
+    /**
+     * Switches the conduit being routed. Existing nodes are kept, and **re-swept**: the drawn tube
+     * and the bend-radius verdict are both read off `preview`, so the preview has to be rebuilt
+     * when the profile changes (finding 179). Without that, the run kept the old diameter on
+     * screen - and, because [recompute] judges [RouteWarning.BEND_RADIUS_TOO_TIGHT] from the same
+     * stale preview, a 16 mm cable that cannot make the corner still complained after the operator
+     * had switched to a duct that can, and a switch to a fatter profile hid a complaint that had
+     * just become true.
+     */
     @Synchronized
     fun setSpec(spec: ConduitSpec) {
+        previewDirty = true
         mutableState.value = recompute(mutableState.value.copy(spec = spec))
     }
 
@@ -400,8 +409,16 @@ class RouteSession(
             state.preview
         }
 
+        // Two kinds of warning meet here. The ones an *action* raised (a double tap, a slip
+        // through a doorway, a ring that does not meet) are sticky until the next action: they
+        // describe something the operator did, and nothing in the geometry can take them back.
+        // [RouteWarning.BEND_RADIUS_TOO_TIGHT] is not one of them - it is derived from the preview
+        // in this very function, so feeding it back in as input made it permanent: once raised, no
+        // recompute could drop it, not even the one that rebuilt the geometry after the same run
+        // was widened (finding 179). It is re-derived every time instead.
         val warning = when {
-            state.warning.isPresent -> state.warning
+            state.warning.isPresent && state.warning != RouteWarning.BEND_RADIUS_TOO_TIGHT ->
+                state.warning
             preview != null && !preview.bendRadiusCompliant -> RouteWarning.BEND_RADIUS_TOO_TIGHT
             else -> RouteWarning.NONE
         }

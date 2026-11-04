@@ -13,6 +13,8 @@ import com.constructar.arengine.route.RouteSession
 import com.constructar.arengine.route.RouteWarning
 import com.constructar.core.math.Quat
 import com.constructar.core.math.Vec3
+import com.constructar.core.model.ConduitKind
+import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.HitSource
 import com.constructar.core.model.SurfaceKind
 import org.junit.Assert.assertEquals
@@ -584,5 +586,80 @@ class RouteSessionTest {
 
         assertTrue(session.closeLoop())
         assertEquals(4f, session.state.value.lengthMeters, 1e-5f)
+    }
+
+    /**
+     * Finding 179: `setSpec` promised the run was "re-swept with the new spec" and forgot to mark
+     * the preview dirty, so the drawn tube kept the profile the operator had just replaced until
+     * the next tap. The three nodes below are a right-angled corner with 20 cm legs.
+     */
+    private fun rightAngleRun(factory: FakeAnchorFactory = FakeAnchorFactory()): RouteSession =
+        RouteSession(factory).apply {
+            addNode(hit(0f, 0f, 0f))
+            addNode(hit(0.2f, 0f, 0f))
+            addNode(hit(0.2f, 0.2f, 0f))
+        }
+
+    @Test
+    fun `switching the conduit re-sweeps the drawn tube`() {
+        val session = rightAngleRun()
+        assertEquals(
+            "the run starts as the default cable",
+            ConduitKind.CABLE,
+            session.state.value.preview?.spec?.kind,
+        )
+
+        val duct = ConduitSpec.duct(60f, 40f)
+        session.setSpec(duct)
+
+        assertEquals(
+            "the preview the HUD draws still holds the old profile",
+            duct,
+            session.state.value.preview?.spec,
+        )
+        assertEquals(duct, session.state.value.spec)
+    }
+
+    /**
+     * A 16 mm cable needs a 128 mm bend radius; two 20 cm legs can only make a 90 mm fillet, so
+     * the corner is a real complaint. A 60 × 40 duct needs 60 mm and is satisfied by the same
+     * corner - and the warning has to follow the conduit, not the history.
+     */
+    @Test
+    fun `a bend warning the new conduit does not need goes away`() {
+        val session = rightAngleRun()
+        assertEquals(
+            "the corner is tighter than a 16 mm cable allows",
+            RouteWarning.BEND_RADIUS_TOO_TIGHT,
+            session.state.value.warning,
+        )
+
+        session.setSpec(ConduitSpec.duct(60f, 40f))
+
+        assertEquals(
+            "a duct bends on this corner, so nothing is left to complain about",
+            RouteWarning.NONE,
+            session.state.value.warning,
+        )
+    }
+
+    @Test
+    fun `a corner that was widened loses its warning on the next frame`() {
+        // The derived warning used to be fed back in as a sticky one, so not even moving the
+        // anchors - the only way a measured corner can change - could clear it.
+        val factory = FakeAnchorFactory()
+        val session = rightAngleRun(factory)
+        assertEquals(RouteWarning.BEND_RADIUS_TOO_TIGHT, session.state.value.warning)
+
+        factory.anchors[0].currentPosition = Vec3(-1f, 0f, 0f)
+        factory.anchors[2].currentPosition = Vec3(0.2f, 1f, 0f)
+        session.onFrame()
+
+        assertEquals("the legs are a metre long now", 2.2f, session.state.value.lengthMeters, 1e-3f)
+        assertEquals(
+            "the corner is a 128 mm fillet now, which the cable takes",
+            RouteWarning.NONE,
+            session.state.value.warning,
+        )
     }
 }

@@ -2085,6 +2085,33 @@ def check_the_ply_header_keeps_the_run_names() -> None:
                  "when the size limit switches the layout (finding 178)")
 
 
+def check_a_derived_warning_can_be_cleared() -> None:
+    """A warning computed from the geometry is recomputed, never inherited (finding 179).
+
+    `RouteSession.recompute` publishes a warning and reads `state.warning` back on the next call,
+    so an action-raised warning is sticky by design. The bend-radius verdict is not one of those:
+    it comes *out* of that function, from the preview. Feeding it back made it permanent, and
+    `setSpec` - which swaps the conduit and therefore the radius the corner must meet - forgot to
+    rebuild the preview at all, so the verdict kept judging the old profile too.
+    """
+    session = ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" / "arengine" / "route" / "RouteSession.kt"
+    text = session.read_text(encoding="utf-8")
+    if "state.warning.isPresent ->" in text:
+        add(session, "the sticky branch takes every warning, including the one this function "
+                     "derives, so a bend-radius complaint can never be cleared (finding 179)")
+    elif "!= RouteWarning.BEND_RADIUS_TOO_TIGHT" not in text:
+        add(session, "nothing keeps the derived bend-radius warning out of the sticky branch "
+                     "(finding 179)")
+    start = text.find("fun setSpec(")
+    if start < 0:
+        add(session, "setSpec is gone - check how the conduit is switched (finding 179)")
+    else:
+        body = text[start:text.find("\n    }\n", start)]
+        if "previewDirty = true" not in body:
+            add(session, "switching the conduit does not rebuild the preview, so the tube and its "
+                         "bend verdict stay on the old profile (finding 179)")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -2141,6 +2168,7 @@ def main() -> int:
     check_a_failed_save_keeps_the_room()
     check_the_ellipsis_does_not_cut_a_character()
     check_the_ply_header_keeps_the_run_names()
+    check_a_derived_warning_can_be_cleared()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
