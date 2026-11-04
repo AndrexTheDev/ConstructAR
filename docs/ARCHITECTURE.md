@@ -160,6 +160,23 @@ to zero; and `IntegrationStats::voxelWeight` reports the evidence a frame added,
 `totalVoxelWeightExact()` is exactly the sum of it over every frame - the accounting identity that
 catches a fusion which is counted but not stored (finding 181's guard).
 
+**Net wall area and the drywall take-off** (`core/.../wall`). The first `:core` package that
+turns geometry into a *purchase order*. `wallSurface` subtracts each wall's openings as a **union**
+of axis-aligned rectangles - swept over the x edges the openings introduce, with the y spans merged
+inside each strip - so two windows that overlap take board off the wall once. That is not a detail:
+subtracting the sum removes board from a wall that is still there, and the estimate then comes out
+short, which is the failure that ends with a fitter in a half-boarded room. Openings that do not fit
+their wall are clipped to it **and counted**, with the reason enumerated (`NEGATIVE_SIZE`,
+`OUTSIDE_WALL`, `ABOVE_WALL`) rather than silently absorbed, because a window 20 cm past the end of
+its wall is a measurement the operator can check. `estimateDrywall` then applies the trade's
+numbers: boards of 2.50 x 1.25 m (one board is one wall height, which is why the default wall height
+is 2.50 m), CW studs at 62.5 cm centres so every board edge lands on metal (a run gets a stud at
+both ends - a 4 m wall is 7, not 6), UW track top and bottom, 29 screws per square metre of
+*installed* board (it is the board that is screwed, not the net wall), and 10 % waste on everything
+that is cut. A spec that cannot be built - zero spacing, zero board - returns `valid = false` with
+every number zero rather than dividing by it. Both entry points are pure and unit-tested; **nothing
+in `:app` calls them yet**, and this paragraph says so.
+
 **Manhattan-World frame** (`geometry/manhattan_world.cpp`). A room is meant to be orthogonal;
 the planes fitted from depth are not, because each carries its own noise and the pose graph's
 drift, and the error is systematic - two walls that should be 4.00 m apart read 4.03 m and the

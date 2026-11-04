@@ -52,6 +52,14 @@ metric depth field, a loop-closure pose graph (built and host-tested — *not ye
 scan pipeline*, see finding 98), thermal-aware degradation, and explicit handling for every way
 AR can fail on a site.
 
+**Drywall take-off** (`core/.../wall`, arithmetic and unit tests in place — **no screen calls it
+yet**): net wall area with the openings subtracted as a *union* (two windows that overlap take
+board off a wall once, not twice — double-subtracting is how an estimate comes out short), then
+boards at the standard 2.50 × 1.25 m, CW studs at 62.5 cm centres (a stud under every board edge),
+UW track top and bottom, 29 screws per square metre of installed board, and 10 % waste on
+everything that gets cut. An opening that does not fit its wall is clipped *and counted*, with the
+reason enumerated, rather than quietly absorbed.
+
 **Depth fusion policy.** ARCore depth is metric but holey; the network is dense but only
 relative. `AiDepthFusion` therefore lets the network **fill holes only** — a confident ARCore
 sample is never overwritten — after `MetricDepthCalibrator` fits `1/z = s·d + t` against
@@ -437,7 +445,9 @@ Known limitations, deliberately documented rather than hidden:
   read-modify-write of two arrays done by several workers, and only the sanitizer can see it when
   that update escapes the shard lock (finding 181). It reports none.
 * **JVM (`:core`)** — transform maths, plane fits and polygon containment, fillet smoothing,
-  measurement, tube/duct mesh invariants, BOM aggregation, the working-time clock, the money
+  measurement, net wall area with openings subtracted as a union (the overlap case included),
+  the drywall take-off's arithmetic (boards, studs per run, tracks, screws, waste),
+  tube/duct mesh invariants, BOM aggregation, the working-time clock, the money
   arithmetic (`Pricing`: rounding, both decimal separators, thousand dots, euro forced on a
   `pl-PL` phone), the photo-token naming contract and the third-party notice list the Help screen
   shows (every linked component attributed, only fee-free licences).
@@ -568,7 +578,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 715 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 735 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 272 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 272 checks, 0 failures, no data race reported |
