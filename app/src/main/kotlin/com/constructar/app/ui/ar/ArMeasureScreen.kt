@@ -129,6 +129,14 @@ fun ArMeasureScreen(
     onBack: () -> Unit,
     onRouteFinished: (com.constructar.core.model.ConduitRoute) -> Unit,
     onScanSummary: (com.constructar.core.model.ScanSummary) -> Unit,
+    /**
+     * The vectorised plan of the room, handed over once per committed run.
+     *
+     * The screen does not write the picture: the plan is data the caller stores (the card thumbnail
+     * is derived from it), and the screen has no repository. It is taken here because *this* is
+     * where the volume is still alive.
+     */
+    onFloorplan: (com.constructar.nativebridge.FloorplanPayload) -> Unit = {},
     onOpenExport: () -> Unit,
     /** A run a killed process left behind, loaded by the caller. Offered back once per entry. */
     draft: RouteDraft? = null,
@@ -295,6 +303,10 @@ fun ArMeasureScreen(
             // Snapshot the scan statistics with the first finished run: the protocol header must
             // describe the room as it was measured.
             onScanSummary(controller.scanSummary())
+            // The plan comes last: the summary is a measurement and the picture is a convenience,
+            // so if the worker is too busy to answer within its bounded wait, the run still keeps
+            // its statistics.
+            controller.finalFloorplan()?.let(onFloorplan)
         }
     }
     val leave: () -> Unit = {

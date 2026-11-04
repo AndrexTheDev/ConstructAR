@@ -15,6 +15,7 @@ import com.constructar.app.billing.EntitlementStore
 import com.constructar.app.billing.LicencePublicKey
 import com.constructar.app.data.DraftGate
 import com.constructar.app.data.ProjectRepository
+import com.constructar.app.data.RoomThumbnail
 import com.constructar.app.data.SiteSettings
 import com.constructar.app.data.UiPreferences
 import com.constructar.app.ui.FieldPhotos
@@ -713,6 +714,25 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
      * Called when a run is finished, so the protocol describes the room as it was scanned
      * rather than whatever the last frame happened to contain.
      */
+    /**
+     * Stores the room's card picture, derived from the plan the AR screen took at commit time.
+     *
+     * Nothing happens when the plan has no closed room in it: a doorway leaves the ring open, and
+     * drawing a wall across it would put a picture of a smaller room on the card. The card falls
+     * back to its placeholder, which is the truth - nobody has measured a closed room yet.
+     *
+     * No state change: the picture is a file next to the project, and the card that reads it belongs
+     * to a later step. The write is the repository's atomic path, and its result is not surfaced -
+     * a thumbnail is a convenience, and the run it pictures is already saved.
+     */
+    fun saveFloorplanThumbnail(plan: com.constructar.nativebridge.FloorplanPayload) {
+        val project = mutableState.value.openProject ?: return
+        val svg = RoomThumbnail.svg(plan) ?: return
+        viewModelScope.launch {
+            repository.saveThumbnail(project.id, svg)
+        }
+    }
+
     fun updateScanSummary(summary: com.constructar.core.model.ScanSummary) {
         val project = mutableState.value.openProject ?: return
         val updated = project.copy(scan = summary)

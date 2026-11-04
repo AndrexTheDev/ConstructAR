@@ -87,24 +87,30 @@ the tolerance could never be reached from a hit near its end, and would disappea
 room's geometry; the 4 cm crosshair snap above is a different rule, and still snaps to corners the
 *run* already has.
 
-**Room thumbnails** (`export/.../svg` — the generator, its figures and its refusals; **nothing
-calls it yet**: the outline now *has* a producer — `NativeSlamEngine.floorplan()` returns the
-vectorised plan over JNI — but the scan worker does not ask for one and `:app` writes no
-`thumbnail.svg` today): the home screen's
-card wants a picture of *that* room, and a JPEG of the camera frame is the wrong answer twice over
-— it carries the customer's kitchen into a file list, and it is 40 kB of pixels to say "4 x 3 m".
+**Room thumbnails** (`export/.../svg` + `app/.../data/RoomThumbnail.kt`): the home screen's card
+wants a picture of *that* room, and a JPEG of the camera frame is the wrong answer twice over — it
+carries the customer's kitchen into a file list, and it is 40 kB of pixels to say "4 x 3 m".
 `FloorplanSvg` writes a standalone SVG of the outline instead: a few hundred bytes, sharp at any
-size, drawn from the same numbers the protocol prints. One scale factor serves both axes (a
-stretch is exactly what makes opposite walls stop being parallel), the long side sets that scale
-and the drawing is centred in the square, the wall is a *physical* 10 cm so a 2 m bathroom and a
-20 m corridor both read right, and a 1 px floor keeps the walls of a 200 m hall visible. Numbers
-are written in the C locale: a decimal comma inside an SVG `points` list is a *separator*, so the
-picture would silently become a different polygon, and nothing anywhere would report it. The file
-holds no text at all — `:export` receives numbers and identifiers, `:app` owns every word (finding
-100's rule), and an unnamed `role="img"` is announced as a nameless image, so the card, which
-prints the room's name next to the drawing, is the accessible element. Only a real room is drawn:
-fewer than three corners, a NaN, a room under 10 cm or one over 200 m is refused with an
-enumerated reason rather than guessed at.
+size, drawn from the same numbers the protocol prints. One scale factor serves both axes (a stretch
+is exactly what makes opposite walls stop being parallel), the long side sets that scale and the
+drawing is centred in the square, the wall is a *physical* 10 cm so a 2 m bathroom and a 20 m
+corridor both read right, and a 1 px floor keeps the walls of a 200 m hall visible. Numbers are
+written in the C locale: a decimal comma inside an SVG `points` list is a *separator*, so the picture
+would silently become a different polygon, and nothing anywhere would report it. The file holds no
+text at all — `:export` receives numbers and identifiers, `:app` owns every word (finding 100's
+rule), and an unnamed `role="img"` is announced as a nameless image, so the card, which prints the
+room's name next to the drawing, is the accessible element. Only a real room is drawn: fewer than
+three corners, a NaN, a room under 10 cm or one over 200 m is refused with an enumerated reason
+rather than guessed at.
+
+The picture is **written**, at the moment a run is committed: the scan worker slices the volume
+while it is still alive (`TsdfScanPipeline.floorplan`, bounded to 400 ms and never called from a
+screen's thread), `RoomThumbnail` picks the room out of the plan — the largest *closed* loop, because
+a doorway leaves the ring open and joining it would draw a wall across the door — and the repository
+writes `files/projects/<id>/thumbnail.svg` through the same temp-file/`fsync`/rename path a project
+file uses. Deleting a room deletes its folder, so no orphan picture outlives the room it shows. What
+is **not** there yet: the card itself still shows a placeholder — nothing reads the SVG back. That is
+phase 5's work, and until then the file is written and unused.
 
 **Depth fusion policy.** ARCore depth is metric but holey; the network is dense but only
 relative. `AiDepthFusion` therefore lets the network **fill holes only** — a confident ARCore
@@ -533,7 +539,10 @@ Known limitations, deliberately documented rather than hidden:
   snapped), metric depth
   calibration (including "refuses to fit on noise"), routing/anchor behaviour, GLB/PLY/CSV
   structural validation, the SVG thumbnail (one scale for both axes, a physical wall width, the
-  C locale under a German default, and every refusal), the protocol's note for a capture that hit the scan limit, the rows of
+  C locale under a German default, and every refusal) and the picture the AR screen writes from a
+  plan (the largest closed loop wins, an open loop is never closed here, a bigger open loop never
+  beats a smaller closed one, the file lands in the room's own folder, an unsafe id and an
+  oversized SVG are refused, and deleting a room takes the file with it), the protocol's note for a capture that hit the scan limit, the rows of
   its summary, the order list's uncertain-hit note, the HUD's detail budget, the tracking
   monitor's steady state (a frame that changes nothing publishes nothing), the torch's refusal
   path (a camera that says no is not asked again), and the ten rules of the reticle stabiliser (a settled median, an
@@ -642,7 +651,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 824 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 838 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 287 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 287 checks, 0 failures, no data race reported |

@@ -231,6 +231,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onBack = { navController.popBackStack() },
                             onRouteFinished = { route -> viewModel.upsertRoute(route) },
                             onScanSummary = { summary -> viewModel.updateScanSummary(summary) },
+                            onFloorplan = { plan -> viewModel.saveFloorplanThumbnail(plan) },
                             onOpenExport = { navController.navigate(Routes.EXPORT) },
                             draft = state.pendingDraft,
                             onDraftChanged = { draft -> viewModel.saveDraft(draft) },

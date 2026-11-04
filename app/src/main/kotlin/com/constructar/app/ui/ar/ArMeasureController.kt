@@ -420,6 +420,16 @@ class ArMeasureController(private val context: Context) {
         sceneController = null
     }
 
+    /**
+     * The room's card picture, taken while the volume is still alive.
+     *
+     * Called when a run is committed, because that is the moment the operator has finished the room
+     * and the volume still holds the walls he walked; after `release()` the volume is gone and the
+     * picture could only be invented. Delegates to the scan worker (see
+     * `TsdfScanPipeline.floorplan`), which is the only thread allowed to touch the volume.
+     */
+    fun finalFloorplan(): com.constructar.nativebridge.FloorplanPayload? = pipeline.floorplan()
+
     /** Scan statistics for the protocol header: two numbers, both measured (finding 103). */
     fun scanSummary(): ScanSummary {
         val state = pipeline.state.value

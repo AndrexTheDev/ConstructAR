@@ -207,6 +207,50 @@ class ProjectRepositoryTest {
     }
 
     @Test
+    fun `the card picture lands in the room's own folder`(): Unit = runBlocking {
+        val project = repository.create("Kitchen")
+
+        val saved = repository.saveThumbnail(project.id, "<svg/>")
+
+        assertTrue(saved, "the write must land")
+        val file = File(File(projectsDirectory, project.id), RoomThumbnail.FILE_NAME)
+        assertTrue(file.isFile, "expected ${file.path}")
+        assertEquals("<svg/>", file.readText())
+        // The list reads the projects folder, so a per-room folder must not look like a room.
+        assertEquals(1, repository.list().projects.size)
+        assertEquals(0, repository.list().unreadable)
+    }
+
+    @Test
+    fun `a thumbnail id that could reach another folder is refused`(): Unit = runBlocking {
+        assertFalse(repository.saveThumbnail("../escape", "<svg/>"))
+        assertFalse(File(context.filesDir, "escape").exists())
+        assertFalse(File(context.filesDir, "projects/../escape").exists())
+    }
+
+    @Test
+    fun `an oversized picture is refused rather than written`(): Unit = runBlocking {
+        val project = repository.create("Workshop")
+        val huge = "x".repeat(ProjectRepository.MAX_THUMBNAIL_BYTES + 1)
+
+        assertFalse(repository.saveThumbnail(project.id, huge))
+        assertFalse(repository.thumbnailFileFor(project.id).exists())
+    }
+
+    @Test
+    fun `deleting a room takes its picture with it`(): Unit = runBlocking {
+        val project = repository.create("Attic")
+        repository.saveThumbnail(project.id, "<svg/>")
+        val file = repository.thumbnailFileFor(project.id)
+        assertTrue(file.isFile)
+
+        repository.delete(project.id)
+
+        assertFalse(file.exists(), "an orphaned picture is a picture of a room that is gone")
+        assertFalse(File(projectsDirectory, project.id).exists())
+    }
+
+    @Test
     fun `a corrupt file is reported as unreadable but is never deleted`(): Unit = runBlocking {
         repository.save(room())
         val file = File(projectsDirectory, "room-1.json")

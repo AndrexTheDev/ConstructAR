@@ -2851,6 +2851,53 @@ FLOORPLAN_HEADER_HPP = ROOT / "native-slam/src/main/cpp/geometry/floorplan.hpp"
 FLOORPLAN_PAYLOAD_KT = ROOT / "native-slam/src/main/kotlin/com/constructar/nativebridge/FloorplanPayload.kt"
 
 
+THUMBNAIL_CHAIN = (
+    ("ar-engine/src/main/kotlin/com/constructar/arengine/scan/TsdfScanPipeline.kt",
+     "dispatcher) { engine?.floorplan(",
+     "the scan worker no longer slices the volume for a plan"),
+    ("app/src/main/kotlin/com/constructar/app/ui/ar/ArMeasureController.kt",
+     "pipeline.floorplan(",
+     "the AR controller no longer asks the pipeline for one"),
+    ("app/src/main/kotlin/com/constructar/app/ui/ar/ArMeasureScreen.kt",
+     "controller.finalFloorplan()?.let(onFloorplan)",
+     "a committed run no longer hands the plan to the caller"),
+    ("app/src/main/kotlin/com/constructar/app/ui/AppRoot.kt",
+     "onFloorplan = { plan -> viewModel.saveFloorplanThumbnail(plan) }",
+     "the screen's plan never reaches the view model"),
+    ("app/src/main/kotlin/com/constructar/app/ProjectViewModel.kt",
+     "repository.saveThumbnail(project.id, svg)",
+     "the view model no longer writes the file"),
+    ("app/src/main/kotlin/com/constructar/app/data/ProjectRepository.kt",
+     "SafeFiles.writeAtomically(thumbnailFileFor(projectId), bytes)",
+     "the file is no longer written atomically"),
+)
+
+
+def check_the_card_picture_has_a_writer() -> None:
+    """The thumbnail is a chain of six links, and every break in it is silent (finding 197).
+
+    A card picture is written by a path that crosses four layers: the scan worker slices the volume
+    before the engine is freed, the AR controller asks for it, the screen hands it to its caller,
+    `AppRoot` routes it to the view model, and the repository writes the SVG next to the project.
+    There is no error at any of those joints - unplug one and the picture simply stops appearing,
+    months after the change, with the README still promising pictures. Nothing in either language
+    links the calls: the types line up at every step, which is exactly why a removal compiles.
+
+    So each link is named here, in the order the data travels, with the sentence the failure
+    deserves. The rule is deliberately a chain and not a "is this referenced" check: a link that is
+    called from somewhere else is still a broken chain, and this round's whole point is that the
+    chain runs.
+    """
+    for relative, marker, complaint in THUMBNAIL_CHAIN:
+        path = ROOT / relative
+        if not path.exists():
+            continue  # a missing file is already a finding above
+        if marker in path.read_text(encoding="utf-8"):
+            continue
+        add(path, f"{complaint} - the card picture stops being written here, and nothing else in "
+                  f"the tree reports it")
+
+
 def check_every_external_function_has_a_symbol() -> None:
     """A JNI name that does not match its C symbol is a runtime crash, not a compile error (finding 195).
 
@@ -3133,6 +3180,7 @@ def main() -> int:
     check_the_reticle_snap_stays_wired()
     check_exported_numbers_use_the_c_locale()
     check_project_imports_are_used()
+    check_the_card_picture_has_a_writer()
     check_every_external_function_has_a_symbol()
     check_the_floorplan_payload_header_matches()
     check_kotlin_structure()

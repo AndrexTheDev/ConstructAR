@@ -320,10 +320,27 @@ would be a length of conduit floating somewhere in the room.
 `thumbnail.svg` for the home screen's card — a few hundred bytes of polygon instead of a camera
 frame, drawn by `:export`'s `FloorplanSvg` from the outline in world metres (one scale for both
 axes, plan view: world `x` right, world `z` down, walls 10 cm thick to scale with a 1 px floor).
-Both halves exist now: `NativeSlamEngine.floorplan()` returns the vectorised outline over JNI and
-`FloorplanSvg` draws one. What is missing is the caller - the scan worker has to ask for a plan when
-a scan ends and the repository has to write the file - so **nothing writes `thumbnail.svg` yet** and
-the card has no picture.
+The chain that writes it, in the order the data travels:
+
+1. `TsdfScanPipeline.floorplan()` — `withContext(dispatcher)` puts the slice in the queue behind the
+   frame being integrated, so it takes the volume lock from the one thread that already owns it. A
+   bounded 400 ms wait: a picture is a convenience and the run must not wait for it.
+2. `ArMeasureController.finalFloorplan()` — called from `commitRun`, the moment a run is finished and
+   the volume still holds the walls that were walked. After `release()` the volume is gone.
+3. `ArMeasureScreen` hands the plan to `onFloorplan` (the screen has no repository, and does not
+   grow one for a picture).
+4. `ProjectViewModel.saveFloorplanThumbnail` → `RoomThumbnail.svg` — the largest **closed** loop is
+   the room; a doorway leaves the ring open, and closing it here would draw a wall across the door.
+5. `ProjectRepository.saveThumbnail` — `files/projects/<id>/thumbnail.svg` through
+   `SafeFiles.writeAtomically`, with the id token-checked and the text capped at 256 kB; `delete()`
+   removes the whole folder, so no orphan picture outlives its room.
+
+A per-room folder rather than a sibling file keeps `<id>.json` a single file that `list()` and
+`backupEntries()` read by extension; a folder is invisible to both. The picture is **not** in the
+backup: it draws a scan, and the scan is not backed up either.
+
+The card that will read it is phase 5's work; today the file is written and unread, and the README
+says so.
 
 Schema version `1`; `ProjectMigrations` is the place for the next one.
 
