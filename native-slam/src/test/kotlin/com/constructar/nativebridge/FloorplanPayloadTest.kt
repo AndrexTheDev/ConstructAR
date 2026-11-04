@@ -54,6 +54,13 @@ class FloorplanPayloadTest {
         return values.toFloatArray()
     }
 
+    /** Where the loop lengths start, given how many segments the payload carries. */
+    private fun loopLengthAt(segmentCount: Int): Int = FloorplanPayload.HEADER + segmentCount * 4
+
+    /** Where the loop closure flags start, after the lengths. */
+    private fun loopClosedAt(segmentCount: Int, loopCount: Int): Int =
+        loopLengthAt(segmentCount) + loopCount
+
     private val room = listOf(
         0f to 0f,
         4f to 0f,
@@ -132,7 +139,9 @@ class FloorplanPayloadTest {
 
     @Test
     fun `a bare header says no plan`() {
-        val parsed = FloorplanPayload.parse(pack(valid = false, closed = false, area = 0f, perimeter = 0f))!!
+        val parsed = FloorplanPayload.parse(
+            pack(valid = false, closed = false, area = 0f, perimeter = 0f, occupiedCells = 0),
+        )!!
 
         assertTrue(parsed.segments.isEmpty())
         assertTrue(parsed.loops.isEmpty())
@@ -249,9 +258,26 @@ class FloorplanPayloadTest {
     @Test
     fun `a fractional loop length is refused instead of truncated`() {
         val payload = pack(loopLengths = listOf(4), loopClosed = listOf(true), outline = room)
-        payload[FloorplanPayload.HEADER + 4 * walls.size] = 2.5f
+        payload[loopLengthAt(segmentCount = 0)] = 2.5f
 
         assertNull(FloorplanPayload.parse(payload))
+    }
+
+    @Test
+    fun `a closure flag is read from the flag region, not from a length`() {
+        val payload = pack(
+            segments = walls,
+            loopLengths = listOf(4),
+            loopClosed = listOf(true),
+            outline = room,
+        )
+
+        // Writing 0 into the flag's own slot must open the loop; writing it into the length region
+        // would truncate the loop instead, and a case that cannot tell those apart proves nothing.
+        assertTrue(FloorplanPayload.parse(payload)!!.loops[0].closed)
+        payload[loopClosedAt(segmentCount = walls.size, loopCount = 1)] = 0f
+        assertFalse(FloorplanPayload.parse(payload)!!.loops[0].closed)
+        assertEquals(4, FloorplanPayload.parse(payload)!!.loops[0].points.size)
     }
 
     @Test
