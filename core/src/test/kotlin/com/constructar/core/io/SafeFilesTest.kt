@@ -134,4 +134,102 @@ class SafeFilesTest {
         assertNotNull(directory.listFiles()?.firstOrNull { it.name == "project.json" })
         assertTrue(directory.listFiles()?.none { it.name.endsWith(".tmp") } == true)
     }
+
+    /**
+     * Finding 176: the fallback used to delete the old file and only then rename the new one into
+     * place. A filesystem that refuses both moves left no file at all — and the fallback only
+     * runs where the ordinary save already failed, so the delete landed on a save that was going
+     * wrong anyway. The old version is moved aside instead and comes back if the swap fails.
+     */
+    @Test
+    fun `a filesystem that refuses both moves keeps the old file`() {
+        val target = File(directory, "project.json").apply { writeText("the only copy") }
+        val temporary = File(directory, "project.json.7.tmp").apply { writeText("replacement") }
+        val backup = File(directory, "project.json.9.bak")
+
+        val written = SafeFiles.replaceOverExisting(target, temporary, backup) { _, _ -> false }
+
+        assertFalse("a move that is refused is a failed write", written)
+        assertEquals("the old version is the only copy there is", "the only copy", target.readText())
+        assertFalse("the temporary of a failed write is worthless", temporary.exists())
+        assertFalse("nothing may be left aside", backup.exists())
+    }
+
+    @Test
+    fun `the old version comes back when the new one does not land`() {
+        val target = File(directory, "project.json").apply { writeText("the only copy") }
+        val temporary = File(directory, "project.json.7.tmp").apply { writeText("replacement") }
+        val backup = File(directory, "project.json.9.bak")
+        var hop = 0
+
+        val written = SafeFiles.replaceOverExisting(target, temporary, backup) { from, to ->
+            hop++
+            // The first move (old file aside) works, the second (new file in) is refused.
+            hop != 2 && from.renameTo(to)
+        }
+
+        assertFalse("the new version never arrived", written)
+        assertEquals("the old version is back at its own name", "the only copy", target.readText())
+        assertEquals(
+            "only the room itself may remain",
+            listOf("project.json"),
+            directory.listFiles()?.map { it.name }?.sorted(),
+        )
+    }
+
+    @Test
+    fun `the swap succeeds on a filesystem that needs two moves`() {
+        val target = File(directory, "project.json").apply { writeText("old") }
+        val temporary = File(directory, "project.json.7.tmp").apply { writeText("replacement") }
+        val backup = File(directory, "project.json.9.bak")
+        var hop = 0
+
+        val written = SafeFiles.replaceOverExisting(target, temporary, backup) { from, to ->
+            hop++
+            assertTrue("the fallback is two moves, not a loop", hop <= 3)
+            from.renameTo(to)
+        }
+
+        assertTrue("two moves are enough", written)
+        assertEquals("replacement", target.readText())
+        assertEquals(
+            "the old version and the temporary are both gone",
+            listOf("project.json"),
+            directory.listFiles()?.map { it.name }?.sorted(),
+        )
+    }
+
+    @Test
+    fun `a replacement that died between its two moves is put back on the next start`() {
+        // The crash window the fallback opens: the old file is aside, the new one never landed.
+        File(directory, "project.json.3.bak").writeText("the last good version")
+
+        assertEquals(1, SafeFiles.clearStaleTemporaries(directory))
+
+        assertEquals(
+            "the room is back where the repository looks for it",
+            "the last good version",
+            File(directory, "project.json").readText(),
+        )
+        assertTrue(
+            "the rescued backup is not left behind",
+            directory.listFiles()?.none { it.name.endsWith(SafeFiles.BACKUP_SUFFIX) } == true,
+        )
+    }
+
+    @Test
+    fun `a backup beside a living room is only debris`() {
+        File(directory, "project.json").writeText("current")
+        File(directory, "project.json.4.bak").writeText("stale")
+        File(directory, "notes.bak").writeText("not ours - no serial, so not touched")
+
+        assertEquals(1, SafeFiles.clearStaleTemporaries(directory))
+
+        assertEquals(
+            "the living room is not overwritten",
+            "current",
+            File(directory, "project.json").readText(),
+        )
+        assertTrue("a foreign .bak is left alone", File(directory, "notes.bak").exists())
+    }
 }

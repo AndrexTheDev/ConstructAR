@@ -2027,6 +2027,29 @@ def check_the_appendix_prints_the_photos_the_screen_holds() -> None:
         add(screen, "the export screen decodes a photo itself, which is the second read the "
                     "appendix never needed (finding 175)")
 
+def check_a_failed_save_keeps_the_room() -> None:
+    """The rename-over fallback moves the old file aside instead of deleting it (finding 176).
+
+    `writeAtomically` steps aside to "delete the target, then rename" on filesystems that refuse
+    to rename over an existing file. Deleting first destroys the old version before the new one
+    is in place: on a volume that refuses both moves - which is the only place this branch ever
+    runs - a failed save took the room with it. The old file is moved to `<name>.<serial>.bak`
+    instead, put back if the second move fails, and `clearStaleTemporaries` restores it on the
+    next start when the process died between the two moves.
+    """
+    safe_files = ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" / "io" / "SafeFiles.kt"
+    text = safe_files.read_text(encoding="utf-8")
+    if "target.delete()" in text:
+        add(safe_files, "the fallback deletes the old file before the new one is in place, so a "
+                        "refused rename leaves no room at all (finding 176)")
+    if "fun replaceOverExisting(" not in text:
+        add(safe_files, "the rename-over fallback is gone - check how a refused rename is handled "
+                        "(finding 176)")
+    if "BACKUP_SUFFIX" not in text:
+        add(safe_files, "nothing puts back a room whose replacement died between the two moves "
+                        "(finding 176)")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -2080,6 +2103,7 @@ def main() -> int:
     check_the_fusion_pass_reuses_its_planes()
     check_the_protocol_notes_can_turn_the_page()
     check_the_appendix_prints_the_photos_the_screen_holds()
+    check_a_failed_save_keeps_the_room()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
