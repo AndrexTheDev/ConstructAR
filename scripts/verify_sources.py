@@ -2839,6 +2839,42 @@ def first_call_argument(code: str, open_paren: int) -> str:
     return code[start:]
 
 
+PROJECT_IMPORT = re.compile(
+    r"^import\s+(com\.constructar\.[\w.]+)(?:\s+as\s+(\w+))?\s*$", re.MULTILINE
+)
+
+
+def check_project_imports_are_used() -> None:
+    """An `import com.constructar.…` with no use is a rename that was half done (finding 194).
+
+    Round 91 renamed a nested type and left one reference behind. The compiler said only
+    `Unresolved reference 'Drawn'` at a line that read `result is Result.Drawn` - because `Result`
+    resolved perfectly well: to `kotlin.Result`, which the compiler imports into every file. So the
+    stale name compiled as far as the type, failed on its member, and the message pointed at the
+    nested class rather than at the rename. Nothing warns about the import that was then unused:
+    Kotlin has no unused-import warning, and `allWarningsAsErrors` cannot refuse a diagnostic that
+    is never emitted.
+
+    An import of a project type that the file never mentions is exactly the fingerprint of that
+    half-done rename, and it is the only part of it a machine can see without a compiler.
+    """
+    for path in tracked_sources():
+        if path.suffix != ".kt":
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in PROJECT_IMPORT.finditer(text):
+            qualified = match.group(1)
+            alias = match.group(2)
+            simple = alias if alias else qualified.rsplit(".", 1)[-1]
+            rest = text[:match.start()] + text[match.end():]
+            if re.search(r"\b" + re.escape(simple) + r"\b", rest):
+                continue
+            add(path, f"imports `{qualified}` and never mentions `{simple}` - the usual cause is a "
+                      f"rename that left a stale reference behind, and a stale name that happens "
+                      f"to exist in the Kotlin standard library (`Result`, `Unit`, `Nothing`) "
+                      f"compiles as far as the type and fails on the member")
+
+
 def check_exported_numbers_use_the_c_locale() -> None:
     """Every number that leaves the device is formatted in the C locale (finding 193).
 
@@ -3028,6 +3064,7 @@ def main() -> int:
     check_a_stable_value_is_asserted_once()
     check_the_reticle_snap_stays_wired()
     check_exported_numbers_use_the_c_locale()
+    check_project_imports_are_used()
     check_kotlin_structure()
     check_resource_xml()
     check_licence_key()

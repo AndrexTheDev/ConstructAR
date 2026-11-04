@@ -7,7 +7,6 @@
 package com.constructar.core.mesh
 
 import com.constructar.core.geo.CurveFrame
-import com.constructar.core.geo.PathSmoother
 import com.constructar.core.geo.SmoothedPath
 import com.constructar.core.geo.SurfaceAlignment
 import com.constructar.core.math.Vec3

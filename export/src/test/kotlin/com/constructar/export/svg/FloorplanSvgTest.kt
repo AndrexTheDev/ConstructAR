@@ -35,8 +35,8 @@ class FloorplanSvgTest {
 
     private fun drawn(corners: List<Corner>, options: Options = Options()): FloorplanSvg.Drawing {
         val result = FloorplanSvg.render(corners, options)
-        assertTrue("expected a drawing, got $result", result is Result.Drawn)
-        return (result as Result.Drawn).drawing
+        assertTrue("expected a drawing, got $result", result is Output.Drawn)
+        return (result as Output.Drawn).drawing
     }
 
     private fun pointsOf(svg: String): String {
