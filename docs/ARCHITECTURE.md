@@ -136,6 +136,30 @@ reason. A doorway leaves the ring open; the call then reports no area and no seg
 joining the last wall run to the first, which would draw a wall across the doorway. Manhattan angle
 snapping and door/window classification are the next step and are not claimed.
 
+**Semantic masking** (`geometry/surface_mask.cpp`) sits between the slice and the vectoriser,
+because a waist-height cut is not a cut through walls: it also crosses every table, counter and
+workbench in the room, and a horizontal patch handed to a 2D vectoriser becomes a wall through the
+middle of the plan, a partition in the deliverable and a wall area the material estimate pays for.
+The separator is the surface normal, which costs nothing extra because a TSDF's gradient *is* the
+normal: `sliceSurfacesAtHeight` takes a central difference over the observed voxels in the band
+(one-sided where only one side was observed) and hands back oriented points. The mask keeps a point
+when its normal is within `maxTiltFromVerticalDegrees` (20°) of vertical, and counts what it
+dropped: horizontal patches in one bucket, points whose normal could not be measured in another.
+Unmeasured points are *not* admitted - letting them through would reintroduce exactly the phantoms
+the mask exists to remove - and the counts are published so a slice made mostly of them is visible
+as such.
+
+**Distance-weighted fusion.** Every observation is weighted by 1/Z² (`observationWeight`, clamped
+to [1/36, 4]), because a depth camera's error grows with range: without it, one frame taken from
+across the room pulls as hard on a voxel as fifty frames taken at arm's length. The weight is
+applied inside `fuseVoxel`, under the shard lock, and the running average uses it - so the
+observations that are worth more are the ones that decide where the surface is. Two consequences
+worth naming: the voxel weight array stopped being a count and became 16-bit fixed point in
+1/256ths (`TsdfVolume::kWeightScale`), since a flat array would have truncated a 0.0625 observation
+to zero; and `IntegrationStats::voxelWeight` reports the evidence a frame added, so the volume's
+`totalVoxelWeightExact()` is exactly the sum of it over every frame - the accounting identity that
+catches a fusion which is counted but not stored (finding 181's guard).
+
 **Manhattan-World frame** (`geometry/manhattan_world.cpp`). A room is meant to be orthogonal;
 the planes fitted from depth are not, because each carries its own noise and the pose graph's
 drift, and the error is systematic - two walls that should be 4.00 m apart read 4.03 m and the

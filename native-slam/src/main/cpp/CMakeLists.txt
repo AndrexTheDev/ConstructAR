@@ -31,6 +31,7 @@ set(SLAM_SOURCES
     calibration/tag_scale.cpp
     geometry/plane_fit.cpp
     geometry/floorplan.cpp
+    geometry/surface_mask.cpp
     slam/rtabmap_bridge.cpp
 )
 

@@ -116,6 +116,16 @@ struct IntegrationStats {
   int blocksTotal = 0;
   double milliseconds = 0.0;
   bool hitBlockBudget = false;
+  /**
+   * Sum of the weights this frame's observations added, i.e. the evidence gained.
+   *
+   * Not the same as `voxelUpdates`: observations are weighted by 1/Z² (see
+   * [observationWeight]), so a frame at 4 m adds a sixteenth of what the same frame adds at 1 m,
+   * and a voxel already at `maxWeight` adds nothing at all. The volume's
+   * `totalVoxelWeightExact()` equals the sum of this over every frame that was never reset - the
+   * identity the host suite asserts.
+   */
+  double voxelWeight = 0.0;
 };
 
 /** Extracted triangle mesh, ready to upload to Filament or write to PLY/GLB. */
@@ -135,6 +145,16 @@ class TsdfVolume {
   static constexpr int kResolution = 8;
   static constexpr int kVoxelsPerBlock = kResolution * kResolution * kResolution;
   static constexpr int kShardCount = 64;
+  /**
+   * Voxel weights are stored as 16-bit fixed point, scaled by this factor.
+   *
+   * They used to be plain counts, which was exact while every observation weighed 1. Weighting by
+   * 1/Z² makes them fractional (0.25 at 2 m), and truncating that to an integer would throw the
+   * observation away entirely. A float per voxel would double the block (a 160 000-block budget is
+   * already 160 MB of weights), so the array stays 16-bit and the unit becomes 1/256 of an
+   * observation: `maxWeight` 64 fits in 16384 of 65535.
+   */
+  static constexpr float kWeightScale = 256.f;
 
   explicit TsdfVolume(const TsdfConfig& config);
 
@@ -166,6 +186,30 @@ class TsdfVolume {
    */
   std::vector<Vec3> sliceSurfaceAtHeight(float heightMetres, float bandMetres) const;
 
+  /**
+   * The same slice, with each voxel's surface normal.
+   *
+   * The normal is the SDF's gradient, taken by central difference over the observed voxels inside
+   * the band (one-sided where only one side was observed, and zero where neither was), which is
+   * the same quantity the mesher's vertex normals follow. It is what the semantic mask needs: at
+   * waist height a slice crosses tables and counters as well as walls, and only the normal tells
+   * a horizontal patch from a vertical one.
+   *
+   * Sorted by voxel index, so two calls on one volume return the same order.
+   */
+  std::vector<OrientedPoint> sliceSurfacesAtHeight(float heightMetres, float bandMetres) const;
+
+  /**
+   * Weight of one observation at `depthMetres`, the 1/Z² confidence of the depth sensor.
+   *
+   * A depth camera's error grows with range, so a reading at 1 m is worth sixteen of the same
+   * pixel at 4 m in the running average. Before this the weight was a flat 1, which let a wall
+   * seen once from across the room pull against the same wall seen fifty times from arm's length.
+   * Clamped to [1/36, 4]: at 6 m (the integration far limit) an observation still counts for
+   * something, and a reading at half a metre cannot outvote the whole frame.
+   */
+  static float observationWeight(float depthMetres);
+
   void reset();
 
   size_t blockCount() const { return blockCount_.load(std::memory_order_relaxed); }
@@ -179,6 +223,9 @@ class TsdfVolume {
    * thread breaks it, which is how the unsynchronised fusion showed up (finding 181).
    */
   size_t totalVoxelWeight() const;
+
+  /** The same sum in observation units, without the fixed-point rounding (see [kWeightScale]). */
+  double totalVoxelWeightExact() const;
   size_t voxelCount() const { return blockCount() * static_cast<size_t>(kVoxelsPerBlock); }
   const TsdfConfig& config() const { return config_; }
 
@@ -200,6 +247,8 @@ class TsdfVolume {
     bool written = false;
     /** A block was created for it, and this frame is the first to touch that block. */
     bool allocated = false;
+    /** How much evidence it added: the weight requested, less whatever `maxWeight` refused. */
+    float weightApplied = 0.f;
   };
 
   /**
@@ -216,9 +265,12 @@ class TsdfVolume {
    * (finding 181). Fusing inside the lock the lookup already takes costs nothing extra.
    *
    * @param normalizedSdf observation, already divided by the truncation distance
+   * @param weight evidence this observation carries (see [observationWeight]), in observations;
+   *        the carve pass passes 1 because "the camera saw through here" is not a range reading
    * @param existingOnly the carve pass: never allocates, and skips voxels without evidence
    */
-  Fusion fuseVoxel(int32_t ix, int32_t iy, int32_t iz, float normalizedSdf, bool existingOnly = false);
+  Fusion fuseVoxel(int32_t ix, int32_t iy, int32_t iz, float normalizedSdf, float weight = 1.f,
+                   bool existingOnly = false);
 
   /** Copies the (res+1)³ voxel grid covering block (bx,by,bz); 0 where unobserved. */
   void gatherBlockGrid(int32_t bx, int32_t by, int32_t bz, float* out) const;

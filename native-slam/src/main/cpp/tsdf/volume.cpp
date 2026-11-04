@@ -17,6 +17,23 @@
 namespace constructar {
 namespace {
 
+/** Exact 21-bits-per-axis voxel key, for neighbour lookups (|index| < 2^20). */
+std::int64_t voxelKey(int32_t x, int32_t y, int32_t z) {
+  return (static_cast<std::int64_t>(x & 0x1FFFFF) << 42) |
+         (static_cast<std::int64_t>(y & 0x1FFFFF) << 21) |
+         static_cast<std::int64_t>(z & 0x1FFFFF);
+}
+
+/** Axis 0 = x, 1 = y, 2 = z (the shift voxelKey put it at). */
+int32_t unpackAxis(std::int64_t key, int axis) {
+  const std::int64_t raw = (key >> (21 * axis)) & 0x1FFFFF;
+  return raw >= (static_cast<std::int64_t>(1) << 20) ? static_cast<int32_t>(raw - (static_cast<std::int64_t>(1) << 21))
+                                                     : static_cast<int32_t>(raw);
+}
+
+}  // namespace
+namespace {
+
 inline float clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
 /** Packs three signed 21-bit block coordinates into one key (±335 km at 16 cm blocks). */
@@ -109,14 +126,27 @@ TsdfVolume::Touch TsdfVolume::findOrCreateBlockLocked(int32_t bx, int32_t by, in
 }
 
 size_t TsdfVolume::totalVoxelWeight() const {
-  size_t total = 0;
+  return static_cast<size_t>(totalVoxelWeightExact() + 0.5);
+}
+
+double TsdfVolume::totalVoxelWeightExact() const {
+  // The stored value is 16-bit fixed point in units of 1/256 of an observation, so the sum is
+  // accumulated in double and divided once - summing 1/256ths as integers would overflow a 32-bit
+  // counter on a large volume, and rounding each voxel first would lose every distant observation.
+  double total = 0.0;
   for (const auto& shard : shards_) {
     std::lock_guard<std::mutex> lock(shard->mutex);
     for (const auto& block : shard->blocks) {
-      for (int i = 0; i < kVoxelsPerBlock; ++i) total += block.weight[i];
+      for (int i = 0; i < kVoxelsPerBlock; ++i) total += static_cast<double>(block.weight[i]);
     }
   }
-  return total;
+  return total / static_cast<double>(kWeightScale);
+}
+
+float TsdfVolume::observationWeight(float depthMetres) {
+  if (!std::isfinite(depthMetres) || !(depthMetres > 0.f)) return 0.f;
+  const float weight = 1.f / (depthMetres * depthMetres);
+  return std::min(std::max(weight, 1.f / 36.f), 4.f);
 }
 
 const TsdfVolume::Block* TsdfVolume::findBlock(int32_t bx, int32_t by, int32_t bz) const {
@@ -129,7 +159,7 @@ const TsdfVolume::Block* TsdfVolume::findBlock(int32_t bx, int32_t by, int32_t b
 }
 
 TsdfVolume::Fusion TsdfVolume::fuseVoxel(int32_t ix, int32_t iy, int32_t iz, float normalizedSdf,
-                                         bool existingOnly) {
+                                         float weight, bool existingOnly) {
   const int32_t bx = floorDiv(ix, kResolution);
   const int32_t by = floorDiv(iy, kResolution);
   const int32_t bz = floorDiv(iz, kResolution);
@@ -155,13 +185,23 @@ TsdfVolume::Fusion TsdfVolume::fuseVoxel(int32_t ix, int32_t iy, int32_t iz, flo
 
   const int idx = ((iz - bz * kResolution) * kResolution + (iy - by * kResolution)) * kResolution +
                   (ix - bx * kResolution);
-  const float oldWeight = static_cast<float>(block->weight[idx]);
+  const float oldWeight = static_cast<float>(block->weight[idx]) / kWeightScale;
   // A ghost only lives where something was observed once.
   if (existingOnly && oldWeight <= 0.f) return result;
-  const float newWeight = std::min(oldWeight + 1.f, config_.maxWeight);
-  block->sdf[idx] = oldWeight > 0.f ? (block->sdf[idx] * oldWeight + normalizedSdf) / newWeight : normalizedSdf;
-  block->weight[idx] = static_cast<uint16_t>(std::min(newWeight, 65535.f));
+  if (!(weight > 0.f)) return result;
+  // `maxWeight` caps how much evidence one voxel may hold; the 16-bit array caps it again at
+  // 65535/256 = 256 observations. Both refusals are subtracted from what is reported, so the
+  // volume's total weight and the sum of `IntegrationStats::voxelWeight` stay the same number.
+  const float rawWeight = std::min(oldWeight + weight, config_.maxWeight) * kWeightScale;
+  const float storedWeight = std::floor(std::min(rawWeight, 65535.f)) / kWeightScale;
+  const float applied = storedWeight - oldWeight;
+  if (!(applied > 0.f)) return result;  // finer than the array can resolve: nothing was stored
+  block->sdf[idx] = oldWeight > 0.f
+                        ? (block->sdf[idx] * oldWeight + normalizedSdf * applied) / storedWeight
+                        : normalizedSdf;
+  block->weight[idx] = static_cast<uint16_t>(storedWeight * kWeightScale);
   result.written = true;
+  result.weightApplied = applied;
   return result;
 }
 
@@ -184,6 +224,7 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
   int rays = 0;
   int updates = 0;
   int allocated = 0;
+  double weightApplied = 0.0;
 
   for (int v = rowBegin; v < rowEnd; v += pixelStep) {
     const uint16_t* row = frame.depth + static_cast<int64_t>(v) * frame.rowStrideElements;
@@ -230,7 +271,7 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
           // behaviour - spent 40 % of the voxels in the volume on empty air: 444 blocks for a
           // single wall became 1 196 and every later gather walked them (finding 111).
           // Free space is fully outside: sdf = +1 in normalised units.
-          if (fuseVoxel(ix, iy, iz, 1.f, /*existingOnly=*/true).written) ++updates;
+          if (fuseVoxel(ix, iy, iz, 1.f, 1.f, /*existingOnly=*/true).written) ++updates;
         }
       }
       const int steps = std::max(2, static_cast<int>(std::ceil((zEnd - zStart) / vs)));
@@ -258,10 +299,16 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
         const float sdf = d - z;
         const float clamped = clampf(sdf / trunc, -1.f, 1.f);
 
-        // Lookup, allocation and fusion in one locked step (finding 181).
-        const Fusion fused = fuseVoxel(ix, iy, iz, clamped);
+        const float weight = observationWeight(d);
+        // Lookup, allocation and fusion in one locked step (finding 181). The observation is
+        // weighted by its range: a depth reading's error grows with Z, so the same pixel at 4 m
+        // is worth a sixteenth of one at 1 m in the running average.
+        const Fusion fused = fuseVoxel(ix, iy, iz, clamped, weight);
         if (fused.allocated) ++allocated;
-        if (fused.written) ++updates;
+        if (fused.written) {
+          ++updates;
+          weightApplied += fused.weightApplied;
+        }
       }
     }
   }
@@ -269,6 +316,7 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
   stats.raysProcessed += rays;
   stats.voxelUpdates += updates;
   stats.blocksAllocated += allocated;
+  stats.voxelWeight += weightApplied;
 }
 
 IntegrationStats TsdfVolume::integrate(const DepthFrameView& frame, int pixelStep) {
@@ -391,6 +439,92 @@ std::vector<Vec3> TsdfVolume::sliceSurfaceAtHeight(float heightMetres, float ban
                              (static_cast<float>(block.bz * kResolution + iz) + 0.5f) * voxelSize));
       }
     }
+  }
+  return slice;
+}
+
+std::vector<OrientedPoint> TsdfVolume::sliceSurfacesAtHeight(float heightMetres,
+                                                           float bandMetres) const {
+  std::vector<OrientedPoint> slice;
+  if (!std::isfinite(heightMetres) || !(bandMetres >= 0.f)) return slice;
+
+  std::lock_guard<std::mutex> lock(integrationMutex_);
+  const float vs = config_.voxelSize;
+  // One voxel of margin either side of the band, because the gradient needs a neighbour to look at.
+  const int32_t yLow = static_cast<int32_t>(std::floor((heightMetres - bandMetres) / vs)) - 1;
+  const int32_t yHigh = static_cast<int32_t>(std::floor((heightMetres + bandMetres) / vs)) + 1;
+
+  // Voxel key -> SDF, for every observed voxel in the band plus one voxel either side. Exact
+  // packing (21 bits per axis, ±1 048 575 voxels) so neighbours can be looked up without a hash
+  // collision deciding a normal.
+  std::unordered_map<std::int64_t, float> observed;
+  std::vector<std::int64_t> keys;
+  for (const auto& shard : shards_) {
+    std::lock_guard<std::mutex> shardLock(shard->mutex);
+    for (const auto& block : shard->blocks) {
+      for (int local = 0; local < kVoxelsPerBlock; ++local) {
+        if (block.weight[local] == 0) continue;  // never observed
+        const int32_t gx = block.bx * kResolution + (local & (kResolution - 1));
+        const int32_t gy = block.by * kResolution + ((local >> 3) & (kResolution - 1));
+        const int32_t gz = block.bz * kResolution + ((local >> 6) & (kResolution - 1));
+        if (gy < yLow || gy > yHigh) continue;
+        const std::int64_t key = voxelKey(gx, gy, gz);
+        if (observed.emplace(key, block.sdf[local]).second) keys.push_back(key);
+      }
+    }
+  }
+  std::sort(keys.begin(), keys.end());
+
+  const auto sdfAt = [&observed](std::int64_t key, float& out) {
+    const auto it = observed.find(key);
+    if (it == observed.end()) return false;
+    out = it->second;
+    return true;
+  };
+  const auto gradientAlong = [&sdfAt](std::int64_t centre, int axis, float& out) {
+    const std::int64_t stride = static_cast<std::int64_t>(1) << (21 * (2 - axis));
+    float centreValue = 0.f, plus = 0.f, minus = 0.f;
+    if (!sdfAt(centre, centreValue)) return false;
+    const bool hasPlus = sdfAt(centre + stride, plus);
+    const bool hasMinus = sdfAt(centre - stride, minus);
+    if (hasPlus && hasMinus) {
+      out = (plus - minus) * 0.5f;
+      return true;
+    }
+    if (hasPlus) {
+      out = plus - centreValue;
+      return true;
+    }
+    if (hasMinus) {
+      out = centreValue - minus;
+      return true;
+    }
+    return false;
+  };
+
+  for (const std::int64_t key : keys) {
+    const float value = observed[key];
+    if (std::fabs(value) > 0.5f) continue;  // not a surface voxel
+    const int32_t gx = unpackAxis(key, 2);
+    const int32_t gy = unpackAxis(key, 1);
+    const int32_t gz = unpackAxis(key, 0);
+    const float y = (static_cast<float>(gy) + 0.5f) * vs;
+    if (std::fabs(y - heightMetres) > bandMetres) continue;
+
+    Vec3 gradient;
+    bool any = false;
+    for (int axis = 0; axis < 3; ++axis) {
+      float component = 0.f;
+      if (gradientAlong(key, axis, component)) {
+        gradient[axis] = component;
+        any = true;
+      }
+    }
+    // A voxel whose six neighbours were all unobserved has no measurable direction. It is emitted
+    // with a zero normal rather than a made-up one, and the mask counts those separately.
+    const float length = gradient.length();
+    const Vec3 normal = (any && length > 1e-6f) ? gradient / length : Vec3(0.f, 0.f, 0.f);
+    slice.push_back(OrientedPoint{voxelCenter(gx, gy, gz), normal});
   }
   return slice;
 }

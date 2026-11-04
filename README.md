@@ -315,6 +315,7 @@ g++ -std=c++20 -O2 -pthread -I native-slam/src/main/cpp \
     native-slam/src/main/cpp/geometry/manhattan_world.cpp \
     native-slam/src/main/cpp/geometry/plane_fit.cpp \
     native-slam/src/main/cpp/geometry/floorplan.cpp \
+    native-slam/src/main/cpp/geometry/surface_mask.cpp \
     native-slam/src/main/cpp/calibration/tag_scale.cpp \
     native-slam/src/main/cpp/slam/rtabmap_bridge.cpp \
     native-slam/src/main/cpp/tests/host_tests.cpp -o /tmp/host_tests && /tmp/host_tests
@@ -378,7 +379,7 @@ Known limitations, deliberately documented rather than hidden:
 
 ## Testing
 
-* **Native (C++) — 229 assertions, all green**, exercised with plain `g++` (no Android SDK):
+* **Native (C++) — 272 assertions, all green**, exercised with plain `g++` (no Android SDK):
   SE(3) exp/log round trip, TSDF integration on synthetic depth, sphere/wall reconstruction
   areas and extents, a 30°-tilted plane (which pins the depth convention), free-space carving
   (a ghost disappears, the real wall does not), triangle budget, invalid input, pose-graph
@@ -412,8 +413,20 @@ Known limitations, deliberately documented rather than hidden:
   ~2 % high — measured +1.25 % on the rectangle, +1.7 % on the L, +2.4 % on the triangle, and the
   suite's tolerance is one-sided because reading *low* would mean a lost wall; and a doorway opens
   the ring, so a scan with the door open reports **no** area and **no** segments rather than
-  closing the gap with a wall that is not there. Gap classification is the next step. Host-tested
-  and **not yet wired**: no JNI symbol, no caller, so no plan on any screen comes from it yet.
+  closing the gap with a wall that is not there. Gap classification is the next step.
+* **Semantic masking and distance-weighted fusion** — two pieces the slice needs to be usable. A
+  waist-height cut crosses tables, counters and workbenches as well as walls, and a horizontal
+  patch drawn as a wall puts a partition through the middle of the room: `maskVerticalSurfaces`
+  keeps a point only when the surface normal is within 20° of vertical, which is the SDF gradient
+  the slice already carries (`sliceSurfacesAtHeight`), and it publishes how many points it dropped
+  as horizontal and how many had no measurable normal rather than guessing either. Measured on a
+  synthetic frame: a vertical wall keeps all 2 580 of its points, the same plane seen by a camera
+  looking straight up is 100 % dropped. And observations are now weighted by **1/Z²**, so a reading
+  at 1 m carries sixteen times the authority of the same pixel at 4 m in the voxel's running
+  average (clamped to [1/36, 4]); the evidence a frame deposits per voxel write is asserted to be
+  exactly that number, so a helper that never reaches the integrator fails. Fractional weights are
+  why the block's 16-bit weight array became fixed point in 1/256ths (`kWeightScale`) instead of a
+  count. Both are host-tested and **not yet wired**: no JNI symbol, no caller.
 * **AprilTag — detector contract, no detector.** `calibration/tag_scale.hpp` holds the interface a
   decoder will implement (whose only implementation says it is unavailable, and why) and the
   marker-to-scale arithmetic: pair ratios against the printed layout, a median, a deviation
@@ -557,8 +570,8 @@ errors:
 | `:ar-engine` unit tests | pass |
 | `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 715 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
-| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 229 checks, 0 failures |
-| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 229 checks, 0 failures, no data race reported |
+| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 272 checks, 0 failures |
+| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 272 checks, 0 failures, no data race reported |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
 | APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |

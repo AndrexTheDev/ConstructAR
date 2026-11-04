@@ -16,6 +16,7 @@
 //       native-slam/src/main/cpp/calibration/tag_scale.cpp
 //       native-slam/src/main/cpp/geometry/plane_fit.cpp
 //       native-slam/src/main/cpp/geometry/floorplan.cpp
+//       native-slam/src/main/cpp/geometry/surface_mask.cpp
 //       native-slam/src/main/cpp/slam/rtabmap_bridge.cpp
 //       native-slam/src/main/cpp/tests/host_tests.cpp -o /tmp/constructar_host_tests
 //   /tmp/constructar_host_tests
@@ -40,6 +41,7 @@
 #include "../core/types.hpp"
 #include "../geometry/floorplan.hpp"
 #include "../geometry/manhattan_world.hpp"
+#include "../geometry/surface_mask.hpp"
 #include "../geometry/plane_fit.hpp"
 #include "../slam/pose_graph.hpp"
 #include "../slam/rtabmap_bridge.hpp"
@@ -76,6 +78,10 @@ using constructar::Floorplan;
 using constructar::SlicePoint;
 using constructar::Vec3;
 using constructar::projectToFloor;
+using constructar::maskVerticalSurfaces;
+using constructar::OrientedPoint;
+using constructar::SurfaceMaskOptions;
+using constructar::WallMask;
 
 // ── Synthetic depth sources ───────────────────────────────────────────────────────────────
 
@@ -628,9 +634,11 @@ void testBlocksAllocatedPerFrame() {
  * ThreadSanitizer reports it as three races on those three lines, and what it loses is an
  * observation in the running average (finding 181).
  *
- * The identity this asserts is exact rather than statistical: a voxel's weight goes up by one for
- * every observation the volume accepted, so the sum over all voxels must equal the sum of
- * `voxelUpdates` over all frames. One lost update anywhere in the volume breaks it.
+ * The identity this asserts is exact rather than statistical: a voxel's weight goes up by exactly
+ * the weight the volume accepted, so the sum over all voxels must equal the sum of
+ * `IntegrationStats::voxelWeight` over all frames. One lost update anywhere in the volume breaks
+ * it. Since observations are weighted by 1/Z² the unit is "one observation at one metre", not a
+ * count: the sphere in this case sits at 2 m, so each of them is worth a quarter.
  *
  * It is not, on its own, the guard for the race: losing an update needs the two threads inside the
  * same three instructions, and eight workers over eight rounds did not manage that on this
@@ -648,9 +656,9 @@ void testVoxelFusionUnderConcurrency() {
   // One assertion for the whole sweep, not one per round: `verify_sources.py` holds the README's
   // native count to the number of `check` call sites, which is only honest as long as every call
   // site runs exactly once (finding 99).
-  size_t worstShortfall = 0;
-  size_t countedTotal = 0;
-  size_t storedTotal = 0;
+  double worstShortfall = 0.0;
+  double countedTotal = 0.0;
+  double storedTotal = 0.0;
   int worstRound = -1;
   for (int round = 0; round < kRounds; ++round) {
     TsdfConfig config;
@@ -658,26 +666,31 @@ void testVoxelFusionUnderConcurrency() {
     config.minConfidence = 0;
     config.workerThreads = 8;
     TsdfVolume volume(config);
-    size_t counted = 0;
+    double counted = 0.0;
     for (int frame = 0; frame < kFrames; ++frame) {
-      counted += static_cast<size_t>(volume.integrate(makeFrame(camera, depth, Mat4::identity()), 1).voxelUpdates);
+      counted += volume.integrate(makeFrame(camera, depth, Mat4::identity()), 1).voxelWeight;
     }
-    const size_t stored = volume.totalVoxelWeight();
+    const double stored = volume.totalVoxelWeightExact();
     countedTotal += counted;
     storedTotal += stored;
-    if (stored < counted) {
-      worstShortfall = std::max(worstShortfall, counted - stored);
+    if (counted - stored > worstShortfall) {
+      worstShortfall = counted - stored;
       worstRound = round;
     }
   }
-  check(worstShortfall == 0,
-        "every counted observation is in a voxel: " + std::to_string(storedTotal) + " stored of " +
-            std::to_string(countedTotal) + " counted over " + std::to_string(kRounds) + " rounds" +
+  // The weights are floats summed per voxel and stored as 1/256ths, so the two totals agree to a
+  // rounding error and not to the last bit.
+  const double tolerance = 1e-6 * countedTotal + 1e-9;
+  check(worstShortfall <= tolerance,
+        "every accepted observation's weight is in a voxel: " + std::to_string(storedTotal) +
+            " stored of " + std::to_string(countedTotal) + " accepted over " +
+            std::to_string(kRounds) + " rounds" +
             (worstRound < 0 ? std::string()
                             : ", round " + std::to_string(worstRound) + " lost " +
                                   std::to_string(worstShortfall)));
   check(storedTotal > countedTotal / 2,
-        "the sweep really exercised the volume: " + std::to_string(storedTotal) + " voxel observations");
+        "the sweep really exercised the volume: " + std::to_string(storedTotal) +
+            " observations of evidence");
 }
 
 /**
@@ -1534,6 +1547,207 @@ void testFloorplanVectorise() {
         "a room whose walls are all below the minimum segment length is not a floorplan");
 }
 
+/**
+ * Observations are weighted by their range (1/Z²).
+ *
+ * A depth camera's error grows with range, so the running average in a voxel should not treat the
+ * same wall seen once from across the room and fifty times from arm's length as fifty-one equal
+ * opinions. Before this the increment was a flat one, so a wall re-measured from across the room
+ * carried the same authority as one measured at arm's length.
+ *
+ * Two things are pinned here. The arithmetic: one metre weighs one, four metres a sixteenth (and
+ * a quarter of a metre cannot outvote a frame). And the wiring: the evidence a frame deposits per
+ * voxel-write is exactly that number, so a weighting that never reaches `fuseVoxel` - the helper
+ * correct, the integration unchanged - fails the second half.
+ */
+void testObservationWeight() {
+  section("TSDF: observations are weighted by their range");
+  checkNear(TsdfVolume::observationWeight(1.f), 1.0, 1e-6, "one metre weighs one observation");
+  checkNear(TsdfVolume::observationWeight(2.f), 0.25, 1e-6, "two metres weighs a quarter");
+  checkNear(TsdfVolume::observationWeight(4.f), 1.0 / 16.0, 1e-6, "four metres weighs a sixteenth");
+  checkNear(TsdfVolume::observationWeight(0.5f), 4.0, 1e-6, "half a metre is clamped at four");
+  checkNear(TsdfVolume::observationWeight(0.2f), 4.0, 1e-6, "closer still stays at the clamp");
+  checkNear(TsdfVolume::observationWeight(6.f), 1.0 / 36.0, 1e-6,
+            "the far limit is clamped at 1/36");
+  checkNear(TsdfVolume::observationWeight(9.f), 1.0 / 36.0, 1e-6, "past the far limit too");
+  check(TsdfVolume::observationWeight(0.f) == 0.f, "no range, no weight");
+  check(TsdfVolume::observationWeight(std::nanf("")) == 0.f, "a NaN range is refused");
+  bool monotone = true;
+  for (float z = 0.6f; z < 5.9f; z += 0.1f) {
+    monotone = monotone &&
+               TsdfVolume::observationWeight(z) >= TsdfVolume::observationWeight(z + 0.1f);
+  }
+  check(monotone, "the weight never rises with range inside the integration band");
+
+  // The weight has to reach the volume and not just the helper: the same wall integrated from 4 m
+  // holds a sixteenth of the evidence per voxel that it holds from 1 m. (Fractional weights are
+  // why the block's 16-bit weight array became fixed point - see `TsdfVolume::kWeightScale`.)
+  SyntheticCamera camera;
+  // A volume is not copyable (it owns shards and a mutex), so this is measured, not returned.
+  const auto weightOfWallAt = [&camera](float depthMetres) {
+    std::vector<uint16_t> depth(static_cast<size_t>(camera.width * camera.height),
+                                static_cast<uint16_t>(depthMetres * 1000.f));
+    TsdfConfig config;
+    config.voxelSize = 0.02f;
+    config.minConfidence = 0;
+    config.workerThreads = 1;
+    TsdfVolume volume(config);
+    volume.integrate(makeFrame(camera, depth, Mat4::identity()), 2);
+    return volume.totalVoxelWeightExact();
+  };
+  const double nearWall = weightOfWallAt(1.0f);
+  const double farWall = weightOfWallAt(4.0f);
+  const double nearWallEvidence = nearWall;
+  const double farWallEvidence = farWall;
+  check(nearWallEvidence > 100.0 && farWallEvidence > 100.0,
+        "both walls were integrated (" + std::to_string(nearWallEvidence) + " and " +
+            std::to_string(farWallEvidence) + " observations of evidence)");
+  // The 4 m wall subtends a quarter of the area, so its raw count is lower anyway; what pins the
+  // weighting is the *per-observation* value, which is a sixteenth at 4 m and one at 1 m.
+  check(nearWallEvidence > 8.0 * farWallEvidence,
+        "a wall at 1 m holds more than eight times the evidence of the same one at 4 m");
+  check(farWallEvidence > nearWallEvidence / 32.0,
+        "and less than a thirty-second, so the ratio is the sixteen of 1/Z² and not zero");
+
+  // What an observation deposits, exactly: the wall's total evidence divided by the number of
+  // writes is the 1/Z² of the frame that made them. This is the identity that fails the moment the
+  // weighting is removed from the integration path - a flat weight gives 1.0 at every range.
+  std::vector<uint16_t> farDepth(static_cast<size_t>(camera.width * camera.height), 4000);
+  const auto evidencePerWrite = [&camera, &farDepth](float depthMetres) {
+    std::vector<uint16_t> depth(static_cast<size_t>(camera.width * camera.height),
+                                static_cast<uint16_t>(depthMetres * 1000.f));
+    TsdfConfig config;
+    config.voxelSize = 0.02f;
+    config.minConfidence = 0;
+    config.workerThreads = 1;
+    TsdfVolume volume(config);
+    const auto stats = volume.integrate(makeFrame(camera, depth, Mat4::identity()), 2);
+    return stats.voxelUpdates > 0 ? volume.totalVoxelWeightExact() / stats.voxelUpdates : 0.0;
+  };
+  checkNear(evidencePerWrite(2.f), 0.25, 1e-4, "a frame at 2 m deposits a quarter per voxel");
+  checkNear(evidencePerWrite(4.f), 1.0 / 16.0, 1e-4, "a frame at 4 m deposits a sixteenth");
+  checkNear(evidencePerWrite(1.f), 1.0, 1e-4, "and a frame at 1 m deposits one");
+}
+
+/**
+ * Semantic masking: a waist-height slice keeps the walls and drops what a cup could stand on.
+ *
+ * The slice at 1.0 m crosses tables, counters and workbenches as well as walls, and a horizontal
+ * patch vectorised as a wall puts a partition through the middle of the room. The normal is the
+ * only thing that separates them.
+ */
+void testSurfaceMask() {
+  section("Semantic masking: walls kept, flat surfaces dropped");
+  const std::vector<OrientedPoint> synthetic = {
+      {{0.f, 1.f, 0.f}, Vec3(0.f, 0.f, 1.f)},     // a wall facing +Z
+      {{1.f, 1.f, 0.f}, Vec3(-1.f, 0.f, 0.f)},    // a wall facing -X
+      {{2.f, 1.f, 0.f}, Vec3(0.f, 1.f, 0.f)},     // a table top
+      {{3.f, 1.f, 0.f}, Vec3(0.f, -1.f, 0.f)},    // the underside of a shelf
+      {{4.f, 1.f, 0.f}, Vec3(0.f, 0.f, 0.f)},     // no measurable normal
+  };
+  const WallMask mask = maskVerticalSurfaces(synthetic);
+  check(mask.walls == 2 && mask.points.size() == 2, "two of five points are walls (" +
+                                                       std::to_string(mask.walls) + ")");
+  check(mask.horizontal == 2, "both horizontal patches are dropped");
+  check(mask.unoriented == 1, "an unmeasurable normal is counted, not assumed to be a wall");
+  checkNear(mask.keptFraction, 0.4, 1e-6, "the kept fraction is reported");
+  check(mask.valid, "a slice with walls is valid");
+  check(mask.points.size() == 2 && mask.points[0].x == 0.f && mask.points[0].z == 0.f,
+        "the footprint is carried through and the height is dropped");
+  check(mask.points.size() == 2 && mask.points[1].x == 1.f, "input order is preserved");
+
+  // A wall leaning 30 degrees from vertical has |n·up| = 0.5: outside a 20-degree tolerance,
+  // inside a 45-degree one. A wall leaning 10 degrees passes the default.
+  const Vec3 lean30(std::cos(30.f * 3.14159265f / 180.f), std::sin(30.f * 3.14159265f / 180.f), 0.f);
+  const Vec3 lean10(std::cos(10.f * 3.14159265f / 180.f), std::sin(10.f * 3.14159265f / 180.f), 0.f);
+  const std::vector<OrientedPoint> leaning = {{{0.f, 1.f, 0.f}, lean30}};
+  check(maskVerticalSurfaces(leaning).horizontal == 1,
+        "a wall leaning 30 degrees is not a vertical surface at 20 degrees");
+  SurfaceMaskOptions loose;
+  loose.maxTiltFromVerticalDegrees = 45.f;
+  check(maskVerticalSurfaces(leaning, loose).walls == 1,
+        "and it is one at 45 degrees");
+  check(maskVerticalSurfaces({{{0.f, 1.f, 0.f}, lean10}}).walls == 1,
+        "a wall leaning 10 degrees passes the default tolerance");
+  SurfaceMaskOptions strict;
+  strict.maxTiltFromVerticalDegrees = 0.f;
+  check(maskVerticalSurfaces({{{0.f, 1.f, 0.f}, Vec3(0.f, 0.01f, 1.f)}}, strict).walls == 0,
+        "a zero tolerance keeps only exactly vertical surfaces");
+  SurfaceMaskOptions negative;
+  negative.maxTiltFromVerticalDegrees = -30.f;
+  check(maskVerticalSurfaces({{{0.f, 1.f, 0.f}, Vec3(0.f, 0.01f, 1.f)}}, negative).walls == 0,
+        "a negative tolerance is treated as zero, not as an inverted window");
+
+  check(!maskVerticalSurfaces({}).valid, "an empty slice is not valid");
+  checkNear(maskVerticalSurfaces({}).keptFraction, 0.0, 1e-9, "and its kept fraction is zero");
+  const WallMask broken = maskVerticalSurfaces(
+      {{{std::nanf(""), 1.f, 0.f}, Vec3(0.f, 0.f, 1.f)}, {{0.f, 1.f, 0.f}, Vec3(std::nanf(""), 0.f, 0.f)}});
+  check(broken.walls == 0 && broken.unoriented == 1, "a NaN position is skipped, a NaN normal counts");
+
+  // The real thing: a wall measured through the TSDF keeps every point, and a plane above the
+  // camera is dropped in full. The normals come from the SDF gradient, so this also pins the sign
+  // and the orientation the mesher uses.
+  SyntheticCamera camera;
+  std::vector<uint16_t> wallDepth(static_cast<size_t>(camera.width * camera.height), 2000);
+  TsdfConfig volumeConfig;
+  volumeConfig.voxelSize = 0.02f;
+  volumeConfig.minConfidence = 0;
+  volumeConfig.workerThreads = 1;
+  TsdfVolume volume(volumeConfig);
+  volume.integrate(
+      makeFrame(camera, wallDepth, Mat4::fromRotationTranslation(Mat3{}, Vec3(0.f, 1.f, 0.f))), 2);
+  const std::vector<OrientedPoint> wallSlice = volume.sliceSurfacesAtHeight(1.0f, 0.05f);
+  check(wallSlice.size() > 100, "the oriented slice is populated (" +
+                                    std::to_string(wallSlice.size()) + " voxels)");
+  double maxUpComponent = 0.0;
+  double maxNormalError = 0.0;
+  double minFacing = 1.0;
+  for (const auto& point : wallSlice) {
+    maxUpComponent = std::max(maxUpComponent, std::fabs(static_cast<double>(point.normal.y)));
+    maxNormalError = std::max(maxNormalError, std::fabs(static_cast<double>(point.normal.length()) - 1.0));
+    minFacing = std::min(minFacing, static_cast<double>(point.normal.z));
+  }
+  checkNear(maxNormalError, 0.0, 1e-3, "every measured normal is a unit vector");
+  check(maxUpComponent < 0.2, "a vertical wall's gradient is horizontal (max |n·up| = " +
+                                  std::to_string(maxUpComponent) + ")");
+  check(minFacing > 0.9, "and it faces the camera, like the mesher's normals do");
+  const WallMask wallMasked = maskVerticalSurfaces(wallSlice);
+  check(wallMasked.valid && wallMasked.horizontal == 0,
+        "a measured wall survives the mask untouched (" + std::to_string(wallMasked.walls) +
+            " kept, " + std::to_string(wallMasked.horizontal) + " dropped)");
+  check(wallMasked.points.size() == wallSlice.size(), "nothing in a wall slice is discarded");
+
+  const std::vector<OrientedPoint> again = volume.sliceSurfacesAtHeight(1.0f, 0.05f);
+  bool same = again.size() == wallSlice.size();
+  for (size_t i = 0; same && i < again.size(); ++i) {
+    same = again[i].position.x == wallSlice[i].position.x &&
+           again[i].position.z == wallSlice[i].position.z &&
+           again[i].normal.x == wallSlice[i].normal.x;
+  }
+  check(same, "the oriented slice is deterministic");
+  check(volume.sliceSurfacesAtHeight(3.0f, 0.05f).empty(),
+        "an oriented slice above the surface is empty");
+  check(volume.sliceSurfacesAtHeight(std::nanf(""), 0.05f).empty(),
+        "an oriented slice at a NaN height is refused");
+
+  // The same frame, with the camera looking straight up: the surface is now a ceiling by normal
+  // even though it is exactly the plane that was a wall a moment ago. That is the whole point of
+  // masking by normal instead of by height.
+  const Mat3 lookUp = Mat3::fromColumns(Vec3(1.f, 0.f, 0.f), Vec3(0.f, 0.f, 1.f),
+                                        Vec3(0.f, -1.f, 0.f));
+  TsdfVolume ceilingVolume(volumeConfig);
+  ceilingVolume.integrate(
+      makeFrame(camera, wallDepth, Mat4::fromRotationTranslation(lookUp, Vec3(0.f, 0.f, 0.f))), 2);
+  const std::vector<OrientedPoint> ceilingSlice = ceilingVolume.sliceSurfacesAtHeight(2.0f, 0.05f);
+  check(ceilingSlice.size() > 100, "the ceiling plane was sliced (" +
+                                       std::to_string(ceilingSlice.size()) + " voxels)");
+  const WallMask ceilingMasked = maskVerticalSurfaces(ceilingSlice);
+  check(!ceilingMasked.valid && ceilingMasked.walls == 0,
+        "a horizontal surface is not a wall, whatever height it sits at");
+  check(ceilingMasked.horizontal > 100, "every one of its points is counted as horizontal (" +
+                                            std::to_string(ceilingMasked.horizontal) + ")");
+}
+
 void testInvalidInput() {
   section("Invalid input handling");
   TsdfConfig config;
@@ -1571,6 +1785,8 @@ int main() {
   testRtabMapBridgeWithoutTheBackEnd();
   testSurfaceSliceAtHeight();
   testFloorplanVectorise();
+  testObservationWeight();
+  testSurfaceMask();
   testInvalidInput();
 
   std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
