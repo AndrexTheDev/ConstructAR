@@ -32,19 +32,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The build log is captured, not just streamed, because a compiler diagnostic is exactly the
+      # thing the failure reporter could not see (finding 190): the reporter reads
+      # `/tmp/host_tests.log`, which does not exist when the build dies, so a `-Werror` diagnostic
+      # on clang arrived as "the build failed before the tests ran" and cost two CI cycles.
       - name: Build the host test binary (${{ matrix.compiler }} ${{ matrix.optimisation }})
         run: |
-          ${{ matrix.compiler }} -std=c++20 ${{ matrix.optimisation }} -pthread -Wall -Wextra -Werror \
-            -I native-slam/src/main/cpp \
-            native-slam/src/main/cpp/tsdf/volume.cpp \
-            native-slam/src/main/cpp/tsdf/surface_nets.cpp \
-            native-slam/src/main/cpp/slam/pose_graph.cpp \
-            native-slam/src/main/cpp/geometry/manhattan_world.cpp \
-            native-slam/src/main/cpp/calibration/tag_scale.cpp \
-            native-slam/src/main/cpp/geometry/plane_fit.cpp \
-            native-slam/src/main/cpp/slam/rtabmap_bridge.cpp \
-            native-slam/src/main/cpp/tests/host_tests.cpp \
-            -o host_tests
+          set +e
+          (
+            ${{ matrix.compiler }} -std=c++20 ${{ matrix.optimisation }} -pthread -Wall -Wextra -Werror \
+              -I native-slam/src/main/cpp \
+              native-slam/src/main/cpp/tsdf/volume.cpp \
+              native-slam/src/main/cpp/tsdf/surface_nets.cpp \
+              native-slam/src/main/cpp/slam/pose_graph.cpp \
+              native-slam/src/main/cpp/geometry/manhattan_world.cpp \
+              native-slam/src/main/cpp/calibration/tag_scale.cpp \
+              native-slam/src/main/cpp/geometry/plane_fit.cpp \
+              native-slam/src/main/cpp/slam/rtabmap_bridge.cpp \
+              native-slam/src/main/cpp/tests/host_tests.cpp \
+              -o host_tests
+          ) > /tmp/build.log 2>&1
+          code=$?
+          bash scripts/ci_annotate.sh /tmp/build.log "host test build failed" "$code"
 
       # The run output is captured so a failure can be reported on the pull request at the end of
       # the job: the Actions log endpoint redirects to a host that is not always reachable, and a
@@ -115,10 +124,16 @@ jobs:
             echo "commit \`$GITHUB_SHA\` on \`$HEAD_REF\`, job ${{ matrix.compiler }} ${{ matrix.optimisation }}"
             echo ""
             echo '```'
-            if [ -f /tmp/host_tests.log ]; then
+            # The build log first: when a `-Werror` diagnostic stops the compiler, the test log
+            # does not exist yet, and "the build failed before the tests ran" is not a diagnostic
+            # (finding 190).
+            if [ -s /tmp/build.log ] && [ ! -s /tmp/host_tests.log ]; then
+              grep -E "error:|warning:|note:" /tmp/build.log | head -n 25
+              tail -n 15 /tmp/build.log
+            elif [ -f /tmp/host_tests.log ]; then
               tail -n 60 /tmp/host_tests.log
             else
-              echo "the build failed before the tests ran"
+              echo "the build failed before the tests ran, and the build log is empty"
             fi
             echo '```'
           } > /tmp/comment.md
