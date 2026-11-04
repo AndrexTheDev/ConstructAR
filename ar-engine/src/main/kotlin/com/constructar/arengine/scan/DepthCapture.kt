@@ -129,15 +129,14 @@ class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity 
                 // matters when mapping a *screen* tap to a depth pixel, which the caller does.
                 displayRotationDegrees = 0,
                 minDepthMm = 180,
+                // The pool is bound here, not at the point of return: the last holder of the
+                // snapshot knows nothing about pools, and the frame that replaced it is not
+                // necessarily the last holder (finding 168).
+                onLastRelease = pool::release,
             )
         } finally {
             depthImage.close()
         }
-    }
-
-    /** Returns a buffer once the worker is done with it. */
-    fun recycle(snapshot: DepthFrameSnapshot) {
-        pool.release(snapshot.depthMm)
     }
 
     /**

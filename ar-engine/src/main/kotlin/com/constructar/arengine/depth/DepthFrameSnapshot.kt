@@ -9,16 +9,31 @@ package com.constructar.arengine.depth
 import com.constructar.core.geo.DepthIntrinsics
 import com.constructar.core.math.Ray
 import com.constructar.core.math.Vec3
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.sqrt
 
 /**
- * Immutable snapshot of one ARCore depth frame, captured **on the render thread** and then
- * consumed asynchronously by the TSDF pipeline.
+ * One ARCore depth frame, captured **on the render thread** and then consumed asynchronously by
+ * the TSDF pipeline.
  *
  * Why a copy: `Frame`/`Image` objects are only valid until the next `update()`, and the
  * integration worker must never touch them. A 640×480 16-bit depth image is 600 kB — copied
- * into a pooled direct buffer so the per-frame cost is a `memcpy`, never an allocation
- * (see `DepthBufferPool`).
+ * into a pooled `ShortArray` so the per-frame cost is a `memcpy`, never an allocation (see
+ * `DepthBufferPool`).
+ *
+ * ## The buffer has several readers, so it is reference counted
+ *
+ * The pixels are immutable, but the array they live in is one of three in a pool, and a frame
+ * is handed to **two** consumers at once: the pipeline's published snapshot (the hit-test
+ * cascade, the AI-depth pass) and the integration worker. Until finding 168 the pipeline returned the array to the pool when
+ * the *next frame replaced it*, which says nothing about the worker — so a hot device, where
+ * integration takes longer than a frame, had the worker reading a `ShortArray` that was
+ * already back in the pool and being rewritten by `DepthCapture.capture`. The result is depth
+ * from one frame fused under another frame's pose.
+ *
+ * So the last holder returns the buffer, and only the last holder: [retain] before handing a
+ * snapshot to another thread, [release] when done. The count starts at one for the capturing
+ * thread.
  */
 class DepthFrameSnapshot(
     /** Depth in **millimetres**, row-major, rowStride in elements (mm). */
@@ -41,8 +56,44 @@ class DepthFrameSnapshot(
     val displayRotationDegrees: Int = 0,
     /** Minimum depth the sensor reports, millimetres (ARCore: ~0.2 m on most devices). */
     val minDepthMm: Int = 200,
+    /**
+     * Where the depth array goes when the last reference is released — bound by
+     * `DepthCapture` to its pool. Null for a snapshot whose array was not pooled (tests, and
+     * any future caller that owns its own buffer).
+     */
+    private val onLastRelease: ((ShortArray) -> Unit)? = null,
 ) {
     val pixelCount: Int get() = width * height
+
+    private val references = AtomicInteger(1)
+
+    /**
+     * How many holders the snapshot has: one to start with, one per [retain]. Exposed for
+     * `DepthBufferLifetimeTest`; no production path needs the number.
+     */
+    val referenceCount: Int get() = references.get()
+
+    /**
+     * Takes one more reference. Every call needs a matching [release] — hand this to the
+     * thread that is about to read the pixels and let it release when it is done.
+     */
+    fun retain(): DepthFrameSnapshot {
+        references.incrementAndGet()
+        return this
+    }
+
+    /**
+     * Drops one reference and returns whether this was the last one.
+     *
+     * Only that call hands the array back to the pool, so a frame can never be recycled while
+     * a worker is still integrating it (finding 168). A release beyond the last one is
+     * ignored: it returns `false` and the array is not handed out twice.
+     */
+    fun release(): Boolean {
+        if (references.decrementAndGet() != 0) return false
+        onLastRelease?.invoke(depthMm)
+        return true
+    }
 
     /** Depth at (x, y) in metres, or null when unobserved/invalid. */
     fun depthMetersAt(x: Int, y: Int): Float? {

@@ -27,7 +27,7 @@ and it is why the AR overlay, the PDF and the GLB can never disagree: they all c
  │  · RouteSession.onFrame() → read refined anchor poses                 │
  │  · TrackingMonitor.onFrame() → cosmetic state only                    │
  └───────────────┬───────────────────────────────────────────────────────┘
-                 │ Channel(1, DROP_OLDEST)
+                 │ Channel(1) — refuses a frame while one is queued
  ┌───────────────▼──────────────────── pipe worker (1 thread) ──────────┐
  │ TsdfScanPipeline.integrate()  → JNI → C++ threads (3)                │
  │ every 300 ms: extractMesh()   → Surface Nets → ScanMesh → StateFlow   │
@@ -40,9 +40,16 @@ off, sometimes" bug. The tap request is queued (`ArInteraction.requestTap`), res
 `onSessionUpdated`, and the result is applied back on the main thread — because
 `Session.createAnchor` belongs to the UI thread.
 
-Back-pressure is explicit: the integration channel holds **one** frame and drops the oldest.
-A dropped frame increments `ScanState.framesDropped`, so "the scan looks sparse" is
-distinguishable from "the device is overloaded".
+Back-pressure is explicit: the integration channel holds **one** frame and refuses the frame
+that arrives while one is queued, returning its depth array to the pool on the spot (it used to
+drop the *queued* frame, whose buffer nothing ever returned). A refused frame increments
+`ScanState.framesDropped`, so "the scan looks sparse" is distinguishable from "the device is
+overloaded".
+
+The depth array itself is reference counted (`DepthFrameSnapshot.retain`/`release`, finding 168):
+one frame is published to the hit cascade *and* handed to the pipe worker, so it goes back to
+`DepthBufferPool` only when the last of them has let go — not when the next frame replaces it,
+which said nothing about the worker that was still pinning it.
 
 ---
 

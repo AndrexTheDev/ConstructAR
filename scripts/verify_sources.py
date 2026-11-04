@@ -1834,6 +1834,42 @@ def check_ply_layout_is_decided_once() -> None:
             add(service, f"the export calls `{bypass.rstrip('(')}` directly, so the size rule in "
                          "`PlyWriter.write` is bypassed (finding 167)")
 
+def check_depth_arrays_go_back_to_the_pool_by_themselves() -> None:
+    """A pooled depth array is returned by its last reader (finding 168).
+
+    `DepthFrameSnapshot.depthMm` is 600 kB out of a three-buffer pool and it has two readers at
+    once: the published snapshot the hit cascade and the AI-depth pass sample, and the
+    integration worker. `TsdfScanPipeline` used to return it when the next frame replaced it -
+    a guess about the worker, and on a hot device integration outlasts a frame, so the worker
+    was pinning an array that was already back in the pool and being rewritten by the next
+    `capture()`. The reference count is the only place that knows when the last reader lets go,
+    so no caller may hand an array back on its own.
+    """
+    snapshot = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
+                "arengine" / "depth" / "DepthFrameSnapshot.kt")
+    text = snapshot.read_text(encoding="utf-8")
+    for required in ("fun retain(", "fun release(", "AtomicInteger"):
+        if required not in text:
+            add(snapshot, f"`DepthFrameSnapshot` no longer carries `{required.rstrip('(')}`, so "
+                          "nothing can tell when the last reader has let go of the pixels "
+                          "(finding 168)")
+    capture = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
+               "arengine" / "scan" / "DepthCapture.kt")
+    if "onLastRelease = pool::release" not in capture.read_text(encoding="utf-8"):
+        add(capture, "the captured snapshot does not know its own pool, so the array can only "
+                      "be returned by a caller guessing that it was the last one (finding 168)")
+
+    pipeline = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
+                "arengine" / "scan" / "TsdfScanPipeline.kt")
+    pipeline_text = pipeline.read_text(encoding="utf-8")
+    for bypass in ("capture.recycle(", "pool.release("):
+        if bypass in pipeline_text:
+            add(pipeline, f"the pipeline calls `{bypass.rstrip('(')}`, returning a depth array "
+                          "while the integration worker may still be pinning it (finding 168)")
+    if ".release()" not in pipeline_text:
+        add(pipeline, "the pipeline never releases a snapshot, so no depth array can go back to "
+                      "the pool (finding 168)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1879,6 +1915,7 @@ def main() -> int:
     check_anchor_id_is_transient()
     check_one_home_for_the_room_limit()
     check_ply_layout_is_decided_once()
+    check_depth_arrays_go_back_to_the_pool_by_themselves()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
