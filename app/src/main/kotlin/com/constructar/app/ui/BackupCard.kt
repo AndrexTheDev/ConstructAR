@@ -286,18 +286,23 @@ fun BackupCard(
                         text = stringResource(
                             R.string.backup_projects_skipped,
                             current.projectsSkipped,
-                            current.projects + current.projectsSkipped,
+                            current.projectsTotal,
                         ),
                         style = MaterialTheme.typography.bodySmall,
                         color = SiteColors.danger,
                     )
                 }
+                // "N of M photos could not be copied" - and M is the job, not the successes. The
+                // line used to be handed `current.photos`, which is what *was* copied, so a backup
+                // that got three of five photos printed "3 photos copied" and then "2 of 3 photos
+                // could not be copied" underneath it: two numbers that add up to five and a
+                // sentence that reads as if four of the three had failed (finding 184).
                 if (current is BackupOutcome.Saved && current.photosSkipped > 0) {
                     Text(
                         text = stringResource(
                             R.string.backup_photos_skipped,
                             current.photosSkipped,
-                            current.photos,
+                            current.photosTotal,
                         ),
                         style = MaterialTheme.typography.bodySmall,
                         color = SiteColors.warning,
@@ -405,7 +410,22 @@ internal sealed interface BackupOutcome {
         val photos: Int,
         val photosSkipped: Int = 0,
         val projectsSkipped: Int = 0,
-    ) : BackupOutcome
+    ) : BackupOutcome {
+        /**
+         * The photo files that were in the job: the ones in the folder plus the ones that are not.
+         *
+         * [photos] and [projects] are the counts that were *written* - that is what the "N photos
+         * copied" sentence needs - so neither is a denominator. The skipped lines say "N of M",
+         * and M has to be the total: with five photos in the job and three in the folder the card
+         * told the operator "2 of 3 photos could not be copied" directly under "3 photos copied".
+         * The project line was written with the total from the start; only its photo sibling was
+         * handed the success count (finding 184).
+         */
+        val photosTotal: Int get() = photos + photosSkipped
+
+        /** The project files that were in the backup, written or not. */
+        val projectsTotal: Int get() = projects + projectsSkipped
+    }
 
     /**
      * A restore that ran, with the two very different reasons a file can be missing from it.

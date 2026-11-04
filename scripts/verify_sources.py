@@ -2246,6 +2246,48 @@ def check_the_native_engine_is_freed_once() -> None:
                       "is the only closer again (finding 182)")
 
 
+def check_the_skipped_counts_name_the_total() -> None:
+    """The backup card's "N of M" lines count the job, not the copies (finding 184).
+
+    `BackupOutcome.Saved.photos` and `.projects` are the counts that were *written* - the "N photos
+    copied" plurals need exactly that - and the two skipped lines say "N of M … could not be
+    copied". The project line was given `projects + projectsSkipped` from the day finding 85 added
+    it; the photo line was handed `photos`, the success count, so a backup that got three of five
+    photos printed "3 photos copied" and then "2 of 3 photos could not be copied" underneath it.
+    Both lines now take an accessor on the data class, and this rule refuses the arithmetic being
+    unrolled at the call site again: a denominator written by hand there is how the asymmetry
+    survived six rounds of reading this file.
+    """
+    card = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+            "BackupCard.kt")
+    text = card.read_text(encoding="utf-8")
+    for resource, accessor, written in (
+        ("backup_photos_skipped", "photosTotal", "photos"),
+        ("backup_projects_skipped", "projectsTotal", "projects"),
+    ):
+        index = text.find(f"R.string.{resource}")
+        if index < 0:
+            add(card, f"`{resource}` is gone - check what the skip line says now (finding 184)")
+            continue
+        call = text[index:index + 400]
+        call = call[:call.find("),")] if ")," in call else call
+        arguments = call[call.find("(") + 1:]
+        if accessor not in arguments:
+            add(card, f"the `{resource}` line no longer takes `{accessor}`, so its denominator is "
+                      f"whatever is written here - and `{written}` is the count that was copied "
+                      f"(finding 184)")
+        elif f"current.{written}," in arguments.replace(" ", " "):
+            add(card, f"the `{resource}` line is handed `current.{written}` again, which is the "
+                      f"number of successes, not the number in the job (finding 184)")
+    for accessor, field, skipped in (
+        ("photosTotal", "photos", "photosSkipped"),
+        ("projectsTotal", "projects", "projectsSkipped"),
+    ):
+        if f"val {accessor}: Int get() = {field} + {skipped}" not in text:
+            add(card, f"`{accessor}` is no longer derived from `{field}` and `{skipped}`, so the "
+                      f"denominator and the numbers on the card can disagree (finding 184)")
+
+
 def cpp_code_only(text: str) -> str:
     """The text with `//` and `/* … */` comments removed.
 
@@ -2357,6 +2399,7 @@ def main() -> int:
     check_both_estimating_overrides_are_passed()
     check_order_list_states_its_waste()
     check_backup_copies_bytes()
+    check_the_skipped_counts_name_the_total()
     check_totals_are_sums_of_printed_rows()
     check_csv_headers_name_their_cells()
     check_screen_states_the_trade_defaults()

@@ -93,6 +93,37 @@ class BackupOutcomeTest {
         )
     }
     @Test
+    fun `the skip line counts the job, not the copies`() {
+        // Five photos in the job, three in the folder: the card printed "3 photos copied" and then
+        // "2 of 3 photos could not be copied" - the denominator was the success count, so the two
+        // sentences contradicted each other and neither of them named how many photos the job had.
+        // `photos` and `projects` stay the copied counts (the "N copied" plurals need that); the
+        // totals are what the "N of M" lines take (finding 184).
+        val saved = BackupOutcome.of(
+            report(available = 2, written = 2, photos = 5, photosWritten = 3),
+            nothing,
+            failed,
+        ) as BackupOutcome.Saved
+
+        assertEquals(BackupOutcome.Saved(projects = 2, photos = 3, photosSkipped = 2), saved)
+        assertEquals(3, saved.photos)
+        assertEquals(2, saved.photosSkipped)
+        assertEquals(5, saved.photosTotal)
+    }
+
+    @Test
+    fun `the project total is the same sum its line prints`() {
+        // The sibling of the test above: three of five rooms written, so the projects line reads
+        // "3 of 5", and the accessor it now takes must agree with the sum the card used to write
+        // out by hand (finding 184).
+        val saved = BackupOutcome.of(report(available = 5, written = 2), nothing, failed)
+            as BackupOutcome.Saved
+
+        assertEquals(BackupOutcome.Saved(projects = 2, projectsSkipped = 3), saved)
+        assertEquals(5, saved.projectsTotal)
+    }
+
+    @Test
     fun `a restore this phone refused blames the storage, not the backup`() {
         // Nothing imported, nothing held back, one room read and refused: "nothing imported" would
         // send the operator looking at his backup instead of at his storage (finding 86).
