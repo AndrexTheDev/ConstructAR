@@ -42,6 +42,16 @@ namespace constructar {
 struct SlamUpdate {
   bool available = false;        // false when compiled without RTAB-Map
   bool loopClosureDetected = false;
+  /**
+   * The call did the work it describes: the keyframe entered the map (processKeyframe) or the
+   * global pass stored improved poses (optimizeGraph).
+   *
+   * It exists because upstream's `process` and `globalBundleAdjustment` both answer with a Boolean
+   * and the bridge used to drop both - the shape finding 72 is about, here at the C++ boundary
+   * (finding 183).
+   */
+  bool stored = false;
+  /** Node the closure matched, or -1. Was 0 for "no closure", which is a node id upstream. */
   int matchedNodeId = -1;
   double milliseconds = 0.0;
 };
@@ -77,7 +87,14 @@ class RtabMapBridge {
                              float cx, float cy, const Mat4& odometryCameraToWorld,
                              int64_t timestampNs);
 
-  /** Forces a global graph optimisation (called on "finish scan"). */
+  /**
+   * Runs the global pass on "finish scan".
+   *
+   * RTAB-Map re-optimises the graph inside `process()`; the explicit global step is
+   * `Rtabmap::globalBundleAdjustment` (g2o by default, `Optimizer/Iterations` when the iteration
+   * count is 0). There is no `setOptimized()` upstream, which is what this used to call - it only
+   * compiled against a stub header that declared it (finding 183).
+   */
   SlamUpdate optimizeGraph();
 
   /** Number of nodes RTAB-Map currently holds. */

@@ -198,9 +198,19 @@ of missing-header errors. That probe is itself tested by
 The C++ side is complete, and the optional branch is **compiled** by the `native-tests` job on
 every push — in the `-DCONSTRUCTAR_WITH_RTABMAP=1` configuration, against the stub headers in
 `native-slam/src/main/cpp/tests/rtabmap-stubs`. It cannot be *linked* or run there (no RTAB-Map
-checkout in CI), but it no longer rots unseen: until finding 107 it could not have compiled at
-all, and the first thing a build with `constructar.rtabmap.dir` set would have hit was a wall of
-template errors from `constructar::std::…`.
+checkout in CI). What that check proves is the *shape* of the calls: those headers mirror
+upstream's declarations — the parameter keys are functions returning `std::string`, parameters go
+to `init()`, the odometry pose is a `process(data, odomPose)` argument, `CameraModel` takes its
+optical rotation and a `cv::Size` — and they are mutated in review to make sure they still
+refuse a wrong call.
+
+It has not always been like that. Until finding 107 the branch could not compile at all (the
+RTAB-Map includes sat inside `namespace constructar`); until finding 183 it still could not,
+because the stubs had been written from the bridge: seven signatures differed from upstream
+(`setParameters`, `setOptimized`, a nine-argument `CameraModel`, an odometry pose inside
+`SensorData`, `kFeatureORB`, the keys as values, and a one-argument `process`), so the job was
+green for a build that would have failed. A real checkout is still the only thing that can prove
+a link, and no run of this app has done that.
 
 * `RtabMapBridge::processKeyframe` feeds one keyframe (RGB + the ARCore odometry pose) and
   reports whether RTAB-Map accepted a loop closure and which node it matched. It does **not**

@@ -5,7 +5,7 @@
  */
 
 /**
- * The two OpenCV types `rtabmap_bridge.cpp` touches, enough to compile it.
+ * The three OpenCV types the bridge's RTAB-Map path touches, enough to compile it.
  *
  * This is a *compile-shape* stub, not OpenCV: `native-tests` builds the RTAB-Map branch of the
  * bridge with these headers so that branch cannot rot while the real dependency (a BSD-clean
@@ -22,6 +22,19 @@
 #define CV_32F 5
 
 namespace cv {
+
+/** Upstream `cv::Size`: `CameraModel`'s image size arrives as one of these. */
+class Size {
+ public:
+  Size() = default;
+  Size(int width, int height) : width_(width), height_(height) {}
+  int width() const { return width_; }
+  int height() const { return height_; }
+
+ private:
+  int width_ = 0;
+  int height_ = 0;
+};
 
 class Mat {
  public:

@@ -669,6 +669,38 @@ void testVoxelFusionUnderConcurrency() {
         "the sweep really exercised the volume: " + std::to_string(storedTotal) + " voxel observations");
 }
 
+/**
+ * The RTAB-Map bridge in a build without RTAB-Map.
+ *
+ * The app calls this class unconditionally, so the stub branch promises four things: the back-end
+ * is reported unavailable, a keyframe is accepted and ignored, no closure is invented, and the
+ * graph is empty - before and after a reset. It used to increment a node counter on every ignored
+ * keyframe, so `graphSize()` grew for a back-end that is not in the binary at all, while its KDoc
+ * promises "number of nodes RTAB-Map currently holds" (finding 183).
+ *
+ * The `CONSTRUCTAR_WITH_RTABMAP` branch cannot be exercised here - it needs the real library to
+ * link - which is why its shape is checked by compiling it against the upstream-shaped stubs in
+ * `tests/rtabmap-stubs` (see `native-tests.yml`).
+ */
+void testRtabMapBridgeWithoutTheBackEnd() {
+  section("RTAB-Map bridge: what a build without the back-end promises");
+  constructar::RtabMapBridge bridge;
+  check(!bridge.isAvailable(), "the back-end is reported as not compiled in");
+  check(bridge.graphSize() == 0, "an empty bridge holds no nodes");
+
+  std::vector<uint8_t> rgb(static_cast<size_t>(8 * 8 * 3), 0);
+  std::vector<uint16_t> depth(static_cast<size_t>(8 * 8), 0);
+  const auto update = bridge.processKeyframe(rgb.data(), 8 * 3, depth.data(), 8, 8, 8, 200.f, 200.f,
+                                             4.f, 4.f, Mat4::identity(), 0);
+  check(!update.available, "a keyframe is not claimed to have been processed");
+  check(!update.stored && !update.loopClosureDetected && update.matchedNodeId == -1,
+        "the no-op reports neither a store nor a closure");
+  check(bridge.graphSize() == 0, "an ignored keyframe is not a node in the graph");
+  check(!bridge.optimizeGraph().stored, "there is no global pass to run");
+  bridge.reset();
+  check(!bridge.isAvailable() && bridge.graphSize() == 0, "a reset leaves it unavailable and empty");
+}
+
 void testInvalidInput() {
   section("Invalid input handling");
   TsdfConfig config;
@@ -700,6 +732,7 @@ int main() {
   testBlockBudgetUnderConcurrency();
   testBlocksAllocatedPerFrame();
   testVoxelFusionUnderConcurrency();
+  testRtabMapBridgeWithoutTheBackEnd();
   testInvalidInput();
 
   std::printf("\n%d checks, %d failures\n", g_checks, g_failures);

@@ -2246,6 +2246,86 @@ def check_the_native_engine_is_freed_once() -> None:
                       "is the only closer again (finding 182)")
 
 
+def cpp_code_only(text: str) -> str:
+    """The text with `//` and `/* … */` comments removed.
+
+    Rule 68 reads C++: the files it checks talk about the very mistakes it looks for - "there is no
+    `setOptimized()` upstream" is a comment in the stub that *declares* that fact, and the first
+    version of the rule reported it as the defect.
+    """
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    return re.sub(r"//[^\n]*", "", text)
+
+
+def check_the_rtabmap_stubs_mirror_upstream() -> None:
+    """The optional RTAB-Map path is compiled against headers copied from RTAB-Map, not from it.
+
+    `native-tests` proves the `CONSTRUCTAR_WITH_RTABMAP=1` translation unit compiles - against
+    `tests/rtabmap-stubs`, which until finding 183 were written from the bridge itself. That makes
+    the check circular: the stubs declared `Parameters::kX` as `constexpr const char*`,
+    `Rtabmap::setParameters`, `Rtabmap::setOptimized`, `SensorData(…, const Transform& odomPose)`
+    and a nine-argument `CameraModel`, and the bridge used all five. Upstream has none of them -
+    the keys are *functions* returning `std::string`, parameters go to `init()`, the odometry is a
+    `process(data, odomPose)` argument, and the camera is built from `cv::Size` - so the documented
+    `CONSTRUCTAR_WITH_RTABMAP=ON` build could not have compiled, while CI reported that it did.
+
+    This rule pins the shapes that were wrong, on both sides: the stub must declare what upstream
+    declares, and the bridge must call it the way upstream wants. It cannot prove the whole API -
+    only a real checkout can - but it keeps the stub from drifting back to "whatever the bridge
+    says", which is the defect this row is about.
+    """
+    bridge = ROOT / "native-slam" / "src" / "main" / "cpp" / "slam" / "rtabmap_bridge.cpp"
+    stubs = ROOT / "native-slam" / "src" / "main" / "cpp" / "tests" / "rtabmap-stubs" / "rtabmap" / "core"
+    text = cpp_code_only(bridge.read_text(encoding="utf-8"))
+
+    for invented in ("setOptimized", "rtabmap.setParameters"):
+        if invented in text:
+            add(bridge, f"`{invented}` does not exist in RTAB-Map; the branch only compiles against "
+                        f"a stub that declares it (finding 183)")
+    if "kFeatureORB" in text:
+        add(bridge, "`Feature2D::Type::kFeatureORB` is spelled `kFeatureOrb` upstream (finding 183)")
+    for match in re.finditer(r"Parameters::k[A-Za-z]+\s*[,)]", text):
+        line = text.count("\n", 0, match.start()) + 1
+        add(bridge, f"line {line}: a parameter key is passed as a value; upstream's keys are "
+                    f"functions (`kMemIncrementalMemory()`) and a bare name is a function pointer "
+                    f"(finding 183)")
+    if "rtabmap.process(data, odom)" not in text:
+        add(bridge, "the odometry pose is not handed to `process(data, odomPose)`, which is the "
+                    "only place upstream accepts it (finding 183)")
+
+    parameters = cpp_code_only((stubs / "Parameters.h").read_text(encoding="utf-8"))
+    if "constexpr const char*" in parameters:
+        add(stubs / "Parameters.h", "the stub declares the keys as values again; upstream declares "
+                                    "them as static functions returning std::string (finding 183)")
+    if "static std::string k" not in parameters:
+        add(stubs / "Parameters.h", "the stub no longer mirrors upstream's key shape (finding 183)")
+    if "kFeatureORB" in parameters or "kFeatureOrb" not in parameters:
+        add(stubs / "Parameters.h", "the stub's Feature2D enumerator is not upstream's "
+                                    "`kFeatureOrb` (finding 183)")
+
+    rtabmap = cpp_code_only((stubs / "Rtabmap.h").read_text(encoding="utf-8"))
+    for missing in ("void init(", "globalBundleAdjustment(", "process(const SensorData& data, Transform odomPose"):
+        if missing not in rtabmap:
+            add(stubs / "Rtabmap.h", f"the stub no longer declares `{missing}` the way upstream does "
+                                     f"(finding 183)")
+    for invented in ("setParameters", "setOptimized"):
+        if invented in rtabmap:
+            add(stubs / "Rtabmap.h", f"the stub declares `{invented}`, which RTAB-Map does not have "
+                                     f"- that is how finding 183 stayed invisible")
+
+    sensor_data = cpp_code_only((stubs / "SensorData.h").read_text(encoding="utf-8"))
+    if "odomPose" in sensor_data or "userData" not in sensor_data:
+        add(stubs / "SensorData.h", "the stub puts an odometry pose in SensorData's constructor "
+                                    "again; upstream's last parameter there is a user-data matrix "
+                                    "(finding 183)")
+
+    camera_model = cpp_code_only((stubs / "CameraModel.h").read_text(encoding="utf-8"))
+    if "opticalRotation" not in camera_model or "cv::Size" not in camera_model:
+        add(stubs / "CameraModel.h", "the stub's CameraModel no longer mirrors upstream's "
+                                     "intrinsics constructor (opticalRotation + cv::Size, "
+                                     "finding 183)")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -2306,6 +2386,7 @@ def main() -> int:
     check_the_clip_row_states_its_defaults()
     check_the_native_fusion_is_locked()
     check_the_native_engine_is_freed_once()
+    check_the_rtabmap_stubs_mirror_upstream()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
