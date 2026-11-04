@@ -23,8 +23,9 @@ import com.constructar.core.model.RouteNodeRecord
  *
  * One instance owns the meshes for *every* run in the project plus the live preview:
  *
- *  * **Committed runs** are meshed once (they only change when their anchors move, which is
- *    handled by re-uploading at most every [REUPLOAD_INTERVAL_MS]).
+ *  * **Committed runs** are meshed once and re-uploaded at most every [REUPLOAD_INTERVAL_MS]:
+ *    their node positions are the ones the run was measured with, so a re-mesh only happens when
+ *    the app hands the controller a run it has not drawn yet.
  *  * **The live run** re-uploads on every geometry change (a node added, a corner smoothed),
  *    never per frame: at 30 fps a 4 000-triangle re-upload would burn the bandwidth budget.
  *

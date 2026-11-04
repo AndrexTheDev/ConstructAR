@@ -448,7 +448,8 @@ Known limitations, deliberately documented rather than hidden:
   be spent atomically (finding 159), a block's per-frame bookkeeping may only happen under the lock
   that owns it (finding 160), a run left out of the order sheet has to be counted somewhere
   (finding 161), the run the operator is measuring has to reach the screen (finding 162), and a
-  frame may only be placed where the tracker actually knows the phone is (finding 163).
+  frame may only be placed where the tracker actually knows the phone is (finding 163), and a
+  finished run must give back what it was measured with (finding 164).
 * **Site gate**: `tools/seo_audit.py` reads the *generated* landing pages and refuses a
   regression: canonical and the six `hreflang` pairs, title/description lengths, Open Graph and
   Twitter cards with a real image size, JSON-LD whose offers match the four real prices, every
@@ -486,7 +487,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 635 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 638 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 66 checks, 0 failures |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |

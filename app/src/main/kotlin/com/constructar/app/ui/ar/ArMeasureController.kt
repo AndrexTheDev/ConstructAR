@@ -375,7 +375,9 @@ class ArMeasureController(private val context: Context) {
     fun finish(label: String): ConduitRoute? {
         val route = routeSession.finish(label) ?: return null
         sessionRouteIds += route.id
-        // Keep the anchors alive: the committed run keeps following ARCore's refinement.
+        // `finish()` has already released this run's anchors: the committed geometry is drawn
+        // from the node positions it was measured with, and nothing refines those afterwards
+        // (finding 164).
         routeSession.startNewRun()
         hitStabilizer.reset()
         stability.value = null

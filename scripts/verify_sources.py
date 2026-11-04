@@ -1732,6 +1732,32 @@ def check_only_posed_frames_are_placed() -> None:
         add(controller, "a tap waiting for a frame is never dropped, so one made while the tracker "
                         "was lost is answered by the first frame after it comes back (finding 163)")
 
+def check_finished_runs_release_their_anchors() -> None:
+    """A finished run's anchors are released with it (finding 164).
+
+    `RouteSession.onFrame` refines the nodes of the run **being measured** - that is the whole
+    point of giving every node an ARCore anchor - and `finish()` copies those positions into the
+    route. Nothing reads the anchors afterwards, but they were kept until the screen closed, so a
+    session held one native anchor per node of every run measured in it, and the state published
+    `anchors.size` (the session's total) next to `nodeCount` (this run's).
+    """
+    source = ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" / "arengine" / "route" / "RouteSession.kt"
+    text = source.read_text(encoding="utf-8")
+    start = text.find("fun finish(")
+    if start < 0:
+        add(source, "`finish` is gone; this rule has nothing to check")
+        return
+    end = text.find("\n    }\n", start)
+    body = text[start:end if end > 0 else len(text)]
+    if ".detach()" not in body:
+        add(source, "a finished run keeps the anchors it was measured with - nothing reads them "
+                    "again, so the session holds one native anchor per node of every run on the "
+                    "screen (finding 164)")
+    if "fun anchorFor(" in text:
+        add(source, "`anchorFor` looks only at the run being measured, so it cannot reach a "
+                    "finished run's anchors - the accessor promised a lookup that does not exist "
+                    "(finding 164)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1773,6 +1799,7 @@ def main() -> int:
     check_excluded_runs_are_recorded()
     check_live_route_is_drawn()
     check_only_posed_frames_are_placed()
+    check_finished_runs_release_their_anchors()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

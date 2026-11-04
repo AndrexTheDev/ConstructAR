@@ -366,8 +366,14 @@ class RouteSession(
             closedLoop = current.closedLoop,
             notes = notes,
         )
-        // The committed route keeps its anchors alive: the finished mesh must stay glued to
-        // the wall while the operator routes the next run. `release()` is called on teardown.
+        // The run's anchors are released here, not at teardown, because nothing reads them after
+        // this point: `onFrame` refines the nodes of the run **being measured** only, and the
+        // route above is a copy of their world positions. Keeping them "alive so the finished
+        // mesh stays glued to the wall" was the comment this code carried - but the committed
+        // mesh is drawn from those same frozen positions, so it never followed a refinement. What
+        // the session held instead was one native anchor per node of every run measured since the
+        // screen opened: a twenty-run flat kept a couple of hundred of them (finding 164).
+        current.nodes.mapNotNull { it.anchorId }.forEach { id -> anchors.remove(id)?.detach() }
         livePoint = null
         return route
     }
@@ -377,11 +383,6 @@ class RouteSession(
     fun release() {
         anchors.values.forEach { it.detach() }
         anchors.clear()
-    }
-
-    fun anchorFor(nodeId: String): AnchorHandle? {
-        val node = mutableState.value.nodes.firstOrNull { it.id == nodeId } ?: return null
-        return node.anchorId?.let(anchors::get)
     }
 
     // ── Internals ───────────────────────────────────────────────────────────────────────

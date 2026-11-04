@@ -153,6 +153,52 @@ class RouteSessionTest {
     }
 
     @Test
+    fun `the run being measured holds exactly its own anchors`() {
+        val factory = FakeAnchorFactory()
+        val session = RouteSession(factory)
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 0f))
+
+        assertEquals("one anchor per node of this run", 2, session.state.value.anchorCount)
+        assertTrue("and every one of them is still alive", factory.anchors.none { it.detached })
+    }
+
+    @Test
+    fun `finishing a run releases the anchors it was measured with`() {
+        // Nothing reads them afterwards: `onFrame` refines the nodes of the run being measured,
+        // and the committed route is a copy of their positions. Keeping them alive for the rest of
+        // the session was one native anchor per node of every run on the screen (finding 164).
+        val factory = FakeAnchorFactory()
+        val session = RouteSession(factory)
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 0f))
+        session.addNode(hit(2f, 0f, 0f))
+
+        assertNotNull(session.finish("first"))
+        assertTrue(
+            "every anchor of the finished run is detached: ${factory.anchors.map { it.detached }}",
+            factory.anchors.all { it.detached },
+        )
+    }
+
+    @Test
+    fun `a second run counts only its own anchors`() {
+        val factory = FakeAnchorFactory()
+        val session = RouteSession(factory)
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(1f, 0f, 0f))
+        assertNotNull(session.finish("first"))
+        session.startNewRun()
+        session.addNode(hit(0f, 1f, 0f))
+        session.addNode(hit(1f, 1f, 0f))
+
+        // The count is published next to `nodeCount` in the same state, so it has to describe the
+        // run the operator is looking at - it used to be the session's total (finding 164).
+        assertEquals("two nodes, two anchors", 2, session.state.value.nodeCount)
+        assertEquals("not four", 2, session.state.value.anchorCount)
+    }
+
+    @Test
     fun `a run needs two nodes before it can be finished`() {
         val session = RouteSession(FakeAnchorFactory())
         assertNull(session.finish("empty"))
