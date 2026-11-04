@@ -114,6 +114,28 @@ points leave the cloud so the same set cannot be proposed again, and the next su
 for, because ending the fit there cost a scan every plane behind a bolt head (finding 191); the normal's sign is fixed towards the
 centre of the cloud, so two fits of one room agree.
 
+**Waist-height slice and floorplan** (`tsdf/volume.cpp`, `geometry/floorplan.cpp`). A 2D plan
+starts as a horizontal cut through the volume at y = 1.0 m: `sliceSurfaceAtHeight` walks every
+shard under the integration and shard locks and emits the voxels whose `|sdf| <= 0.5` and whose
+`weight > 0` inside the band, so the result is measured surface at that height and nothing from
+free or unobserved space. The cut is taken from the *volume* rather than the mesh on purpose — the
+mesh is a triangle soup whose vertices sit wherever the triangulator placed them, so slicing it
+depends on the triangulation, while the voxel lattice has a fixed spacing and a fixed cost.
+`vectoriseFloorplan` then rasterises the points into a 5 cm grid, resolves the cells that touch only
+at a corner (a 45° wall is a staircase of exactly those, and without the resolution its boundary
+breaks into four-point bubbles and the room never closes), collects each occupied cell's
+empty-sided edges with the interior on the left, chains them into loops through integer corner keys
+— so closure is an exact comparison, not an epsilon — and simplifies each loop with
+Ramer–Douglas–Peucker, splitting it at the vertex farthest from the start so the simplification does
+not pin two arbitrary corners. Of the closed loops the largest one that encloses at least a quarter
+of the slice's bounding rectangle is reported: smaller closed loops are slivers where a band's two
+faces meet, and calling one of those "the room" is how a doorway scan would claim 0.23 m². Because
+the loop is the outer face of a one-cell band, every wall moves outward by up to a cell and the area
+reads high — measured +1.25 % on a 4 × 3 m room — and the suite's tolerance is one-sided for that
+reason. A doorway leaves the ring open; the call then reports no area and no segments rather than
+joining the last wall run to the first, which would draw a wall across the doorway. Manhattan angle
+snapping and door/window classification are the next step and are not claimed.
+
 **Manhattan-World frame** (`geometry/manhattan_world.cpp`). A room is meant to be orthogonal;
 the planes fitted from depth are not, because each carries its own noise and the pose graph's
 drift, and the error is systematic - two walls that should be 4.00 m apart read 4.03 m and the

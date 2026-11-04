@@ -367,6 +367,34 @@ void TsdfVolume::collectSurfaceBlocks(std::vector<int32_t>& outCoords) const {
   }
 }
 
+std::vector<Vec3> TsdfVolume::sliceSurfaceAtHeight(float heightMetres, float bandMetres) const {
+  std::vector<Vec3> slice;
+  if (!std::isfinite(heightMetres) || !(bandMetres >= 0.f)) return slice;
+
+  std::lock_guard<std::mutex> lock(integrationMutex_);
+  const float voxelSize = config_.voxelSize;
+  for (const auto& shard : shards_) {
+    std::lock_guard<std::mutex> shardLock(shard->mutex);
+    for (const auto& [key, slot] : shard->index) {
+      (void)key;
+      const Block& block = shard->blocks[slot];
+      for (int local = 0; local < kVoxelsPerBlock; ++local) {
+        if (block.weight[local] == 0) continue;              // never observed
+        if (std::fabs(block.sdf[local]) > 0.5f) continue;     // not a surface voxel
+        const int ix = local & (kResolution - 1);
+        const int iy = (local >> 3) & (kResolution - 1);
+        const int iz = (local >> 6) & (kResolution - 1);
+        const float y = (static_cast<float>(block.by * kResolution + iy) + 0.5f) * voxelSize;
+        if (std::fabs(y - heightMetres) > bandMetres) continue;
+        slice.push_back(Vec3((static_cast<float>(block.bx * kResolution + ix) + 0.5f) * voxelSize,
+                             y,
+                             (static_cast<float>(block.bz * kResolution + iz) + 0.5f) * voxelSize));
+      }
+    }
+  }
+  return slice;
+}
+
 void TsdfVolume::reset() {
   std::lock_guard<std::mutex> lock(integrationMutex_);
   for (auto& shard : shards_) {

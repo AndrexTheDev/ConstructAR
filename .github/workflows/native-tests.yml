@@ -48,6 +48,7 @@ jobs:
               native-slam/src/main/cpp/geometry/manhattan_world.cpp \
               native-slam/src/main/cpp/calibration/tag_scale.cpp \
               native-slam/src/main/cpp/geometry/plane_fit.cpp \
+              native-slam/src/main/cpp/geometry/floorplan.cpp \
               native-slam/src/main/cpp/slam/rtabmap_bridge.cpp \
               native-slam/src/main/cpp/tests/host_tests.cpp \
               -o host_tests

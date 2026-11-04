@@ -197,7 +197,7 @@ jobs:
           (
             cd native-slam/src/main/cpp
             g++ -std=c++20 -O2 -Wall -Wextra -Werror -I. \
-              tsdf/volume.cpp tsdf/surface_nets.cpp slam/pose_graph.cpp geometry/manhattan_world.cpp geometry/plane_fit.cpp calibration/tag_scale.cpp slam/rtabmap_bridge.cpp \
+              tsdf/volume.cpp tsdf/surface_nets.cpp slam/pose_graph.cpp geometry/manhattan_world.cpp geometry/plane_fit.cpp geometry/floorplan.cpp calibration/tag_scale.cpp slam/rtabmap_bridge.cpp \
               tests/host_tests.cpp -o /tmp/constructar_host_tests -pthread \
               && /tmp/constructar_host_tests
           ) > /tmp/step.log 2>&1

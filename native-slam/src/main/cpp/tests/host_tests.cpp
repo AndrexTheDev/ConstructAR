@@ -15,6 +15,7 @@
 //       native-slam/src/main/cpp/geometry/manhattan_world.cpp
 //       native-slam/src/main/cpp/calibration/tag_scale.cpp
 //       native-slam/src/main/cpp/geometry/plane_fit.cpp
+//       native-slam/src/main/cpp/geometry/floorplan.cpp
 //       native-slam/src/main/cpp/slam/rtabmap_bridge.cpp
 //       native-slam/src/main/cpp/tests/host_tests.cpp -o /tmp/constructar_host_tests
 //   /tmp/constructar_host_tests
@@ -37,6 +38,7 @@
 
 #include "../calibration/tag_scale.hpp"
 #include "../core/types.hpp"
+#include "../geometry/floorplan.hpp"
 #include "../geometry/manhattan_world.hpp"
 #include "../geometry/plane_fit.hpp"
 #include "../slam/pose_graph.hpp"
@@ -70,7 +72,10 @@ using constructar::Mat3;
 using constructar::PoseGraph;
 using constructar::TsdfConfig;
 using constructar::TsdfVolume;
+using constructar::Floorplan;
+using constructar::SlicePoint;
 using constructar::Vec3;
+using constructar::projectToFloor;
 
 // ── Synthetic depth sources ───────────────────────────────────────────────────────────────
 
@@ -1310,6 +1315,225 @@ void testRtabMapBridgeWithoutTheBackEnd() {
   check(!bridge.isAvailable() && bridge.graphSize() == 0, "a reset leaves it unavailable and empty");
 }
 
+/**
+ * The waist-height slice, against a wall whose height is known.
+ *
+ * The camera is placed one metre up and two metres back from a fronto-parallel wall, so the wall
+ * stands from y = 0.04 m to 1.96 m and a slice at y = 1.0 m must cross it while a slice at 3.0 m
+ * finds nothing. That is the whole contract of `sliceSurfaceAtHeight`: points on the *surface* at
+ * the requested height, observed only, and no points from free or unobserved space.
+ */
+void testSurfaceSliceAtHeight() {
+  section("TSDF slice at waist height");
+  SyntheticCamera camera;
+  std::vector<uint16_t> depth(static_cast<size_t>(camera.width * camera.height), 2000);
+  TsdfConfig config;
+  config.voxelSize = 0.02f;
+  config.minConfidence = 0;
+  config.workerThreads = 1;
+  TsdfVolume volume(config);
+  const Mat4 cameraToWorld = Mat4::fromRotationTranslation(Mat3{}, Vec3(0.f, 1.f, 0.f));
+  volume.integrate(makeFrame(camera, depth, cameraToWorld), 2);
+
+  const std::vector<Vec3> slice = volume.sliceSurfaceAtHeight(1.0f, 0.05f);
+  check(slice.size() > 100, "waist-height slice covers the wall (" + std::to_string(slice.size()) +
+                                " voxels)");
+
+  double maxHeightError = 0.0;
+  double maxDepthError = 0.0;
+  float minX = 1e30f, maxX = -1e30f;
+  bool allFinite = true;
+  for (const Vec3& point : slice) {
+    allFinite = allFinite && std::isfinite(point.x) && std::isfinite(point.y) &&
+                std::isfinite(point.z);
+    maxHeightError = std::max(maxHeightError, std::fabs(static_cast<double>(point.y) - 1.0));
+    maxDepthError = std::max(maxDepthError, std::fabs(static_cast<double>(point.z) + 2.0));
+    minX = std::min(minX, point.x);
+    maxX = std::max(maxX, point.x);
+  }
+  check(allFinite, "every sliced point is finite");
+  // Half a voxel of slack: the slice keeps voxel centres, and a surface voxel's centre can sit
+  // half a voxel either side of the plane it belongs to.
+  checkNear(maxHeightError, 0.0, 0.06, "slice stays within the band it was asked for");
+  // A slice emits voxel *centres*, so a point sits up to a voxel either side of the surface it
+  // belongs to - the mesh interpolates its vertices onto the zero crossing, the slice deliberately
+  // does not (a fixed lattice is the point of slicing the volume instead of the mesh).
+  checkNear(maxDepthError, 0.0, 0.05, "sliced points sit on the wall plane");
+  checkNear(maxX - minX, 2.56, 0.15, "the slice spans the wall's visible width (m)");
+
+  check(volume.sliceSurfaceAtHeight(3.0f, 0.05f).empty(), "a slice above the wall is empty");
+  check(volume.sliceSurfaceAtHeight(1.0f, -0.05f).empty(), "a negative band is refused");
+  check(volume.sliceSurfaceAtHeight(std::nanf(""), 0.05f).empty(), "a NaN height is refused");
+  check(volume.sliceSurfaceAtHeight(1.0f, 0.05f).size() == slice.size(),
+        "two slices of one volume agree (no order dependence)");
+
+  TsdfVolume empty(config);
+  check(empty.sliceSurfaceAtHeight(1.0f, 0.05f).empty(), "an unintegrated volume slices to nothing");
+
+  // projectToFloor() is the seam between the slice and the floorplan: the height is dropped and
+  // the footprint is carried through unchanged.
+  const std::vector<SlicePoint> floor = projectToFloor(slice);
+  check(floor.size() == slice.size(), "projection keeps every point");
+  check(floor.empty() || (std::isfinite(floor[0].x) && std::isfinite(floor[0].z)),
+        "projected points carry a finite footprint");
+  bool footprintMatches = true;
+  for (size_t i = 0; i < floor.size(); ++i) {
+    footprintMatches = footprintMatches && floor[i].x == slice[i].x && floor[i].z == slice[i].z;
+  }
+  check(footprintMatches, "projection drops the height and nothing else");
+}
+
+/** Walls sampled every two centimetres along a polygon, the way a scan of that room would look. */
+std::vector<SlicePoint> sampleWallLoop(const std::vector<SlicePoint>& corners) {
+  std::vector<SlicePoint> point;
+  for (size_t i = 0; i < corners.size(); ++i) {
+    const SlicePoint a = corners[i];
+    const SlicePoint b = corners[(i + 1) % corners.size()];
+    const float dx = b.x - a.x;
+    const float dz = b.z - a.z;
+    const float length = std::sqrt(dx * dx + dz * dz);
+    const int steps = std::max(1, static_cast<int>(length / 0.02f));
+    for (int step = 0; step < steps; ++step) {
+      const float t = static_cast<float>(step) / static_cast<float>(steps);
+      point.push_back(SlicePoint{a.x + dx * t, a.z + dz * t});
+    }
+  }
+  return point;
+}
+
+double totalLength(const std::vector<constructar::WallSegment>& segments) {
+  double total = 0.0;
+  for (const auto& segment : segments) total += segment.length();
+  return total;
+}
+
+/**
+ * Slice points -> wall segments (`vectoriseFloorplan`).
+ *
+ * The tolerances are one-sided on purpose: the traced loop is the *outer* face of a surface band
+ * one cell wide, so every wall moves outward by up to a cell and the reported area is a little
+ * larger than the room - measured +1.25 % on a 4 x 3 m room, +1.7 % on an L. A result *below* the
+ * room would mean the loop lost a wall, which is a different bug, so the lower bound is tighter
+ * than the upper one.
+ */
+void testFloorplanVectorise() {
+  section("Floorplan: slice points to wall segments");
+
+  // A closed 4 x 3 m room: four walls, and nothing else.
+  const std::vector<SlicePoint> room =
+      sampleWallLoop({{0.f, 0.f}, {4.f, 0.f}, {4.f, 3.f}, {0.f, 3.f}});
+  const constructar::Floorplan plan = constructar::vectoriseFloorplan(room);
+  check(plan.valid, "a closed room vectorises");
+  check(plan.closed, "the room's loop closed");
+  check(plan.segments.size() == 4, "a rectangular room is four segments (" +
+                                       std::to_string(plan.segments.size()) + ")");
+  checkNear(plan.areaSquareMetres, 12.0, 0.3, "area of a 4 x 3 m room (m2)");
+  check(plan.areaSquareMetres >= 11.7, "the area is never below the room it encloses");
+  checkNear(plan.perimeterMetres, 14.0, 0.3, "perimeter of a 4 x 3 m room (m)");
+  checkNear(totalLength(plan.segments), plan.perimeterMetres, 1e-3,
+            "the segments add up to the perimeter");
+  check(plan.occupiedCells > 200, "the occupancy grid saw the walls (" +
+                                      std::to_string(plan.occupiedCells) + " cells)");
+  bool everyRunIsAWall = true;
+  for (const auto& segment : plan.segments) {
+    everyRunIsAWall = everyRunIsAWall && segment.length() >= 2.5f;
+  }
+  check(everyRunIsAWall, "every wall run is a wall, not a staircase step");
+
+  // Repeated runs must produce byte-identical output: the chainer's vertex keys are integers, so
+  // there is no epsilon to make two runs disagree.
+  const constructar::Floorplan again = constructar::vectoriseFloorplan(room);
+  bool identical = again.segments.size() == plan.segments.size();
+  for (size_t i = 0; identical && i < plan.segments.size(); ++i) {
+    identical = again.segments[i].start.x == plan.segments[i].start.x &&
+                again.segments[i].start.z == plan.segments[i].start.z &&
+                again.segments[i].end.x == plan.segments[i].end.x &&
+                again.segments[i].end.z == plan.segments[i].end.z;
+  }
+  check(identical, "two runs of the same scan produce the same outline");
+
+  // An L-shaped room: six corners, and the concave corner must survive simplification.
+  const std::vector<SlicePoint> ell = sampleWallLoop(
+      {{0.f, 0.f}, {4.f, 0.f}, {4.f, 2.f}, {2.f, 2.f}, {2.f, 4.f}, {0.f, 4.f}});
+  const constructar::Floorplan ellPlan = constructar::vectoriseFloorplan(ell);
+  check(ellPlan.valid, "an L-shaped room vectorises");
+  check(ellPlan.segments.size() == 6, "an L is six segments (" +
+                                          std::to_string(ellPlan.segments.size()) + ")");
+  checkNear(ellPlan.areaSquareMetres, 12.0, 0.4, "area of the L (m2)");
+
+  // A diagonal wall is a staircase of cells that touch only at their corners. Without resolving
+  // those pinches the loop breaks into bubbles and the room is reported as unclosed; this triangle
+  // is what pins that down.
+  const std::vector<SlicePoint> triangle = sampleWallLoop({{0.f, 0.f}, {5.f, 0.f}, {0.f, 3.5f}});
+  const constructar::Floorplan trianglePlan = constructar::vectoriseFloorplan(triangle);
+  check(trianglePlan.valid, "a room with a 45-degree wall vectorises");
+  check(trianglePlan.segments.size() == 3,
+        "the triangle is three segments (" + std::to_string(trianglePlan.segments.size()) + ")");
+  checkNear(trianglePlan.areaSquareMetres, 8.75, 0.4, "area of the 5 x 3.5 m triangle (m2)");
+
+  // A doorway leaves the waist-height ring open. Closing it would draw a wall across the door and
+  // report the area of a room that is not there, so the contract is: no area, no segments, and the
+  // scan still counted. When gap handling lands, this is the test that has to change.
+  std::vector<SlicePoint> doorway;
+  for (float x = 0.f; x <= 4.f + 1e-4f; x += 0.02f) {
+    if (x > 1.5f && x < 2.4f) continue;
+    doorway.push_back({x, 0.f});
+    doorway.push_back({x, 3.f});
+  }
+  for (float z = 0.f; z <= 3.f + 1e-4f; z += 0.02f) {
+    doorway.push_back({0.f, z});
+    doorway.push_back({4.f, z});
+  }
+  const constructar::Floorplan openPlan = constructar::vectoriseFloorplan(doorway);
+  check(!openPlan.valid, "a room with an open doorway is not reported as a closed floorplan");
+  check(!openPlan.closed, "an open ring is not claimed to be closed");
+  check(openPlan.areaSquareMetres == 0.f, "an open plan reports no area rather than a wrong one");
+  check(openPlan.segments.empty(), "an open plan reports no wall runs");
+  check(openPlan.occupiedCells > 200, "the doorway scan was still seen (" +
+                                          std::to_string(openPlan.occupiedCells) + " cells)");
+
+  // Nothing to vectorise, and input that is not a room at all.
+  const std::vector<SlicePoint> nothing;
+  check(!constructar::vectoriseFloorplan(nothing).valid, "no points is not a floorplan");
+  check(!constructar::vectoriseFloorplan(std::vector<SlicePoint>{{0.f, 0.f}}).valid,
+        "one point is not a floorplan");
+  std::vector<SlicePoint> twoWalls;
+  for (float x = 0.f; x <= 3.f + 1e-4f; x += 0.02f) {
+    twoWalls.push_back({x, 0.f});
+    twoWalls.push_back({x, 3.f});
+  }
+  const constructar::Floorplan partial = constructar::vectoriseFloorplan(twoWalls);
+  check(!partial.valid, "two walls cannot close a room");
+  check(partial.occupiedCells > 50, "the two walls were still seen");
+
+  std::vector<SlicePoint> poisoned = sampleWallLoop({{0.f, 0.f}, {2.f, 0.f}, {2.f, 2.f}});
+  poisoned.push_back({std::nanf(""), 1.f});
+  poisoned.push_back({1.f, std::nanf("")});
+  const constructar::Floorplan poisonedPlan = constructar::vectoriseFloorplan(poisoned);
+  check(poisonedPlan.valid, "a non-finite point does not destroy an otherwise valid plan");
+
+  // The primitives the pass is built on.
+  const std::vector<SlicePoint> square = {{0.f, 0.f}, {2.f, 0.f}, {2.f, 2.f}, {0.f, 2.f}};
+  checkNear(constructar::polygonArea(square), 4.0, 1e-4, "polygon area of a 2 x 2 square");
+  std::vector<SlicePoint> reversed(square.rbegin(), square.rend());
+  checkNear(constructar::polygonArea(reversed), -4.0, 1e-4, "reversed winding flips the sign");
+  const std::vector<SlicePoint> straight = constructar::simplifyRdp(
+      {{0.f, 0.f}, {1.f, 0.f}, {2.f, 0.f}, {3.f, 0.f}}, 0.01f);
+  check(straight.size() == 2, "a straight chain simplifies to its two ends (" +
+                                  std::to_string(straight.size()) + ")");
+  const std::vector<SlicePoint> corner = constructar::simplifyRdp(
+      {{0.f, 0.f}, {1.f, 0.f}, {2.f, 0.f}, {2.f, 2.f}}, 0.01f);
+  check(corner.size() == 3, "a corner is kept (" + std::to_string(corner.size()) + ")");
+
+  // Segment length filtering: a 2 x 2 m room with a 2 m minimum would keep nothing.
+  constructar::FloorplanOptions coarse;
+  coarse.minSegmentMetres = 3.0f;
+  check(!constructar::vectoriseFloorplan(
+             sampleWallLoop({{0.f, 0.f}, {2.f, 0.f}, {2.f, 2.f}, {0.f, 2.f}}), coarse)
+             .valid,
+        "a room whose walls are all below the minimum segment length is not a floorplan");
+}
+
 void testInvalidInput() {
   section("Invalid input handling");
   TsdfConfig config;
@@ -1345,6 +1569,8 @@ int main() {
   testTagScaleContract();
   testPlaneFit();
   testRtabMapBridgeWithoutTheBackEnd();
+  testSurfaceSliceAtHeight();
+  testFloorplanVectorise();
   testInvalidInput();
 
   std::printf("\n%d checks, %d failures\n", g_checks, g_failures);

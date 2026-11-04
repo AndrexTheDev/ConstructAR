@@ -28,6 +28,7 @@ sources=(
   "$cpp/geometry/manhattan_world.cpp"
   "$cpp/calibration/tag_scale.cpp"
   "$cpp/geometry/plane_fit.cpp"
+  "$cpp/geometry/floorplan.cpp"
   "$cpp/slam/rtabmap_bridge.cpp"
   "$cpp/tests/host_tests.cpp"
 )

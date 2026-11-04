@@ -150,6 +150,22 @@ class TsdfVolume {
    */
   MeshBuffers extractMesh(float isoLevel = 0.f) const;
 
+  /**
+   * Surface voxels within `bandMetres` of the horizontal plane `y = heightMetres`.
+   *
+   * This is the 2D floorplan's raw material (section 4 of the master prompt): a slice through the
+   * volume at waist height shows the walls as a ring of points, with doorways showing as gaps and
+   * furniture as islands - whatever the camera saw at that height, and nothing at ankle or eye
+   * level. Slicing the *volume* rather than the mesh is deliberate: the mesh is a triangle soup
+   * whose vertices sit between voxels, so a slice of it depends on where the triangulator happened
+   * to place its vertices, while the voxel grid has a fixed lattice and a fixed cost.
+   *
+   * Only voxels that are part of the surface are emitted (`|sdf| <= 0.5`, i.e. inside the
+   * truncation band) and only ones that were ever observed (`weight > 0`), so free space and
+   * unobserved space both contribute nothing. Serialised against integrate() like extraction.
+   */
+  std::vector<Vec3> sliceSurfaceAtHeight(float heightMetres, float bandMetres) const;
+
   void reset();
 
   size_t blockCount() const { return blockCount_.load(std::memory_order_relaxed); }

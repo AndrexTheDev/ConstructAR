@@ -314,6 +314,7 @@ g++ -std=c++20 -O2 -pthread -I native-slam/src/main/cpp \
     native-slam/src/main/cpp/slam/pose_graph.cpp \
     native-slam/src/main/cpp/geometry/manhattan_world.cpp \
     native-slam/src/main/cpp/geometry/plane_fit.cpp \
+    native-slam/src/main/cpp/geometry/floorplan.cpp \
     native-slam/src/main/cpp/calibration/tag_scale.cpp \
     native-slam/src/main/cpp/slam/rtabmap_bridge.cpp \
     native-slam/src/main/cpp/tests/host_tests.cpp -o /tmp/host_tests && /tmp/host_tests
@@ -377,7 +378,7 @@ Known limitations, deliberately documented rather than hidden:
 
 ## Testing
 
-* **Native (C++) — 185 assertions, all green**, exercised with plain `g++` (no Android SDK):
+* **Native (C++) — 229 assertions, all green**, exercised with plain `g++` (no Android SDK):
   SE(3) exp/log round trip, TSDF integration on synthetic depth, sphere/wall reconstruction
   areas and extents, a 30°-tilted plane (which pins the depth convention), free-space carving
   (a ghost disappears, the real wall does not), triangle budget, invalid input, pose-graph
@@ -399,6 +400,20 @@ Known limitations, deliberately documented rather than hidden:
   chain — a synthetic 4 × 3 m room cloud with 3 mm of noise and one wall 8° off square, six
   surfaces, one frame, five snapped planes and the crooked wall left at the 4 m it was measured
   at.
+* **Waist-height slice and floorplan** (`tsdf/volume.cpp`, `geometry/floorplan.cpp`) — the first
+  half of a 2D plan: `sliceSurfaceAtHeight(1.0f, 0.05f)` returns the surface voxels inside a 5 cm
+  band at standing height (observed voxels only, so free and unseen space contribute nothing), and
+  `vectoriseFloorplan` turns those points into wall segments — a 5 cm occupancy grid, boundary
+  edges with the room on the left, loops chained through integer corner keys, and
+  Ramer–Douglas–Peucker over each loop. A 4 × 3 m room comes back as four segments, 12.15 m² and
+  14.10 m; an L-shaped room as six; a room with a 45° wall as three (the grid's corner-touching
+  pinches are resolved first, or a diagonal wall breaks the loop into bubbles). Two things are
+  deliberate: the traced loop is the *outer* face of a one-cell surface band, so area reads up to
+  ~2 % high — measured +1.25 % on the rectangle, +1.7 % on the L, +2.4 % on the triangle, and the
+  suite's tolerance is one-sided because reading *low* would mean a lost wall; and a doorway opens
+  the ring, so a scan with the door open reports **no** area and **no** segments rather than
+  closing the gap with a wall that is not there. Gap classification is the next step. Host-tested
+  and **not yet wired**: no JNI symbol, no caller, so no plan on any screen comes from it yet.
 * **AprilTag — detector contract, no detector.** `calibration/tag_scale.hpp` holds the interface a
   decoder will implement (whose only implementation says it is unavailable, and why) and the
   marker-to-scale arithmetic: pair ratios against the printed layout, a median, a deviation
@@ -542,8 +557,8 @@ errors:
 | `:ar-engine` unit tests | pass |
 | `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 715 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
-| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 185 checks, 0 failures |
-| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 185 checks, 0 failures, no data race reported |
+| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 229 checks, 0 failures |
+| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 229 checks, 0 failures, no data race reported |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
 | APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |
