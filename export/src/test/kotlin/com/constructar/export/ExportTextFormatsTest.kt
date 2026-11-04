@@ -258,6 +258,52 @@ class ExportTextFormatsTest {
         assertTrue(diagnostic, lines.none { it == "element vertex 999999" })
     }
 
+    /**
+     * Finding 178: the header was encoded as US-ASCII, which does not fail on a name outside that
+     * range - it substitutes `?` for the letter. `comment mesh K?che` is what a German room looked
+     * like in the file the surveyor opens, and four of the app's six locales type letters US-ASCII
+     * cannot hold.
+     */
+    @Test
+    fun `a run name keeps its own letters in the ply header`() {
+        val names = listOf("Küche", "Baño 2", "Łazienka", "Café 1. OG")
+        val text = PlyWriter.writeAscii(names.map { PlyWriter.PlyPart(it, triangleMesh()) })
+        for (name in names) {
+            assertTrue("lost the letters of $name: $text", text.contains("comment mesh $name\n"))
+        }
+
+        val bytes = PlyWriter.write(listOf(PlyWriter.PlyPart("Küche", triangleMesh())))
+        val decoded = String(bytes, Charsets.UTF_8)
+        assertTrue("the written file holds ${decoded.take(120)}", decoded.contains("comment mesh Küche\n"))
+        assertFalse("a substitute character reached the header: ${decoded.take(120)}", decoded.contains("?"))
+    }
+
+    /**
+     * Finding 178, second half: the binary header carried no per-part comment at all, so the same
+     * bundle told a reader which mesh was which while it was small and stopped telling him once it
+     * crossed the size limit that switches the layout.
+     */
+    @Test
+    fun `the binary layout names its runs as well`() {
+        val bytes = PlyWriter.writeBinaryLittleEndian(
+            listOf(
+                PlyWriter.PlyPart("Küche", triangleMesh()),
+                PlyWriter.PlyPart("Bad OG", triangleMesh()),
+            ),
+        )
+        val marker = "end_header\n".toByteArray()
+        val headerLength = indexOf(bytes, marker) + marker.size
+        val header = String(bytes, 0, headerLength, Charsets.UTF_8)
+
+        assertTrue("first run missing: $header", header.contains("comment mesh Küche\n"))
+        assertTrue("second run missing: $header", header.contains("comment mesh Bad OG\n"))
+        assertEquals(
+            "one line per run and no more: $header",
+            2,
+            header.lines().count { it.startsWith("comment mesh ") },
+        )
+    }
+
     @Test
     fun `a ply comment is flattened into one header line`() {
         val bytes = PlyWriter.writeBinaryLittleEndian(
@@ -269,7 +315,7 @@ class ExportTextFormatsTest {
         assertTrue("end_header not found in ${String(bytes, Charsets.US_ASCII).take(200)}", headerLength >= marker.size)
         val header = String(bytes, 0, headerLength, Charsets.US_ASCII).lines()
         val diagnostic = header.joinToString(" | ")
-        assertEquals(diagnostic, 1, header.count { it.startsWith("comment ") })
+        assertEquals(diagnostic, 1, header.count { it.startsWith("comment ") && !it.startsWith("comment mesh ") })
         assertTrue(diagnostic, header.none { it == "element vertex 999999" })
         assertEquals(diagnostic, 1, header.count { it == "element vertex 3" })
         assertEquals(diagnostic, 1, header.count { it == "end_header" })

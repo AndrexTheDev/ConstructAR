@@ -2066,6 +2066,25 @@ def check_the_ellipsis_does_not_cut_a_character() -> None:
                       "(finding 177)")
 
 
+def check_the_ply_header_keeps_the_run_names() -> None:
+    """The PLY header names its runs, in both layouts, in the operator's own letters (finding 178).
+
+    `PlyWriter` encoded the header as `Charsets.US_ASCII`, which does not fail on a letter outside
+    ASCII: it substitutes `?` for it. A German room was `comment mesh K?che` in the file the
+    surveyor opens, and four of the app's six locales type letters that encoding cannot hold. The
+    binary header carried no per-part comment at all, so the same bundle stopped naming its meshes
+    once it crossed the size limit that switches the layout.
+    """
+    ply = ROOT / "export" / "src" / "main" / "kotlin" / "com" / "constructar" / "export" / "ply" / "PlyWriter.kt"
+    text = ply.read_text(encoding="utf-8")
+    if "Charsets.US_ASCII" in text:
+        add(ply, "the header is encoded as US-ASCII again, which turns every letter outside it "
+                 "into '?' - and the names in it are the operator's own (finding 178)")
+    if text.count('"comment mesh ') < 2:
+        add(ply, "only one of the two layouts names its runs, so a bundle loses its mesh names "
+                 "when the size limit switches the layout (finding 178)")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -2121,6 +2140,7 @@ def main() -> int:
     check_the_appendix_prints_the_photos_the_screen_holds()
     check_a_failed_save_keeps_the_room()
     check_the_ellipsis_does_not_cut_a_character()
+    check_the_ply_header_keeps_the_run_names()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

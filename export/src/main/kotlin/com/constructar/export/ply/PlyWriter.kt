@@ -32,6 +32,20 @@ import java.util.Locale
  * Both use metres and Y-up (PLY has no up-axis convention, so it is written as a comment —
  * losers of the format, but a comment has saved more imports than it cost).
  *
+ * Both layouts name their meshes in the header, and both write the header as **UTF-8**.
+ *
+ * PLY's header is ASCII by the letter of the format, but the names in it are the operator's own
+ * run labels: "Küche", "Baño", "Łazienka". Encoding them as US-ASCII did not fail, it
+ * substituted `?` for every letter outside it - `comment mesh K?che` - so four of the app's six
+ * locales could not get a room name into the file the surveyor opens. The header is therefore
+ * encoded as UTF-8: identical bytes while every name is ASCII, and the name itself otherwise. A
+ * reader that treats a `comment` as bytes (all of them do) prints the letters; the structural
+ * tokens are still plain ASCII, so nothing about parsing changes (finding 178).
+ *
+ * The binary layout used to carry no per-part comment at all, so the two layouts held the same
+ * geometry and different information about it - and the layout is chosen by size, which meant a
+ * bundle lost its run names the moment it got big.
+ *
  * The default comment says **export**, not "scan": what this writer receives is whatever the caller
  * hands it, and the export hands it the measured runs. The header used to call every file a room
  * scan, so a wholesaler opening a 40 kB PLY of conduit runs read that the room itself was in there
@@ -62,7 +76,7 @@ object PlyWriter {
         if (parts.sumOf { it.mesh.triangleCount } > ASCII_LIMIT_TRIANGLES) {
             writeBinaryLittleEndian(parts, comment)
         } else {
-            writeAscii(parts, comment).toByteArray(Charsets.US_ASCII)
+            writeAscii(parts, comment).toByteArray(Charsets.UTF_8)
         }
 
     data class PlyPart(val name: String, val mesh: MeshData)
@@ -119,13 +133,14 @@ object PlyWriter {
             append("ply\n")
             append("format binary_little_endian 1.0\n")
             append("comment ${oneLine(comment)}\n")
+            parts.forEach { append("comment mesh ${oneLine(it.name)}\n") }
             append("element vertex ${parts.sumOf { it.mesh.vertexCount }}\n")
             append("property float x\nproperty float y\nproperty float z\n")
             append("property float nx\nproperty float ny\nproperty float nz\n")
             append("element face ${parts.sumOf { it.mesh.triangleCount }}\n")
             append("property list uchar int vertex_indices\n")
             append("end_header\n")
-        }.toByteArray(Charsets.US_ASCII)
+        }.toByteArray(Charsets.UTF_8)
 
         val vertexBytes = parts.sumOf { it.mesh.vertexCount } * 6 * 4
         val faceBytes = parts.sumOf { it.mesh.triangleCount } * (1 + 3 * 4)
