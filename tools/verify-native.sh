@@ -26,6 +26,7 @@ sources=(
   "$cpp/tsdf/surface_nets.cpp"
   "$cpp/slam/pose_graph.cpp"
   "$cpp/geometry/manhattan_world.cpp"
+  "$cpp/calibration/tag_scale.cpp"
   "$cpp/slam/rtabmap_bridge.cpp"
   "$cpp/tests/host_tests.cpp"
 )

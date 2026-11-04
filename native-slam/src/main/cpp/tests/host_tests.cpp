@@ -13,6 +13,7 @@
 //       native-slam/src/main/cpp/tsdf/surface_nets.cpp
 //       native-slam/src/main/cpp/slam/pose_graph.cpp
 //       native-slam/src/main/cpp/geometry/manhattan_world.cpp
+//       native-slam/src/main/cpp/calibration/tag_scale.cpp
 //       native-slam/src/main/cpp/slam/rtabmap_bridge.cpp
 //       native-slam/src/main/cpp/tests/host_tests.cpp -o /tmp/constructar_host_tests
 //   /tmp/constructar_host_tests
@@ -33,6 +34,7 @@
 #include <string>
 #include <vector>
 
+#include "../calibration/tag_scale.hpp"
 #include "../core/types.hpp"
 #include "../geometry/manhattan_world.hpp"
 #include "../slam/pose_graph.hpp"
@@ -865,6 +867,167 @@ void testManhattanFrame() {
         "solving the same planes twice gives the same axes");
 }
 
+
+/**
+ * The AprilTag contract: an interface whose only implementation says "no decoder", and the
+ * marker-to-scale arithmetic that a decoder will feed. No decoder exists, so nothing here decodes
+ * a pixel - what is tested is the arithmetic, the outlier filter and the honesty of the absence.
+ */
+std::vector<constructar::TagLayoutEntry> standardLayout() {
+  return {
+      {0, {0.f, 0.f, 0.f}},
+      {1, {1.f, 0.f, 0.f}},
+      {2, {0.f, 0.f, 1.f}},
+      {3, {1.f, 0.f, 1.f}},
+      {4, {0.5f, 0.f, 0.5f}},
+  };
+}
+
+/** The layout as the scan would report it if the scan's metre were `stretch` times long. */
+std::vector<constructar::TagSighting> stretchedSightings(float stretch) {
+  std::vector<constructar::TagSighting> sightings;
+  for (const constructar::TagLayoutEntry& entry : standardLayout()) {
+    sightings.push_back({entry.id, entry.nominal * stretch, 0.9f, 0});
+  }
+  return sightings;
+}
+
+void testTagScaleContract() {
+  section("AprilTag contract: the absence is explicit");
+  const auto detector = constructar::makeTagDetector();
+  check(detector != nullptr, "the build always offers a detector object, even with no decoder");
+  check(!detector->available(), "a build with no decoder says it is unavailable");
+  const char* reason = detector->unavailableReason();
+  check(reason != nullptr && std::strlen(reason) > 0,
+        "an unavailable detector says why, so a diagnostic screen can print it");
+  check(reason != nullptr && std::strstr(reason, "contract") != nullptr,
+        "the reason names the contract rather than blaming the frame");
+
+  std::vector<uint8_t> pixels(static_cast<size_t>(8 * 8), 128);
+  constructar::GrayFrameView view{pixels.data(), 8, 8, 8, 0.0};
+  check(view.isUsable(), "a well-formed luminance view is usable");
+  check(detector->detect(view).empty(),
+        "with no decoder a frame yields no detections - which is why `available()` exists");
+  constructar::GrayFrameView broken{nullptr, 8, 8, 8, 0.0};
+  check(!broken.isUsable(), "a view with no buffer is refused before a decoder reads it");
+  constructar::GrayFrameView narrow{pixels.data(), 8, 8, 4, 0.0};
+  check(!narrow.isUsable(), "a row stride narrower than the row is refused");
+  check(detector->detect(broken).empty(), "a broken view is not a crash");
+
+  section("AprilTag contract: marker to scale, and what it refuses");
+  const auto layout = standardLayout();
+
+  // Five tags stretched 5 %: ten ratios that must agree.
+  const auto stretched = stretchedSightings(1.05f);
+  const auto estimate = constructar::estimateScaleFromTagSightings(stretched, layout, {});
+  check(estimate.valid, "five tags at a known spacing determine a factor");
+  checkNear(estimate.factor, 1.0 / 1.05, 1e-4,
+            "the factor is nominal over measured, the same direction as the app's calibration");
+  check(estimate.pairs == 10, "every pair of trusted tags contributes a ratio");
+  check(estimate.rejectedPairs == 0, "ten agreeing pairs reject nothing");
+  checkNear(estimate.spread, 0.0, 1e-6, "pairs that agree exactly have zero spread");
+  checkNear(estimate.baselineMetres, 1.4142135, 1e-3,
+            "the published baseline is the longest one the factor rests on");
+
+  // Two tags are one pair, and one pair is not a factor.
+  std::vector<constructar::TagSighting> two{stretched[0], stretched[1]};
+  std::vector<constructar::TagLayoutEntry> twoLayout{layout[0], layout[1]};
+  const auto single = constructar::estimateScaleFromTagSightings(two, twoLayout, {});
+  check(!single.valid, "one pair is not enough evidence to publish a factor");
+  check(single.pairs == 1, "the count still says one pair was seen - 'not enough' is not 'nothing'");
+  check(single.factor == 1.f, "a refused estimate leaves the factor at one, never at a guess");
+  constructar::TagScaleOptions onePair;
+  onePair.minPairs = 1;
+  const auto allowed = constructar::estimateScaleFromTagSightings(two, twoLayout, onePair);
+  check(allowed.valid, "a caller that accepts one pair can have one pair");
+  checkNear(allowed.factor, 1.0 / 1.05, 1e-5, "and the factor is that pair's ratio exactly");
+
+  // A minority of bad evidence: one tag stuck a metre from where it belongs, so its four pairs
+  // are wrong and the other six are right. The median has a majority to find; a robust estimator
+  // has nothing to say at 50 % contamination, which is why this test does not ask it to.
+  std::vector<constructar::TagSighting> withOutlier = stretched;
+  withOutlier[4].centroid = {1.4f, 0.f, 1.4f};
+  const auto filtered = constructar::estimateScaleFromTagSightings(withOutlier, layout, {});
+  check(filtered.valid, "an estimate survives one tag being wrong");
+  check(filtered.pairs == 6 && filtered.rejectedPairs == 4,
+        "the four pairs the bad tag touches are rejected and the six that do not agree are kept");
+  checkNear(filtered.factor, 1.0 / 1.05, 1e-4, "the outlier does not move the factor");
+
+  // Confidence and error correction: a tag read through a corrected bit is not a ruler.
+  std::vector<constructar::TagSighting> blurred = stretched;
+  blurred[1].decisionMargin = 0.3f;
+  const auto lowMargin = constructar::estimateScaleFromTagSightings(blurred, layout, {});
+  check(!lowMargin.valid || lowMargin.pairs == 6,
+        "a tag below the decision margin contributes no pair");
+  check(lowMargin.valid && lowMargin.pairs == 6,
+        "the other four tags still agree: six pairs, not ten");
+  std::vector<constructar::TagSighting> corrected = stretched;
+  corrected[1].hamming = 1;
+  const auto guessed = constructar::estimateScaleFromTagSightings(corrected, layout, {});
+  check(guessed.valid && guessed.pairs == 6, "a tag that needed a corrected bit is not used");
+
+  // One tag, two sightings: the more confident one is the tag.
+  std::vector<constructar::TagSighting> duplicated = stretched;
+  duplicated.push_back({0, {0.f, 0.f, 0.4f}, 0.7f, 0});
+  const auto deduped = constructar::estimateScaleFromTagSightings(duplicated, layout, {});
+  check(deduped.valid && deduped.pairs == 10,
+        "a second sighting of the same tag replaces nothing - one tag is one tag");
+  checkNear(deduped.factor, 1.0 / 1.05, 1e-4,
+            "the confident sighting wins, so a ghost detection cannot move the factor");
+
+  // An id the layout does not know contributes nothing, and says so by counting no pairs.
+  std::vector<constructar::TagSighting> unknown = stretched;
+  unknown.push_back({99, {0.5f, 0.5f, 0.5f}, 0.99f, 0});
+  const auto withUnknown = constructar::estimateScaleFromTagSightings(unknown, layout, {});
+  check(withUnknown.valid && withUnknown.pairs == 10,
+        "an id the printed layout does not contain is ignored");
+
+  // Weighting: a 3 m baseline is much better evidence than a 0.3 m one. With the deviation filter
+  // opened up so both families are kept, the factor must sit near the long pairs' ratio rather
+  // than at the unweighted mean of the three.
+  std::vector<constructar::TagLayoutEntry> weightedLayout{
+      {0, {0.f, 0.f, 0.f}}, {1, {3.f, 0.f, 0.f}}, {2, {0.f, 0.f, 0.3f}}};
+  std::vector<constructar::TagSighting> weightedSightings{
+      {0, {0.f, 0.f, 0.f}, 0.9f, 0},
+      {1, {3.3f, 0.f, 0.f}, 0.9f, 0},   // the scan's metre is 10 % long along the long baseline
+      {2, {0.f, 0.f, 0.3f}, 0.9f, 0},   // and right along a baseline too short to notice
+  };
+  constructar::TagScaleOptions generous;
+  generous.maxRelativeDeviation = 0.2f;
+  const auto weighted =
+      constructar::estimateScaleFromTagSightings(weightedSightings, weightedLayout, generous);
+  check(weighted.valid, "both families are kept when the filter allows it");
+  check(std::fabs(static_cast<double>(weighted.factor) - 1.0 / 1.10) < 0.01,
+        "the factor follows the 3 m baseline, not the 0.3 m one");
+  check(std::fabs(static_cast<double>(weighted.factor) - (1.0 / 1.10 + 1.0 + 1.0 / 1.1) / 3.0) >
+            0.02,
+        "and it is not the unweighted mean of the three ratios");
+
+  // Two tags a micron apart: the ratio would be 10^6 rather than 0.95, and a factor of a million
+  // is the kind of number that ends up in a protocol. The baseline floor is what stops it.
+  std::vector<constructar::TagSighting> collapsed{stretched[0], stretched[1]};
+  collapsed[1].centroid = collapsed[0].centroid + constructar::Vec3(1e-6f, 0.f, 0.f);
+  const auto degenerate = constructar::estimateScaleFromTagSightings(collapsed, twoLayout, {});
+  check(!degenerate.valid && degenerate.factor == 1.f,
+        "a micrometre baseline is not divided by: no factor rather than a factor of 10^6");
+  // With the pair count relaxed to one, the only thing standing between that division and a
+  // published factor is the baseline floor - so this is the case that pins it.
+  const auto degenerateAllowed =
+      constructar::estimateScaleFromTagSightings(collapsed, twoLayout, onePair);
+  check(!degenerateAllowed.valid && degenerateAllowed.pairs == 0,
+        "even a caller that accepts one pair gets nothing from a micrometre baseline");
+
+  // Nothing at all.
+  const auto empty = constructar::estimateScaleFromTagSightings({}, layout, {});
+  check(!empty.valid && empty.pairs == 0 && empty.factor == 1.f,
+        "no sightings, no factor, no invented number");
+
+  // Determinism: the same evidence twice is the same factor, bit for bit.
+  const auto again = constructar::estimateScaleFromTagSightings(stretched, layout, {});
+  check(std::memcmp(&estimate.factor, &again.factor, sizeof(float)) == 0,
+        "estimating twice gives the same factor");
+}
+
 void testRtabMapBridgeWithoutTheBackEnd() {
   section("RTAB-Map bridge: what a build without the back-end promises");
   constructar::RtabMapBridge bridge;
@@ -916,6 +1079,7 @@ int main() {
   testBlocksAllocatedPerFrame();
   testVoxelFusionUnderConcurrency();
   testManhattanFrame();
+  testTagScaleContract();
   testRtabMapBridgeWithoutTheBackEnd();
   testInvalidInput();
 

@@ -28,6 +28,7 @@ set(SLAM_SOURCES
     tsdf/surface_nets.cpp
     slam/pose_graph.cpp
     geometry/manhattan_world.cpp
+    calibration/tag_scale.cpp
     slam/rtabmap_bridge.cpp
 )
 

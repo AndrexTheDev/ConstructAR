@@ -273,7 +273,7 @@ and the sitemap are absolute.
 | Module | Language | Responsibility |
 |--------|----------|----------------|
 | `:core` | Kotlin/JVM, **no Android deps** | Maths (`Vec3`, `Quat`, `Mat4`, `Plane3`, polygon containment), routing model, fillet/RMF smoothing, tube & duct mesh generation, measurement, bill of materials, formatting. This is the trust boundary: everything that decides a *number* lives here and is unit-tested on the JVM. |
-| `:native-slam` | C++20 + JNI | TSDF volume (block-hashed, free-space carving optional), Surface Nets extraction, Manhattan-World frame solver, pose graph with loop closures, RTAB-Map bridge. Host-testable: `native-slam/src/main/cpp/tests`; the optional RTAB-Map branch is compile-checked in CI against stub headers that mirror upstream's declarations (finding 183). |
+| `:native-slam` | C++20 + JNI | TSDF volume (block-hashed, free-space carving optional), Surface Nets extraction, Manhattan-World frame solver, AprilTag detector contract and marker-to-scale arithmetic, pose graph with loop closures, RTAB-Map bridge. Host-testable: `native-slam/src/main/cpp/tests`; the optional RTAB-Map branch is compile-checked in CI against stub headers that mirror upstream's declarations (finding 183). |
 | `:ar-engine` | Kotlin/Android | ARCore session & config, torch policy, tracking monitor, depth capture, TSDF pipeline, hit cascade, AI depth, anchors, routing state, Filament mesh upload, Compose AR surface. |
 | `:export` | Kotlin/Android | PDF protocol, CSV bill of materials, GLB writer, PLY writer. Storage-agnostic (works on `OutputStream`). |
 | `:app` | Kotlin/Android | Single activity, Compose Material 3 UI with glove-sized controls, project storage (JSON files), navigation. |
@@ -313,6 +313,7 @@ g++ -std=c++20 -O2 -pthread -I native-slam/src/main/cpp \
     native-slam/src/main/cpp/tsdf/surface_nets.cpp \
     native-slam/src/main/cpp/slam/pose_graph.cpp \
     native-slam/src/main/cpp/geometry/manhattan_world.cpp \
+    native-slam/src/main/cpp/calibration/tag_scale.cpp \
     native-slam/src/main/cpp/slam/rtabmap_bridge.cpp \
     native-slam/src/main/cpp/tests/host_tests.cpp -o /tmp/host_tests && /tmp/host_tests
 ```
@@ -375,7 +376,7 @@ Known limitations, deliberately documented rather than hidden:
 
 ## Testing
 
-* **Native (C++) — 116 assertions, all green**, exercised with plain `g++` (no Android SDK):
+* **Native (C++) — 152 assertions, all green**, exercised with plain `g++` (no Android SDK):
   SE(3) exp/log round trip, TSDF integration on synthetic depth, sphere/wall reconstruction
   areas and extents, a 30°-tilted plane (which pins the depth convention), free-space carving
   (a ghost disappears, the real wall does not), triangle budget, invalid input, pose-graph
@@ -383,7 +384,13 @@ Known limitations, deliberately documented rather than hidden:
   volume's weights, and the Manhattan-World frame (finding 187): a 4 x 3 x 2.5 m room with one
   wall 8° off square and a 35° bay window comes back square to a fifth of a degree, the crooked
   wall is squared and stays where its points are, the bay is returned untouched, a set of parallel
-  walls is refused rather than guessed at, and a room turned 30° yields the turned frame. `tools/verify-native.sh` builds and runs all of it the way CI does;
+  walls is refused rather than guessed at, and a room turned 30° yields the turned frame.
+* **AprilTag — detector contract, no detector.** `calibration/tag_scale.hpp` holds the interface a
+  decoder will implement (whose only implementation says it is unavailable, and why) and the
+  marker-to-scale arithmetic: pair ratios against the printed layout, a median, a deviation
+  filter, and a baseline-weighted mean. It publishes a factor and its evidence and decides
+  nothing - the window stays in `:core`. No decoder is vendored, nothing exposes it over JNI and
+  no screen has a button for it; `docs/CALIBRATION.md` says the same. `tools/verify-native.sh` builds and runs all of it the way CI does;
   `--tsan` runs the same suite under ThreadSanitizer, which is a gate: the fusion of a voxel is a
   read-modify-write of two arrays done by several workers, and only the sanitizer can see it when
   that update escapes the shard lock (finding 181). It reports none.
@@ -521,8 +528,8 @@ errors:
 | `:ar-engine` unit tests | pass |
 | `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 715 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
-| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 116 checks, 0 failures |
-| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 116 checks, 0 failures, no data race reported |
+| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 152 checks, 0 failures |
+| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 152 checks, 0 failures, no data race reported |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
 | APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |

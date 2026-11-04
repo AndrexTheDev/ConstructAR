@@ -2466,48 +2466,110 @@ MANHATTAN_HEADER = (ROOT / "native-slam" / "src" / "main" / "cpp" / "geometry" /
                     "manhattan_world.hpp")
 MANHATTAN_SOURCE = (ROOT / "native-slam" / "src" / "main" / "cpp" / "geometry" /
                     "manhattan_world.cpp")
+TAG_SCALE_HEADER = (ROOT / "native-slam" / "src" / "main" / "cpp" / "calibration" /
+                    "tag_scale.hpp")
+TAG_SCALE_SOURCE = (ROOT / "native-slam" / "src" / "main" / "cpp" / "calibration" /
+                    "tag_scale.cpp")
+CALIBRATION_DOC = ROOT / "docs" / "CALIBRATION.md"
 
 
 def check_the_frame_solver_is_built_everywhere() -> None:
-    """One translation unit, four build lists (finding 187).
+    """One translation unit, four build lists (findings 187, 188).
 
     The native layer is compiled in four places that nobody edits together: the NDK library's
     `SLAM_SOURCES`, the host script a developer runs, the `native-tests` workflow matrix and the
     host step of `android-build`. A source added to three of them compiles, tests green, and then
     fails to link in the APK - or, worse, is tested in a configuration the app never builds. So
-    the file lists are compared as sets: every `.cpp` under the native tree is either in all four
-    lists or in none of them.
+    every `.cpp` under the native tree must be in all four lists, or in none of them. The two
+    exceptions are named and deliberate: `jni/slam_jni.cpp` is Android-only (no host build could
+    link it) and `tests/host_tests.cpp` *is* the host build.
     """
     if not MANHATTAN_SOURCE.exists():
         add(MANHATTAN_SOURCE, "the Manhattan-World solver is gone - the room's planes would be "
                               "reported at whatever angle the depth noise left them")
-        return
+    if not TAG_SCALE_SOURCE.exists():
+        add(TAG_SCALE_SOURCE, "the marker-to-scale contract is gone - docs/CALIBRATION.md and the "
+                              "host suite would be describing arithmetic that no longer exists")
     built = {
         "CMakeLists.txt": (ROOT / "native-slam" / "src" / "main" / "cpp" / "CMakeLists.txt"),
         "tools/verify-native.sh": ROOT / "tools" / "verify-native.sh",
         ".github/workflows/native-tests.yml": ROOT / ".github" / "workflows" / "native-tests.yml",
         ".github/workflows/android-build.yml": ROOT / ".github" / "workflows" / "android-build.yml",
     }
-    for label, path in built.items():
-        if "manhattan_world.cpp" not in path.read_text(encoding="utf-8"):
-            add(path, f"{label} does not compile `geometry/manhattan_world.cpp`, so the solver "
-                      f"would be dead code in that configuration (and the others would still "
-                      f"pass)")
+    native_root = ROOT / "native-slam" / "src" / "main" / "cpp"
+    android_only = {native_root / "jni" / "slam_jni.cpp", native_root / "tests" / "host_tests.cpp"}
+    listed = {label: path.read_text(encoding="utf-8") for label, path in built.items()}
+    for source in sorted(native_root.rglob("*.cpp")):
+        if source in android_only:
+            continue
+        for label, text in listed.items():
+            if source.name not in text:
+                add(source, f"{label} does not compile this file, so it is dead code in that "
+                            f"configuration and the others still pass")
     suite = NATIVE_SUITE.read_text(encoding="utf-8")
-    if "testManhattanFrame();" not in suite:
-        add(NATIVE_SUITE, "the host suite no longer runs `testManhattanFrame`, so 41 assertions "
-                          "about the solver are written and never executed")
-    # The licensing contract: no Eigen, no OpenCV in the self-contained build. Eigen is LGPL-ish
-    # in combination, MPI is not ours to ship, and the NDK build must stay BSD-3/MIT only.
-    for path in (ROOT / "native-slam" / "src" / "main" / "cpp").rglob("*.cpp"):
-        text = path.read_text(encoding="utf-8")
-        if "#include <Eigen" in text:
-            add(path, "Eigen in the self-contained native build - the NDK library must stay "
-                      "BSD-3/MIT only (docs/LICENSING.md)")
-    for path in (ROOT / "native-slam" / "src" / "main" / "cpp").rglob("*.hpp"):
+    for entry, count in (("testManhattanFrame();", "41"), ("testTagScaleContract();", "35")):
+        if entry not in suite:
+            add(NATIVE_SUITE, f"the host suite no longer runs `{entry}`, so {count} assertions "
+                              f"about it are written and never executed")
+    # The licensing contract: no Eigen, no OpenCV in the self-contained build. Eigen is not ours
+    # to ship, and the NDK library must stay BSD-3/MIT only (docs/LICENSING.md).
+    for path in list(native_root.rglob("*.cpp")) + list(native_root.rglob("*.hpp")):
         if "#include <Eigen" in path.read_text(encoding="utf-8"):
             add(path, "Eigen in the self-contained native build - the NDK library must stay "
                       "BSD-3/MIT only (docs/LICENSING.md)")
+
+
+def check_the_tag_contract_is_not_sold_as_a_detector() -> None:
+    """The marker tier is arithmetic and an interface, not a detector (finding 188).
+
+    Tier 2 is the one tier this repository cannot prove: decoding an AprilTag means vendoring a
+    decoder, licensing it, and running it on a phone. What can be built here is the interface a
+    decoder would implement and the arithmetic its output feeds - and the difference between the
+    two is exactly the kind of gap that gets papered over later. So this rule holds four lines:
+
+    * the acceptance window may not appear in the native layer. `[0.85, 1.15]` is `:core`'s
+      decision (`ReferenceCalibration.accepted`), and a second copy in C++ would be a second
+      definition of when a factor is believable;
+    * nothing may expose a detector over JNI, and no app source may name one, because a caller
+      that can compile against `TagDetector` will believe tags are being read;
+    * both documents that describe the tier must say "detector contract", so the one-line summary
+      a reader sees is the truth rather than the aspiration;
+    * the header must carry its own "Contract only." marker - the marker a wiring deletes.
+    """
+    native_root = ROOT / "native-slam" / "src" / "main" / "cpp"
+    # The tests are not shipped code and are full of tolerances that happen to be 0.85; the rule is
+    # about the library the app links.
+    for path in [item for item in native_root.rglob("*")
+                 if item.suffix in (".cpp", ".hpp") and "tests" not in item.parts]:
+        text = path.read_text(encoding="utf-8")
+        for literal in ("0.85", "1.15"):
+            if literal in text:
+                add(path, f"the acceptance window ({literal}) has reached the native layer - the "
+                          f"decision belongs to `ReferenceCalibration.accepted` in `:core`, and a "
+                          f"second copy here would be a second definition of 'believable'")
+    jni = native_root / "jni" / "slam_jni.cpp"
+    jni_text = jni.read_text(encoding="utf-8")
+    for symbol in ("TagDetector", "estimateScaleFromTagSightings", "tagScale"):
+        if symbol in jni_text:
+            add(jni, f"`{symbol}` is exposed over JNI, but no decoder is compiled into this build "
+                     f"- the app could call a detector that cannot detect anything")
+    for path in kotlin_sources("app") + kotlin_sources("ar-engine"):
+        text = path.read_text(encoding="utf-8")
+        for symbol in ("TagDetector", "estimateScaleFromTagSightings", "tagScale"):
+            if symbol in text:
+                add(path, f"`{symbol}` is used from the app, but no decoder exists - `docs/"
+                         f"CALIBRATION.md` tier 2 is contract only (finding 188)")
+    if not TAG_SCALE_HEADER.exists():
+        return
+    header = TAG_SCALE_HEADER.read_text(encoding="utf-8")
+    if "Contract only." not in header:
+        add(TAG_SCALE_HEADER, "the header no longer marks itself contract-only - that marker is "
+                              "what a wiring deletes, and deleting it by accident is how a "
+                              "contract becomes a claim")
+    for path in (CALIBRATION_DOC, ROOT / "README.md"):
+        if "detector contract" not in path.read_text(encoding="utf-8"):
+            add(path, "this document no longer calls tier 2 a detector contract, so the summary a "
+                      "reader sees promises a detector that this build does not contain")
 
 
 def check_the_squared_wall_keeps_its_distance() -> None:
@@ -2659,6 +2721,7 @@ def main() -> int:
     check_the_calibration_has_one_home()
     check_the_frame_solver_is_built_everywhere()
     check_the_squared_wall_keeps_its_distance()
+    check_the_tag_contract_is_not_sold_as_a_detector()
     check_totals_are_sums_of_printed_rows()
     check_csv_headers_name_their_cells()
     check_screen_states_the_trade_defaults()

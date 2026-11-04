@@ -18,7 +18,7 @@ drifts.
 | Tier | Source of the scale | State |
 |---|---|---|
 | 1 | ARCore VIO + Raw Depth (+ AI depth fused into holes, when the model asset ships) | ARCore and Raw Depth path **built**; the AI fusion is coded and unit-tested but **not wired** — `MonocularDepthEstimator` is never constructed in `:app`/`:ar-engine` and `app/src/main/assets/models/*.tflite` is not in the repository |
-| 2 | Passive marker detection (AprilTag 3 / ArUco) in a native worker | **Not built.** A background detector needs a decoder (its own vendored source and license entry) and cannot be built or verified in the development sandbox; see "Not built" below |
+| 2 | Passive marker detection (AprilTag 3 / ArUco) in a native worker | **Detector contract built; detector not.** The interface a decoder implements, the marker-to-scale arithmetic and its outlier filter are in `calibration/tag_scale.hpp`, host-tested with 35 assertions, and nothing in the app constructs a detector. The pixel decoder is not vendored and not built; see "Not built" below |
 | 3 | Active reference calibration: bank card or folding rule | **Complete in the app**: arithmetic, sweep, storage and application (`core/.../calib`, `ProjectRecord.calibrationScale`), a *Calibrate* button and dialog on the AR screen that takes the reticle point twice, six locales, and a correction notice on the room screen. The protocol header and both CSV files carry the factor as their own line, so a document showing corrected metres also shows what corrected them |
 
 ## Tier 3 — the arithmetic
@@ -111,11 +111,34 @@ project file, which is why it survives the phone being put in a pocket.
   contract this app requires in its manifest. Writing it would be code that claims a capability
   the target devices do not have — the opposite of what this repository does everywhere else. The
   metric source stays ARCore Raw Depth, with the AI fusion filling holes only.
-* **AprilTag 3 / ArUco.** A background detector means vendoring a decoder (denoising, quad
-  extraction, tag36h11 decode) plus its BSD license entry in `NOTICE` and `docs/LICENSING.md`.
-  The next step here is the *contract*: a detector interface, the marker-to-scale update and its
-  outlier filter, host-tested with synthetic tags; the pixel decoder lands only when it can be
-  built for the NDK and verified on a device.
+* **The AprilTag decoder.** The detector contract exists (see below); the *decoder* does not. A
+  background detector means vendoring one (denoising, quad extraction, tag36h11 decode) plus its
+  BSD licence entry in `NOTICE` and `docs/LICENSING.md`, and it cannot be built for the NDK or
+  verified on a device in this repository's development sandbox. It lands only when both are
+  possible.
+
+## Tier 2 — the detector contract
+
+`native-slam/.../calibration/tag_scale.hpp` holds the half of tier 2 that can be proved here:
+
+* **`TagDetector`**, the interface a decoder will implement, with `NoTagDetector` as the only
+  implementation in this build: `available()` is false and `unavailableReason()` is a sentence a
+  diagnostic screen can print. The two are separate on purpose — a detector that is not compiled
+  in and a frame with no tags in it both produce an empty detection list, and a caller that cannot
+  tell them apart reports "no tags in view" for a build that has no decoder at all. That is the
+  same shape as `RtabMapBridge::isAvailable` (finding 98).
+* **`estimateScaleFromTagSightings`**, the marker-to-scale update: the ratios between every pair
+  of tags that the printed layout also knows (`nominal / measured`), a median to find the majority,
+  a relative-deviation filter to drop the pairs that disagree with it, and a baseline-weighted mean
+  of what survives. Long baselines dominate because a ratio's error falls with its baseline, and a
+  tag seen at 0.6 decision margin or read through a corrected bit is not used at all.
+* **What it will not do:** decide. It publishes a factor, the pairs that agreed, the pairs it
+  rejected and the longest baseline behind it; the window and the decision to store anything stay
+  in `:core` with the bank-card reference, and the native directory does not contain the window's
+  two numbers even in a comment.
+
+The contract is not wired: no JNI symbol exposes it, no app source names it, and no screen has a
+button for it. When a decoder lands, the wiring is what changes — not this arithmetic.
 * **Applying a factor to stored geometry.** Today a route's metres are what ARCore measured. Once
   the dialog exists, the factor is stored on the project and applied at the reporting layer (bill
   of materials, protocol tables, CSV) — never baked into the node positions, because a factor that

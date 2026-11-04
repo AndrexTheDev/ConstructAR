@@ -117,6 +117,19 @@ cosine; a plane more than 20° off (a bay window, a chamfer) is returned untouch
 and a set of parallel walls produces no frame at all rather than an invented one. The solver
 decides geometry only: no length, no node position and no fitting count passes through it.
 
+**Passive marker contract** (`calibration/tag_scale.cpp`). Tier 2 of the calibration ladder — a
+printed AprilTag of known size, seen in enough frames, gives the scan a length that does not depend
+on an operator holding a bank card still. The pixel half of that is a decoder to vendor and licence,
+so what exists is the half that can be proved here: `TagDetector`, the interface a decoder will
+implement (whose only implementation in this build reports itself unavailable, and why — an empty
+detection list means "no tags in view" otherwise, which a build with no decoder would report for
+ever), and the marker-to-scale update: pair ratios of nominal over measured against the printed
+layout, a median to find the majority, a deviation filter for the tag that was mis-detected, and a
+baseline-weighted mean of what survives. It publishes a factor, the pairs that agreed, the pairs it
+rejected and the longest baseline behind it, and it decides nothing — the acceptance window lives
+in `:core` beside the bank-card reference, which is why the native directory does not contain its
+two numbers even in a comment. Nothing is wired: no JNI symbol, no app caller, no button.
+
 **Pose graph** (`slam/pose_graph.cpp`). Gauss–Newton on SE(3) with central-difference Jacobians,
 block-sparse Hessian solved by preconditioned conjugate gradient, backtracking line search (a
 full step overshoots on a room with one closure), snapshot/rollback so a diverging iteration can
