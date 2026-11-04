@@ -66,13 +66,6 @@ struct DepthFrameView {
 
   int64_t timestampNs = 0;
 
-  /**
-   * ARCore reports raw depth as the perpendicular distance along the optical axis
-   * (z-depth). Kept as a flag because some depth sources hand out Euclidean range instead,
-   * and because the Kotlin side can flip it if a device ever disagrees.
-   */
-  bool depthIsOpticalAxis = true;
-
   bool isValid() const {
     return depth != nullptr && width > 0 && height > 0 && rowStrideElements >= width &&
            intrinsics.isValid() && cameraToWorld.isFinite();
@@ -93,14 +86,22 @@ struct TsdfConfig {
   /** Per-voxel weight cap; keeps a static surface from freezing out new observations. */
   float maxWeight = 64.f;
   /**
-   * Also mark observed free space (camera → truncation band) as "outside". Removes ghosts
-   * of furniture that has been moved, at a steep cost: measured on a 640×480 frame it takes
-   * integration from ~21 ms to ~133 ms (desktop, 3 threads). Off by default; the UI exposes
-   * it as an explicit "ghost removal (slower)" switch for a final clean-up pass.
+   * Also mark observed free space (camera → truncation band) as "outside", which removes the
+   * ghosts of furniture that has been moved since it was scanned.
+   *
+   * Off by default and meant as a one-shot clean-up pass, not a scanning mode: measured on a
+   * 320×240 frame (single worker, desktop, `pixelStep = 2`) integration goes from 7.3 ms to
+   * 55.9 ms, because the pass visits every voxel along every ray rather than only the truncation
+   * band. A coarser stride would be cheaper and is wrong: it writes a lattice of free voxels and
+   * leaves the voxels between two samples with their old inside value, so a ghost turns into a
+   * comb of extra iso-surfaces (finding 111 - a 1 m plane seen once and then cleared produced
+   * three times as much geometry as leaving it alone). Only existing, observed voxels are
+   * touched, so carving never allocates a block.
+   *
+   * Nothing sets it yet: `nativeCreate` does not take it and no screen offers it, so this is an
+   * engine capability, not a shipped control.
    */
   bool carveFreeSpace = false;
-  /** Coarse stride (in voxels) used while carving free space. */
-  int freeSpaceStrideVoxels = 4;
   /** Upper bound on allocated blocks — a safety valve, not a working limit. */
   size_t maxBlocks = 160000;
   /** Integration worker threads; 0 ⇒ hardware_concurrency − 1 (at least 1). */
@@ -152,6 +153,16 @@ class TsdfVolume {
   void reset();
 
   size_t blockCount() const { return blockCount_.load(std::memory_order_relaxed); }
+
+  /**
+   * Sum of every voxel's weight: the amount of evidence the volume holds.
+   *
+   * Each accepted observation adds exactly one to one voxel, so for a volume that was never
+   * reset this equals the sum of `IntegrationStats::voxelUpdates` over its frames. That identity
+   * is what the host suite asserts: a write that is counted but overwritten by another worker
+   * thread breaks it, which is how the unsynchronised fusion showed up (finding 181).
+   */
+  size_t totalVoxelWeight() const;
   size_t voxelCount() const { return blockCount() * static_cast<size_t>(kVoxelsPerBlock); }
   const TsdfConfig& config() const { return config_; }
 
@@ -166,6 +177,32 @@ class TsdfVolume {
                 (static_cast<float>(vy) + 0.5f) * vs,
                 (static_cast<float>(vz) + 0.5f) * vs);
   }
+
+  /** What one [fuseVoxel] call did. */
+  struct Fusion {
+    /** The observation reached its voxel. */
+    bool written = false;
+    /** A block was created for it, and this frame is the first to touch that block. */
+    bool allocated = false;
+  };
+
+  /**
+   * Adds one SDF observation to voxel (ix, iy, iz) — the whole read-modify-write, **under the
+   * shard lock**.
+   *
+   * `findOrCreateBlock` can only hand the block out and release the lock, so the fusion that
+   * followed it ran unprotected: `oldWeight = weight[idx]`, then `sdf[idx]` and `weight[idx]`
+   * written back. Two worker threads whose rays cross the same voxel - which is the normal case,
+   * the truncation band is four voxels thick and the frame is split into row bands - therefore
+   * read-modify-wrote the same two words without synchronisation. ThreadSanitizer reports it as
+   * three races on those three lines; what it costs is an observation that is counted and then
+   * written away, so the running average weights some views twice and others not at all
+   * (finding 181). Fusing inside the lock the lookup already takes costs nothing extra.
+   *
+   * @param normalizedSdf observation, already divided by the truncation distance
+   * @param existingOnly the carve pass: never allocates, and skips voxels without evidence
+   */
+  Fusion fuseVoxel(int32_t ix, int32_t iy, int32_t iz, float normalizedSdf, bool existingOnly = false);
 
   /** Copies the (res+1)³ voxel grid covering block (bx,by,bz); 0 where unobserved. */
   void gatherBlockGrid(int32_t bx, int32_t by, int32_t bz, float* out) const;
@@ -196,7 +233,24 @@ class TsdfVolume {
   static int64_t blockKey(int32_t bx, int32_t by, int32_t bz);
   static int shardFor(int64_t key);
 
-  Block* findOrCreateBlock(int32_t bx, int32_t by, int32_t bz);
+  /**
+   * A block for one sample, and whether this frame is the first to reach it.
+   *
+   * The second half exists because the per-frame bookkeeping has to happen **inside** the shard
+   * lock. It used to be done by the caller, one line after the lookup, on a field of a block whose
+   * header another worker thread may be writing at the same instant - a data race, a double count
+   * when two threads land in one block, and, because a freshly created block was created with
+   * `lastFrame` already set, a first frame that allocated hundreds of blocks and reported zero
+   * (finding 160).
+   */
+  struct Touch {
+    Block* block = nullptr;
+    bool firstInFrame = false;
+  };
+
+  /** [findOrCreateBlock] without the lock - the caller holds the shard's mutex. */
+  Touch findOrCreateBlockLocked(int32_t bx, int32_t by, int32_t bz, Shard& shard, int64_t key);
+  /** Existing block, or null. Read-only, for the gather paths. */
   const Block* findBlock(int32_t bx, int32_t by, int32_t bz) const;
 
   void integrateRows(const DepthFrameView& frame, int pixelStep, int rowBegin, int rowEnd,
@@ -209,7 +263,15 @@ class TsdfVolume {
   mutable std::mutex integrationMutex_;
   std::atomic<size_t> blockCount_{0};
   uint32_t frameCounter_ = 0;
-  bool blockBudgetReported_ = false;
+  /**
+   * Set the first time a block is refused because `maxBlocks` is spent.
+   *
+   * Atomic, not a plain bool: `findOrCreateBlock` runs on every worker thread, and two threads
+   * hitting the budget at the same moment were writing the same flag without synchronisation - a
+   * data race under the C++ memory model, in the only signal that says the scan has stopped
+   * growing (finding 97).
+   */
+  std::atomic<bool> blockBudgetReported_{false};
 };
 
 }  // namespace constructar

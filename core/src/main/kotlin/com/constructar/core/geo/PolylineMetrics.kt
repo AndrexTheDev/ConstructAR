@@ -17,6 +17,7 @@ import com.constructar.core.model.SurfaceKind
 import kotlin.math.PI
 import kotlin.math.ceil
 import kotlin.math.max
+import kotlin.math.min
 
 /** Classification of an interior corner — drives the elbow count of the bill of materials. */
 enum class BendKind {
@@ -49,16 +50,35 @@ data class BendAngle(
  *
  * [totalMeters] is the strict Euclidean sum the specification asks for
  * (`L = Σ |Pᵢ₊₁ − Pᵢ|`) over the *anchor-refined* node positions — the same value the
- * floating HUD shows. [bendAllowanceMeters] is reported separately (never folded in) so
- * the on-site figure stays verifiable with a tape measure; procurement uses
- * [withWasteMeters].
+ * floating HUD shows and the figure a tape measure can check.
+ *
+ * [bendDeductionMeters] is the amount by which the *bent* conduit is shorter than that figure:
+ * a bend of sweep δ and centreline radius r replaces two straight trims of `r·tan(δ/2)` with an
+ * arc of `r·δ`, so the developed length loses `2·r·tan(δ/2) − r·δ` at every corner. The trade
+ * calls this the bend deduction (or the "gain" of a bend); it is always positive, and it used to
+ * be here as a negative `bendAllowanceMeters` described as "the arc length a fitter has to add",
+ * which is the opposite sign of what a bend does and was printed nowhere (finding 114).
+ *
+ * It is reported, never folded in: the on-site metre stays the tape-measure figure and
+ * procurement uses [withWasteMeters]. Only sweeps a bender can make (up to 90°, clamped, and
+ * never more than half the run) count - a sharper corner is formed with a fitting, and a
+ * measurement that doubles back on itself is not a bend at all.
  */
 data class RouteMetrics(
     val totalMeters: Float,
     val segments: List<SegmentLength>,
     val bends: List<BendAngle>,
-    val bendAllowanceMeters: Float,
+    val bendDeductionMeters: Float,
     val withWasteMeters: Float,
+    /**
+     * Corners the chain actually turns at.
+     *
+     * Not `bends.size`: [bendAngles] classifies every interior node, and one that is within 5° of
+     * straight is a `STRAIGHT` entry because the smoothing path and the diagnostics want the whole
+     * row of corners. Counting those as bends put "Bends: 4" on a straight pull of six taps along
+     * one wall, on the document the customer signs, while the same report's procurement table
+     * ordered not a single elbow (finding 116).
+     */
     val bendCount: Int,
     val elbow90Count: Int,
     val elbow45Count: Int,
@@ -66,24 +86,21 @@ data class RouteMetrics(
     val clipCount: Int,
     val couplingCount: Int,
     val minimumConfidence: Float,
-) {
-    val segmentCount: Int get() = segments.size
-
     /**
      * Nodes that must be reviewed before the customer pays for them.
      *
      * Two ways to be soft: the hit came from a source that is a guess by design (a feature point
      * or a manual placement), or the surface confidence the tracker reported is below
-     * [HitConfidence.TRUSTED]. The second case used to be ignored
-     * here while the AR screen warned about it, so a run measured on a badly tracked plane
-     * reached the order list unflagged.
+     * [HitConfidence.RUN_TRUSTED] - the same bar the HUD questions a run at.
+     *
+     * Counted over the **nodes**, once each. Counting segments was wrong twice over: it used the
+     * lower bar of 0.5, so a raycast point (0.7) reached the order list unflagged, and a weak point
+     * between two segments was counted as two, because a segment carries its start node's source
+     * and the smaller of its two confidences (finding 47).
      */
-    val lowConfidenceNodes: Int
-        get() = segments.count {
-            it.hitSource == HitSource.FEATURE_POINT ||
-                it.hitSource == HitSource.MANUAL ||
-                it.confidence < HitConfidence.TRUSTED
-        }
+    val lowConfidenceNodes: Int,
+) {
+    val segmentCount: Int get() = segments.size
 }
 
 /**
@@ -92,18 +109,58 @@ data class RouteMetrics(
  */
 object PolylineMetrics {
 
-    /** Default procurement waste: cables are re-pulled, ducts are cut, both need spare. */
-    fun defaultWasteFactor(spec: ConduitSpec): Float = when (spec.kind) {
+    /**
+     * Default procurement waste: cables are re-pulled, ducts are cut, both need spare.
+     *
+     * Answered per **family**, because that is all it depends on - and the material screen has to
+     * be able to say what "the trade default" means before the operator picks it, without inventing
+     * a spec to ask about (finding 156). The spec overload is the same function, so the number the
+     * screen shows and the number the engine applies cannot drift apart.
+     */
+    fun defaultWasteFactor(kind: com.constructar.core.model.ConduitKind): Float = when (kind) {
         com.constructar.core.model.ConduitKind.CABLE -> 0.07f
         com.constructar.core.model.ConduitKind.PIPE -> 0.08f
         com.constructar.core.model.ConduitKind.DUCT -> 0.10f
     }
 
-    /** Clip spacing in metres by trade practice (cables/pipes 60 cm, channels 50 cm). */
-    fun defaultClipSpacing(spec: ConduitSpec): Float = when (spec.kind) {
+    fun defaultWasteFactor(spec: ConduitSpec): Float = defaultWasteFactor(spec.kind)
+
+    /**
+     * Clip spacing in metres by trade practice: cables 60 cm, pipes 90 cm, channels 50 cm.
+     *
+     * Answered per **family**, like [defaultWasteFactor] and for the same reason (finding 156):
+     * the material screen has to say what "the trade default" stands for *before* the operator
+     * picks it, and it has no spec to ask about. The spec overload routes through this one, so the
+     * number the screen states and the number the engine counts with cannot drift apart.
+     *
+     * This KDoc said "cables/pipes 60 cm, channels 50 cm" while the code has counted pipe clips at
+     * 90 cm since finding 138 - a sentence a maintainer reads *before* changing the number, and one
+     * that every other document contradicts: findings 113, 151 and the material screen all quote
+     * 90 cm for pipe (finding 180).
+     */
+    fun defaultClipSpacing(kind: com.constructar.core.model.ConduitKind): Float = when (kind) {
         com.constructar.core.model.ConduitKind.CABLE -> 0.6f
         com.constructar.core.model.ConduitKind.PIPE -> 0.9f
         com.constructar.core.model.ConduitKind.DUCT -> 0.5f
+    }
+
+    /** The spacing the engine counts a spec's clips with — see the per-family overload. */
+    fun defaultClipSpacing(spec: ConduitSpec): Float = defaultClipSpacing(spec.kind)
+
+    /**
+     * The length one piece of this family is bought in, or `null` for a reel that has no joint.
+     *
+     * Cable comes on a drum, so a pull needs no coupling however long it is. Pipes, empty conduit
+     * and duct channels are sold in 3 m lengths, so every 3 m of run needs a socket. The order list
+     * used to answer this with one hard-coded limit for everything: 3 m for ducts and **50 m** for
+     * pipes and cable, so a 40 m pipe pull ordered no socket at all (the fitter cannot join two
+     * pieces he was never sent) and a 60 m cable ordered a coupling that no one makes for a drum
+     * (finding 138).
+     */
+    fun defaultStockLength(spec: ConduitSpec): Float? = when (spec.kind) {
+        com.constructar.core.model.ConduitKind.CABLE -> null
+        com.constructar.core.model.ConduitKind.PIPE -> 3f
+        com.constructar.core.model.ConduitKind.DUCT -> 3f
     }
 
     /** Euclidean polyline length: `L = Σ |Pᵢ₊₁ − Pᵢ|`, metres. */
@@ -125,6 +182,7 @@ object PolylineMetrics {
         closed: Boolean = false,
         wasteFactor: Float = defaultWasteFactor(spec),
         clipSpacingMeters: Float = defaultClipSpacing(spec),
+        stockLengthMeters: Float? = defaultStockLength(spec),
     ): RouteMetrics {
         val segments = ArrayList<SegmentLength>(max(0, nodes.size))
         var total = 0f
@@ -164,35 +222,62 @@ object PolylineMetrics {
         val elbow45 = bends.count { it.kind == BendKind.BEND_45 }
         val other = bends.count { it.kind == BendKind.BEND_OTHER }
 
-        // Bend allowance (arc length a fitter has to add inside the bend): each bend of
-        // angle δ replaces two straight trims t with an arc of radius r and sweep δ.
+        // Bend deduction: each bend of sweep δ replaces two straight trims of r·tan(δ/2) with an
+        // arc of radius r, so the bent conduit is shorter than the polyline by
+        // 2·r·tan(δ/2) − r·δ. Clamped to a right angle (a sharper corner is made with a fitting,
+        // not by bending) and to half the run (a deduction can never eat the piece).
         val radius = defaultBendRadius(spec)
-        val allowance = bends.sumOf { bend ->
-            val delta = Math.toRadians(bend.angleDegrees.toDouble()).toFloat()
-            if (delta <= 0f) 0.0 else {
-                val trim = 2f * radius * kotlin.math.tan(delta / 2f)
-                ((radius * delta) - trim).toDouble()
-            }
-        }.toFloat()
+        val deduction = min(
+            bends.sumOf { bend ->
+                // A corner inside the STRAIGHT tolerance is not bent at all.
+                if (bend.kind == BendKind.STRAIGHT) return@sumOf 0.0
+                val delta = Math.toRadians(bend.angleDegrees.toDouble()).toFloat()
+                val sweep = min(delta, Math.PI.toFloat() / 2f)
+                if (sweep <= 0f) 0.0 else {
+                    val trim = 2f * radius * kotlin.math.tan(sweep / 2f)
+                    (trim - (radius * sweep)).coerceAtLeast(0f).toDouble()
+                }
+            }.toFloat(),
+            total * 0.5f,
+        )
 
-        val clips = if (clipSpacingMeters <= 0f) 0 else ceil(total / clipSpacingMeters).toInt() + 1
-        // One coupling per straight length limit exceeded: 3 m for ducts, 50 m cable pulls.
-        val couplingLimit = if (spec.kind == com.constructar.core.model.ConduitKind.DUCT) 3f else 50f
-        val couplings = if (total <= couplingLimit) 0 else ceil(total / couplingLimit).toInt() - 1
+        // An open run is clipped at both ends, so it needs one more clip than it has gaps. A
+        // closed ring does not: the clip at the start *is* the clip at the end, and the run of
+        // 6 m at 0.6 m spacing needs exactly ten clips, not eleven. The extra clip used to be
+        // counted anyway, which put one fitting per ring on the order list.
+        val closedRing = closed && nodes.size > 2
+        val clips = if (clipSpacingMeters <= 0f) {
+            0
+        } else {
+            ceil(total / clipSpacingMeters).toInt() + if (closedRing) 0 else 1
+        }
+        // One coupling per joint the run needs, and the joint count follows the stock length: a
+        // 12 m pipe is four 3 m pieces and three sockets, a 70 m cable on a drum is still one
+        // piece. See [defaultStockLength] for the 50 m limit this replaces (finding 138).
+        val couplings = if (stockLengthMeters == null || stockLengthMeters <= 0f || total <= stockLengthMeters) {
+            0
+        } else {
+            ceil(total / stockLengthMeters).toInt() - 1
+        }
 
         return RouteMetrics(
             totalMeters = total,
             segments = segments,
             bends = bends,
-            bendAllowanceMeters = allowance,
+            bendDeductionMeters = deduction,
             withWasteMeters = total * (1f + wasteFactor),
-            bendCount = bends.size,
+            bendCount = bends.count { it.kind != BendKind.STRAIGHT },
             elbow90Count = elbow90,
             elbow45Count = elbow45,
             otherBendCount = other,
             clipCount = clips,
             couplingCount = couplings,
             minimumConfidence = nodes.minOfOrNull { it.confidence } ?: 1f,
+            lowConfidenceNodes = nodes.count { node ->
+                node.hitSource == HitSource.FEATURE_POINT ||
+                    node.hitSource == HitSource.MANUAL ||
+                    node.confidence < HitConfidence.RUN_TRUSTED
+            },
         )
     }
 

@@ -7,6 +7,7 @@
 package com.constructar.app.ui
 
 import android.content.Intent
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -40,18 +41,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.constructar.app.BuildConfig
 import com.constructar.app.R
 import com.constructar.app.ui.theme.SiteColors
+import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.licence.Entitlements
 import com.constructar.core.bom.MaterialList
+import com.constructar.core.bom.MaterialListBuilder
+import com.constructar.core.bom.MaterialListOptions
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.price.Pricing
 import com.constructar.core.units.LengthFormatter
 import com.constructar.export.ExportService
+import com.constructar.export.pdf.PdfSection
 import com.constructar.export.csv.MaterialCsvWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -77,6 +83,16 @@ fun ExportScreen(
     fieldPhotos: Map<String, android.graphics.Bitmap> = emptyMap(),
     /** Effective hourly rate of this project, already resolved against the firm default. */
     hourlyRateCents: Int = Pricing.DEFAULT_HOURLY_RATE_CENTS,
+    /** The firm's waste factor, the one the material screen showed - `null` for the defaults. */
+    wasteOverride: Float? = null,
+    /**
+     * The firm's clip spacing, the one the material screen showed - `null` for the defaults.
+     *
+     * Both halves travel together: the counts on the page are built from the same measurement the
+     * screen showed, so a firm that clips every 30 cm must not read its order sheet at 60 cm
+     * (findings 96, 151).
+     */
+    clipSpacingOverride: Float? = null,
     onBack: () -> Unit,
     onUpgrade: () -> Unit,
 ) {
@@ -86,6 +102,9 @@ fun ExportScreen(
 
     var includePdf by remember { mutableStateOf(true) }
     var includeCsv by remember { mutableStateOf(true) }
+    // Off by default: the full CSV already carries the numbers, and the order list is for the
+    // wholesaler - a deliberate second file, not something to hand out by accident.
+    var includeOrderList by remember { mutableStateOf(false) }
     // A free build cannot write the BIM formats, so the switches start off rather than promise
     // a file that the licence check would refuse to produce.
     var includeGlb by remember(entitlements.isPro) { mutableStateOf(entitlements.canExportMesh) }
@@ -102,6 +121,17 @@ fun ExportScreen(
     }
     val signatureTitle = stringResource(R.string.signature_pdf_title)
     val signatureCaption = stringResource(R.string.signature_pdf_caption)
+    // The document has to say what corrected it: a protocol reporting 5.25 m for a run the phone
+    // measured as 5.00 m, with no word about the factor, is one nobody can check. Resolved here
+    // because the export coroutine below runs off the main thread, where no string can be read.
+    val calibrationLabel = if (project.isCalibrated) {
+        stringResource(
+            R.string.calib_success_toast,
+            ReferenceCalibration.formatScale(project.calibrationScale),
+        )
+    } else {
+        ""
+    }
 
     // The site file, resolved here rather than in the coroutine below: by the time the operator
     // has picked a folder there is no composition left to read a string from.
@@ -117,6 +147,8 @@ fun ExportScreen(
         columnDuration = stringResource(R.string.pdf_column_duration),
         totalLabel = stringResource(R.string.pdf_label_work_total),
         runningLabel = stringResource(R.string.field_time_open),
+        nextDayLabel = stringResource(R.string.field_time_next_day),
+        openSessionNote = stringResource(R.string.pdf_note_open_session),
         diaryTitle = stringResource(R.string.pdf_section_diary),
         defectsTitle = stringResource(R.string.pdf_section_defects),
         columnDefect = stringResource(R.string.pdf_column_note),
@@ -137,11 +169,17 @@ fun ExportScreen(
         photosTitle = stringResource(R.string.pdf_section_photos),
         photoDiaryPrefix = stringResource(R.string.pdf_section_diary),
         photoDefectPrefix = stringResource(R.string.pdf_section_defects),
+        // The phone's own clock convention, so the printed table matches the screen (finding 148).
+        timePattern = rememberTimePattern(),
     )
-    val siteFileSections = remember(project, siteFileTexts, hourlyRateCents) {
+    // Built at the moment of the export, not at the moment the screen appeared: a session that
+    // is still open keeps counting, and a protocol whose time table is frozen at composition
+    // would print a total that is minutes or hours behind the phone - the same divergence
+    // between screen and paperwork that findings 39, 46 and 47 were about. The sections are a
+    // pure function of project + words + a clock, so recomputing them costs nothing.
+    fun sectionsNow(): List<PdfSection> =
         buildSiteFileSections(project, siteFileTexts) +
             listOfNotNull(buildCostSection(project, hourlyRateCents, siteFileTexts))
-    }
     val photoAppendix = remember(project, fieldPhotos, siteFileTexts) {
         buildPhotoAppendix(project, fieldPhotos, siteFileTexts)
     }
@@ -149,16 +187,30 @@ fun ExportScreen(
     val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         busy = true
+        // Read on the main thread, before the IO work: "requested" is what the switches said at
+        // the moment the operator pressed the button, not what they say when the write finishes.
+        val requestedCount =
+            listOf(includePdf, includeCsv, includeOrderList, includeGlb, includePly).count { it }
+        // Captured with the switches, for the same reason: whether a 3D model was asked for.
+        val meshRequested = includeGlb || includePly
         scope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 runCatching {
-                    context.contentResolver.takePersistableUriPermission(
-                        uri,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-                    )
+                    // Best effort: a provider that cannot grant permanently must not cost the
+                    // operator his protocol (see UriGrants).
+                    UriGrants.take {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                        )
+                    }
                     val root = DocumentFile.fromTreeUri(context, uri)
                         ?: error(context.getString(R.string.export_folder_inaccessible))
-                    val stem = exportService.fileStem(project)
+                    // One clock read, one stamp: the folder and the files inside it are one
+                    // export. Reading the clock again inside `build` let a minute tick between
+                    // the two and named the folder differently from its contents (finding 122).
+                    val at = System.currentTimeMillis()
+                    val stem = exportService.fileStem(project, at)
                     val target = root.findFile(stem)?.takeIf { it.isDirectory }
                         ?: root.createDirectory(stem)
                         ?: error(context.getString(R.string.export_folder_inaccessible))
@@ -166,13 +218,19 @@ fun ExportScreen(
                     val artifacts = exportService.build(
                         ExportService.Request(
                             project = project,
-                            materialList = materialList ?: MaterialListBuilderFallback.build(project),
+                            materialList = exportMaterialList(
+                                project = project,
+                                cached = materialList,
+                                wasteOverride = wasteOverride,
+                                clipSpacingOverride = clipSpacingOverride,
+                            ),
                             routeMeshes = ExportService.routeMeshes(project),
                             screenshot = photo,
                             operatorName = operatorName,
                             appVersion = appVersion,
                             includePdf = includePdf,
                             includeCsv = includeCsv,
+                            includeOrderList = includeOrderList,
                             includeGlb = includeGlb,
                             includePly = includePly,
                             watermark = if (entitlements.pdfWatermark) watermark else "",
@@ -180,30 +238,68 @@ fun ExportScreen(
                             signatureTitle = signatureTitle,
                             signatureCaption = signatureCaption,
                             labels = pdfLabels,
-                            sections = siteFileSections,
+                            calibrationLabel = calibrationLabel,
+                            sections = sectionsNow(),
                             photos = photoAppendix,
                             photosTitle = siteFileTexts.photosTitle,
+                            // The appendix holds eight; the job can hold twenty. The protocol
+                            // says which it is printing (finding 91).
+                            photosTotal = FieldPhotos.ordered(project).size,
                             logo = logo,
                         ),
+                        atMillis = at,
+                        stem = stem,
                     )
                     var written = 0
+                    // The first write that threw, so the storage sentence still names the cause
+                    // when nothing at all made it to the folder (finding 130).
+                    var failure: Throwable? = null
                     artifacts.forEach { artifact ->
-                        val file = target.createFile(artifact.mimeType, artifact.fileName)
-                        val output = file?.uri?.let { context.contentResolver.openOutputStream(it) }
-                        if (output != null) {
-                            output.use { artifact.write(it) }
-                            written++
-                        } else {
-                            file?.delete()
+                        val outcome = ExportFiles.writeOnce(
+                            create = { target.createFile(artifact.mimeType, artifact.fileName) },
+                            open = { file -> context.contentResolver.openOutputStream(file.uri) },
+                            write = { stream -> stream.use { artifact.write(it) } },
+                            delete = { file -> file.delete() },
+                        )
+                        when (outcome) {
+                            ExportFiles.Outcome.Written -> written++
+                            ExportFiles.Outcome.NotCreated, ExportFiles.Outcome.NotOpened -> Unit
+                            // A file that did not finish writing was deleted by `writeOnce`: a
+                            // truncated protocol must not sit in the folder looking finished.
+                            is ExportFiles.Outcome.Broken -> failure = failure ?: outcome.cause
                         }
                     }
-                    written to stem
+                    // Nothing written and something threw: report the exception, not "the folder
+                    // is not writable", which is a different problem with a different fix.
+                    if (written == 0) failure?.let { throw it }
+                    ExportStatus.Report(
+                        requested = requestedCount,
+                        produced = artifacts.size,
+                        written = written,
+                        folder = stem,
+                        meshSkipped = meshRequested &&
+                            artifacts.none { it.fileName.endsWith(".glb") || it.fileName.endsWith(".ply") },
+                    )
                 }
             }
             busy = false
             status = outcome.fold(
-                onSuccess = { (count, stem) -> ExportStatus.Saved(count = count, folder = stem) },
-                onFailure = { error -> ExportStatus.Failed(error.message ?: error.javaClass.simpleName) },
+                onSuccess = { report ->
+                    ExportStatus.of(
+                        report = report,
+                        messages = ExportStatus.Messages(
+                            folderUnreadable = context.getString(R.string.export_folder_inaccessible),
+                            nothingSelected = context.getString(R.string.export_nothing_selected),
+                            nothingToExport = context.getString(R.string.export_nothing_to_export),
+                        ),
+                    )
+                },
+                // The operator gets a sentence, not `java.io.IOException: ... ENOSPC`. The
+                // exception itself goes to the log, where a bug report can find it.
+                onFailure = { error ->
+                    Log.w("ConstructAR", "export failed: ${error.javaClass.simpleName}", error)
+                    ExportStatus.Failed(context.getString(storageFailureOf(error).messageRes()))
+                },
             )
         }
     }
@@ -269,6 +365,15 @@ fun ExportScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    // A scan that hit its block budget covered only part of the room, and the
+                    // operator is about to hand the model over (finding 100).
+                    if (scan.scanLimited) {
+                        Text(
+                            stringResource(R.string.export_room_scan_limited),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SiteColors.warning,
+                        )
+                    }
                 }
             }
         }
@@ -283,6 +388,11 @@ fun ExportScreen(
             description = stringResource(R.string.export_csv_desc),
             checked = includeCsv,
         ) { includeCsv = it }
+        FormatRow(
+            label = stringResource(R.string.export_order_list),
+            description = stringResource(R.string.export_order_list_desc),
+            checked = includeOrderList,
+        ) { includeOrderList = it }
         if (entitlements.canExportMesh) {
             FormatRow(
                 label = stringResource(R.string.export_glb),
@@ -338,20 +448,70 @@ fun ExportScreen(
             }
         }
 
+        // Every format switched off is not an export: the button stays disabled and says why,
+        // rather than opening a picker that can only end in a sentence about the folder.
+        val anyFormat = includePdf || includeCsv || includeOrderList || includeGlb || includePly
         GloveButton(
             label = stringResource(if (busy) R.string.export_saving else R.string.export_choose_folder),
             icon = Icons.Default.CreateNewFolder,
             onClick = { folderLauncher.launch(null) },
-            enabled = !busy,
+            enabled = !busy && anyFormat,
             modifier = Modifier.fillMaxWidth(),
         )
+        if (!anyFormat) {
+            Text(
+                stringResource(R.string.export_nothing_selected),
+                style = MaterialTheme.typography.bodyMedium,
+                color = SiteColors.warning,
+            )
+        }
 
         status?.let { current ->
             val text = when (current) {
-                is ExportStatus.Saved -> stringResource(R.string.export_success, current.count, current.folder)
+                // A plurals resource, not a sentence with a number in it: one file is not
+                // "1 files" in any of the six languages (finding 94).
+                is ExportStatus.Saved -> pluralStringResource(
+                    R.plurals.export_success,
+                    current.count,
+                    current.count,
+                    current.folder,
+                )
+                is ExportStatus.Partial -> stringResource(
+                    R.string.export_partial,
+                    current.saved,
+                    current.expected,
+                    current.folder,
+                )
+                is ExportStatus.Meshless -> stringResource(
+                    R.string.export_meshless,
+                    current.saved,
+                    current.expected,
+                    current.folder,
+                )
                 is ExportStatus.Failed -> stringResource(R.string.export_failed, current.detail)
             }
-            Text(text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+            // A failure is not a success in another shade: it is red, like every other failure
+            // in this app (BackupCard does the same). It used to be drawn in the accent colour.
+            // A partial write is neither: it is the warning colour, because something *is* on
+            // the card but not everything the operator asked for.
+            val tone = when (current) {
+                is ExportStatus.Saved -> SiteColors.accent
+                is ExportStatus.Partial -> SiteColors.warning
+                is ExportStatus.Meshless -> SiteColors.warning
+                is ExportStatus.Failed -> SiteColors.danger
+            }
+            Text(text, style = MaterialTheme.typography.bodyLarge, color = tone)
+            // A partial write on a project with no buildable run is both things at once: files
+            // missing because the folder refused them, and the GLB/PLY missing because there was
+            // nothing to build them from. The count alone sends the operator hunting for the one
+            // file that never existed (finding 89).
+            if (current is ExportStatus.Partial && current.meshSkipped) {
+                Text(
+                    stringResource(R.string.export_meshless_note),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = SiteColors.warning,
+                )
+            }
         }
 
         // Ownership line: the operator always sees whose build this is.
@@ -434,19 +594,126 @@ private fun FormatRow(
  * Outcome of one export, kept as data so the sentence is rendered by Compose (and therefore
  * localised) instead of being formatted inside the IO coroutine.
  */
-private sealed interface ExportStatus {
+internal sealed interface ExportStatus {
     data class Saved(val count: Int, val folder: String) : ExportStatus
+
+    /**
+     * Some files made it and some did not: the operator must not walk away believing all did.
+     *
+     * [meshSkipped] carries the second fact of the same attempt: the GLB and the PLY were never
+     * candidates, because no run in this project could be built into 3D geometry. Without it the
+     * caller told the operator "2 of 3 files" and stopped - so a man who had ticked four formats
+     * went looking for two missing files when only one write had actually failed (finding 89).
+     */
+    data class Partial(
+        val saved: Int,
+        val expected: Int,
+        val folder: String,
+        val meshSkipped: Boolean = false,
+    ) : ExportStatus
+
+    /**
+     * Every file that exists was written, but a format the operator ticked does not exist for
+     * this project: no run carries scan geometry, so there is no GLB and no PLY to write.
+     *
+     * This used to be reported as a plain success with a smaller number in it ("Saved 3 files")
+     * while four switches were on - the operator then goes looking for a 3D model that the app
+     * never had the geometry to produce. The switches stay where he left them; the sentence says
+     * why the folder is one file short.
+     */
+    data class Meshless(val saved: Int, val expected: Int, val folder: String) : ExportStatus
+
     data class Failed(val detail: String) : ExportStatus
+
+    /**
+     * What the attempt asked for and what came of it.
+     *
+     * Three counts, because there are three different reasons for writing nothing and only one of
+     * them is a broken folder: nothing was *requested* (every switch off), nothing was *produced*
+     * (mesh-only export of a room with no routable run and no scan), or everything was produced
+     * and none of it could be written.
+     */
+    data class Report(
+        val requested: Int,
+        val produced: Int,
+        val written: Int,
+        val folder: String,
+        // The operator asked for a 3D model, but the project holds no mesh to export.
+        val meshSkipped: Boolean = false,
+    )
+
+    /** The three sentences, resolved at composition - never inside the export coroutine. */
+    data class Messages(
+        val folderUnreadable: String,
+        val nothingSelected: String,
+        val nothingToExport: String,
+    )
+
+    companion object {
+        /**
+         * What to tell the operator after an export attempt.
+         *
+         * Writing zero files is a failure, not a success with a zero in it. It is also the most
+         * likely failure there is: the folder picker hands back a tree the app may create
+         * directories in but not write into (a read-only SD card, a revoked grant, a provider
+         * that only supports directory creation). Every artifact's `openOutputStream` returns
+         * `null`, nothing is thrown, and the old code then reported "saved 0 files" in the
+         * success colour - on the screen whose entire job is to tell the operator whether his
+         * protocol exists.
+         *
+         * The order matters: blaming the folder for a request that asked for nothing is a wrong
+         * answer in a confident tone, and it is what the first version of this rule did.
+         */
+        fun of(report: Report, messages: Messages): ExportStatus = when {
+            report.requested == 0 -> Failed(detail = messages.nothingSelected)
+            report.produced == 0 -> Failed(detail = messages.nothingToExport)
+            report.written == 0 -> Failed(detail = messages.folderUnreadable)
+            // The write failure is the louder fact, but it is not the whole report: the missing
+            // 3D files come with it, so the sentence beneath can say why (finding 89).
+            report.written < report.produced -> Partial(
+                saved = report.written,
+                expected = report.produced,
+                folder = report.folder,
+                meshSkipped = report.meshSkipped && report.requested > report.produced,
+            )
+            // Fewer files than switches on, and nothing failed: the missing ones are the 3D
+            // formats, and this project has no geometry for them.
+            report.meshSkipped && report.requested > report.produced -> Meshless(
+                saved = report.written,
+                expected = report.requested,
+                folder = report.folder,
+            )
+            else -> Saved(count = report.written, folder = report.folder)
+        }
+    }
 }
 
-/** Fallback when the view model has no cached list (e.g. deep link straight into Export). */
-private object MaterialListBuilderFallback {
-    fun build(project: ProjectRecord) = com.constructar.core.bom.MaterialListBuilder.build(project)
-}
+/**
+ * The bill of materials the exported files are written from.
+ *
+ * The cached list is the one the material screen showed, so it wins whenever it exists: the PDF,
+ * the CSV and the screen must never print two different jobs. The fallback exists for the path
+ * where there is no cached list (a deep link straight into Export), and it used to build with the
+ * *defaults* - so on a firm that had set its waste factor to 20 % the protocol and the order list
+ * quietly ordered at 7 %, the one place where a wrong number costs money twice: once in the
+ * customer's document, once in the wholesaler's order (finding 96).
+ */
+internal fun exportMaterialList(
+    project: ProjectRecord,
+    cached: MaterialList?,
+    wasteOverride: Float?,
+    clipSpacingOverride: Float? = null,
+): MaterialList = cached ?: MaterialListBuilder.build(
+    project,
+    MaterialListOptions(
+        wasteFactorOverride = wasteOverride,
+        clipSpacingMetersOverride = clipSpacingOverride,
+    ),
+)
 
 /** Exposed for tests/diagnostics: the CSV the operator will get for this project. */
-fun previewCsv(project: ProjectRecord): String =
+fun previewCsv(project: ProjectRecord, wasteOverride: Float? = null): String =
     MaterialCsvWriter.write(
-        materialList = com.constructar.core.bom.MaterialListBuilder.build(project),
+        materialList = exportMaterialList(project, cached = null, wasteOverride = wasteOverride),
         options = MaterialCsvWriter.Options(includeBom = false),
     )

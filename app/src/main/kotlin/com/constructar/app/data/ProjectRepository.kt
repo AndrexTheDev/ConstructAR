@@ -13,6 +13,7 @@ import android.net.Uri
 import android.util.Log
 import com.constructar.core.io.SafeFiles
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.model.RouteDraft
 import com.constructar.core.model.WorkTime
 import com.constructar.core.model.ScanSummary
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +50,19 @@ class ProjectRepository(private val context: Context) {
         }
     }
 
+    /**
+     * Drafts of runs that are still being measured, one file per project.
+     *
+     * A separate directory from the projects on purpose: a draft is not a project and must never
+     * be listed as one, and a backup must not carry half a measurement as if it were a room.
+     */
+    private val draftDirectory: File by lazy {
+        File(context.filesDir, "drafts").apply {
+            mkdirs()
+            SafeFiles.clearStaleTemporaries(this)
+        }
+    }
+
     data class ProjectSummary(
         val id: String,
         val name: String,
@@ -60,14 +74,51 @@ class ProjectRepository(private val context: Context) {
         val openDefects: Int = 0,
         /** True while this room's clock is still running. */
         val workRunning: Boolean = false,
+        /**
+         * Who the job is for - the name the operator searches by.
+         *
+         * It is the one of the three names on a room (room, site, customer) that he remembers when
+         * he is standing in front of the man, and it was in neither the row nor the search
+         * (finding 144). Defaulted so a summary written by an older build still decodes.
+         */
+        val customerName: String = "",
     )
 
-    /** Lists projects, newest first. Corrupt files are skipped, never fatal. */
-    suspend fun list(): List<ProjectSummary> = withContext(Dispatchers.IO) {
-        directory.listFiles { file -> file.extension == "json" }
-            ?.mapNotNull { readProject(it) }
-            ?.map { project ->
-                ProjectSummary(
+    /**
+     * What the folder holds: the rooms that can be read, and how many files could not.
+     *
+     * The count is the point. A file is kept when it cannot be parsed - nothing here ever deletes
+     * a room it does not understand - but until now it was simply *absent* from the list, so a
+     * damaged project looked exactly like a deleted one and the operator had no way to know that
+     * his data was still on the phone.
+     */
+    data class Listing(
+        val projects: List<ProjectSummary> = emptyList(),
+        /** Files in the projects folder that could not be read as a project. */
+        val unreadable: Int = 0,
+        /**
+         * The names of those files, sorted.
+         *
+         * A count alone told the operator that something was wrong and nothing about what to do
+         * with it. A damaged file occupies a room on the free plan (finding 126) and cannot be
+         * opened, exported or restored over - so without its name there is no way to free the
+         * slot at all, and the app's only advice ("restore it from a backup") was refused by the
+         * same plan (finding 150).
+         */
+        val unreadableNames: List<String> = emptyList(),
+    )
+
+    /** Lists projects, newest first. Corrupt files are reported, never fatal. */
+    suspend fun list(): Listing = withContext(Dispatchers.IO) {
+        val files = directory.listFiles { file -> file.extension == "json" }.orEmpty()
+        val summaries = ArrayList<ProjectSummary>(files.size)
+        val unreadableNames = ArrayList<String>()
+        for (file in files) {
+            val project = readProject(file)
+            if (project == null) {
+                unreadableNames += file.name
+            } else {
+                summaries += ProjectSummary(
                     id = project.id,
                     name = project.name,
                     siteName = project.siteName,
@@ -76,14 +127,38 @@ class ProjectRepository(private val context: Context) {
                     updatedAtEpochMs = project.updatedAtEpochMs,
                     openDefects = project.openDefectCount,
                     workRunning = WorkTime.isRunning(project.sessions),
+                    customerName = project.customerName,
                 )
             }
-            ?.sortedByDescending { it.updatedAtEpochMs }
-            ?: emptyList()
+        }
+        Listing(
+            projects = summaries.sortedByDescending { it.updatedAtEpochMs },
+            unreadable = unreadableNames.size,
+            unreadableNames = unreadableNames.sorted(),
+        )
     }
 
     suspend fun load(id: String): ProjectRecord? = withContext(Dispatchers.IO) {
         readProject(fileFor(id))
+    }
+
+    /**
+     * Deletes one project file this build cannot read - the only way its room becomes free.
+     *
+     * The name comes from [Listing.unreadableNames], and everything about it is re-checked here
+     * rather than trusted: a name that is not a plain token plus `.json` cannot be a file in this
+     * folder (finding 19's lesson), and a file that *does* parse is refused, because a room is
+     * deleted from the screen that names the room, its photos and its hours (finding 125). This
+     * path exists for exactly the file that screen cannot show.
+     *
+     * Returns whether the file is gone.
+     */
+    suspend fun deleteUnreadable(name: String): Boolean = withContext(Dispatchers.IO) {
+        if (!name.endsWith(".json") || !isSafeToken(name.removeSuffix(".json"))) return@withContext false
+        val file = File(directory, name)
+        if (!file.isFile) return@withContext false
+        if (readProject(file) != null) return@withContext false
+        file.delete()
     }
 
     /** Creates a project and returns it; the name is used verbatim (it is user content). */
@@ -122,22 +197,34 @@ class ProjectRepository(private val context: Context) {
         saved
     }
 
-    /** One project file, verbatim — the unit of a backup. */
-    data class BackupEntry(val fileName: String, val text: String)
+    /**
+     * One project file, verbatim — the unit of a backup.
+     *
+     * [bytes] is the file exactly as it sits on disk. `null` means the file is there but could not
+     * be read at all; it stays in the list rather than vanishing, because a backup has to be able
+     * to say what it could not copy (finding 153).
+     */
+    data class BackupEntry(val fileName: String, val bytes: ByteArray?)
 
     /**
-     * Every project as its raw JSON, for the operator's own backup.
+     * Every project as its raw bytes, for the operator's own backup.
      *
      * The files are copied verbatim rather than re-serialised: a backup must be a byte-for-byte
      * copy of what the app wrote, so a restore of an older app version stays possible and so a
      * corrupted-but-readable file is not silently "fixed" into something else.
+     *
+     * This used to read each file as *text* and the caller wrote that text back out as UTF-8,
+     * which is not the same thing: a byte that is not valid UTF-8 decodes to the replacement
+     * character and is re-encoded as three bytes that were never in the file. The one file where
+     * that matters is the damaged one - the room the list cannot parse and therefore keeps, which
+     * finding 150 made deletable precisely because it is the operator's only copy. Backing up
+     * rewrote it. The bytes are now read as bytes and written as bytes, and a file that cannot be
+     * read at all is reported instead of dropped (finding 153).
      */
     suspend fun backupEntries(): List<BackupEntry> = withContext(Dispatchers.IO) {
         directory.listFiles { file -> file.extension == "json" }
             ?.sortedBy { it.name }
-            ?.mapNotNull { file ->
-                runCatching { BackupEntry(file.name, file.readText()) }.getOrNull()
-            }
+            ?.map { file -> BackupEntry(file.name, runCatching { file.readBytes() }.getOrNull()) }
             .orEmpty()
     }
 
@@ -146,8 +233,15 @@ class ProjectRepository(private val context: Context) {
         photoDirectory.listFiles()?.filter { it.isFile && it.length() > 0L }?.sortedBy { it.name }.orEmpty()
     }
 
-    /** Whether a project with [id] exists — used to re-attach a restored photo to its project. */
-    suspend fun hasProject(id: String): Boolean = withContext(Dispatchers.IO) { fileFor(id).exists() }
+    /**
+     * A restored project together with the id its file carried before any re-keying.
+     *
+     * The two ids differ exactly when the file's id was already taken - and that is the case in
+     * which the restore has to know, because the photo belongs to the project, not to the id: a
+     * re-keyed copy must take its photo with it instead of leaving it on the room that kept the
+     * old id.
+     */
+    data class ImportedProject(val originalId: String, val project: ProjectRecord)
 
     /**
      * Imports one project file.
@@ -156,25 +250,131 @@ class ProjectRepository(private val context: Context) {
      * backup onto a phone that still has the original must not destroy either copy.
      * Returns the stored project, or `null` when the text is not a project.
      */
-    suspend fun importProject(text: String): ProjectRecord? = withContext(Dispatchers.IO) {
-        val parsed = runCatching {
+    suspend fun importProject(text: String): ProjectRecord? = importProjectDetailed(text)?.project
+
+    /**
+     * The room in [text], or `null` when this build cannot read it.
+     *
+     * Pure: nothing is written, no id is re-keyed, no file is touched. The restore uses it to tell
+     * "a room this plan had no slot for" from "not a room at all" *before* it decides which files
+     * it can even attempt - a file past the free slots is otherwise classified as held back for an
+     * upgrade it would never survive.
+     *
+     * A file written by a **newer** ConstructAR is refused (finding 101). `schemaVersion` has been
+     * in every project file since the first release and no line of the app ever compared it: the
+     * parser ignores unknown keys, so a room backed up by a newer phone was accepted with
+     * everything that version had added - a diary entry, a photo reference, a defect - silently
+     * dropped, and the operator saw a room that had "restored" while part of the job was gone.
+     * Refusing leaves the file untouched in his backup, and the restore's sentence now names the
+     * cause. Files from *older* versions are still accepted: they only lack keys this build
+     * defaults. The repository's own files are read by [readProject] and never version-checked, so
+     * installing an older build does not hide the rooms already on the phone.
+     */
+    fun parseProject(text: String): ProjectRecord? {
+        val record = runCatching {
             json.decodeFromString(ProjectRecord.serializer(), text)
-        }.getOrNull() ?: return@withContext null
-        val target = if (fileFor(parsed.id).exists()) {
+        }.getOrNull() ?: return null
+        return if (record.schemaVersion > ProjectRecord.SCHEMA_VERSION) null else record
+    }
+
+    /** [importProject], also reporting the id the file carried before any re-keying. */
+    suspend fun importProjectDetailed(text: String): ImportedProject? = withContext(Dispatchers.IO) {
+        val parsed = parseProject(text) ?: return@withContext null
+        // The id becomes a file name, and this text came from a file somebody handed over.
+        // An id of "../../databases/x" must never reach `File(directory, "$id.json")`, so an
+        // id that is not a plain token is replaced - the project is still imported, under a
+        // fresh identity, exactly like the duplicate case below.
+        val target = if (!isSafeToken(parsed.id) || fileFor(parsed.id).exists()) {
             parsed.copy(id = UUID.randomUUID().toString())
         } else {
             parsed
         }
-        if (save(target)) target else null
+        if (save(target)) ImportedProject(originalId = parsed.id, project = target) else null
+    }
+
+    /**
+     * Whether a stored name can be used as a file name.
+     *
+     * Ids and photo tokens both come from outside: a project id from a restored JSON file, a
+     * photo token from the *file name* of a picked picture. Both are appended to a directory
+     * path, so a value like `../databases/app` would write - or delete - outside the folder
+     * this repository owns. Letters, digits, dash and underscore only; no dots, no separators.
+     */
+    fun isSafeToken(value: String): Boolean =
+        value.isNotEmpty() && value.length <= 120 &&
+            value.all { it.isLetterOrDigit() || it == '-' || it == '_' }
+
+    /**
+     * Text of a picked project file, or `null` when it is too large to be one.
+     *
+     * A restore reads whatever the operator picked, and the picker accepts every MIME type
+     * (a `.json` file is reported as three different types depending on the file manager).
+     * Reading a 2 GB video into a `String` is an out-of-memory crash in the middle of a
+     * restore; a project with a scan summary is a few hundred kilobytes, so the cap is far
+     * above anything real and far below anything dangerous.
+     */
+    fun readProjectText(input: java.io.InputStream): String? = runCatching {
+        val buffer = java.io.ByteArrayOutputStream(64 * 1024)
+        val chunk = ByteArray(64 * 1024)
+        var total = 0
+        while (true) {
+            val read = input.read(chunk)
+            if (read <= 0) break
+            total += read
+            if (total > MAX_PROJECT_BYTES) return null
+            buffer.write(chunk, 0, read)
+        }
+        String(buffer.toByteArray(), Charsets.UTF_8)
+    }.getOrNull()
+
+    // ── Drafts of runs in progress ──────────────────────────────────────────────────────────
+
+    /**
+     * Writes the run that is being measured, so a killed process does not take it.
+     *
+     * Called on every committed point, so the write has to be cheap and atomic - it is the same
+     * `SafeFiles.writeAtomically` path a project uses (temporary file, `fsync`, rename), which
+     * means a kill in the middle leaves the previous draft intact rather than a half-written one.
+     * A draft with fewer than two points is a mis-tap, not a measurement: it is deleted instead.
+     */
+    suspend fun saveDraft(draft: RouteDraft): Boolean = withContext(Dispatchers.IO) {
+        if (!isSafeToken(draft.projectId)) return@withContext false
+        if (!draft.isRecoverable) return@withContext deleteDraft(draft.projectId)
+        val text = runCatching {
+            json.encodeToString(RouteDraft.serializer(), draft)
+        }.getOrNull() ?: return@withContext false
+        SafeFiles.writeAtomically(draftFileFor(draft.projectId), text)
+    }
+
+    /** The stored draft for [projectId], or `null` when there is none (or it is unreadable). */
+    suspend fun loadDraft(projectId: String): RouteDraft? = withContext(Dispatchers.IO) {
+        if (!isSafeToken(projectId)) return@withContext null
+        val file = draftFileFor(projectId)
+        if (!file.isFile) return@withContext null
+        runCatching {
+            json.decodeFromString(RouteDraft.serializer(), file.readText())
+        }.getOrNull()?.takeIf { it.isRecoverable }
+    }
+
+    suspend fun deleteDraft(projectId: String): Boolean = withContext(Dispatchers.IO) {
+        if (!isSafeToken(projectId)) return@withContext false
+        val file = draftFileFor(projectId)
+        !file.exists() || file.delete()
     }
 
     suspend fun delete(id: String): Boolean = withContext(Dispatchers.IO) {
+        if (!isSafeToken(id)) return@withContext false
         // The site photo is `<id>.jpg`, an entry photo is `<id>__diary_<entry>.jpg`; deleting a
         // project must not leave either of them orphaned in private storage.
         photoDirectory.listFiles()
             ?.filter { it.name == "$id.jpg" || it.name.startsWith("${id}__") }
             ?.forEach { it.delete() }
-        fileFor(id).delete()
+        val removed = fileFor(id).delete()
+        // A draft belongs to exactly one project; deleting the room must not leave it behind to
+        // be offered again on the next start (with nothing to attach it to). The result of *that*
+        // delete is not the answer to "was the room deleted": with no draft it is `false`.
+        draftFileFor(id).delete()
+        removed
     }
 
     /** Merges a finished scan summary into the stored project. */
@@ -205,8 +405,9 @@ class ProjectRepository(private val context: Context) {
      */
     fun photoFileByName(token: String): File = File(photoDirectory, "$token.jpg")
 
-    /** Copies a picked picture into private storage under [token]. */
+    /** Copies a picked picture into private storage under [token]; refused for an unsafe one. */
     suspend fun savePhotoAs(token: String, source: Uri): Boolean = withContext(Dispatchers.IO) {
+        if (!isSafeToken(token)) return@withContext false
         runCatching {
             val target = photoFileByName(token)
             val copied = context.contentResolver.openInputStream(source)?.use { input ->
@@ -218,16 +419,21 @@ class ProjectRepository(private val context: Context) {
         }.getOrDefault(false)
     }
 
-    fun deletePhotoAs(token: String): Boolean = photoFileByName(token).delete()
+    fun deletePhotoAs(token: String): Boolean =
+        isSafeToken(token) && photoFileByName(token).delete()
 
     /**
-     * Decodes a stored photo at a size fit for its purpose.
+     * Decodes a stored entry photo at 640 px, the size the field book and the printed appendix
+     * both use.
      *
-     * Thumbnails in the site file are 640 px; the export re-reads the same file larger for the
-     * appendix. Sampling is power-of-two, so the working set stays a few megabytes either way.
+     * There is no second, larger read: the appendix prints the same thumbnails the screen holds,
+     * because its cell is 255 pt wide and 640 px across 3.1 in is already ~200 ppi (finding 175 —
+     * this comment used to promise a 1 200 px re-read for the appendix that no code performed).
+     * Sampling is power-of-two, so the working set stays a few megabytes.
      */
     suspend fun loadPhotoAs(token: String, maxDimensionPx: Int = 640): Bitmap? =
         withContext(Dispatchers.IO) {
+            if (!isSafeToken(token)) return@withContext null
             decodeSampled(photoFileByName(token), maxDimensionPx)
         }
 
@@ -248,11 +454,12 @@ class ProjectRepository(private val context: Context) {
     suspend fun savePhoto(projectId: String, source: Uri): Boolean = savePhotoAs(projectId, source)
 
     /**
-     * Decodes the photo at a size fit for a screen and an A4 page.
+     * Decodes **the room's own photo** — the one picture attached to the project, printed across
+     * the first protocol page — at 1 200 px.
      *
-     * A modern phone camera writes 12 MP; decoding that at full size would be ~48 MB twice over
-     * (thumbnail + PDF). Sampling keeps the working set at a few megabytes, and a protocol page
-     * cannot use more detail than this anyway.
+     * Not an entry photo: those come from [loadPhotoAs] at 640 px. A modern phone camera writes
+     * 12 MP; decoding that at full size would be ~48 MB per picture. Sampling keeps the working
+     * set at a few megabytes, and a half-page A4 image cannot use more detail than this.
      */
     suspend fun loadPhoto(projectId: String, maxDimensionPx: Int = 1_200): Bitmap? =
         loadPhotoAs(projectId, maxDimensionPx)
@@ -261,6 +468,8 @@ class ProjectRepository(private val context: Context) {
     fun exportStagingDirectory(): File = File(context.cacheDir, "exports").apply { mkdirs() }
 
     private fun fileFor(id: String) = File(directory, "$id.json")
+
+    private fun draftFileFor(id: String) = File(draftDirectory, "$id.json")
 
     private val photoDirectory: File by lazy {
         File(context.filesDir, "photos").apply { mkdirs() }
@@ -278,5 +487,8 @@ class ProjectRepository(private val context: Context) {
 
     companion object {
         private const val TAG = "ProjectRepository"
+
+        /** Generous for a project file, small enough that a wrong pick cannot exhaust the heap. */
+        const val MAX_PROJECT_BYTES: Int = 8 * 1024 * 1024
     }
 }

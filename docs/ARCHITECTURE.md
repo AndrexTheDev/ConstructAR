@@ -27,7 +27,7 @@ and it is why the AR overlay, the PDF and the GLB can never disagree: they all c
  │  · RouteSession.onFrame() → read refined anchor poses                 │
  │  · TrackingMonitor.onFrame() → cosmetic state only                    │
  └───────────────┬───────────────────────────────────────────────────────┘
-                 │ Channel(1, DROP_OLDEST)
+                 │ Channel(1) — refuses a frame while one is queued
  ┌───────────────▼──────────────────── pipe worker (1 thread) ──────────┐
  │ TsdfScanPipeline.integrate()  → JNI → C++ threads (3)                │
  │ every 300 ms: extractMesh()   → Surface Nets → ScanMesh → StateFlow   │
@@ -40,9 +40,17 @@ off, sometimes" bug. The tap request is queued (`ArInteraction.requestTap`), res
 `onSessionUpdated`, and the result is applied back on the main thread — because
 `Session.createAnchor` belongs to the UI thread.
 
-Back-pressure is explicit: the integration channel holds **one** frame and drops the oldest.
-A dropped frame increments `ScanState.framesDropped`, so "the scan looks sparse" is
-distinguishable from "the device is overloaded".
+Back-pressure is explicit: the integration channel holds **one** frame and refuses the frame
+that arrives while one is queued, returning its depth array to the pool on the spot (it used to
+drop the *queued* frame, whose buffer nothing ever returned). A refused frame increments
+`ScanState.framesDropped`, so "the scan looks sparse" is distinguishable from "the device is
+overloaded" — the overlay switches to `ScanHint.BEHIND`, with the share in the sentence, once
+one offered frame in six is lost (finding 170).
+
+The depth array itself is reference counted (`DepthFrameSnapshot.retain`/`release`, finding 168):
+one frame is published to the hit cascade *and* handed to the pipe worker, so it goes back to
+`DepthBufferPool` only when the last of them has let go — not when the next frame replaces it,
+which said nothing about the worker that was still pinning it.
 
 ---
 
@@ -91,11 +99,67 @@ an explicit "ghost removal" pass.
 crossings; one quad per sign-changing edge, split into two triangles with a winding consistent
 with the SDF gradient. Output is un-welded per face, which is what both Filament and glTF want.
 
+**Plane fitting** (`geometry/plane_fit.cpp`). The step in front of the frame solver: RANSAC for
+the consensus set, the covariance's smallest eigenvector for the plane itself, the explained points
+removed and the next plane looked for. Three things decide whether it is trustworthy. The RANSAC
+budget is derived, not chosen: a sample is clean with probability `w³` for a surface holding a
+fraction `w` of the cloud, so a six-surface room needs ~990 samples for 99 % confidence, and a
+budget below that fails *quietly* — it reports a facet of a real surface, so a wall arrives in two
+pieces and every downstream count is plausible. The plane is re-fitted by least squares before it
+is reported, so the noisy triple decides membership and never position. And the sampler is seeded
+from `PlaneFitOptions::seed` alone: a fit that differs every run cannot be regression-tested or
+reproduced by the person reporting a bad room. `planarity` and `extentMetres` reject the line of
+points and the sliver that would otherwise become walls, and a rejected candidate is *spent* — its
+points leave the cloud so the same set cannot be proposed again, and the next surface is looked
+for, because ending the fit there cost a scan every plane behind a bolt head (finding 191); the normal's sign is fixed towards the
+centre of the cloud, so two fits of one room agree.
+
+**Manhattan-World frame** (`geometry/manhattan_world.cpp`). A room is meant to be orthogonal;
+the planes fitted from depth are not, because each carries its own noise and the pose graph's
+drift, and the error is systematic - two walls that should be 4.00 m apart read 4.03 m and the
+corner reads 87.6°. The solver finds the frame the room is trying to be and snaps to it only the
+planes that are already close: the dominant direction is the top eigenvector of Σ w·n·nᵀ, the
+remaining degree of freedom is one turn angle in the plane perpendicular to it, found by a 1-D
+search of a Tukey-weighted inlier score, and the third axis is the cross product. Both the search
+and the kernel are the finding (187): in a square room the two horizontal families carry nearly
+equal weight, so the eigen-decomposition's second direction is ill-conditioned and a single
+crooked wall tilted the "square" pair by 15.7°; and a hard tolerance cut is a cliff the search
+walks into, where a bay window 35° off square was worth enough at 19.4° to tilt the room by 15°
+again. A plausible-looking wrong answer, on a
+problem nothing else in the app checks. A plane with a centroid is squared *through* that
+centroid, so a wall 8° off stays at the distance it was measured at instead of moving by its
+cosine; a plane more than 20° off (a bay window, a chamfer) is returned untouched, bit for bit,
+and a set of parallel walls produces no frame at all rather than an invented one. The solver
+decides geometry only: no length, no node position and no fitting count passes through it. The
+frame's vertical is *not* taken from the top eigenvector (finding 189): in a room whose floor and
+walls carry comparable weight the two horizontal families couple through one crooked wall and their
+rotated pair out-eigenvalues the vertical, so each eigenvector is tried as the primary and the frame
+that explains the most inliers wins; a frame also needs two of its three axes evidenced, which is
+what separates "a room" from "a floor and a ceiling". It is
+host-tested and **not yet wired** - no plane fit in the app feeds it, so the app does not square
+anything today; what exists is the engine a plane-fitting pass will call, not a behaviour a user
+can observe (the same distinction finding 98 had to make about the pose graph).
+
+**Passive marker contract** (`calibration/tag_scale.cpp`). Tier 2 of the calibration ladder — a
+printed AprilTag of known size, seen in enough frames, gives the scan a length that does not depend
+on an operator holding a bank card still. The pixel half of that is a decoder to vendor and licence,
+so what exists is the half that can be proved here: `TagDetector`, the interface a decoder will
+implement (whose only implementation in this build reports itself unavailable, and why — an empty
+detection list means "no tags in view" otherwise, which a build with no decoder would report for
+ever), and the marker-to-scale update: pair ratios of nominal over measured against the printed
+layout, a median to find the majority, a deviation filter for the tag that was mis-detected, and a
+baseline-weighted mean of what survives. It publishes a factor, the pairs that agreed, the pairs it
+rejected and the longest baseline behind it, and it decides nothing — the acceptance window lives
+in `:core` beside the bank-card reference, which is why the native directory does not contain its
+two numbers even in a comment. Nothing is wired: no JNI symbol, no app caller, no button.
+
 **Pose graph** (`slam/pose_graph.cpp`). Gauss–Newton on SE(3) with central-difference Jacobians,
 block-sparse Hessian solved by preconditioned conjugate gradient, backtracking line search (a
 full step overshoots on a room with one closure), snapshot/rollback so a diverging iteration can
 never corrupt the trajectory. Loop closures carry 100× the odometry weight because they are
-appearance-verified.
+appearance-verified. The graph is *not yet driven by the scan pipeline* (finding 98): it is
+host-tested and reachable from `NativeSlamEngine`, but no keyframe reaches it today, so the app
+measures on ARCore's own tracking.
 
 **Monocular depth fusion.** Optional and strictly additive:
 `YuvFrame` copies the camera planes on the render thread (~0.2 ms), the inference worker runs
@@ -139,6 +203,16 @@ rename). Routes store node positions, normals, the hit source and confidence —
 measured from soft hits is identifiable months later. The scan mesh is *not* persisted: it is
 10 MB of derived data, regenerated on demand, exported on request.
 
+A run that is still being measured is written as it grows
+(`filesDir/drafts/<project id>.json`, same atomic write, one file per project). It is not a
+project and never appears in a backup: it exists so that a process killed mid-measurement — a
+phone call, a low-memory device, a battery that gave up — costs the operator nothing. On the next
+start the AR screen offers the run back. What survives exactly is what the paperwork needs (the
+points, the conduit spec, whether the loop was closed); what cannot survive is the ARCore world
+origin, so the recovered route is marked `recovered`: it counts fully in the bill of materials
+and the protocol, and it is kept out of the 3D export and the AR preview, where its coordinates
+would be a length of conduit floating somewhere in the room.
+
 Schema version `1`; `ProjectMigrations` is the place for the next one.
 
 ---
@@ -177,11 +251,28 @@ translucent scan overlay) in its constructor — which runs from `onSceneReady`,
 thread. A frame then only reads a `ConcurrentHashMap`: no material is created, and no object is
 allocated, in the render loop.
 
+**Numbers in an exported document.** One policy, three cases. Lengths, quantities and the
+duration line use `Locale.ROOT`, so the same protocol prints `14.82 m`, `2 h 15 min` and
+`1 250` on every phone - a signed handover document must not change its digits because the
+device was set to another language, and formatting with the device locale once put
+Arabic-Indic digits (`٢ h ١٥ min`) into an English page. Money is the deliberate exception:
+`MoneyFormatter` follows the phone's convention (`1.250,00 €` in German) because the price is
+read by the customer, and it forces **euro** regardless of locale. Dates are two cases of
+their own: free-form labels (a diary line) follow the phone's `DateFormat`, while the fixed
+numeric day (`01.11.2026` in the project list and on the licence expiry) is pinned to
+`Locale.ROOT` - a `SimpleDateFormat` takes its *calendar* from the locale, so a Thai phone
+printed a licence expiring in 2569. The CSV is the third case:
+it is data for a spreadsheet, so it is always `.`-decimal with `;` separators, plus a UTF-8
+BOM for Excel - see `docs/TESTING.md` findings 28 and 30.
+
 **Localisation seam.** The engine modules contain no user-facing strings. `TrackingMonitor`
 publishes a `Guidance` code, `RouteSession` a `RouteWarning` code, the hit cascade a
 `SurfaceKind`/`HitSource`, `ArSessionController` an `ArReadiness` branch. `:app` maps each to
-`stringResource` in `ui/Labels.kt`, and every length is formatted by `LengthFormatter` or the
-`hud_length` resource. That is what makes six locales complete without the engines carrying a
+`stringResource` in `ui/Labels.kt`, and every length is formatted by `LengthFormatter` - where
+the resource carries the unit (`hud_length` is `%1$s m`), the digits arrive through
+`LengthFormatter.number()`, never through a `%f` format, because a `%f` resource takes its
+decimal mark from the device and put `12,50 m` beside `28.80 m` in one HUD column (finding 39).
+That is what makes six locales complete without the engines carrying a
 Context — and it keeps the engines unit-testable on the JVM.
 
 ---

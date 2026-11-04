@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Cable
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
@@ -46,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,9 +62,6 @@ import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.licence.Entitlements
 import com.constructar.core.units.LengthFormatter
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * The home screen: one job — get the operator back to work in one tap.
@@ -82,20 +81,43 @@ fun HomeScreen(
     onCreate: (String) -> Unit,
     onUpgrade: () -> Unit,
     onHelp: () -> Unit,
+    /**
+     * Project files in the app's folder that could not be read. They are kept - nothing here
+     * deletes a room it does not understand - so the list has to say they exist, or a damaged
+     * project looks exactly like a deleted one.
+     */
+    unreadableProjects: Int = 0,
+    /**
+     * The same files by name, so each one can be deleted.
+     *
+     * A count told the operator that his data was still on the phone and gave him nothing to do
+     * about it: the file takes the free room (finding 126), the create gate counts it (finding
+     * 149) and no other screen can show it. Deleting is the one action that frees the slot, and
+     * it is offered here, next to the sentence that says the file was kept (finding 150).
+     */
+    unreadableFiles: List<String> = emptyList(),
+    onDeleteUnreadable: (String) -> Unit = {},
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
-    var newName by remember { mutableStateOf("") }
-    var query by remember { mutableStateOf("") }
-    val canCreate = entitlements.allowsAnotherProject(projects.size)
+    var newName by rememberSaveable { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
+    // The file the operator has asked to delete, pending the question that names it.
+    var damagedToDelete by rememberSaveable { mutableStateOf("") }
+    // A file this build cannot read is still a room on the phone: it occupies the one free
+    // slot just like a healthy one (finding 126). Asked through `ProjectSlots` because the gate
+    // behind this button has to answer with the same count (finding 149).
+    val canCreate = ProjectSlots.allowsAnother(
+        entitlements = entitlements,
+        readable = projects.size,
+        unreadable = unreadableProjects,
+    )
     val mostRecent = projects.firstOrNull()
     // Searching pays for itself from a handful of rooms on; with two it is just another field
     // between the operator and the thing they tapped the app for.
     val needle = query.trim()
-    val filtered = if (needle.isEmpty()) {
-        projects
-    } else {
-        projects.filter { it.name.contains(needle, ignoreCase = true) || it.siteName.contains(needle, ignoreCase = true) }
-    }
+    // Name, site **and customer**: he remembers who the job was for, not what he called the room
+    // (finding 144).
+    val filtered = projects.filter { ProjectFilter.matches(needle, it) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Header(
@@ -110,6 +132,28 @@ fun HomeScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (unreadableProjects > 0) {
+                item {
+                    Text(
+                        text = pluralStringResource(
+                            R.plurals.home_unreadable,
+                            unreadableProjects,
+                            unreadableProjects,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SiteColors.warning,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+            if (unreadableFiles.isNotEmpty()) {
+                item {
+                    DamagedFilesCard(
+                        names = unreadableFiles,
+                        onDelete = { name -> damagedToDelete = name },
+                    )
+                }
+            }
             if (loading) {
                 item { Spacer(Modifier.height(24.dp)) }
             } else if (mostRecent != null) {
@@ -223,7 +267,10 @@ fun HomeScreen(
 
     if (showCreateDialog) {
         AlertDialog(
-            onDismissRequest = { showCreateDialog = false },
+            onDismissRequest = {
+                showCreateDialog = false
+                newName = ""
+            },
             title = { Text(stringResource(R.string.home_new_project)) },
             text = {
                 OutlinedTextField(
@@ -244,9 +291,80 @@ fun HomeScreen(
                 ) { Text(stringResource(R.string.home_create)) }
             },
             dismissButton = {
-                TextButton(onClick = { showCreateDialog = false }) { Text(stringResource(R.string.home_cancel)) }
+                TextButton(
+                    onClick = {
+                        // An abandoned name is not a suggestion for the next room (finding 125).
+                        showCreateDialog = false
+                        newName = ""
+                    },
+                ) { Text(stringResource(R.string.home_cancel)) }
             },
         )
+    }
+
+    // Deleting a file the app cannot read is deleting the operator's own data: the question names
+    // the file, says what this version could and could not read, and says what becomes free.
+    if (damagedToDelete.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { damagedToDelete = "" },
+            title = { Text(stringResource(R.string.home_damaged_title)) },
+            text = { Text(stringResource(R.string.home_damaged_body, damagedToDelete)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val name = damagedToDelete
+                        damagedToDelete = ""
+                        onDeleteUnreadable(name)
+                    },
+                ) { Text(stringResource(R.string.home_damaged_delete)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { damagedToDelete = "" }) {
+                    Text(stringResource(R.string.home_cancel))
+                }
+            },
+        )
+    }
+}
+
+/**
+ * The files this version cannot read, each with the one action that helps.
+ *
+ * Not a row in the room list: that list is built from rooms the app could parse, and a file that
+ * cannot be parsed is exactly the one it cannot draw. A separate card says what these files are,
+ * keeps them visible, and lets the operator free the room they occupy (finding 150).
+ */
+@Composable
+private fun DamagedFilesCard(names: List<String>, onDelete: (String) -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Jamaica.SurfaceHigh),
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                stringResource(R.string.home_damaged_title),
+                style = MaterialTheme.typography.labelMedium,
+                color = SiteColors.warning,
+            )
+            names.forEach { name ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = { onDelete(name) }) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = stringResource(R.string.home_damaged_delete),
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -300,7 +418,13 @@ private fun Header(
 @Composable
 fun PlanChip(entitlements: Entitlements, trialDaysLeft: Long, onClick: () -> Unit) {
     val (label, tint) = when {
-        entitlements.isTrial -> stringResource(R.string.plan_trial_days, trialDaysLeft) to SiteColors.accent
+        // A count of one is not "1 days": the chip on the list can show the trial's last day
+        // (finding 135).
+        entitlements.isTrial -> pluralStringResource(
+            R.plurals.plan_trial_days,
+            trialDaysLeft.toInt().coerceAtLeast(0),
+            trialDaysLeft,
+        ) to SiteColors.accent
         entitlements.isPro -> stringResource(R.string.plan_pro) to SiteColors.accent
         else -> stringResource(R.string.plan_free) to MaterialTheme.colorScheme.onSurfaceVariant
     }
@@ -401,7 +525,8 @@ private fun ProjectRow(project: ProjectRepository.ProjectSummary, onClick: () ->
 
 @Composable
 private fun ProjectMetaLine(project: ProjectRepository.ProjectSummary) {
-    val formatter = remember { SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()) }
+    // Gregorian and identical in all six languages: see `formatDayLabel`.
+    val updatedLabel = remember(project.updatedAtEpochMs) { formatDayLabel(project.updatedAtEpochMs) }
     // Resolved at composition: `pluralStringResource` is @Composable and must not be called
     // from inside `buildString`.
     val runsText = pluralStringResource(R.plurals.home_runs, project.routeCount, project.routeCount)
@@ -411,29 +536,59 @@ private fun ProjectMetaLine(project: ProjectRepository.ProjectSummary) {
     } else {
         ""
     }
+    // What always fits: runs, metres, date. Everything else used to be appended here as well, in a
+    // single ellipsized line - so on a normal phone the string was cut off after the date and the
+    // site name, the defect count *and the running clock* were never shown at all. The one line on
+    // the home screen that says money is burning was the first thing the ellipsis ate.
     Text(
         text = buildString {
             append(runsText)
             append(" · ")
             append(LengthFormatter.format(project.totalLengthMeters))
             append(" · ")
-            append(formatter.format(Date(project.updatedAtEpochMs)))
-            if (project.siteName.isNotBlank()) {
-                append(" · ")
-                append(project.siteName)
-            }
-            if (project.workRunning) {
-                append(" · ")
-                append(runningText)
-            }
-            if (defectsText.isNotEmpty()) {
-                append(" · ")
-                append(defectsText)
-            }
+            append(updatedLabel)
         },
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
+    // The customer and the site share one line: the row has to stay three lines tall on a phone
+    // held in a glove, and both facts are the same kind of quiet grey detail. One ellipsized Text
+    // keeps the running-clock and defect chips on the right (finding 129's lesson), where two
+    // weighted Texts would have squeezed them off (finding 144).
+    val placeAndCustomer = listOf(project.customerName.trim(), project.siteName.trim())
+        .filter { it.isNotEmpty() }
+        .joinToString(" · ")
+    if (placeAndCustomer.isNotEmpty() || project.workRunning || defectsText.isNotEmpty()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+            if (placeAndCustomer.isNotEmpty()) {
+                Text(
+                    placeAndCustomer,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            if (project.workRunning) {
+                Text(
+                    runningText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Jamaica.Lime,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+            if (defectsText.isNotEmpty()) {
+                Text(
+                    defectsText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = SiteColors.warning,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+        }
+    }
 }

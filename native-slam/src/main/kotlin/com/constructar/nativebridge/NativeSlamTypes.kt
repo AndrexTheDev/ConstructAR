@@ -110,18 +110,28 @@ data class PoseGraphResult(
     val rmsRotationRadians: Float,
     val iterations: Int,
     val milliseconds: Float,
+    /**
+     * The optimiser's own verdict, carried across the bridge.
+     *
+     * This used to be *derived* here as `iterations > 0 && finalCost <= initialCost`, which is not
+     * the same question. A graph the solver did not need to touch converges with zero iterations
+     * and was reported as not converged; a run that used up its iteration budget with the cost
+     * still falling, or whose last step was rejected, was reported as converged because the final
+     * cost was no worse than the initial one (finding 112).
+     */
+    val converged: Boolean,
     /** Column-major camera→world matrices, one per node. */
     val poses: List<FloatArray>,
 ) {
-    val converged: Boolean get() = iterations > 0 && finalCost <= initialCost
 
     companion object {
         fun from(values: FloatArray): PoseGraphResult? {
-            if (values.size < 6) return null
-            val poseCount = (values.size - 6) / 16
+            // 6 report floats + the converged flag, then 16 floats per node.
+            if (values.size < 7) return null
+            val poseCount = (values.size - 7) / 16
             val poses = ArrayList<FloatArray>(poseCount)
             for (i in 0 until poseCount) {
-                val offset = 6 + i * 16
+                val offset = 7 + i * 16
                 if (offset + 16 > values.size) break
                 poses.add(values.copyOfRange(offset, offset + 16))
             }
@@ -132,6 +142,7 @@ data class PoseGraphResult(
                 rmsRotationRadians = values[3],
                 iterations = values[4].toInt(),
                 milliseconds = values[5],
+                converged = values[6] != 0f,
                 poses = poses,
             )
         }
@@ -155,8 +166,6 @@ fun ScanMesh.toMeshBuilder(create: () -> MeshBuilder = { MeshBuilder(vertexCount
     return builder
 }
 
-/** Bounds helper for the scan summary (`ScanSummary.fromBounds`). */
-fun ScanMesh.toAabbOrNull(): Aabb? = mesh.bounds()
 
 /** Convenience: centroid of the reconstructed surface — used to aim the HUD camera. */
 fun ScanMesh.centroid(): Vec3 = bounds?.center ?: Vec3.ZERO

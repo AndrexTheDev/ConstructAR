@@ -1,0 +1,219 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
+package com.constructar.export
+
+import com.constructar.core.bom.MaterialListBuilder
+import com.constructar.core.math.Vec3
+import com.constructar.core.model.ConduitKind
+import com.constructar.core.model.ConduitRoute
+import com.constructar.core.model.ConduitSpec
+import com.constructar.core.model.HitSource
+import com.constructar.core.model.ProjectRecord
+import com.constructar.core.model.RouteNodeRecord
+import com.constructar.core.model.SurfaceKind
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.ByteArrayOutputStream
+
+/**
+ * What the bundle contains - and, more importantly, what it does **not** pretend to contain.
+ *
+ * `build` documents that it never throws for a missing mesh, it just omits it. That promise is
+ * easy to state and easy to break in a refactor, and it decides what the export screen says to
+ * the operator: the screen infers "nothing to write" from an empty artifact list, so an empty
+ * list has to mean exactly "there was nothing to write", never "I gave up quietly".
+ */
+class ExportServiceTest {
+
+    private val service = ExportService(clock = { 0L })
+
+    private fun emptyProject() = ProjectRecord.empty("p1", "Baustelle Nord", 0L)
+
+    private fun measuredProject(): ProjectRecord {
+        val spec = ConduitSpec.cable(16f, "Cable Ø16")
+        val route = ConduitRoute(
+            id = "r1",
+            label = "Flur",
+            spec = spec,
+            nodes = listOf(
+                RouteNodeRecord("n1", Vec3(0f, 0f, 0f), Vec3(0f, 0f, 1f), SurfaceKind.WALL, HitSource.PLANE_POLYGON),
+                RouteNodeRecord("n2", Vec3(2.5f, 0f, 0f), Vec3(0f, 0f, 1f), SurfaceKind.WALL, HitSource.PLANE_POLYGON),
+            ),
+            createdAtEpochMs = 0L,
+        )
+        return ProjectRecord.empty("p2", "Neubau", 0L).copy(routes = listOf(route))
+    }
+
+    private fun route(
+        label: String,
+        spec: ConduitSpec,
+        lengthMeters: Float,
+        recovered: Boolean = false,
+    ) = ConduitRoute(
+        id = label,
+        label = label,
+        spec = spec,
+        nodes = listOf(
+            RouteNodeRecord("$label-a", Vec3(0f, 0f, 0f), Vec3(0f, 0f, 1f), SurfaceKind.WALL, HitSource.PLANE_POLYGON),
+            RouteNodeRecord("$label-b", Vec3(lengthMeters, 0f, 0f), Vec3(0f, 0f, 1f), SurfaceKind.WALL, HitSource.PLANE_POLYGON),
+        ),
+        createdAtEpochMs = 0L,
+        recovered = recovered,
+    )
+
+    private fun request(project: ProjectRecord) = ExportService.Request(
+        project = project,
+        materialList = MaterialListBuilder.build(project, nowMs = 0L),
+        routeMeshes = ExportService.routeMeshes(project),
+        appVersion = "test",
+    )
+
+    @Test
+    fun `a project with no runs still exports its paper, and no model files`() {
+        val project = emptyProject()
+        val artifacts = service.build(request(project))
+
+        assertEquals(listOf("csv", "pdf"), artifacts.map { it.fileName.substringAfterLast('.') }.sorted())
+        // The CSV must actually write: a document that exists only as a file name is not a
+        // document. (The PDF writer needs a real `PdfDocument`, so its bytes are covered where
+        // one exists - `PdfTextTest` for the layout, the screenshot matrix for the page.)
+        val csv = artifacts.single { it.fileName.endsWith(".csv") }
+        val sink = ByteArrayOutputStream()
+        csv.write(sink)
+        assertTrue("the csv wrote nothing", sink.size() > 0)
+        val text = String(sink.toByteArray(), Charsets.UTF_8)
+        // The production CSV carries a UTF-8 BOM for Excel, so the header is not at index 0.
+        assertTrue(text.contains("Project;"))
+    }
+
+    @Test
+    fun `mesh formats are omitted, not faked, when there is no geometry`() {
+        val project = emptyProject()
+        val artifacts = service.build(request(project).copy(includePdf = false, includeCsv = false))
+
+        assertTrue(artifacts.isEmpty())
+    }
+
+    @Test
+    fun `a measured run produces every requested format`() {
+        val project = measuredProject()
+        val artifacts = service.build(request(project))
+
+        val kinds = artifacts.map { it.fileName.substringAfterLast('.') }.sorted()
+        assertEquals(listOf("csv", "glb", "pdf", "ply"), kinds)
+        // Four formats, four distinct files in one folder: a collision would silently overwrite.
+        assertEquals(artifacts.size, artifacts.map { it.fileName }.distinct().size)
+    }
+
+    /**
+     * The folder and the files inside it are one export.
+     *
+     * The screen names the destination folder with `fileStem(project)` and `build` named the files
+     * with a second, independent clock read. When the minute turned between the two, the operator
+     * got `ConstructAR_Neubau_20260314-1015/` containing `ConstructAR_Neubau_20260314-1016.pdf`,
+     * `.csv`, `.glb` and `.ply` - a folder that does not match what is in it, and the success
+     * message names the folder (finding 122).
+     */
+    @Test
+    fun `every file carries the stamp of the export, not a second clock read`() {
+        val project = measuredProject()
+        val at = 1_778_616_000_000L
+        // A clock that has already ticked past the minute the folder was named with.
+        val ticking = ExportService(clock = { at + 60_000L })
+
+        val stem = ticking.fileStem(project, at)
+        val names = ticking.build(request(project), atMillis = at, stem = stem).map { it.fileName }
+
+        assertTrue(names.toString(), names.isNotEmpty())
+        assertTrue(names.toString(), names.all { it.startsWith(stem) })
+        // And the default is still the same single stamp: caller-free call sites agree too.
+        val fromDefault = ticking.build(request(project), atMillis = at).map { it.fileName }
+        assertEquals(names, fromDefault)
+    }
+
+    @Test
+    fun `the order list is a file of its own, next to the full bill of materials`() {
+        val project = measuredProject()
+        val artifacts = service.build(request(project).copy(includeOrderList = true, includeGlb = false, includePly = false))
+
+        val names = artifacts.map { it.fileName }
+        // Two CSVs, two names: `-order` is the wholesaler's one-line-per-article list, and it must
+        // not collide with - or replace - the full list the operator keeps.
+        assertEquals(listOf("csv", "csv", "pdf"), artifacts.map { it.fileName.substringAfterLast('.') }.sorted())
+        assertTrue(names.toString(), names.any { it.endsWith("-order.csv") })
+        assertEquals(artifacts.size, names.distinct().size)
+
+        val order = artifacts.single { it.fileName.endsWith("-order.csv") }
+        val sink = ByteArrayOutputStream()
+        order.write(sink)
+        val text = String(sink.toByteArray(), Charsets.UTF_8)
+        assertTrue(text, text.contains("Article;Order length (m);"))
+        assertFalse("the order list carries no per-run detail", text.contains("Run;"))
+    }
+
+    /**
+     * A `List<Pair<String, MeshData>>` could only say what *is* in the model, so a run whose mesh
+     * refused to build simply vanished from the GLB while the protocol and the price still listed it
+     * (finding 80). The result type now names those runs.
+     */
+    @Test
+    fun `a run that cannot be swept is named, not dropped in silence`() {
+        // `ConduitSpec` only requires dimensions to be non-negative, so a project record that came
+        // through a migration - or a hand-edited one - can carry a round conduit of 0 mm, and the
+        // tube sweep refuses to build a radius of zero.
+        val lostDiameter = ConduitSpec(kind = ConduitKind.CABLE, label = "Kabel unbekannt")
+        val project = ProjectRecord.empty("p3", "Neubau", 0L).copy(
+            routes = listOf(route("Flur", ConduitSpec.cable(16f), 2.5f), route("Keller", lostDiameter, 4f)),
+        )
+
+        val meshes = ExportService.routeMeshes(project)
+
+        assertEquals(listOf("Flur"), meshes.parts.map { it.first })
+        assertEquals(listOf("Keller"), meshes.unbuildable)
+    }
+
+    @Test
+    fun `a run whose two nodes collapsed onto one point is named as well`() {
+        val collapsed = route("Bad", ConduitSpec.cable(16f), 0f)
+        val project = ProjectRecord.empty("p4", "Neubau", 0L).copy(routes = listOf(collapsed))
+
+        val meshes = ExportService.routeMeshes(project)
+
+        assertTrue("nothing can be swept from one point", meshes.parts.isEmpty())
+        assertEquals(listOf("Bad"), meshes.unbuildable)
+    }
+
+    @Test
+    fun `a recovered run is explained by its own note, not blamed on the mesh builder`() {
+        val project = ProjectRecord.empty("p5", "Neubau", 0L).copy(
+            routes = listOf(route("Alt", ConduitSpec.cable(16f), 2.5f, recovered = true)),
+        )
+
+        val meshes = ExportService.routeMeshes(project)
+
+        assertTrue(meshes.parts.isEmpty())
+        // Two different sentences for two different causes: a recovered run's geometry was never
+        // meant to be in the model, and printing it under "geometry failed" would be a lie.
+        assertTrue("recovered runs have their own note", meshes.unbuildable.isEmpty())
+    }
+    @Test
+    fun `the ply of a measured room lists its runs and carries no scan`() {
+        val project = measuredProject()
+        val artifacts = service.build(request(project).copy(includePdf = false, includeCsv = false))
+
+        val ply = artifacts.single { it.fileName.endsWith(".ply") }
+        val sink = ByteArrayOutputStream()
+        ply.write(sink)
+        val text = String(sink.toByteArray(), Charsets.US_ASCII)
+
+        assertTrue(text, text.contains("comment mesh Flur"))
+        // Nothing in the model claims to be the scanned room (finding 87).
+        assertFalse("the scan mesh is not part of an export", text.contains("Room scan"))
+    }
+}

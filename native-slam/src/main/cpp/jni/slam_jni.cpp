@@ -80,12 +80,19 @@ struct EngineContext {
   Bounds lastBounds;
   int lastTriangleCount = 0;
   /**
-   * Serialises *every* access to the volume.
+   * Serialises every access to the volume: integrate, extract and reset.
    *
    * The Kotlin pipeline already funnels integration and extraction onto one worker thread, but
-   * `reset()` arrives from the UI thread (a new room was started) and `destroy()` from whatever
-   * thread closed the engine. Without this lock a reset racing an integration corrupts the
-   * block table silently — the kind of bug that shows up as "the scan went weird" days later.
+   * `reset()` arrives from the UI thread (a new room was started). Without this lock a reset
+   * racing an integration corrupts the block table silently — the kind of bug that shows up as
+   * "the scan went weird" days later.
+   *
+   * `nativeDestroy` deliberately does **not** take it: a mutex cannot be locked and then destroyed
+   * with the lock held, so freeing cannot be made safe from inside this file. The contract is that
+   * destroy is the last call on a context, and `NativeSlamEngine` now enforces it on the Kotlin
+   * side twice over - the handle is claimed and zeroed under a lock, so a second close has nothing
+   * to free, and the scan worker that owns the engine frees it only after its loop has ended, so
+   * an integration or extraction in flight is never deleted underneath itself (finding 182).
    */
   std::mutex volumeMutex;
 };
@@ -419,8 +426,13 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativePoseGraphAddEdge(
 
 /**
  * Runs the optimiser and returns
- * `[initialCost, finalCost, rmsTranslation, rmsRotation, iterations, convergedMs,
- *   pose0(16), pose1(16), …]` so one call refreshes the whole scene graph.
+ * `[initialCost, finalCost, rmsTranslation, rmsRotation, iterations, milliseconds,
+ *   converged(0/1), pose0(16), pose1(16), …]` so one call refreshes the whole scene graph.
+ *
+ * `converged` is the optimiser's own answer (`OptimizationReport::converged`), not something the
+ * caller can infer from the two costs: the solver also declares convergence on a graph it did not
+ * need to touch, and it stops *without* it when the iteration budget runs out or a step is
+ * rejected (finding 112).
  */
 JNIEXPORT jfloatArray JNICALL
 Java_com_constructar_nativebridge_NativeSlamEngine_nativePoseGraphOptimize(JNIEnv* env, jobject,
@@ -431,7 +443,7 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativePoseGraphOptimize(JNIEn
   const constructar::OptimizationReport report = context->poseGraph.optimize(iterations);
   const auto poses = context->poseGraph.poses();
 
-  const jsize size = static_cast<jsize>(6 + poses.size() * 16);
+  const jsize size = static_cast<jsize>(7 + poses.size() * 16);
   jfloatArray result = env->NewFloatArray(size);
   if (result == nullptr) return nullptr;
 
@@ -442,7 +454,8 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativePoseGraphOptimize(JNIEn
   payload[3] = static_cast<float>(report.rmsRotationRadians);
   payload[4] = static_cast<float>(report.iterations);
   payload[5] = static_cast<float>(report.milliseconds);
-  size_t write = 6;
+  payload[6] = report.converged ? 1.f : 0.f;
+  size_t write = 7;
   for (const auto& pose : poses) {
     std::memcpy(payload.data() + write, pose.m, sizeof(pose.m));
     write += 16;

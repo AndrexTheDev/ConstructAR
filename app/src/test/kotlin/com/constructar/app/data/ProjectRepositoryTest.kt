@@ -24,6 +24,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -109,7 +110,7 @@ class ProjectRepositoryTest {
     fun `the list carries what the home screen shows`(): Unit = runBlocking {
         repository.save(room())
 
-        val summary = repository.list().single()
+        val summary = repository.list().projects.single()
         assertEquals("room-1", summary.id)
         assertEquals("Küche", summary.name)
         assertEquals("Seilerweg 14", summary.siteName)
@@ -121,7 +122,27 @@ class ProjectRepositoryTest {
     fun `a blank room name falls back instead of producing an unnamed room`(): Unit = runBlocking {
         val created = repository.create(name = "   ", fallbackName = "Raum")
         assertEquals("Raum", created.name)
-        assertTrue(repository.hasProject(created.id))
+        assertNotNull(repository.load(created.id))
+    }
+
+    @Test
+    fun `a room written by a newer app is refused instead of half-read`(): Unit = runBlocking {
+        repository.save(room())
+        val text = repository.backupEntries().single().bytes!!.decodeToString()
+        val newer = text.replace("\"schemaVersion\": 1", "\"schemaVersion\": 2")
+        assertTrue(newer != text, "the fixture must carry a bumped schema version")
+
+        assertNull(repository.parseProject(newer), "a newer file must not be parsed")
+        assertNull(repository.importProject(newer), "a newer file must not be imported")
+        assertEquals(
+            1,
+            repository.list().projects.size,
+            "a refused file must leave the phone exactly as it was",
+        )
+
+        assertNotNull(repository.parseProject(text), "the same room at this version is readable")
+        assertNotNull(repository.importProject(text), "and still restorable")
+        assertEquals(2, repository.list().projects.size)
     }
 
     @Test
@@ -129,20 +150,60 @@ class ProjectRepositoryTest {
         val original = repository.save(room())
         assertTrue(original)
 
-        val backupText = repository.backupEntries().single().text
+        val backupText = repository.backupEntries().single().bytes!!.decodeToString()
         val restored = assertNotNull(repository.importProject(backupText))
 
         assertTrue(restored.id != "room-1", "the restored copy must get a fresh id")
-        assertEquals(2, repository.list().size)
+        assertEquals(2, repository.list().projects.size)
         assertEquals("Küche", repository.load("room-1")?.name)
         assertEquals("Küche", repository.load(restored.id)?.name)
+    }
+
+    @Test
+    fun `a re-keyed restore reports the id the file carried`(): Unit = runBlocking {
+        // The room is still on the phone, so the restore stores a copy under a fresh id - and it
+        // has to say which id the *file* had, because that is the name its photo was saved under.
+        repository.save(room())
+        val backupText = repository.backupEntries().single().bytes!!.decodeToString()
+
+        val restored = assertNotNull(repository.importProjectDetailed(backupText))
+
+        assertEquals("room-1", restored.originalId)
+        assertTrue(restored.project.id != "room-1", "the copy must get a fresh id")
+        assertEquals(restored.project.id, repository.list().projects.map { it.id }.firstOrNull { it != "room-1" })
+    }
+
+    @Test
+    fun `a restore onto an empty phone keeps the file's own id`(): Unit = runBlocking {
+        repository.save(room())
+        val backupText = repository.backupEntries().single().bytes!!.decodeToString()
+        File(projectsDirectory, "room-1.json").delete()
+
+        val restored = assertNotNull(repository.importProjectDetailed(backupText))
+
+        // Nothing to collide with: the photo in the zip is named room-1 and stays correct.
+        assertEquals("room-1", restored.originalId)
+        assertEquals("room-1", restored.project.id)
+    }
+
+    @Test
+    fun `an empty file is unreadable, not an empty room`(): Unit = runBlocking {
+        // A write interrupted at the wrong moment can leave a zero-byte file; listing it as a
+        // room called "" would be worse than saying it could not be read.
+        repository.save(room())
+        File(projectsDirectory, "room-2.json").writeText("")
+
+        val listing = repository.list()
+
+        assertEquals(1, listing.projects.size)
+        assertEquals(1, listing.unreadable)
     }
 
     @Test
     fun `text that is not a project is refused, and nothing is written`(): Unit = runBlocking {
         assertNull(repository.importProject("{\"not\": \"a project\"}"))
         assertNull(repository.importProject(""))
-        assertTrue(repository.list().isEmpty())
+        assertTrue(repository.list().projects.isEmpty())
     }
 
     @Test
@@ -152,9 +213,60 @@ class ProjectRepositoryTest {
         file.writeText("{ this is not json")
 
         assertNull(repository.load("room-1"))
-        assertTrue(repository.list().isEmpty(), "an unreadable room cannot be listed")
+        val listing = repository.list()
+        assertTrue(listing.projects.isEmpty(), "an unreadable room cannot be listed")
+        assertEquals(1, listing.unreadable, "and it is counted, so the home screen can say so")
         assertTrue(file.exists(), "the bytes are the operator's only copy - keep them")
         assertTrue(file.readText().startsWith("{ this is not json"))
+    }
+
+    @Test
+    fun `the files that cannot be read are named, not only counted`(): Unit = runBlocking {
+        // A count told the operator something was wrong and gave him nothing to do about it; on
+        // the free plan a damaged file holds the only room, so its name is the way out
+        // (finding 150).
+        repository.save(room())
+        File(projectsDirectory, "broken-a.json").writeText("{ not json")
+        File(projectsDirectory, "broken-b.json").writeText("")
+
+        val listing = repository.list()
+
+        assertEquals(listOf("broken-a.json", "broken-b.json"), listing.unreadableNames)
+        assertEquals(2, listing.unreadable)
+    }
+
+    @Test
+    fun `deleting a damaged file frees its room, and the list says so`(): Unit = runBlocking {
+        // The folder is created by the repository's first touch, not by the constructor.
+        projectsDirectory.mkdirs()
+        File(projectsDirectory, "broken.json").writeText("{ not json")
+
+        assertTrue(repository.deleteUnreadable("broken.json"))
+        assertFalse(File(projectsDirectory, "broken.json").exists())
+        assertEquals(0, repository.list().unreadable)
+        assertTrue(repository.list().unreadableNames.isEmpty())
+    }
+
+    @Test
+    fun `a file that can be read is not deleted through the damaged-file path`(): Unit = runBlocking {
+        // A room is deleted from the screen that names the room, its photos and its hours
+        // (finding 125). This path exists for the file that screen cannot show.
+        repository.save(room())
+
+        assertFalse(repository.deleteUnreadable("room-1.json"))
+        assertTrue(File(projectsDirectory, "room-1.json").exists())
+        assertEquals(1, repository.list().projects.size)
+    }
+
+    @Test
+    fun `a name that is not a plain file name in this folder is refused`(): Unit = runBlocking {
+        val outside = File(context.filesDir, "outside.json").apply { writeText("{ not json") }
+
+        assertFalse(repository.deleteUnreadable("../outside.json"))
+        assertFalse(repository.deleteUnreadable("outside.json"))
+        assertFalse(repository.deleteUnreadable("broken.txt"))
+        assertFalse(repository.deleteUnreadable(""))
+        assertTrue(outside.exists(), "nothing outside the projects folder is touched")
     }
 
     @Test
@@ -197,6 +309,91 @@ class ProjectRepositoryTest {
 
         val entry = repository.backupEntries().single()
         assertEquals("room-1.json", entry.fileName)
-        assertEquals(onDisk, entry.text)
+        assertEquals(onDisk, entry.bytes!!.decodeToString())
+    }
+
+    @Test
+    fun `the backup keeps a damaged byte exactly as it is`(): Unit = runBlocking {
+        // A room file with one byte that is not valid UTF-8 - the shape a half-written file or a
+        // filesystem repair leaves behind, and the reason the list refuses to parse it while
+        // keeping the bytes (findings 150, 153).
+        projectsDirectory.mkdirs()
+        val damaged = byteArrayOf(
+            '{'.code.toByte(), '"'.code.toByte(), 'x'.code.toByte(), '"'.code.toByte(),
+            0xC3.toByte(), 0x28.toByte(),
+        )
+        File(projectsDirectory, "damaged.json").writeBytes(damaged)
+
+        val entry = repository.backupEntries().single()
+
+        // The backup is the file: same bytes, same length - not a decode and a re-encode.
+        assertContentEquals(damaged, entry.bytes!!)
+        // And the difference is not academic: decoding would have produced three bytes where the
+        // file had two, and the operator's only copy would come back altered.
+        assertFalse(
+            String(entry.bytes, Charsets.UTF_8).toByteArray(Charsets.UTF_8).contentEquals(damaged),
+            "a text round trip must not be mistaken for a copy",
+        )
+    }
+
+    @Test
+    fun `a project file that cannot be read is reported, not dropped`(): Unit = runBlocking {
+        // A directory where a project file should be: `listFiles` sees it, `readBytes` cannot read
+        // it. The entry stays in the list with no bytes, so the card's `available - written`
+        // counts it as a room that is not in the folder.
+        repository.save(room())
+        val unreadable = File(projectsDirectory, "a-broken.json")
+        assertTrue(unreadable.mkdirs())
+
+        val entries = repository.backupEntries()
+
+        assertEquals(listOf("a-broken.json", "room-1.json"), entries.map { it.fileName })
+        assertNull(entries.first { it.fileName == "a-broken.json" }.bytes)
+        assertNotNull(entries.first { it.fileName == "room-1.json" }.bytes)
+    }
+
+    @Test
+    fun `an id in a restored file never becomes a path`(): Unit = runBlocking {
+        repository.save(room())
+        val original = repository.backupEntries().single().bytes!!.decodeToString()
+        val hostile = original.replace("\"room-1\"", "\"../../escape\"")
+
+        val restored = assertNotNull(repository.importProject(hostile))
+
+        // The original stays, and the restored copy lands under a fresh, safe id.
+        assertEquals(2, repository.list().projects.size)
+        assertEquals(1, projectsDirectory.listFiles()!!.count { it.name == "room-1.json" })
+        assertTrue(restored.id != "../../escape", "the hostile id was kept")
+        assertTrue(repository.isSafeToken(restored.id), "the stored id is not a plain token")
+        assertEquals(2, projectsDirectory.listFiles()!!.size)
+        assertFalse(File(context.filesDir, "escape.json").exists())
+        assertFalse(File(context.filesDir.parentFile!!, "escape.json").exists())
+    }
+
+    @Test
+    fun `only plain tokens are accepted as file names`() {
+        assertTrue(repository.isSafeToken("3f2a8c1e-9b4d-4f6a-8c2e-1d5b7a9c0e3f"))
+        assertTrue(repository.isSafeToken("room-1__diary_entry-1"))
+        for (hostile in listOf("", "../escape", "a/b", "a\\b", "a.b", "..", "x".repeat(121))) {
+            assertFalse(repository.isSafeToken(hostile), "$hostile was accepted")
+        }
+    }
+
+    @Test
+    fun `a picked photo whose name is a path is refused`(): Unit = runBlocking {
+        photoDirectory.mkdirs()
+        assertFalse(repository.savePhotoAs("../../escape", android.net.Uri.EMPTY))
+        assertFalse(repository.deletePhotoAs("../../projects/room-1"))
+        assertNull(repository.loadPhotoAs("../../escape"))
+        assertEquals(0, context.filesDir.walkTopDown().count { it.isFile })
+    }
+
+    @Test
+    fun `a picked file bigger than a project can be is refused`() {
+        val real = "{\"id\":\"room-1\"}".toByteArray()
+        assertEquals("{\"id\":\"room-1\"}", repository.readProjectText(real.inputStream()))
+
+        val tooBig = ByteArray(ProjectRepository.MAX_PROJECT_BYTES + 1) { ' '.code.toByte() }
+        assertNull(repository.readProjectText(tooBig.inputStream()), "an 8 MB project file is not a project")
     }
 }

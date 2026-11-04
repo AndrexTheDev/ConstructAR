@@ -47,7 +47,6 @@ androidxTestRunner = "1.7.0"
 robolectric = "4.17"
 # Roborazzi renders the Compose screens to PNG on the JVM, so the screenshot matrix needs no
 # emulator and no hardware. Apache-2.0.
-roborazzi = "1.77.0"
 
 [libraries]
 # AndroidX
@@ -91,11 +90,6 @@ kotlin-test-junit = { group = "org.jetbrains.kotlin", name = "kotlin-test-junit"
 androidx-test-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestJunit" }
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
-roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
-roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
-roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "roborazzi-junit-rule", version.ref = "roborazzi" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

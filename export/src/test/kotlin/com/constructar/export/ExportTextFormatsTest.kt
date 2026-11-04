@@ -9,6 +9,7 @@ package com.constructar.export
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.bom.MaterialListBuilder
 import com.constructar.core.mesh.MeshData
+import com.constructar.core.model.ConduitKind
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.ProjectRecord
@@ -19,6 +20,7 @@ import com.constructar.core.math.Vec3
 import com.constructar.export.csv.MaterialCsvWriter
 import com.constructar.export.ply.PlyWriter
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.ByteBuffer
@@ -64,9 +66,143 @@ class ExportTextFormatsTest {
     }
 
     @Test
+    fun `a calibrated metres column says what corrected it`() {
+        // The number in the file is the corrected one. A buyer who compares it against a tape and
+        // finds 5.25 m where the phone said 5.00 m has to be able to read why, in the same file.
+        val project = sampleProject()
+        val list: MaterialList = MaterialListBuilder.build(project, nowMs = 0L)
+
+        val withLabel = MaterialCsvWriter.write(
+            list,
+            MaterialCsvWriter.Options(includeBom = false),
+            "2026-03-14 10:15",
+            calibrationLabel = "Calibrated: factor 1.053",
+        )
+        val without = MaterialCsvWriter.write(
+            list,
+            MaterialCsvWriter.Options(includeBom = false),
+            "2026-03-14 10:15",
+        )
+
+        assertTrue(withLabel.contains("Calibration;Calibrated: factor 1.053"))
+        // It is a preamble row, above the table it qualifies.
+        assertTrue(
+            withLabel.indexOf("Calibration;") < withLabel.indexOf("Kind;Specification"),
+        )
+        assertFalse(without.contains("Calibration;"))
+        // A blank label adds no row at all, so an uncalibrated export is byte-for-byte what it was.
+        assertEquals(without, MaterialCsvWriter.write(list, MaterialCsvWriter.Options(includeBom = false), "2026-03-14 10:15", calibrationLabel = ""))
+    }
+
+    @Test
+    fun `the wholesaler's order list carries the calibration too`() {
+        val project = sampleProject()
+        val list: MaterialList = MaterialListBuilder.build(project, nowMs = 0L)
+
+        val orderList = MaterialCsvWriter.writeOrderList(
+            list,
+            MaterialCsvWriter.Options(includeBom = false),
+            "2026-03-14 10:15",
+            calibrationLabel = "Calibrated: factor 1.053",
+        )
+
+        assertTrue(orderList.contains("Calibration;Calibrated: factor 1.053"))
+        // In the preamble, with the other qualifiers - not after the articles it applies to.
+        assertTrue(
+            orderList.lineSequence().take(5).any { it.startsWith("Calibration;") },
+        )
+    }
+
+    @Test
     fun `csv escaping doubles internal quotes`() {
         assertEquals("\"a\"\"b\"", MaterialCsvWriter.escape("a\"b"))
         assertEquals("plain", MaterialCsvWriter.escape("plain"))
+    }
+
+    @Test
+    fun `a cell a spreadsheet would evaluate is prefixed as text`() {
+        // A restored backup can carry any name: the cell must be data, not a formula.
+        assertEquals("'=1+1", MaterialCsvWriter.escape("=1+1"))
+        assertTrue(MaterialCsvWriter.escape("+1+1").startsWith("'"))
+        assertTrue(MaterialCsvWriter.escape("@SUM(A1)").startsWith("'"))
+        assertTrue(MaterialCsvWriter.escape("\tk").startsWith("'"))
+        // The guard survives the RFC 4180 quoting when the value also needs quotes.
+        assertEquals("\"'=A;B\"", MaterialCsvWriter.escape("=A;B"))
+    }
+
+    @Test
+    fun `a minus sign is guarded only when it is not a number`() {
+        // -5.00 is a value that must survive untouched; -2+3 is a formula.
+        assertEquals("-5.00", MaterialCsvWriter.escape("-5.00"))
+        assertTrue(MaterialCsvWriter.escape("-2+3").startsWith("'"))
+        assertEquals("", MaterialCsvWriter.escape(""))
+    }
+
+    @Test
+    fun `a hostile project name cannot become a formula in the list`() {
+        val project = sampleProject().copy(name = "=cmd|' /C calc'!A0")
+        val csv = MaterialCsvWriter.write(
+            MaterialListBuilder.build(project, nowMs = 0L),
+            MaterialCsvWriter.Options(includeBom = false),
+        )
+        assertTrue(csv.contains("'=cmd"))
+        // Nothing in the file may begin a line with an evaluating character.
+        csv.lineSequence().forEach { line ->
+            assertFalse("line starts a formula: $line", line.startsWith("=") || line.startsWith("@"))
+        }
+    }
+
+    @Test
+    fun `the by-trade summary names its length and carries both of them`() {
+        // `Cable; 3.50 m` under a blank header, and the figure was the net metres while the column
+        // above it was the order length (finding 155).
+        val list = MaterialListBuilder.build(sampleProject(), nowMs = 0L)
+        val csv = MaterialCsvWriter.write(list, MaterialCsvWriter.Options(includeBom = false))
+        val rows = csv.split("\r\n")
+
+        val summaryStart = rows.indexOfFirst { it.startsWith("Summary by trade") }
+        assertTrue("the summary block must exist", summaryStart >= 0)
+        val header = rows[summaryStart].split(";")
+        assertEquals(listOf("Summary by trade", "Net length (m)", "Order length (m)"), header)
+        // The line table also has a row per trade, so the summary row is the one *after* its header.
+        val cable = rows.drop(summaryStart + 1).first { it.startsWith("Cable;") }.split(";")
+        assertEquals(MaterialCsvWriter.number(list.metersFor(ConduitKind.CABLE)), cable[1])
+        assertEquals(MaterialCsvWriter.number(list.orderMetersFor(ConduitKind.CABLE)), cable[2])
+        // The order figure is the one to buy by, and it is larger than the net one - a summary that
+        // printed only the first left the buyer to add the waste himself.
+        assertTrue(cable[2].toFloat() > cable[1].toFloat())
+
+        // Both columns still add up to the totals at the top of the same file.
+        val kinds = ConduitKind.entries
+        assertEquals(
+            MaterialCsvWriter.number(list.totalMeters),
+            MaterialCsvWriter.number(kinds.sumOf { list.metersFor(it).toDouble() }.toFloat()),
+        )
+        assertEquals(
+            MaterialCsvWriter.number(list.totalWithWasteMeters),
+            MaterialCsvWriter.number(kinds.sumOf { list.orderMetersFor(it).toDouble() }.toFloat()),
+        )
+    }
+
+    @Test
+    fun `no header cell in the bill of materials is blank`() {
+        // A blank header is a number nobody can look up: the one that used to be here was the
+        // length that decides the order (finding 155).
+        val csv = MaterialCsvWriter.write(
+            MaterialListBuilder.build(sampleProject(), nowMs = 0L),
+            MaterialCsvWriter.Options(includeBom = false, includeRunDetail = true),
+            runDetails = listOf(Triple("Run r1", "Ø 16 mm", 3.5f)),
+        )
+
+        val headers = csv.split("\r\n").filter { row ->
+            row.startsWith("Kind;") || row.startsWith("Summary by trade") || row.startsWith("Run;")
+        }
+        assertEquals("one header per block: $headers", 3, headers.size)
+        headers.forEach { header ->
+            header.split(";").forEachIndexed { index, cell ->
+                assertTrue("blank header cell at $index in \"$header\"", cell.isNotBlank())
+            }
+        }
     }
 
     @Test
@@ -80,6 +216,39 @@ class ExportTextFormatsTest {
         val body = lines.subList(headerEnd + 1, lines.size).filter { it.isNotBlank() }
         assertEquals(4, body.size) // 3 vertices + 1 face
         assertTrue(body.last().startsWith("3 ")) // a triangle
+    }
+
+    @Test
+    fun `the ply the export writes is text while a person might read it`() {
+        // Findings 161-166 were all one shape: a documented variant nobody produced. Here the
+        // export produced only the ascii one and the class comment claimed both (finding 167), so
+        // the layout is now a decision with a rule and this pins both sides of it.
+        val small = PlyWriter.write(listOf(PlyWriter.PlyPart("run", triangleMesh())))
+        assertTrue(
+            "a run-sized bundle stays readable text",
+            String(small, Charsets.US_ASCII).startsWith("ply\nformat ascii 1.0\n"),
+        )
+    }
+
+    @Test
+    fun `a ply too big to read is written as binary`() {
+        // Same geometry either way; past the limit the bytes are what matters. The mesh needs only
+        // the triangle count to clear it, so the fixture stays three vertices.
+        val triangles = PlyWriter.ASCII_LIMIT_TRIANGLES + 1
+        val huge = MeshData(
+            positions = floatArrayOf(0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f, 0f),
+            normals = FloatArray(9),
+            uvs = null,
+            indices = IntArray(triangles * 3) { it % 3 },
+        )
+
+        val bytes = PlyWriter.write(listOf(PlyWriter.PlyPart("scan", huge)))
+
+        val header = String(bytes, 0, 64, Charsets.US_ASCII)
+        assertTrue("the header has to say which layout it is: $header", header.startsWith("ply\nformat binary_little_endian 1.0\n"))
+        // And the payload is the size the header declares, not the ascii text.
+        val headerEnd = indexOf(bytes, "end_header\n".toByteArray()) + "end_header\n".length
+        assertEquals(headerEnd + 3 * 6 * 4 + triangles * (1 + 3 * 4), bytes.size)
     }
 
     @Test
@@ -99,6 +268,105 @@ class ExportTextFormatsTest {
         assertEquals("Keller-Raum-2", ExportService.slug("Keller / Raum: 2"))
         assertEquals("project", ExportService.slug("   "))
         assertTrue(ExportService.slug("A".repeat(200)).length <= 40)
+        assertEquals("project", ExportService.slug("///"))
+        assertEquals("Bad-Keller", ExportService.slug("Bad/Keller"))
+        // Nothing a path cannot hold survives, whatever an operator pasted in.
+        for (hostile in listOf("a\\b", "a:b", "a*b", "a?b", "a\"b", "a<b", "a>b", "a|b", "a\u0000b", "..\\..")) {
+            val stem = ExportService.slug(hostile)
+            assertTrue("$hostile -> $stem", stem.none { it in "/\\:*?\"<>|" })
+            assertTrue("$hostile -> $stem", stem.isNotBlank())
+        }
+    }
+
+    @Test
+    fun `a room keeps its own name in the file stem`() {
+        // The umlaut used to be deleted, not transliterated: "Küche" became "Kche", which is not
+        // a short name but a different one. Every locale of this app types letters like these.
+        assertEquals("Küche", ExportService.slug("Küche"))
+        assertEquals("Chantier-Château", ExportService.slug("Chantier Château"))
+        assertEquals("Baño-2", ExportService.slug("Baño (2)"))
+        assertEquals("Łazienka", ExportService.slug("Łazienka"))
+        assertEquals("Cucina-Öl-1", ExportService.slug("Cucina Öl 1"))
+        assertEquals("Café-1-OG", ExportService.slug("Café 1. OG"))
+        // A surrogate pair is never cut in half.
+        val emoji = ExportService.slug("A" + "🛠".repeat(40))
+        assertTrue(emoji.none { it.isHighSurrogate() && emoji.indexOf(it) == emoji.length - 1 })
+    }
+
+    @Test
+    fun `a ply run label is flattened into the header, not spliced into it`() {
+        val nasty = "tri\nelement vertex 999999\nend_header"
+        val ply = PlyWriter.writeAscii(listOf(PlyWriter.PlyPart(nasty, triangleMesh())))
+        val lines = ply.lines()
+        val diagnostic = lines.joinToString(" | ")
+        assertEquals(diagnostic, 1, lines.count { it == "element vertex 3" })
+        assertEquals(diagnostic, 1, lines.count { it == "element face 1" })
+        assertEquals(diagnostic, 1, lines.count { it == "end_header" })
+        assertEquals(diagnostic, 1, lines.count { it.startsWith("comment mesh ") })
+        assertTrue(diagnostic, lines.none { it == "element vertex 999999" })
+    }
+
+    /**
+     * Finding 178: the header was encoded as US-ASCII, which does not fail on a name outside that
+     * range - it substitutes `?` for the letter. `comment mesh K?che` is what a German room looked
+     * like in the file the surveyor opens, and four of the app's six locales type letters US-ASCII
+     * cannot hold.
+     */
+    @Test
+    fun `a run name keeps its own letters in the ply header`() {
+        val names = listOf("Küche", "Baño 2", "Łazienka", "Café 1. OG")
+        val text = PlyWriter.writeAscii(names.map { PlyWriter.PlyPart(it, triangleMesh()) })
+        for (name in names) {
+            assertTrue("lost the letters of $name: $text", text.contains("comment mesh $name\n"))
+        }
+
+        val bytes = PlyWriter.write(listOf(PlyWriter.PlyPart("Küche", triangleMesh())))
+        val decoded = String(bytes, Charsets.UTF_8)
+        assertTrue("the written file holds ${decoded.take(120)}", decoded.contains("comment mesh Küche\n"))
+        assertFalse("a substitute character reached the header: ${decoded.take(120)}", decoded.contains("?"))
+    }
+
+    /**
+     * Finding 178, second half: the binary header carried no per-part comment at all, so the same
+     * bundle told a reader which mesh was which while it was small and stopped telling him once it
+     * crossed the size limit that switches the layout.
+     */
+    @Test
+    fun `the binary layout names its runs as well`() {
+        val bytes = PlyWriter.writeBinaryLittleEndian(
+            listOf(
+                PlyWriter.PlyPart("Küche", triangleMesh()),
+                PlyWriter.PlyPart("Bad OG", triangleMesh()),
+            ),
+        )
+        val marker = "end_header\n".toByteArray()
+        val headerLength = indexOf(bytes, marker) + marker.size
+        val header = String(bytes, 0, headerLength, Charsets.UTF_8)
+
+        assertTrue("first run missing: $header", header.contains("comment mesh Küche\n"))
+        assertTrue("second run missing: $header", header.contains("comment mesh Bad OG\n"))
+        assertEquals(
+            "one line per run and no more: $header",
+            2,
+            header.lines().count { it.startsWith("comment mesh ") },
+        )
+    }
+
+    @Test
+    fun `a ply comment is flattened into one header line`() {
+        val bytes = PlyWriter.writeBinaryLittleEndian(
+            parts = listOf(PlyWriter.PlyPart("tri", triangleMesh())),
+            comment = "scan\nelement vertex 999999",
+        )
+        val marker = "end_header\n".toByteArray()
+        val headerLength = indexOf(bytes, marker) + marker.size
+        assertTrue("end_header not found in ${String(bytes, Charsets.US_ASCII).take(200)}", headerLength >= marker.size)
+        val header = String(bytes, 0, headerLength, Charsets.US_ASCII).lines()
+        val diagnostic = header.joinToString(" | ")
+        assertEquals(diagnostic, 1, header.count { it.startsWith("comment ") && !it.startsWith("comment mesh ") })
+        assertTrue(diagnostic, header.none { it == "element vertex 999999" })
+        assertEquals(diagnostic, 1, header.count { it == "element vertex 3" })
+        assertEquals(diagnostic, 1, header.count { it == "end_header" })
     }
 
     private fun indexOf(haystack: ByteArray, needle: ByteArray): Int {
@@ -107,5 +375,17 @@ class ExportTextFormatsTest {
             return i
         }
         return -1
+    }
+    @Test
+    fun `an exported ply does not call itself a room scan`() {
+        // Every exported PLY carried "comment ConstructAR scan, metres, Y-up" while the file held
+        // only the measured conduit runs: the TSDF scan never leaves the AR session it was
+        // captured in, so the header promised a room that is not in the file (finding 87).
+        val ply = PlyWriter.writeAscii(listOf(PlyWriter.PlyPart("Flur", triangleMesh())))
+        val header = ply.lines().takeWhile { it != "end_header" }
+        val diagnostic = header.joinToString(" | ")
+
+        assertTrue(diagnostic, header.any { it == "comment ${PlyWriter.DEFAULT_COMMENT}" })
+        assertFalse(diagnostic, header.any { it.contains("scan", ignoreCase = true) })
     }
 }

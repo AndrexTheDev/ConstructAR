@@ -10,7 +10,11 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -31,8 +35,11 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.Loop
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Straighten
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -40,6 +47,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -47,10 +55,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -60,24 +70,41 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.constructar.app.R
 import com.constructar.app.ui.ActionTone
 import com.constructar.app.ui.GloveButton
 import com.constructar.app.ui.GloveButtonRow
+import com.constructar.app.ui.formatTimeLabel
+import com.constructar.app.ui.rememberTimePattern
 import com.constructar.app.ui.label
 import com.constructar.app.ui.message
 import com.constructar.app.ui.routingLabel
+import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.app.ui.tierLabel
 import com.constructar.arengine.render.ArScene
 import com.constructar.arengine.session.ArReadiness
 import com.constructar.arengine.tracking.TrackingQuality
 import com.google.ar.core.Config
+import com.constructar.core.calib.CalibrationOutcome
+import com.constructar.core.calib.CalibrationReference
+import com.constructar.core.calib.CalibrationSweep
+import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.model.ConduitPresets
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.units.LengthFormatter
+import com.constructar.core.units.LengthUnit
+import com.constructar.core.units.PercentText
+import com.constructar.core.model.RouteDraft
+import com.constructar.core.model.RouteLabels
 
 /**
  * The AR measuring screen.
@@ -103,30 +130,97 @@ fun ArMeasureScreen(
     onRouteFinished: (com.constructar.core.model.ConduitRoute) -> Unit,
     onScanSummary: (com.constructar.core.model.ScanSummary) -> Unit,
     onOpenExport: () -> Unit,
+    /** A run a killed process left behind, loaded by the caller. Offered back once per entry. */
+    draft: RouteDraft? = null,
+    /** `null` clears the stored draft; anything else is the run as it stands. */
+    onDraftChanged: (RouteDraft?) -> Unit = {},
+    onDraftRecovered: (RouteDraft) -> Unit = {},
+    onDraftDiscarded: () -> Unit = {},
+    /**
+     * Stores the factor a reference calibration produced, or refuses it (the view model asks
+     * `ReferenceCalibration.accepted` before it writes anything).
+     *
+     * The screen does not keep the result: a factor that lived only in this composable would be
+     * forgotten the moment the operator leaves the AR view, and the metres he takes to the
+     * customer would be the uncorrected ones.
+     */
+    onCalibration: (Double) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val controller = remember { ArMeasureController(context) }
     val activity = remember(context) { context.findActivity() }
+    // The two-tap calibration sweep (see `CalibrationSweep`): one value instead of three
+    // nullables, so a third tap cannot move the factor the operator is reading. Not saved state:
+    // a rotation ends the sweep, which costs two taps and never a stored number.
+    var calibrationSweep by remember { mutableStateOf<CalibrationSweep>(CalibrationSweep.Idle) }
+    var calibrationOpen by rememberSaveable { mutableStateOf(false) }
 
-    var hasCameraPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
-        )
-    }
+    fun cameraGranted(): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+
+    var hasCameraPermission by remember { mutableStateOf(cameraGranted()) }
+    // Whether this screen has already asked. Before the first ask the system reports
+    // "no rationale" for a first request too, so the flag cannot be inferred.
+    var permissionAsked by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        permissionAsked = true
         hasCameraPermission = it
     }
     LaunchedEffect(Unit) {
-        if (!hasCameraPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
+        if (!hasCameraPermission) {
+            permissionAsked = true
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+    // Coming back from the settings app has to be noticed: the launcher callback only fires for
+    // a dialog, and there is none once the system has stopped showing it. The same resume also has
+    // to invalidate the ARCore answer: an install or an update completed in the Play Store happens
+    // while this screen is merely stopped, and readiness was fetched once per camera permission -
+    // so the gate kept saying "ARCore needs an update" over a device that had it (finding 146).
+    var readinessRecheck by remember { mutableStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasCameraPermission = cameraGranted()
+                readinessRecheck++
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val permissionState = cameraPermissionState(
+        granted = hasCameraPermission,
+        asked = permissionAsked,
+        rationaleKnown = activity != null,
+        showRationale = activity != null &&
+            ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.CAMERA),
+    )
+    val openAppSettings: () -> Unit = {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", context.packageName, null),
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // A device without that activity must not crash on the one screen that is already broken.
+        runCatching { context.startActivity(intent) }
     }
 
     // ARCore readiness (installed / supported / up to date) — checked before the surface is
     // composed so a device without AR gets a sentence instead of a black screen.
     var readiness by remember { mutableStateOf<ArReadiness?>(null) }
-    LaunchedEffect(hasCameraPermission) {
-        readiness = if (hasCameraPermission) controller.checkReadiness(activity, true) else null
+    // The first check on entry may send him to Play; every re-check after a resume asks the device
+    // silently instead. Reset to false by the gate's own "Play Store" button, which is an explicit
+    // request to be prompted again.
+    var readinessMayPrompt by remember { mutableStateOf(true) }
+    LaunchedEffect(hasCameraPermission, readinessRecheck) {
+        if (!hasCameraPermission) {
+            readiness = null
+        } else {
+            readiness = controller.checkReadiness(activity, true, requestInstallFromPlay = readinessMayPrompt)
+            readinessMayPrompt = false
+        }
     }
     var sessionError by remember { mutableStateOf<String?>(null) }
 
@@ -138,6 +232,10 @@ fun ArMeasureScreen(
     val tracking by controller.tracking.status.collectAsStateWithLifecycle()
     val scanState by controller.pipeline.state.collectAsStateWithLifecycle()
     val torchOn by controller.torchOn.collectAsStateWithLifecycle()
+    // A torch button that cannot switch anything on is not a button: on a device whose camera
+    // refuses the torch (most tablets have no flash) the tap used to do nothing at all
+    // (finding 106).
+    val torchUnavailable by controller.torchUnavailable.collectAsStateWithLifecycle()
     val hudPosition by controller.hudScreenPixels.collectAsStateWithLifecycle()
     val lastHit by controller.lastHit.collectAsStateWithLifecycle()
     val stability by controller.stability.collectAsStateWithLifecycle()
@@ -145,6 +243,70 @@ fun ArMeasureScreen(
     var spec by remember { mutableStateOf(ConduitPresets.all.first()) }
     var showScanner by remember { mutableStateOf(true) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
+
+    /**
+     * A run of two points or more is the operator's work, and leaving the screen used to throw
+     * it away without a word: the on-screen close button and the system back gesture both popped
+     * the screen, `release()` dropped the anchors, and eight taps along a wall were gone. The
+     * system gesture had no handler at all, so the *quietest* way out was the one that lost the
+     * most. Two points is the same threshold as `ConduitRoute.isRoutable` - below it there is no
+     * run to save, above it there is.
+     */
+    var confirmLeave by remember { mutableStateOf(false) }
+
+    /**
+     * The interrupted run, offered once per entry.
+     *
+     * Only while nothing has been tapped in this session: a draft that arrives from disk a moment
+     * after the operator has started measuring must never replace what is on screen.
+     */
+    var recoverable by remember(project.id) { mutableStateOf<RouteDraft?>(null) }
+    LaunchedEffect(project.id, draft) {
+        if (draft != null && draft.isRecoverable && routeState.nodeCount == 0) recoverable = draft
+    }
+    // Whether *this* screen has written a draft, so the first composition (zero points) does not
+    // delete the draft it is about to offer.
+    var draftWritten by remember(project.id) { mutableStateOf(false) }
+    LaunchedEffect(project.id, routeState.nodeCount, routeState.closedLoop) {
+        val state = routeState
+        if (state.nodeCount >= LeaveGuard.MIN_NODES_FOR_A_RUN) {
+            onDraftChanged(
+                RouteDraft(
+                    projectId = project.id,
+                    spec = state.spec,
+                    nodes = state.nodes,
+                    closedLoop = state.closedLoop,
+                    savedAtEpochMs = System.currentTimeMillis(),
+                ),
+            )
+            draftWritten = true
+        } else if (draftWritten) {
+            // Everything was undone: there is no run left to recover.
+            onDraftChanged(null)
+            draftWritten = false
+        }
+    }
+    val commitRun: () -> Unit = {
+        // Persisted label: locale-independent and stable across devices, so a run reads the same
+        // in the CSV, the PDF and the project file. One implementation, in `RouteLabels`.
+        val runLabel = RouteLabels.next(spec, project.routes.map { it.label })
+        controller.finish(label = runLabel)?.let { route ->
+            onRouteFinished(route)
+            // Snapshot the scan statistics with the first finished run: the protocol header must
+            // describe the room as it was measured.
+            onScanSummary(controller.scanSummary())
+        }
+    }
+    val leave: () -> Unit = {
+        if (LeaveGuard.needsConfirmation(routeState.nodeCount)) confirmLeave = true else onBack()
+    }
+    // Back closes the dialog before it closes the screen.
+    BackHandler(enabled = LeaveGuard.needsConfirmation(routeState.nodeCount)) {
+        confirmLeave = !confirmLeave
+    }
+    // Drops the failed session and composes the surface again: ARScene, its engine and its
+    // ARCore session are all torn down by the gate, so a fresh one starts from nothing.
+    val retrySession: () -> Unit = { sessionError = null }
 
     // Tap results are produced on the render thread; they are applied here, on the main
     // thread, where anchor creation belongs.
@@ -154,16 +316,26 @@ fun ArMeasureScreen(
             if (event != null) controller.applyPendingHit()
         }
     }
+    // The run being measured follows the reticle (finding 162): `RouteSession` rebuilds the
+    // preview whenever a node is added or the reticle moves, and the geometry controller skips the
+    // upload when the signature has not changed, so this is at most one upload per geometry change
+    // - and the key becomes `null` when the run is finished, which removes the mesh.
+    LaunchedEffect(routeState.preview, routeState.nodeCount) {
+        controller.syncLiveRoute()
+    }
     // Re-upload the room scan whenever the (300 ms-throttled) mesh changes.
     LaunchedEffect(scanState.meshVersion, showScanner) {
         controller.syncScanMesh(showScanner)
     }
     // Committed runs are re-meshed when a new one is added (and at most once per second).
     LaunchedEffect(project.routes.size) {
+        // Only this session's runs can be placed: a recovered run - and one measured on an
+        // earlier visit - belongs to a world origin that no longer exists, and drawing it would
+        // put a length of conduit in a random spot of this room (finding 129).
         controller.syncCommittedRoutes(project.routes)
     }
 
-    val lengthText = stringResource(R.string.hud_length, routeState.lengthMeters)
+    val lengthText = stringResource(R.string.hud_length, LengthFormatter.number(routeState.lengthMeters))
     // The segment under the crosshair, while walking: the number that tells the operator when
     // to stop and tap, rather than tapping and then reading the result.
     val liveSegmentText = if (routeState.nodeCount > 0 && routeState.liveSegmentMeters >= 0.05f) {
@@ -173,6 +345,9 @@ fun ArMeasureScreen(
     }
     val guidanceText = tracking.guidance.message(tracking)
     val warningText = routeState.warning.message()
+    val weakPointText = RunConfidence
+        .weakPointPercent(routeState.nodeCount, routeState.worstNodeConfidence)
+        ?.let { percent -> stringResource(R.string.ar_confidence_weak, percent) }
     val readinessIssue = readiness
     val readinessText = if (readinessIssue != null && !readinessIssue.canStartSession) {
         readinessIssue.message()
@@ -184,33 +359,116 @@ fun ArMeasureScreen(
     val sizeText = spec.sizeLabel
     val pointsText = pluralStringResource(R.plurals.ar_points, routeState.nodeCount, routeState.nodeCount)
     val closedLoopText = if (routeState.closedLoop) stringResource(R.string.ar_closed_loop) else null
+    // The room, not just the run: the operator's real question on site. It reuses the export
+    // screen's own "N runs · X total" line, so the number on the phone and on the protocol come
+    // from one sentence and one formatter.
+    val roomTotals = RunSummary.of(
+        committedMeters = project.routes.map { it.polylineLengthMeters },
+        liveNodes = routeState.nodeCount,
+        liveMeters = routeState.lengthMeters,
+    )
+    val roomTotalText = if (roomTotals.runs > 0) {
+        stringResource(
+            R.string.export_runs_total,
+            roomTotals.runs,
+            LengthFormatter.format(roomTotals.meters),
+        )
+    } else {
+        null
+    }
+    // The percentage is the share of the reference detail budget, not a fraction of the room:
+    // the string says so since finding 102.
     val scanProgressText = stringResource(
         R.string.ar_scan_progress,
-        (scanState.coverage * 100).toInt(),
+        PercentText.of(scanState.detailFraction),
         scanState.triangleCount / 1000,
     )
     val scanInstructionText = stringResource(R.string.scan_instruction)
     val scanUnavailableText = stringResource(R.string.ar_scan_unavailable)
+    // The volume budget is spent: the mesh has stopped growing and the gauge will not move again.
+    // Said out loud, because a stuck scan and a slow one look the same from the outside
+    // (finding 97).
+    val scanFullText = stringResource(R.string.ar_scan_full)
+    // ...and the queue: the pipeline refuses frames it cannot integrate, which is the difference
+    // between a room that is filling in slowly and a phone that is not keeping up at all
+    // (finding 170).
+    val scanBehindText = stringResource(
+        R.string.ar_scan_behind,
+        PercentText.of(scanState.droppedFraction),
+    )
+    val hint = scanHint(
+        showScanner = showScanner,
+        ready = scanState.ready,
+        hitBlockBudget = scanState.hitBlockBudget,
+        meshVersion = scanState.meshVersion,
+        droppedShare = scanState.droppedFraction,
+    )
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .onSizeChanged { viewSize = it },
     ) {
-        when {
-            !hasCameraPermission -> GateMessage(
-                text = stringResource(R.string.ar_camera_permission),
-                action = stringResource(R.string.ar_grant_permission),
-                onAction = { permissionLauncher.launch(Manifest.permission.CAMERA) },
-            )
+        when (arGate(hasCameraPermission, readinessText != null, sessionError != null)) {
+            // The system stops showing its dialog after two denials: a button that re-launches
+            // the request then does nothing at all. Say what actually has to happen instead.
+            ArGate.PERMISSION -> if (permissionState == CameraPermissionState.BLOCKED) {
+                GateMessage(
+                    text = stringResource(R.string.ar_camera_blocked),
+                    action = stringResource(R.string.ar_open_settings),
+                    onAction = openAppSettings,
+                )
+            } else {
+                GateMessage(
+                    text = stringResource(R.string.ar_camera_permission),
+                    action = stringResource(R.string.ar_grant_permission),
+                    onAction = {
+                        permissionAsked = true
+                        permissionLauncher.launch(Manifest.permission.CAMERA)
+                    },
+                )
+            }
 
-            readinessText != null -> GateMessage(
-                text = readinessText,
-                action = stringResource(R.string.export_back),
-                onAction = onBack,
-            )
+            // The three fixable answers (ARCore missing, too old, install declined) get the one
+            // button that actually helps; "Back" stays for the answers that are not his to fix.
+            ArGate.READINESS -> {
+                val install = ArReadinessAction.offersInstall(readinessIssue)
+                // Asking Play again is an explicit request to be prompted, so the dialog comes back.
+                val askStore: () -> Unit = {
+                    readinessMayPrompt = true
+                    readinessRecheck++
+                }
+                GateMessage(
+                    text = readinessText.orEmpty(),
+                    action = stringResource(if (install) R.string.ar_install_arcore else R.string.export_back),
+                    icon = if (install) Icons.Default.Refresh else Icons.Default.Close,
+                    onAction = if (install) askStore else onBack,
+                )
+            }
 
-            else -> {
+            // A session that failed is not a note in the corner: no frame arrives, so no point
+            // can be placed and every control is inert. Take the surface away and say so.
+            ArGate.SESSION_FAILED -> {
+                val retry = canRetrySession(routeState.nodeCount)
+                GateMessage(
+                    text = stringResource(R.string.ar_session_failed, sessionError.orEmpty()),
+                    action = if (retry) {
+                        stringResource(R.string.ar_session_retry)
+                    } else {
+                        stringResource(R.string.ar_leave_save)
+                    },
+                    onAction = if (retry) {
+                        retrySession
+                    } else {
+                        {
+                            commitRun()
+                            onBack()
+                        }
+                    },
+                )
+            }
+
+            ArGate.NONE -> {
                 ArScene(
                     modifier = Modifier.fillMaxSize(),
                     depthEnabled = true,
@@ -222,6 +480,9 @@ fun ArMeasureScreen(
                     onFrame = { session, frame, width, height ->
                         controller.onFrame(session, frame, width, height)
                     },
+                    // Deliberate raw detail (`raw-detail`): ARCore's own sentence is the
+                    // diagnosis, and `ar_session_failed` exists to carry it - the operator pastes
+                    // it into a support mail. Everything else says why in his language.
                     onSessionFailed = { error ->
                         sessionError = error.message ?: error.javaClass.simpleName
                     },
@@ -251,7 +512,7 @@ fun ArMeasureScreen(
             if (routeState.nodeCount > 0 && viewSize.width > 0) {
                 val labelWidthPx = with(density) { 190.dp.toPx() }
                 Surface(
-                    color = Color.Black.copy(alpha = 0.7f),
+                    color = HudStyle.panel,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.offset {
                         IntOffset(
@@ -274,7 +535,7 @@ fun ArMeasureScreen(
 
         // ── Top status bar ───────────────────────────────────────────────────────────────
         Surface(
-            color = Color.Black.copy(alpha = 0.55f),
+            color = HudStyle.panel,
             shape = RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -296,7 +557,7 @@ fun ArMeasureScreen(
                             Text(
                                 text = segment,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White.copy(alpha = 0.75f),
+                                color = HudStyle.text,
                             )
                         }
                         Text(
@@ -312,20 +573,20 @@ fun ArMeasureScreen(
                                 }
                             },
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.85f),
+                            color = HudStyle.text,
                         )
                     }
                     // Offline badge: the operator must be able to see at a glance that
                     // nothing on this screen talks to a network.
                     Surface(
-                        color = Color.White.copy(alpha = 0.12f),
+                        color = HudStyle.rule,
                         shape = RoundedCornerShape(50),
                         modifier = Modifier.padding(end = 4.dp),
                     ) {
                         Text(
                             text = stringResource(R.string.ar_offline_badge),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.75f),
+                            color = HudStyle.text,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         )
                     }
@@ -336,7 +597,7 @@ fun ArMeasureScreen(
                             tint = Color.White,
                         )
                     }
-                    IconButton(onClick = onBack, modifier = Modifier.size(56.dp)) {
+                    IconButton(onClick = leave, modifier = Modifier.size(56.dp)) {
                         Icon(
                             Icons.Default.Close,
                             contentDescription = stringResource(R.string.ar_close),
@@ -346,11 +607,13 @@ fun ArMeasureScreen(
                 }
 
                 // Coaching: tracking verdict first, then the scan state.
-                val statusLine = guidanceText ?: when {
-                    !showScanner -> null
-                    !scanState.ready -> scanUnavailableText
-                    scanState.meshVersion == 0 -> scanInstructionText
-                    else -> scanProgressText
+                val statusLine = guidanceText ?: when (hint) {
+                    ScanHint.NONE -> null
+                    ScanHint.UNAVAILABLE -> scanUnavailableText
+                    ScanHint.FULL -> scanFullText
+                    ScanHint.INSTRUCTION -> scanInstructionText
+                    ScanHint.BEHIND -> scanBehindText
+                    ScanHint.PROGRESS -> scanProgressText
                 }
                 statusLine?.let { line ->
                     Text(
@@ -358,20 +621,22 @@ fun ArMeasureScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = when {
                             warningText != null -> SiteColors.warning
+                            hint == ScanHint.FULL || hint == ScanHint.BEHIND -> SiteColors.warning
                             tracking.quality == TrackingQuality.NOT_TRACKING -> SiteColors.danger
-                            else -> Color.White.copy(alpha = 0.75f)
+                            else -> HudStyle.text
                         },
                     )
                 }
                 warningText?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
                 }
-                sessionError?.let {
-                    Text(
-                        text = stringResource(R.string.ar_session_failed, it),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = SiteColors.danger,
-                    )
+                // The weakest point of the run, not the last one: one guessed point makes the
+                // whole length a guess, and this is the only moment it can still be re-tapped.
+                weakPointText?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
+                }
+                roomTotalText?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.accent)
                 }
                 // Whether the point under the crosshair has settled. Until it has, a tap would
                 // commit one noisy frame; the stabiliser says when it is worth tapping.
@@ -385,7 +650,7 @@ fun ArMeasureScreen(
                             color = if (reading.settled) {
                                 SiteColors.accent
                             } else {
-                                Color.White.copy(alpha = 0.7f)
+                                HudStyle.text
                             },
                         )
                     }
@@ -401,7 +666,7 @@ fun ArMeasureScreen(
                             stringResource(R.string.ar_no_surface)
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (hit != null) Color.White.copy(alpha = 0.6f) else SiteColors.danger,
+                        color = if (hit != null) HudStyle.hint else SiteColors.danger,
                     )
                 }
             }
@@ -438,14 +703,16 @@ fun ArMeasureScreen(
                     enabled = routeState.nodeCount > 0,
                     modifier = Modifier.weight(1f),
                 )
-                GloveButton(
-                    label = stringResource(R.string.ar_torch),
-                    icon = Icons.Default.FlashlightOn,
-                    onClick = { controller.toggleTorch() },
-                    tone = ActionTone.SECONDARY,
-                    selected = torchOn,
-                    modifier = Modifier.weight(1f),
-                )
+                if (!torchUnavailable) {
+                    GloveButton(
+                        label = stringResource(R.string.ar_torch),
+                        icon = Icons.Default.FlashlightOn,
+                        onClick = { controller.toggleTorch() },
+                        tone = ActionTone.SECONDARY,
+                        selected = torchOn,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 GloveButton(
                     label = stringResource(if (showScanner) R.string.ar_stop_scan else R.string.ar_scan),
                     icon = Icons.Default.Add,
@@ -468,17 +735,7 @@ fun ArMeasureScreen(
                 GloveButton(
                     label = stringResource(R.string.ar_finish),
                     icon = Icons.Default.Save,
-                    onClick = {
-                        // Persisted label: locale-independent and stable across devices, so a
-                        // run reads the same in the CSV, the PDF and the project file.
-                        val runLabel = "${spec.kind.name} ${spec.sizeLabel} #${project.routes.size + 1}"
-                        controller.finish(label = runLabel)?.let { route ->
-                            onRouteFinished(route)
-                            // Snapshot the scan statistics with the first finished run: the
-                            // protocol header must describe the room as it was measured.
-                            onScanSummary(controller.scanSummary())
-                        }
-                    },
+                    onClick = commitRun,
                     tone = ActionTone.PRIMARY,
                     enabled = routeState.canFinish,
                     modifier = Modifier.weight(2f),
@@ -500,13 +757,224 @@ fun ArMeasureScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            // ── Reference calibration ────────────────────────────────────────────────
+            // ARCore's metre is metric on its own; this is the operator's check of it against an
+            // object of known size, and the factor it produces is applied to the metres that are
+            // reported (`.//docs/CALIBRATION.md`), never to the geometry.
+            GloveButton(
+                label = stringResource(R.string.calib_title),
+                icon = Icons.Default.Straighten,
+                tone = ActionTone.SECONDARY,
+                onClick = {
+                    calibrationSweep = CalibrationSweep.Idle
+                    calibrationOpen = true
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            if (calibrationOpen) {
+                val sweep = calibrationSweep
+                AlertDialog(
+                    onDismissRequest = {
+                        calibrationSweep = CalibrationSweep.Idle
+                        calibrationOpen = false
+                    },
+                    title = { Text(stringResource(R.string.calib_title)) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                text = stringResource(R.string.calib_hint),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            CalibrationReference.values().forEach { reference ->
+                                GloveButton(
+                                    label = calibrationLabel(reference),
+                                    icon = Icons.Default.Straighten,
+                                    tone = if (sweep.reference == reference) ActionTone.PRIMARY else ActionTone.SECONDARY,
+                                    onClick = { calibrationSweep = calibrationSweep.start(reference) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                            GloveButton(
+                                label = stringResource(R.string.calib_take_point),
+                                icon = Icons.Default.Add,
+                                tone = ActionTone.SECONDARY,
+                                enabled = sweep.step.collecting && lastHit?.hit != null,
+                                onClick = {
+                                    lastHit?.hit?.let { hit ->
+                                        calibrationSweep = calibrationSweep.tap(hit.point)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            when (val outcome = sweep.outcome) {
+                                is CalibrationOutcome.Accepted -> Text(
+                                    text = stringResource(
+                                        R.string.calib_success_toast,
+                                        ReferenceCalibration.formatScale(outcome.scale),
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Jamaica.Lime,
+                                )
+                                is CalibrationOutcome.Rejected -> Text(
+                                    text = stringResource(
+                                        R.string.calib_rejected_toast,
+                                        ReferenceCalibration.formatScale(outcome.scale),
+                                        ReferenceCalibration.formatScale(ReferenceCalibration.MIN_SCALE),
+                                        ReferenceCalibration.formatScale(ReferenceCalibration.MAX_SCALE),
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = SiteColors.danger,
+                                )
+                                // No measurement at all: the hint above is the whole answer, and
+                                // a factor printed here would be a number nobody measured.
+                                CalibrationOutcome.Unmeasurable, null -> Unit
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        val accepted = sweep.outcome as? CalibrationOutcome.Accepted
+                        TextButton(
+                            enabled = accepted != null,
+                            onClick = {
+                                accepted?.let { onCalibration(it.scale) }
+                                calibrationSweep = CalibrationSweep.Idle
+                                calibrationOpen = false
+                            },
+                        ) { Text(stringResource(R.string.calib_apply)) }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                calibrationSweep = CalibrationSweep.Idle
+                                calibrationOpen = false
+                            },
+                        ) { Text(stringResource(R.string.home_cancel)) }
+                    },
+                )
+            }
+        }
+    }
+
+    if (confirmLeave) {
+        Dialog(onDismissRequest = { confirmLeave = false }) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xFF10140C),
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.ar_leave_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                    )
+                    // Same two strings the HUD already resolved: no second formatting site.
+                    Text(
+                        text = stringResource(R.string.ar_leave_body, pointsText + " · " + lengthText),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = HudStyle.dialogBody,
+                    )
+                    GloveButton(
+                        label = stringResource(R.string.ar_leave_save),
+                        icon = Icons.Default.Save,
+                        onClick = {
+                            confirmLeave = false
+                            commitRun()
+                            onDraftChanged(null)
+                            onBack()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    GloveButton(
+                        label = stringResource(R.string.ar_leave_discard),
+                        icon = Icons.Default.Close,
+                        onClick = {
+                            confirmLeave = false
+                            // A deliberate discard must not come back as an offer next time.
+                            onDraftChanged(null)
+                            onBack()
+                        },
+                        tone = ActionTone.DANGER,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    TextButton(
+                        onClick = { confirmLeave = false },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.home_cancel), color = HudStyle.dialogAction)
+                    }
+                }
+            }
+        }
+    }
+
+    // The run the last process did not finish. Drawn over the viewfinder so it cannot be
+    // scrolled past, and not dismissible by tapping outside: the operator has to decide.
+    recoverable?.let { pending ->
+        Dialog(onDismissRequest = {}) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xFF10140C),
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.draft_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.draft_body,
+                            pluralStringResource(
+                                R.plurals.ar_points,
+                                pending.nodes.size,
+                                pending.nodes.size,
+                            ) + " · " + stringResource(R.string.hud_length, LengthFormatter.number(pending.lengthMeters)),
+                            formatTimeLabel(pending.savedAtEpochMs, rememberTimePattern()),
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = HudStyle.dialogBody,
+                    )
+                    GloveButton(
+                        label = stringResource(R.string.draft_save),
+                        icon = Icons.Default.Save,
+                        onClick = {
+                            recoverable = null
+                            onDraftRecovered(pending)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    GloveButton(
+                        label = stringResource(R.string.draft_discard),
+                        icon = Icons.Default.Close,
+                        onClick = {
+                            recoverable = null
+                            onDraftDiscarded()
+                        },
+                        tone = ActionTone.DANGER,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
         }
     }
 }
 
 /** Blocking message with one action: missing permission, unsupported device, failed session. */
 @Composable
-private fun GateMessage(text: String, action: String, onAction: () -> Unit) {
+private fun GateMessage(
+    text: String,
+    action: String,
+    icon: ImageVector = Icons.Default.Add,
+    onAction: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -522,7 +990,7 @@ private fun GateMessage(text: String, action: String, onAction: () -> Unit) {
         )
         GloveButton(
             label = action,
-            icon = Icons.Default.Add,
+            icon = icon,
             onClick = onAction,
             modifier = Modifier
                 .fillMaxWidth()
@@ -543,8 +1011,13 @@ private fun SpecChip(
         shape = RoundedCornerShape(14.dp),
         modifier = modifier.padding(vertical = 2.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) Color(spec.colorArgb).copy(alpha = 0.9f) else Color.Black.copy(alpha = 0.5f),
-            contentColor = Color.White,
+            // The selected chip used to be the spec colour at 90 % under *white* text - white on
+            // gold measures 1.4:1, so the one chip the worker just tapped was the one he could not
+            // read. The spec colours are all light (orange, blue, teal), which is exactly why the
+            // rest of the theme pairs them with Ink; do the same here and keep the fill opaque,
+            // because a label that depends on the camera behind it is not a label.
+            containerColor = if (selected) Color(spec.colorArgb) else HudStyle.panel,
+            contentColor = if (selected) Jamaica.Ink else HudStyle.text,
         ),
     ) {
         Text(
@@ -563,4 +1036,22 @@ private fun Context.findActivity(): Activity? {
         current = current.baseContext
     }
     return null
+}
+
+/**
+ * What the calibration dialog calls the object to hold: a localised name and the size from
+ * `:core`, formatted by the one formatter the app uses for lengths.
+ *
+ * The number is not in the string table on purpose - six translations of "85.60 mm" is six
+ * chances to disagree about how long a bank card is, and `ReferenceCalibration` is the only
+ * place that fact is allowed to live.
+ */
+@Composable
+private fun calibrationLabel(reference: CalibrationReference): String = if (reference.isCard) {
+    stringResource(
+        R.string.calib_credit_card,
+        LengthFormatter.format(reference.realMetres.toFloat(), LengthUnit.CENTIMETER, 1),
+    )
+} else {
+    stringResource(R.string.calib_zollstock, LengthFormatter.format(reference.realMetres.toFloat()))
 }

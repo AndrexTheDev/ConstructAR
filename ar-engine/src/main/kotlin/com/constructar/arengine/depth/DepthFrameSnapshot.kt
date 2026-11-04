@@ -9,16 +9,35 @@ package com.constructar.arengine.depth
 import com.constructar.core.geo.DepthIntrinsics
 import com.constructar.core.math.Ray
 import com.constructar.core.math.Vec3
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.sqrt
 
 /**
- * Immutable snapshot of one ARCore depth frame, captured **on the render thread** and then
- * consumed asynchronously by the TSDF pipeline.
+ * One ARCore depth frame, captured **on the render thread** and then consumed asynchronously by
+ * the TSDF pipeline.
  *
  * Why a copy: `Frame`/`Image` objects are only valid until the next `update()`, and the
  * integration worker must never touch them. A 640×480 16-bit depth image is 600 kB — copied
- * into a pooled direct buffer so the per-frame cost is a `memcpy`, never an allocation
- * (see `DepthBufferPool`).
+ * into a pooled `ShortArray` so the per-frame cost is a `memcpy`, never an allocation (see
+ * `DepthBufferPool`).
+ *
+ * ## The buffer has several readers, so it is reference counted
+ *
+ * The pixels are immutable, but the array they live in is one of three in a pool, and a frame
+ * is handed to **two** consumers at once: the pipeline's published snapshot (the hit-test
+ * cascade, the AI-depth pass) and the integration worker. Until finding 168 the pipeline returned the array to the pool when
+ * the *next frame replaced it*, which says nothing about the worker — so a hot device, where
+ * integration takes longer than a frame, had the worker reading a `ShortArray` that was
+ * already back in the pool and being rewritten by `DepthCapture.capture`. The result is depth
+ * from one frame fused under another frame's pose.
+ *
+ * So the last holder returns the buffers, and only the last holder: [retain] before handing a
+ * snapshot to another thread, [release] when done. The count starts at one for the capturing
+ * thread.
+ *
+ * The confidence plane (160×120 on every ARCore device, 19 kB) is pooled the same way and
+ * released with the depth array — it used to be a fresh `ByteArray` on every frame, in the class
+ * whose whole comment is about not allocating in the render loop (finding 172).
  */
 class DepthFrameSnapshot(
     /** Depth in **millimetres**, row-major, rowStride in elements (mm). */
@@ -41,8 +60,44 @@ class DepthFrameSnapshot(
     val displayRotationDegrees: Int = 0,
     /** Minimum depth the sensor reports, millimetres (ARCore: ~0.2 m on most devices). */
     val minDepthMm: Int = 200,
+    /**
+     * What happens when the last reference is released — bound by `DepthCapture` to its pools,
+     * which is where **both** of this frame's arrays belong. Null for a snapshot whose arrays
+     * were not pooled (tests, and any future caller that owns its own buffers).
+     */
+    private val onLastRelease: (() -> Unit)? = null,
 ) {
     val pixelCount: Int get() = width * height
+
+    private val references = AtomicInteger(1)
+
+    /**
+     * How many holders the snapshot has: one to start with, one per [retain]. Exposed for
+     * `DepthBufferLifetimeTest`; no production path needs the number.
+     */
+    val referenceCount: Int get() = references.get()
+
+    /**
+     * Takes one more reference. Every call needs a matching [release] — hand this to the
+     * thread that is about to read the pixels and let it release when it is done.
+     */
+    fun retain(): DepthFrameSnapshot {
+        references.incrementAndGet()
+        return this
+    }
+
+    /**
+     * Drops one reference and returns whether this was the last one.
+     *
+     * Only that call hands the array back to the pool, so a frame can never be recycled while
+     * a worker is still integrating it (finding 168). A release beyond the last one is
+     * ignored: it returns `false` and the array is not handed out twice.
+     */
+    fun release(): Boolean {
+        if (references.decrementAndGet() != 0) return false
+        onLastRelease?.invoke()
+        return true
+    }
 
     /** Depth at (x, y) in metres, or null when unobserved/invalid. */
     fun depthMetersAt(x: Int, y: Int): Float? {
@@ -253,26 +308,48 @@ data class DepthRaycastHit(
 )
 
 /**
- * Fixed-size pool of `ShortArray`s for depth copies. Avoids allocating 600 kB per frame in
- * the render loop (which would be a guaranteed GC pause every few seconds).
+ * Fixed-size pools of the two planes of one ARCore depth frame: the depth plane (640×480×2 B,
+ * 600 kB) and the confidence plane (160×120 B, 19 kB).
+ *
+ * Both are acquired when a frame is captured on the render thread, handed to the integration
+ * worker and published to the hit cascade, and go back when the last holder releases the
+ * snapshot (see [DepthFrameSnapshot]). Pooling them avoids a guaranteed GC pause every few
+ * seconds in the one thread the app cannot afford to stall.
  */
 class DepthBufferPool(private val capacity: Int, private val initialPixels: Int = 640 * 480 * 2) {
-    private val buffers = ArrayDeque<ShortArray>(capacity)
+    private val depthPlanes = ArrayDeque<ShortArray>(capacity)
+    private val confidencePlanes = ArrayDeque<ByteArray>(capacity)
 
     init {
-        repeat(capacity) { buffers.addLast(ShortArray(initialPixels)) }
+        repeat(capacity) { depthPlanes.addLast(ShortArray(initialPixels)) }
+        // The confidence planes start empty rather than pre-allocated: their size comes from the
+        // image ARCore hands over (160×120 on every device, but not a constant this module owns),
+        // so the first few frames create them.
     }
 
     @Synchronized
     fun acquire(size: Int): ShortArray {
-        val buffer = buffers.removeFirstOrNull()
+        val buffer = depthPlanes.removeFirstOrNull()
         if (buffer == null || buffer.size < size) return ShortArray(size)
         return buffer
     }
 
     @Synchronized
     fun release(buffer: ShortArray) {
-        if (buffers.size < capacity) buffers.addLast(buffer)
+        if (depthPlanes.size < capacity) depthPlanes.addLast(buffer)
+    }
+
+    /** A confidence plane of at least [size] bytes, reused once one has been returned. */
+    @Synchronized
+    fun acquireConfidence(size: Int): ByteArray {
+        val buffer = confidencePlanes.removeFirstOrNull()
+        if (buffer == null || buffer.size < size) return ByteArray(size)
+        return buffer
+    }
+
+    @Synchronized
+    fun releaseConfidence(buffer: ByteArray) {
+        if (confidencePlanes.size < capacity) confidencePlanes.addLast(buffer)
     }
 }
 

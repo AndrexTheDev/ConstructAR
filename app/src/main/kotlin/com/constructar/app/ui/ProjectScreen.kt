@@ -8,6 +8,7 @@ package com.constructar.app.ui
 
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -47,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,8 +63,11 @@ import androidx.core.content.FileProvider
 import com.constructar.app.R
 import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
+import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.bom.MaterialList
+import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.model.WorkTime
 import com.constructar.core.price.MoneyFormatter
 import com.constructar.core.price.Pricing
 import com.constructar.core.units.LengthFormatter
@@ -90,23 +95,65 @@ fun ProjectScreen(
     onFieldBook: () -> Unit,
     onSaveCustomer: (name: String, address: String, phone: String) -> Unit,
     /** Effective rate for this job - the project's own, or the firm default behind it. */
-    hourlyRateCents: Int,
+    firmHourlyRateCents: Int,
     onSavePricing: (hourlyRateCents: Int?, materialLumpSumCents: Long) -> Unit,
     photo: Bitmap?,
-    onPhoto: (Uri) -> Unit,
+    /**
+     * Copies the camera's picture into private storage and answers whether that copy happened.
+     *
+     * The answer is not a detail: when it is `false` the cache file is the only copy there is, so
+     * the screen must not delete it (finding 128's rule, applied here).
+     */
+    onPhoto: (Uri, (Boolean) -> Unit) -> Unit,
     onDelete: () -> Unit,
 ) {
     var renameOpen by remember { mutableStateOf(false) }
     var deleteOpen by remember { mutableStateOf(false) }
-    var nameDraft by remember(project.id) { mutableStateOf(project.name) }
-    var notesDraft by remember(project.id) { mutableStateOf(project.notes) }
+    // Removing a run used to be one tap on a 48 dp icon next to the length - the most valuable
+    // thing on the screen (thirty taps of measuring) and the only destructive action on it that
+    // asked nothing. It asks now, and names what goes.
+    var routeToRemove by remember { mutableStateOf<ConduitRoute?>(null) }
+    // Everything on this screen is typed with the customer standing next to the operator - a name,
+    // an address, a rate - and a turn of the phone used to throw it away, silently, because a
+    // `remember` is not part of the saved state (finding 83). `rememberSaveable` keeps the drafts
+    // across a rotation and across the system recreating the screen; the key still resets them when
+    // the operator moves to another room.
+    var nameDraft by rememberSaveable(project.id) { mutableStateOf(project.name) }
+    var notesDraft by rememberSaveable(project.id) { mutableStateOf(project.notes) }
     var notesSaved by remember(project.id) { mutableStateOf(false) }
-    var technicianDraft by remember(project.id) { mutableStateOf(project.technician) }
+    var technicianDraft by rememberSaveable(project.id) { mutableStateOf(project.technician) }
     val context = LocalContext.current
-    var pendingCapture by remember { mutableStateOf<Uri?>(null) }
+    // The camera is a *separate app*, and to make room for it Android is entitled to reclaim this
+    // one - a screen that has just been measuring with AR (native buffers, a depth model, a
+    // rendered scene) is the first candidate. This capture used to be one `Uri` in a plain
+    // `remember`, so a picture taken after such a reclaim came back to a screen whose pending
+    // field was `null`: the callback dropped it, nothing was copied into private storage, and the
+    // room's documentation photo - the one the protocol prints and the customer signs - was gone
+    // without a sentence. It is the same defect the field book had (finding 137), in the last
+    // screen that still had it: three strings in saved state and the same tested decision function
+    // (finding 186).
+    var pendingToken by rememberSaveable(project.id) { mutableStateOf("") }
+    var pendingUri by rememberSaveable(project.id) { mutableStateOf("") }
+    var pendingPath by rememberSaveable(project.id) { mutableStateOf("") }
     val captureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
-        val target = pendingCapture
-        if (captured && target != null) onPhoto(target)
+        val target = PendingCapture.restore(pendingToken, pendingUri, pendingPath)
+        pendingToken = ""
+        pendingUri = ""
+        pendingPath = ""
+        when (captureOutcome(target, captured)) {
+            CaptureOutcome.ATTACH -> if (target != null) {
+                onPhoto(Uri.parse(target.uriString)) { attached ->
+                    // Deleted only when the copy into private storage succeeded: on a failure this
+                    // cache file is the only picture that exists (finding 128).
+                    if (CaptureFile.shouldDelete(captured = true, attached = attached)) {
+                        java.io.File(target.path).delete()
+                    }
+                }
+            }
+            // The operator cancelled: the empty file the camera left in the cache goes.
+            CaptureOutcome.DISCARD -> if (target != null) java.io.File(target.path).delete()
+            CaptureOutcome.NOTHING -> Unit
+        }
     }
 
     val scanned = (project.scan?.meshTriangleCount ?: 0) > 0
@@ -129,29 +176,56 @@ fun ProjectScreen(
         stringResource(R.string.ready_photo) to readyPhoto,
         stringResource(R.string.ready_time) to readyTime,
     ).filterNot { it.second }.map { it.first }
-    var customerName by remember(project.id) { mutableStateOf(project.customerName) }
-    var customerAddress by remember(project.id) { mutableStateOf(project.customerAddress) }
-    var customerPhone by remember(project.id) { mutableStateOf(project.customerPhone) }
+    var customerName by rememberSaveable(project.id) { mutableStateOf(project.customerName) }
+    var customerAddress by rememberSaveable(project.id) { mutableStateOf(project.customerAddress) }
+    var customerPhone by rememberSaveable(project.id) { mutableStateOf(project.customerPhone) }
     // Blank means "use the firm rate", which is why the fields are strings and not numbers: an
     // empty field has to be distinguishable from a typed zero.
-    var rateDraft by remember(project.id) {
+    var rateDraft by rememberSaveable(project.id) {
         mutableStateOf(project.hourlyRateCents?.let { Pricing.formatForInput(it.toLong()) } ?: "")
     }
-    var materialDraft by remember(project.id) {
+    var materialDraft by rememberSaveable(project.id) {
         mutableStateOf(
             project.materialLumpSumCents.takeIf { it > 0L }?.let(Pricing::formatForInput) ?: "",
         )
     }
-    val parsedRate = Pricing.parseCents(rateDraft)?.toInt()?.takeIf { it > 0 }
-    val parsedMaterial = Pricing.parseCents(materialDraft) ?: 0L
-    val effectiveRate = parsedRate ?: hourlyRateCents
-    val priceDirty = parsedRate != project.hourlyRateCents || parsedMaterial != project.materialLumpSumCents
-    val workMillis = remember(project.sessions, project.id) { project.totalWorkMillis() }
+    // A typo is an error, not a zero: see PricingInput.
+    // A blank field means "bill at the firm's rate" - which is not the override the field was
+    // pre-filled with, so the fallback cannot be the effective rate (finding 75).
+    val rate = ratePreview(project, rateDraft, firmHourlyRateCents)
+    val materialInput = PricingInput.amount(materialDraft)
+    val parsedMaterial = materialInput.cents
+    val effectiveRate = rate.effectiveCents
+    val priceDirty = rate.dirty || parsedMaterial != project.materialLumpSumCents
+    // The preview the operator reads while typing a rate. Not remembered: a running session makes
+    // this number grow, and the key that would have to invalidate it - the session list - does not
+    // change while a clock runs. [rememberNowMs] moves it on every half minute, exactly like the
+    // field book's total and unlike the frozen value this used to be.
+    val nowMs = rememberNowMs(WorkTime.isRunning(project.sessions))
+    // What the protocol will bill - the sessions' whole minutes added up - so the card on the
+    // phone and the document that leaves the site show the same money (finding 81).
+    val workMillis = WorkTime.billableMillis(project.sessions, nowMs)
     val labourPreview = Pricing.labourCents(workMillis, effectiveRate)
     val totalPreview = Pricing.totalCents(labourPreview, parsedMaterial)
     val customerDirty = customerName != project.customerName ||
         customerAddress != project.customerAddress ||
         customerPhone != project.customerPhone
+    // The two drafts that are *not* customer or price, and were not in the guard: the name that
+    // signs the protocol and the note for the office each have their own Save button, so an
+    // unsaved one is work the operator can still lose (finding 142).
+    val technicianDirty = technicianDraft.trim() != project.technician
+    val notesDirty = notesDraft != project.notes
+    // Typed work is work: the back arrow and the system back gesture used to drop every unsaved
+    // field without a question, while the AR screen has asked before discarding a run since
+    // finding 26 (finding 124). All four groups are named, not counted.
+    val unsavedEdits = ProjectEdits.lostByLeaving(
+        customerFieldsDiffer = customerDirty,
+        priceDiffers = priceDirty,
+        technicianDiffers = technicianDirty,
+        notesDiffer = notesDirty,
+    )
+    var confirmLeave by rememberSaveable(project.id) { mutableStateOf(false) }
+    BackHandler(enabled = unsavedEdits) { confirmLeave = true }
 
     Column(
         modifier = Modifier
@@ -162,7 +236,7 @@ fun ProjectScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
+            IconButton(onClick = { if (unsavedEdits) confirmLeave = true else onBack() }) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.paywall_back),
@@ -183,7 +257,15 @@ fun ProjectScreen(
                     )
                 }
             }
-            IconButton(onClick = { renameOpen = true }, modifier = Modifier.size(52.dp)) {
+            IconButton(
+                onClick = {
+                    // Opens with the room's current name, not with whatever was last typed
+                    // into the dialog and then abandoned (finding 125).
+                    nameDraft = project.name
+                    renameOpen = true
+                },
+                modifier = Modifier.size(52.dp),
+            ) {
                 Icon(
                     Icons.Default.Edit,
                     contentDescription = stringResource(R.string.action_rename),
@@ -275,7 +357,11 @@ fun ProjectScreen(
                             context.packageName + ".fileprovider",
                             target,
                         )
-                        pendingCapture = uri
+                        // All three, because the screen may be rebuilt before the camera answers
+                        // (finding 186). The token is the room: this photo belongs to the project.
+                        pendingToken = project.id
+                        pendingUri = uri.toString()
+                        pendingPath = target.absolutePath
                         captureLauncher.launch(uri)
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -300,6 +386,20 @@ fun ProjectScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // A corrected number has to say that it is one. Every metre on this screen and in
+                // the protocol is the measured value multiplied by the operator's reference
+                // calibration, and a document that quietly reports 5.25 m for a run the phone
+                // measured as 5.00 m is a document nobody can check.
+                if (project.isCalibrated) {
+                    Text(
+                        stringResource(
+                            R.string.calib_success_toast,
+                            ReferenceCalibration.formatScale(project.calibrationScale),
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Jamaica.Lime,
+                    )
+                }
                 materialList?.let { list ->
                     Text(
                         stringResource(R.string.export_order_length, LengthFormatter.format(list.totalWithWasteMeters)),
@@ -344,7 +444,11 @@ fun ProjectScreen(
                             route.spec.sizeLabel,
                         ),
                         length = LengthFormatter.format(route.polylineLengthMeters),
-                        onDelete = { onRemoveRoute(route.id) },
+                        // A run recovered after an interruption counts in every length and every
+                        // fitting, but its 3D geometry is not in the model. Saying so is the
+                        // difference between a documented limitation and a surprise in a viewer.
+                        badge = if (route.recovered) stringResource(R.string.run_recovered) else null,
+                        onDelete = { routeToRemove = route },
                     )
                 }
             }
@@ -439,8 +543,14 @@ fun ProjectScreen(
                     value = rateDraft,
                     onValueChange = { rateDraft = it },
                     label = { Text(stringResource(R.string.project_costs_rate)) },
-                    placeholder = { Text(Pricing.formatForInput(hourlyRateCents.toLong())) },
+                    placeholder = { Text(Pricing.formatForInput(firmHourlyRateCents.toLong())) },
                     singleLine = true,
+                    isError = rate.invalid,
+                    supportingText = if (rate.invalid) {
+                        { Text(stringResource(R.string.project_costs_invalid)) }
+                    } else {
+                        null
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -449,6 +559,12 @@ fun ProjectScreen(
                     onValueChange = { materialDraft = it },
                     label = { Text(stringResource(R.string.project_costs_material)) },
                     singleLine = true,
+                    isError = materialInput.invalid,
+                    supportingText = if (materialInput.invalid) {
+                        { Text(stringResource(R.string.project_costs_invalid)) }
+                    } else {
+                        null
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -471,8 +587,9 @@ fun ProjectScreen(
                     label = stringResource(R.string.action_save),
                     icon = Icons.Default.Check,
                     tone = ActionTone.SECONDARY,
-                    enabled = priceDirty,
-                    onClick = { onSavePricing(parsedRate, parsedMaterial) },
+                    // Nothing is saved while a field says it cannot read what was typed.
+                    enabled = priceDirty && !rate.invalid && !materialInput.invalid,
+                    onClick = { onSavePricing(rate.typedCents, parsedMaterial) },
                 )
             }
         }
@@ -571,11 +688,61 @@ fun ProjectScreen(
         )
     }
 
+    if (confirmLeave) {
+        AlertDialog(
+            onDismissRequest = { confirmLeave = false },
+            title = { Text(stringResource(R.string.project_leave_title)) },
+            text = { Text(stringResource(R.string.project_leave_body, project.name)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmLeave = false
+                        onBack()
+                    },
+                ) { Text(stringResource(R.string.project_leave_discard)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmLeave = false }) {
+                    Text(stringResource(R.string.project_leave_keep))
+                }
+            },
+        )
+    }
+
+    routeToRemove?.let { run ->
+        AlertDialog(
+            onDismissRequest = { routeToRemove = null },
+            title = { Text(stringResource(R.string.run_delete_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.run_delete_body,
+                        stringResource(R.string.run_detail, run.spec.label, run.spec.sizeLabel),
+                        LengthFormatter.format(run.polylineLengthMeters),
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        routeToRemove = null
+                        onRemoveRoute(run.id)
+                    },
+                ) { Text(stringResource(R.string.action_delete), color = SiteColors.danger) }
+            },
+            dismissButton = {
+                TextButton(onClick = { routeToRemove = null }) { Text(stringResource(R.string.home_cancel)) }
+            },
+        )
+    }
+
     if (deleteOpen) {
         AlertDialog(
             onDismissRequest = { deleteOpen = false },
             title = { Text(stringResource(R.string.dialog_delete_title)) },
-            text = { Text(stringResource(R.string.dialog_delete_body)) },
+            // Names the room and what goes with it: the header's delete icon sits 52 dp from
+            // the rename icon, on a phone held by a gloved hand (finding 125).
+            text = { Text(stringResource(R.string.dialog_delete_body, project.name)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -613,7 +780,13 @@ private fun PriceLine(label: String, value: String, emphasis: Boolean = false) {
 }
 
 @Composable
-private fun RouteRow(kind: String, detail: String, length: String, onDelete: () -> Unit) {
+private fun RouteRow(
+    kind: String,
+    detail: String,
+    length: String,
+    badge: String? = null,
+    onDelete: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -630,6 +803,13 @@ private fun RouteRow(kind: String, detail: String, length: String, onDelete: () 
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            badge?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = SiteColors.warning,
+                )
+            }
         }
         Text(length, style = MaterialTheme.typography.titleSmall, color = SiteColors.gold)
         IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {

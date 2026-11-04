@@ -94,12 +94,33 @@ object WorkTime {
     const val MINUTE_MS: Long = 60_000L
     private const val HOUR_MS: Long = 3_600_000L
 
+    /**
+     * A clock that has been running this long is worth a question, not a silent invoice line.
+     *
+     * A shift is eight hours and a long one is ten; twelve is where "I forgot to stop it" becomes
+     * more likely than "we worked twelve hours" - and the app prices by the minute, so a forgotten
+     * timer bills a night at 48 € an hour. Nothing is capped or guessed: the number stays, the
+     * operator is asked.
+     */
+    const val OVERDUE_SESSION_MS: Long = 12 * HOUR_MS
+
     /** `true` when a session is still open — the state the "stop work" button is shown in. */
     fun isRunning(sessions: List<WorkSession>): Boolean = sessions.any { it.endEpochMs == null }
 
     /** The open session, if any. Sessions are appended in order, so the last one wins. */
     fun runningSession(sessions: List<WorkSession>): WorkSession? =
         sessions.lastOrNull { it.endEpochMs == null }
+
+    /**
+     * The open session, when it has been running implausibly long, or `null`.
+     *
+     * Answered from the sessions and a clock, so it can be tested at a fixed instant and answered
+     * by both the field book and whatever writes the protocol.
+     */
+    fun overdueSession(sessions: List<WorkSession>, nowMs: Long): WorkSession? {
+        val running = runningSession(sessions) ?: return null
+        return if (sessionMillis(running, nowMs) > OVERDUE_SESSION_MS) running else null
+    }
 
     /** Duration of one session; an open one runs until [nowMs]. Never negative. */
     fun sessionMillis(session: WorkSession, nowMs: Long): Long =
@@ -109,8 +130,46 @@ object WorkTime {
     fun totalMillis(sessions: List<WorkSession>, nowMs: Long): Long =
         sessions.sumOf { sessionMillis(it, nowMs) }
 
-    fun hours(millis: Long): Long = millis / HOUR_MS
+    /**
+     * The quantity a timesheet can print and a customer can multiply: whole minutes, rounded down.
+     *
+     * The protocol prints "2 h 7 min" and a rate, and the customer multiplies those two numbers
+     * by hand. As long as labour was computed from the raw milliseconds, that multiplication did
+     * not give the total on the page - 2 h 7 min 42 s at 48 €/h was billed 101,98 € where the page
+     * suggested 101,60 € (finding 76). So the remainder is dropped here, once, and both the printed
+     * duration and the money come from this number.
+     */
+    fun billableMinutes(millis: Long): Long = millis.coerceAtLeast(0L) / MINUTE_MS
 
-    /** Whole minutes after the hours are taken out — 2 h 07 min, never "127 min". */
-    fun minutes(millis: Long): Long = (millis % HOUR_MS) / MINUTE_MS
+    /**
+     * The job's whole minutes, **one row at a time** - the quantity the time table adds up to.
+     *
+     * The table in the protocol prints one row per session, and each row's duration is printed as
+     * whole minutes. A total truncated from the raw sum is therefore not the sum of the rows: three
+     * sessions of 59 s print "0 min" three times and a total of "2 min", and the labour line below
+     * billed those two minutes at 1,60 € - a page on which the customer's calculator disagrees with
+     * the invoice (finding 81).
+     *
+     * So the rounding happens per session, at the row, and the total is the sum of the rows. What
+     * that costs is at most 59 s per interruption, and the table says so on the row itself: an
+     * interruption that short is printed as what it bills, nothing.
+     */
+    fun billableMinutes(sessions: List<WorkSession>, nowMs: Long): Long =
+        sessions.sumOf { billableMinutes(sessionMillis(it, nowMs)) }
+
+    /**
+     * [billableMinutes] expressed in milliseconds.
+     *
+     * The bridge between the rows and the money: everything that prints a duration or bills labour
+     * takes this one number, so the table, the labour line and the screen preview cannot show three
+     * different jobs.
+     */
+    fun billableMillis(sessions: List<WorkSession>, nowMs: Long): Long =
+        billableMinutes(sessions, nowMs) * MINUTE_MS
+
+    /** Whole hours of the [billableMinutes] quantity. */
+    fun hours(millis: Long): Long = billableMinutes(millis) / 60L
+
+    /** Whole minutes after the hours are taken out — 2 h 7 min, never "127 min". */
+    fun minutes(millis: Long): Long = billableMinutes(millis) % 60L
 }

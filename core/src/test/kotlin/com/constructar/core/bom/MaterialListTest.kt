@@ -7,12 +7,14 @@
 package com.constructar.core.bom
 
 import com.constructar.core.math.Vec3
+import com.constructar.core.model.ConduitKind
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.HitSource
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.model.RouteNodeRecord
 import com.constructar.core.model.SurfaceKind
+import com.constructar.core.units.LengthFormatter
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -126,14 +128,27 @@ class MaterialListTest {
         ).lines.single()
         assertEquals(1, flagged.lowConfidenceRuns, "a 0.2-confidence run must be visible in the BOM")
 
-        val excluded = MaterialListBuilder.build(
+        val excludedList = MaterialListBuilder.build(
             project(route("a", cable, 3f, confidence = 0.2f), route("b", cable, 2f)),
             MaterialListOptions(includeLowConfidenceRuns = false),
             nowMs = 0L,
-        ).lines.single()
+        )
+        val excluded = excludedList.lines.single()
         assertEquals(1, excluded.runCount)
         assertEquals(2f, excluded.totalMeters, 1e-3f)
         assertEquals(0, excluded.lowConfidenceRuns)
+
+        // The exclusion has to leave a trace: every warning in the app counts the runs that
+        // *survived*, so a list that dropped one and recorded nothing prints as a job with no
+        // uncertainty at all, short by the metres it threw away (finding 161).
+        assertEquals(1, excludedList.excludedLowConfidenceRuns, "the dropped run is counted")
+        assertEquals(3f, excludedList.excludedLowConfidenceMeters, 1e-3f)
+        val included = MaterialListBuilder.build(
+            project(route("a", cable, 3f, confidence = 0.2f), route("b", cable, 2f)),
+            nowMs = 0L,
+        )
+        assertEquals(0, included.excludedLowConfidenceRuns, "nothing is excluded by default")
+        assertEquals(0f, included.excludedLowConfidenceMeters, 1e-6f)
     }
 
     @Test
@@ -160,6 +175,66 @@ class MaterialListTest {
     }
 
     @Test
+    fun `the total is the sum of the rows the documents print`() {
+        // Three articles of 3.335 m in two trades: each row prints "3.34", so the column adds up
+        // to 10.02 while one rounding at the end gives 10.01. A wholesaler adding the column in
+        // front of the operator is looking at a sheet that does not add up (finding 154).
+        val lines = listOf(
+            line("cable|16", ConduitKind.CABLE, 3.335f),
+            line("cable|10", ConduitKind.CABLE, 3.335f),
+            line("pipe|20", ConduitKind.PIPE, 3.335f),
+        )
+        val list = MaterialList("p1", "Bad Nord", lines, generatedAtEpochMs = 0L)
+
+        val printedRows = lines.map { LengthFormatter.number(it.withWasteMeters).toDouble() }
+        assertEquals(10.02, printedRows.sum(), 1e-9)
+        assertEquals(
+            printedMetersOf(list.totalWithWasteMeters),
+            printedRows.sum(),
+            1e-9,
+            "the total under the column must be the column",
+        )
+        // And the case has teeth: the raw sum rounded once would have printed a different number.
+        assertTrue(
+            printedMetersOf(lines.sumOf { it.withWasteMeters.toDouble() }.toFloat()) != printedRows.sum(),
+            "the fixture no longer reproduces the defect",
+        )
+        // The same rule for the net column and for the per-trade summary.
+        assertEquals(
+            lines.map { LengthFormatter.number(it.totalMeters).toDouble() }.sum(),
+            printedMetersOf(list.totalMeters),
+            1e-9,
+        )
+        assertEquals(
+            printedMetersOf(list.totalMeters),
+            printedMetersOf(list.metersFor(ConduitKind.CABLE)) + printedMetersOf(list.metersFor(ConduitKind.PIPE)),
+            1e-9,
+        )
+    }
+
+    /** A length as the paperwork prints it, for comparing totals with columns. */
+    private fun printedMetersOf(meters: Float): Double =
+        LengthFormatter.number(meters).toDouble()
+
+    /** A hand-built line, for the rounding cases where the builder would only blur the number. */
+    private fun line(key: String, kind: ConduitKind, meters: Float) = MaterialLine(
+        bomKey = key,
+        kind = kind,
+        spec = if (kind == ConduitKind.CABLE) ConduitSpec.cable(16f, "Cable Ø16") else ConduitSpec.pipe(20f, "Pipe Ø20"),
+        runCount = 1,
+        totalMeters = meters,
+        withWasteMeters = meters,
+        wasteFactor = 0f,
+        clipCount = 0,
+        couplingCount = 0,
+        elbow90Count = 0,
+        elbow45Count = 0,
+        otherBendCount = 0,
+        bendDeductionMeters = 0f,
+        lowConfidenceRuns = 0,
+    )
+
+    @Test
     fun `an empty room produces an empty list, not a zero line`() {
         val list = MaterialListBuilder.build(project(), nowMs = 0L)
 
@@ -180,6 +255,55 @@ class MaterialListTest {
         )
 
         assertTrue(MaterialListBuilder.build(project(orphan), nowMs = 0L).isEmpty)
+    }
+
+    /**
+     * Clip spacing is the difference between a plausible order sheet and a real one: a 6 m run
+     * needs 12 clips at the 0.6 m cable default, 8 at 0.9 m and 14 at 0.5 m. The counts below are
+     * the documented formula (`ceil(length / spacing) + 1` for an open run) evaluated at the
+     * defaults, so a change to either number has to be deliberate.
+     */
+    @Test
+    fun `clips are counted at the default spacing of each family`() {
+        val cableLine = MaterialListBuilder.build(project(route("a", cable, 6.1f)), nowMs = 0L).lines.single()
+        assertEquals(12, cableLine.clipCount, "cable at 0.6 m: ceil(6.1 / 0.6) + 1")
+
+        val pipeLine = MaterialListBuilder.build(project(route("a", pipe, 6.1f)), nowMs = 0L).lines.single()
+        assertEquals(8, pipeLine.clipCount, "pipe at 0.9 m: ceil(6.1 / 0.9) + 1")
+    }
+
+    /**
+     * The clip-spacing override is part of the public options and documented as "when null, each
+     * conduit family uses its own default" - which promises that a value *is* used. Until finding
+     * 113 the builder never forwarded it, so every job was clipped at the family default however
+     * the caller asked, and the order list carried the wrong number of the article the buyer
+     * orders most of.
+     */
+    @Test
+    fun `a clip spacing override reaches the clip count and nothing else`() {
+        val list = MaterialListBuilder.build(
+            project(route("a", cable, 6.1f)),
+            MaterialListOptions(clipSpacingMetersOverride = 1.0f),
+            nowMs = 0L,
+        )
+        val line = list.lines.single()
+        assertEquals(8, line.clipCount, "cable at 1.0 m: ceil(6.1 / 1.0) + 1")
+        // The override changes fittings, not metres: the length and the waste line stay put.
+        assertEquals(6.1f, line.totalMeters, 1e-3f)
+        val defaultLine = MaterialListBuilder.build(project(route("a", cable, 6.1f)), nowMs = 0L).lines.single()
+        assertEquals(defaultLine.withWasteMeters, line.withWasteMeters, 1e-3f)
+        assertEquals(defaultLine.totalMeters, line.totalMeters, 1e-3f)
+    }
+
+    @Test
+    fun `a zero clip spacing counts no clips instead of dividing by zero`() {
+        val line = MaterialListBuilder.build(
+            project(route("a", cable, 6.1f)),
+            MaterialListOptions(clipSpacingMetersOverride = 0f),
+            nowMs = 0L,
+        ).lines.single()
+        assertEquals(0, line.clipCount)
+        assertEquals(6.1f, line.totalMeters, 1e-3f)
     }
 
     @Test

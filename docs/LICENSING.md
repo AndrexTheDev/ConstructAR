@@ -7,15 +7,37 @@ what is used, under which licence, and the obligations that follow.
 
 | Component | Version | Licence | Obligation |
 |-----------|---------|---------|------------|
-| SceneView for Android | 4.63.0 | Apache-2.0 | Attribution in the about screen (to be added before release); no copyleft |
-| Filament | 1.72.1 | Apache-2.0 | Same |
-| ARCore (`com.google.ar:core`) | 1.57.0 | Google ARCore SDK licence (free, closed) | Distributed through Google Play Services for AR; no fee, no attribution requirement, but it **is** proprietary — acceptable because it ships with the platform |
-| Kotlin / AndroidX / Compose | catalog | Apache-2.0 | Attribution |
-| kotlinx.coroutines / serialization | catalog | Apache-2.0 | Attribution |
-| LiteRT (former TensorFlow Lite) | 2.3.0 | Apache-2.0 | Attribution |
-| **Depth Anything V2 Small** | weights | **Apache-2.0** (Small only) | Attribution. Base/Large are **CC-BY-NC-4.0** and must not be shipped — enforced by the checksum in `MonocularDepthEstimator` |
-| **RTAB-Map** (optional) | source | **BSD-3-Clause** | Keep the copyright notice. Must be built with `OPENCV_ENABLE_NONFREE=OFF`; only SIFT/ORB/BRISK (free) detectors may be linked |
+| SceneView for Android | 4.63.0 | Apache-2.0 | Attribution shown in the Help screen's *Third-party components* section (`:core` `ThirdPartyNotices`, listed on the device); no copyleft |
+| Filament | 1.72.1 | Apache-2.0 | Same in-app attribution |
+| ARCore (`com.google.ar:core`) | 1.57.0 | Google ARCore SDK licence (free, closed) | Distributed through Google Play Services for AR; no fee, no attribution requirement (it is named in the in-app list anyway, so nobody has to argue about it), but it **is** proprietary — acceptable because it ships with the platform |
+| Kotlin / AndroidX / Compose | catalog | Apache-2.0 | Notice shown in the app (see below) |
+| kotlinx.coroutines / serialization | catalog | Apache-2.0 | Notice shown in the app (see below) |
+| LiteRT (former TensorFlow Lite) | 2.3.0 | Apache-2.0 | Notice shown in the app (see below) |
+| **Depth Anything V2 Small** | weights | **Apache-2.0** (Small only) | Notice shown in the app (see below). Base/Large are **CC-BY-NC-4.0** and must not be shipped — enforced by the checksum in `MonocularDepthEstimator` |
+| **RTAB-Map** (optional) | source | **BSD-3-Clause** | The copyright notice is reproduced in the app's *Third-party components* section, with the "All rights reserved" reservation BSD-3 requires. Must be built with `OPENCV_ENABLE_NONFREE=OFF`; only SIFT/ORB/BRISK (free) detectors may be linked |
 | OpenCV (transitive, if RTAB-Map enabled) | 4.x | Apache-2.0 (without the `nonfree` module) | Do not enable `opencv_contrib`'s `nonfree` module. SIFT is free since OpenCV 4.4 and is what we use |
+
+## Where the attributions actually are
+
+Apache-2.0 §4 and BSD-3-Clause make the notice an obligation of *distribution*, not a note in a
+document, so the list is carried in three places that are checked against each other:
+
+1. **In the app** — Help screen → *Third-party components*, rendering
+   `com.constructar.core.licence.ThirdPartyNotices.ALL`. The strings are deliberately not
+   localised: a copyright line is a legal identifier, and translating it would not reproduce the
+   notice the licence asks for. `ThirdPartyNoticesTest` (`:core`, JVM) fails if a listed licence
+   is not one of Apache-2.0, BSD-3-Clause or the ARCore SDK licence, or if a BSD-3 entry lacks the
+   "All rights reserved" reservation.
+2. **In this repository** — `NOTICE` at the root lists the same components with the same copyright
+   lines, and the full texts are reproduced verbatim under `licenses/` (`Apache-2.0.txt`,
+   `BSD-3-Clause.txt`), because §4(a) asks for a copy of the licence, not just its name.
+3. **In the release checklist** — `docs/RELEASE_CHECKLIST.md` names the components a release
+   engineer must confirm.
+
+`scripts/verify_sources.py` rule 20 reads that checklist line, fails if a named component is
+missing from `ThirdPartyNotices.ALL`, fails if a component the app lists is missing from `NOTICE`,
+fails if `NOTICE` points at a licence file that does not exist, and fails if this document starts
+saying the attribution is still "to be added".
 
 ## Explicitly excluded
 

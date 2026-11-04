@@ -83,6 +83,7 @@ fun RouteWarning.message(): String? = when (this) {
     RouteWarning.SURFACE_JUMP -> stringResource(R.string.route_warning_surface_jump)
     RouteWarning.LOOP_TOO_WIDE -> stringResource(R.string.route_warning_loop_gap)
     RouteWarning.LOW_CONFIDENCE -> stringResource(R.string.route_warning_low_confidence)
+    RouteWarning.HEIGHT_JUMP -> stringResource(R.string.route_warning_height_jump)
 }
 
 /** Why AR cannot start, in the operator's language; null when it can. */

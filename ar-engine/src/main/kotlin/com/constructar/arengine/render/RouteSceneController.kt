@@ -23,8 +23,9 @@ import com.constructar.core.model.RouteNodeRecord
  *
  * One instance owns the meshes for *every* run in the project plus the live preview:
  *
- *  * **Committed runs** are meshed once (they only change when their anchors move, which is
- *    handled by re-uploading at most every [REUPLOAD_INTERVAL_MS]).
+ *  * **Committed runs** are meshed once and re-uploaded at most every [REUPLOAD_INTERVAL_MS]:
+ *    their node positions are the ones the run was measured with, so a re-mesh only happens when
+ *    the app hands the controller a run it has not drawn yet.
  *  * **The live run** re-uploads on every geometry change (a node added, a corner smoothed),
  *    never per frame: at 30 fps a 4 000-triangle re-upload would burn the bandwidth budget.
  *
@@ -62,6 +63,9 @@ class RouteSceneController(
     private val lastUploadMillis = HashMap<String, Long>(8)
     private val uploadedSignatures = HashMap<String, Int>(8)
 
+    /** The preview mesh currently uploaded, by identity - see [syncLiveRoute]. */
+    private var liveMesh: MeshData? = null
+
     /** Uploads/refreshes every committed route mesh. */
     fun syncCommittedRoutes(routes: List<ConduitRoute>, visible: Boolean = true) {
         for (route in routes) {
@@ -87,18 +91,27 @@ class RouteSceneController(
     /**
      * Uploads the in-progress run: the swept tube for the nodes already placed, plus the
      * preview segment to the reticle.
+     *
+     * Deduped on the **mesh**, not on the node chain. The preview segment ends at the reticle, so
+     * its geometry changes without a node being added; the old dedupe compared the node signature,
+     * so after the first upload the tube stopped where the reticle had been when the second node
+     * was placed and only moved again when a third node was committed - the drawn run trailed the
+     * operator by one node (finding 162). `RouteSession` builds a fresh [MeshData] exactly when
+     * the preview geometry changes, so identity is the change detector, and re-sending the same
+     * mesh object costs nothing.
      */
-    fun syncLiveRoute(nodes: List<RouteNodeRecord>, spec: ConduitSpec, closed: Boolean, previewGeometry: MeshData?) {
+    fun syncLiveRoute(nodes: List<RouteNodeRecord>, spec: ConduitSpec, previewGeometry: MeshData?) {
         val key = LIVE_KEY
         if (nodes.size < 2 || previewGeometry == null) {
             sink.remove(key)
-            uploadedSignatures.remove(key)
+            // No signature bookkeeping for this key: the live preview is tracked by `liveMesh`,
+            // and the map's entry for it would be a line nobody reads.
+            liveMesh = null
             return
         }
-        val signature = signatureOf(nodes, spec, closed)
-        if (uploadedSignatures[key] != signature) {
+        if (liveMesh !== previewGeometry) {
             if (sink.upload(key, previewGeometry, spec.colorArgb)) {
-                uploadedSignatures[key] = signature
+                liveMesh = previewGeometry
             }
         }
         sink.setVisible(key, true)
@@ -108,6 +121,14 @@ class RouteSceneController(
         uploadedSignatures.keys.toList().forEach(sink::remove)
         uploadedSignatures.clear()
         lastUploadMillis.clear()
+        // The live preview is not in `uploadedSignatures` any more (it is deduped on the mesh), so
+        // tearing the scene down has to remove it by name or it outlives the session: the next
+        // run's first upload would replace it, but a scene that is never measured in again keeps
+        // a tube of the last one (finding 162).
+        if (liveMesh != null) {
+            sink.remove(LIVE_KEY)
+            liveMesh = null
+        }
     }
 
     private fun keyFor(routeId: String) = "route:$routeId"

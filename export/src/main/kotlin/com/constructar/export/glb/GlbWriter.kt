@@ -44,8 +44,14 @@ object GlbWriter {
         val roughness: Float = 0.6f,
     )
 
-    /** Builds a complete `.glb` byte array. */
-    fun write(parts: List<GlbPart>, generator: String = "ConstructAR", sceneName: String = "ConstructAR scan"): ByteArray {
+    /**
+     * Builds a complete `.glb` byte array.
+     *
+     * [sceneName] defaults to "ConstructAR export", not "ConstructAR scan": the file holds what the
+     * caller passes, and every caller passes the measured runs. The same correction as the PLY
+     * header (finding 87).
+     */
+    fun write(parts: List<GlbPart>, generator: String = "ConstructAR", sceneName: String = "ConstructAR export"): ByteArray {
         val binary = ByteArrayOutputStream(1024 * 64)
         val bufferViews = StringBuilder()
         val accessors = StringBuilder()

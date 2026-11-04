@@ -35,6 +35,25 @@ class SiteSettings(context: Context) {
     }
 
     /**
+     * The firm's own clip spacing in metres, or `null` for each family's trade default.
+     *
+     * The second half of the same number: `MaterialListOptions` has documented both since finding
+     * 113 and the app only ever set one of them, so a shop that clips a fire-alarm cable every
+     * 30 cm (VDE practice; the family default is 60 cm) got an order sheet with half the clips it
+     * needs and no way to say so. Clips are the most numerous article on that sheet (finding 151).
+     */
+    fun clipSpacingMetersOverride(): Float? {
+        val stored = preferences.getFloat(KEY_CLIP, UNSET)
+        return if (stored == UNSET) null else stored
+    }
+
+    fun setClipSpacingOverride(value: Float?) {
+        preferences.edit().apply {
+            if (value == null) putFloat(KEY_CLIP, UNSET) else putFloat(KEY_CLIP, value)
+        }.apply()
+    }
+
+    /**
      * The firm's hourly rate in cents, or `null` for the built-in default.
      *
      * Kept with the app rather than per project because a shop bills the same rate on every job;
@@ -50,6 +69,7 @@ class SiteSettings(context: Context) {
 
     private companion object {
         const val KEY_WASTE = "waste_factor_override"
+        const val KEY_CLIP = "clip_spacing_override"
         const val KEY_HOURLY = "hourly_rate_cents"
         const val UNSET_RATE = -1
 

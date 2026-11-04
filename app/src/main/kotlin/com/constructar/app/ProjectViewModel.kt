@@ -13,9 +13,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.constructar.app.billing.EntitlementStore
 import com.constructar.app.billing.LicencePublicKey
+import com.constructar.app.data.DraftGate
 import com.constructar.app.data.ProjectRepository
 import com.constructar.app.data.SiteSettings
 import com.constructar.app.data.UiPreferences
+import com.constructar.app.ui.FieldPhotos
+import com.constructar.app.ui.ProjectSlots
+import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.bom.MaterialListBuilder
 import com.constructar.core.bom.MaterialListOptions
@@ -28,12 +32,16 @@ import com.constructar.core.model.DiaryEntry
 import com.constructar.core.model.PhotoKind
 import com.constructar.core.model.PhotoTokens
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.model.RouteDraft
+import com.constructar.core.model.RouteLabels
 import com.constructar.core.model.WorkSession
 import com.constructar.core.price.Pricing
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 /**
@@ -54,13 +62,42 @@ enum class UiMessage {
     PROJECT_OPEN_FAILED,
     PROJECT_SAVE_FAILED,
 
+    /**
+     * A field photo could not be written to app storage - a full phone, usually. Its own code
+     * because the operator's next action differs: with the room save he retries, with this one he
+     * frees space first.
+     */
+    PHOTO_SAVE_FAILED,
+
     /** The free plan's single room is taken. The UI answers with the paywall, never a crash. */
     PROJECT_LIMIT_REACHED,
+
+    /**
+     * A room could not be removed from storage - a read-only or revoked folder.
+     *
+     * `repository.delete(id)` answers whether the file is gone, and the answer was dropped: the
+     * screen cleared the open room and told the caller it was deleted, the next `refresh()` read
+     * the folder and listed the room again, and the operator deleted it a second time (finding 93).
+     */
+    PROJECT_DELETE_FAILED,
+
+    /**
+     * A photo file could not be removed: the defect or room it belonged to is gone, the picture
+     * is not.
+     *
+     * That is not cosmetic - the file goes into the next backup and stays on the phone after the
+     * customer's documentation was deliberately deleted (finding 93).
+     */
+    PHOTO_DELETE_FAILED,
 }
 
 class ProjectViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = ProjectRepository(application)
+
+    /** Submission order for draft writes; see [writeDraft]. */
+    private val draftGate = DraftGate()
+    private val draftWrites = Mutex()
     private val entitlements = EntitlementStore(application)
     private val preferences = UiPreferences(application)
     private val settings = SiteSettings(application)
@@ -68,6 +105,18 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     data class UiState(
         val loading: Boolean = true,
         val projects: List<ProjectRepository.ProjectSummary> = emptyList(),
+        /**
+         * Files in the projects folder that could not be read. They are **kept**, not deleted, so
+         * the app has to say so rather than let a damaged room look like a deleted one.
+         */
+        val unreadableProjects: Int = 0,
+        /**
+         * Those files by name, so the list can offer the one action that frees their room.
+         *
+         * Empty when nothing is damaged; a name is only ever shown with a delete button attached
+         * (finding 150).
+         */
+        val unreadableFiles: List<String> = emptyList(),
         val openProject: ProjectRecord? = null,
         val materialList: MaterialList? = null,
         val lastError: UiMessage? = null,
@@ -75,21 +124,54 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val deviceTag: String = "",
         val trialUsed: Boolean = false,
         val trialDaysLeft: Long = 0L,
+        /**
+         * Whether the licence rules would let this phone start a trial right now.
+         *
+         * Defaults to `true`: an unseeded state must not claim a trial is impossible. The paywall
+         * used to draw its "try Pro for 7 days" button from `trialUsed`, a raw presence check of
+         * the stored key, while `startTrial()` refuses on `trialAvailable` - so after a clock
+         * rollback or on a build that cannot vouch for itself the screen offered a button whose
+         * only outcome was the failure sentence (finding 140).
+         */
+        val trialAvailable: Boolean = true,
         /** True while the bundled licence key is the demo key — surfaced in a debug build only. */
         val demoSigningKey: Boolean = false,
         /** The device clock is behind the last day this install has seen. */
         val clockRolledBack: Boolean = false,
         /** The installation could not be confirmed (re-signed APK or an attached debugger). */
         val integrityFailed: Boolean = false,
+        /**
+         * A sealed value on this phone failed to verify, so the trial counts as used.
+         *
+         * Otherwise the paywall answers that state with "the trial has already been used" - the
+         * app's guess about a trial nobody used (finding 139).
+         */
+        val localStateTampered: Boolean = false,
         val onboardingDone: Boolean = false,
         /** Firm-wide waste factor, `null` = each conduit family's default. */
         val wasteOverride: Float? = null,
+        /** Firm-wide clip spacing in metres, `null` = each conduit family's default. */
+        val clipSpacingOverride: Float? = null,
         /** Documentation photo of the open project, decoded for screen and protocol. */
         val photo: Bitmap? = null,
         /** Firm-wide hourly rate, used when a project does not override it. */
         val firmHourlyRateCents: Int = Pricing.DEFAULT_HOURLY_RATE_CENTS,
         /** Decoded thumbnails of the open project's entry photos, by token. */
         val fieldPhotos: Map<String, Bitmap> = emptyMap(),
+        /**
+         * A run that a killed process left behind, ready to be offered on the AR screen.
+         *
+         * Loaded when the screen is entered, so a cold start never has to read a file on the
+         * way to the viewfinder.
+         */
+        val pendingDraft: RouteDraft? = null,
+        /**
+         * True while a room that was open when the process died is waiting to be shown.
+         *
+         * The navigation host consumes it (see [consumeResume]) so that going home afterwards
+         * stays home instead of bouncing back into the room.
+         */
+        val resumeReady: Boolean = false,
     )
 
     private val mutableState = MutableStateFlow(UiState())
@@ -108,32 +190,77 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             deviceTag = entitlements.deviceTag,
             trialUsed = entitlements.trialUsed(),
             trialDaysLeft = entitlements.trialDaysLeft(),
+            trialAvailable = entitlements.diagnostics.value.trialAvailable,
             demoSigningKey = LicencePublicKey.isDemoKey,
             onboardingDone = preferences.onboardingDone(),
             wasteOverride = settings.wasteFactorOverride(),
+            clipSpacingOverride = settings.clipSpacingMetersOverride(),
             firmHourlyRateCents = settings.hourlyRateCents() ?: Pricing.DEFAULT_HOURLY_RATE_CENTS,
+            localStateTampered = entitlements.diagnostics.value.localStateTampered,
         )
         refresh()
+        resumeLastProject()
+    }
+
+    /**
+     * Re-opens the room the process died in.
+     *
+     * The id is a preference, the room is a file: if the file is gone there is nothing to resume
+     * and the operator simply lands on his list. Deliberately silent - a message about a room he
+     * cannot see would be noise on cold start.
+     */
+    private fun resumeLastProject() {
+        val id = preferences.lastProjectId() ?: return
+        viewModelScope.launch {
+            val project = repository.load(id) ?: run {
+                preferences.setLastProjectId(null)
+                return@launch
+            }
+            mutableState.value = mutableState.value.copy(
+                openProject = project,
+                materialList = buildMaterialList(project),
+                photo = repository.loadPhoto(project.id),
+                fieldPhotos = loadFieldPhotos(project),
+                resumeReady = true,
+            )
+        }
+    }
+
+    /** The resumed room has been shown once; the next visit to the list must stay a visit. */
+    fun consumeResume() {
+        mutableState.value = mutableState.value.copy(resumeReady = false)
     }
 
     fun refresh() {
         viewModelScope.launch {
-            val projects = repository.list()
-            mutableState.value = mutableState.value.copy(loading = false, projects = projects)
+            val listing = repository.list()
+            mutableState.value = mutableState.value.copy(
+                loading = false,
+                projects = listing.projects,
+                unreadableProjects = listing.unreadable,
+                unreadableFiles = listing.unreadableNames,
+            )
         }
     }
 
     /** Re-derives licence, trial and device state. Called on resume: that is how expiry works. */
     fun refreshEntitlements() {
         entitlements.refresh()
+        // The two answered from sealed values run *before* the snapshot: either of them can fail a
+        // seal, and that is the diagnosis the screen is about to show (finding 139).
+        val trialUsed = entitlements.trialUsed()
+        val trialDaysLeft = entitlements.trialDaysLeft()
+        entitlements.refreshDiagnostics()
         mutableState.value = mutableState.value.copy(
             entitlements = entitlements.entitlements.value,
             deviceTag = entitlements.deviceTag,
-            trialUsed = entitlements.trialUsed(),
-            trialDaysLeft = entitlements.trialDaysLeft(),
+            trialUsed = trialUsed,
+            trialDaysLeft = trialDaysLeft,
             demoSigningKey = LicencePublicKey.isDemoKey,
             clockRolledBack = entitlements.diagnostics.value.clockRolledBack,
             integrityFailed = entitlements.diagnostics.value.integrityFailed,
+            localStateTampered = entitlements.diagnostics.value.localStateTampered,
+            trialAvailable = entitlements.diagnostics.value.trialAvailable,
         )
     }
 
@@ -143,9 +270,17 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         return check
     }
 
-    fun startTrial() {
-        entitlements.startTrial()
+    /**
+     * Starts the seven-day trial and says whether it did.
+     *
+     * The paywall used to switch itself to "trial active" before calling this, so a refusal - the
+     * trial was already used, the clock moved back, the build cannot vouch for itself - looked
+     * exactly like a success until the operator left the screen and found the app still free.
+     */
+    fun startTrial(): Boolean {
+        val started = entitlements.startTrial()
         refreshEntitlements()
+        return started
     }
 
     fun completeOnboarding() {
@@ -162,13 +297,21 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun createProject(name: String, siteName: String = "", onCreated: (ProjectRecord) -> Unit) {
         viewModelScope.launch {
             val current = mutableState.value
-            if (!current.entitlements.allowsAnotherProject(current.projects.size)) {
+            // The same count the button draws its state from: a room file this build cannot read
+            // is still a room on the phone (findings 126, 149).
+            val slotsLeft = ProjectSlots.allowsAnother(
+                entitlements = current.entitlements,
+                readable = current.projects.size,
+                unreadable = current.unreadableProjects,
+            )
+            if (!slotsLeft) {
                 mutableState.value = current.copy(lastError = UiMessage.PROJECT_LIMIT_REACHED)
                 return@launch
             }
             // A blank name becomes the operator's own language's word for "room", not English.
             val fallback = getApplication<Application>().getString(R.string.home_default_room_name)
             val project = repository.create(name, siteName, fallbackName = fallback)
+            preferences.setLastProjectId(project.id)
             mutableState.value = mutableState.value.copy(openProject = project, lastError = null)
             refresh()
             onCreated(project)
@@ -183,6 +326,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 onOpened(null)
                 return@launch
             }
+            // The room the operator is standing in, for the next cold start (see
+            // `resumeLastProject`). Written after a successful load only: a room that cannot be
+            // opened is not one to come back to.
+            preferences.setLastProjectId(project.id)
             mutableState.value = mutableState.value.copy(
                 openProject = project,
                 materialList = buildMaterialList(project),
@@ -199,6 +346,86 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val project = mutableState.value.openProject ?: return
         val updated = project.upsertRoute(route)
         mutate(updated, onSaved)
+    }
+
+    // ── Drafts of a run in progress ────────────────────────────────────────────────────────
+
+    /**
+     * Loads whatever the last process left of a run for the open project.
+     *
+     * Called on entering the AR screen rather than at start-up: a draft is only interesting to
+     * the screen that can do something with it, and reading it here keeps the home screen free
+     * of file access it does not need.
+     */
+    fun loadDraft() {
+        val project = mutableState.value.openProject ?: return
+        viewModelScope.launch {
+            val draft = repository.loadDraft(project.id)
+            // Still the same project? The operator may have gone back while this was in flight.
+            if (mutableState.value.openProject?.id == project.id) {
+                mutableState.value = mutableState.value.copy(pendingDraft = draft)
+            }
+        }
+    }
+
+    /**
+     * Persists the run being measured, or clears it with `null`.
+     *
+     * Fire-and-forget on purpose: the screen writes on every committed point, and a write that
+     * fails must never interrupt a measurement. The cost of a lost draft is the same as before
+     * this existed; the cost of a blocked tap is worse.
+     *
+     * Ordering, however, is not negotiable - see [writeDraft].
+     */
+    fun saveDraft(draft: RouteDraft?) {
+        val projectId = mutableState.value.openProject?.id ?: return
+        writeDraft(projectId, draft)
+    }
+
+    /**
+     * The one place a draft reaches the disk, and the only place that decides whether it may.
+     *
+     * Two calls a second apart can still complete out of order, because both cross to
+     * `Dispatchers.IO` and neither waits for the other. Without a rule, the delete that follows
+     * "Save as run" can finish first and the save that came before it can finish last - the draft
+     * is back on disk, the next entry offers to "recover" a run that is already saved, and the same
+     * conduit is measured into the bill of materials twice. So each request takes a ticket in
+     * submission order and only the newest ticket writes, under one lock (finding 74).
+     */
+    private fun writeDraft(projectId: String, draft: RouteDraft?) {
+        val ticket = draftGate.ticket()
+        viewModelScope.launch {
+            draftWrites.withLock {
+                if (!draftGate.isNewest(ticket)) return@withLock
+                if (draft == null || !draft.isRecoverable) {
+                    repository.deleteDraft(projectId)
+                } else {
+                    repository.saveDraft(draft)
+                }
+            }
+        }
+    }
+
+    /** Takes the interrupted run as a finished route - marked as recovered - and drops the draft. */
+    fun recoverDraft(draft: RouteDraft) {
+        val project = mutableState.value.openProject ?: return
+        val route = draft.toRoute(
+            id = "route-${UUID.randomUUID()}",
+            label = RouteLabels.next(draft.spec, project.routes.map { it.label }),
+            createdAtEpochMs = System.currentTimeMillis(),
+        ) ?: return
+        mutableState.value = mutableState.value.copy(pendingDraft = null)
+        // Through the gate: a save that was queued while he was tapping must not bring the
+        // draft back after he has taken it as a run.
+        writeDraft(project.id, null)
+        upsertRoute(route)
+    }
+
+    /** Forgets the interrupted run, because the operator said so. */
+    fun discardDraft() {
+        val project = mutableState.value.openProject ?: return
+        mutableState.value = mutableState.value.copy(pendingDraft = null)
+        writeDraft(project.id, null)
     }
 
     fun removeRoute(routeId: String, onSaved: (ProjectRecord?) -> Unit = {}) {
@@ -251,7 +478,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun deleteDiaryEntry(entryId: String) {
         val project = mutableState.value.openProject ?: return
         project.diary.firstOrNull { it.id == entryId }?.photo?.let { token ->
-            repository.deletePhotoAs(token)
+            // Same as the defect path: the entry goes, the file may not (finding 93).
+            if (!repository.deletePhotoAs(token)) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PHOTO_DELETE_FAILED)
+            }
             mutableState.value = mutableState.value.copy(fieldPhotos = mutableState.value.fieldPhotos - token)
         }
         mutate(project.removeDiaryEntry(entryId))
@@ -288,7 +518,11 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun deleteDefect(defectId: String) {
         val project = mutableState.value.openProject ?: return
         project.defects.firstOrNull { it.id == defectId }?.photo?.let { token ->
-            repository.deletePhotoAs(token)
+            // The defect goes either way; the picture is a file, and a file this phone refuses to
+            // delete stays in the folder and in the next backup (finding 93).
+            if (!repository.deletePhotoAs(token)) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PHOTO_DELETE_FAILED)
+            }
             mutableState.value = mutableState.value.copy(fieldPhotos = mutableState.value.fieldPhotos - token)
         }
         mutate(project.removeDefect(defectId))
@@ -314,10 +548,39 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         if (stopped !== project) mutate(stopped)
     }
 
+    /**
+     * Drops one work session - the correction for a clock that was stopped late, or not at all.
+     *
+     * The room, the runs and the photos stay; only the hours that are not true go. See
+     * [ProjectRecord.removeSession].
+     */
+    fun deleteWorkSession(sessionId: String) {
+        val project = mutableState.value.openProject ?: return
+        val corrected = project.removeSession(sessionId)
+        if (corrected !== project) mutate(corrected)
+    }
+
     // ── Pricing ─────────────────────────────────────────────────────────────────────────
     fun updatePricing(hourlyRateCents: Int?, materialLumpSumCents: Long, onSaved: (ProjectRecord?) -> Unit = {}) {
         val project = mutableState.value.openProject ?: return
         mutate(project.withPricing(hourlyRateCents, materialLumpSumCents), onSaved)
+    }
+
+    /**
+     * Stores the factor a reference calibration produced, or refuses it.
+     *
+     * The window is decided in `:core` (`ReferenceCalibration.accepted`), not here: a screen that
+     * could store a factor of 1.43 would put a document labelled *calibrated* over a measurement
+     * nobody checked, and a second copy of `[0.85, 1.15]` in the view model is a second definition
+     * of what counts as a measurement. Returns the project as it now stands, or `null` when no
+     * project is open or the factor was refused.
+     */
+    fun setCalibration(scale: Double, onSaved: (ProjectRecord?) -> Unit = {}): ProjectRecord? {
+        val project = mutableState.value.openProject ?: return null
+        if (!ReferenceCalibration.accepted(scale)) return null
+        val updated = project.copy(calibrationScale = scale)
+        mutate(updated, onSaved)
+        return updated
     }
 
     /** The rate this project bills at: its own override, or the firm's default. */
@@ -329,39 +592,77 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
      *
      * The token carries the kind (`<project>__diary_<id>`) so one code path serves both, and
      * the file name alone is enough to restore it from a backup.
+     *
+     * The copy is the one step in this view model that suspends *before* it reads the project
+     * again, so it is also the one place where "the project" can move underneath it: the picker
+     * hands back a picture, the operator taps into another room while five megabytes are being
+     * copied, and the state this function started with is no longer what is on screen. The token
+     * names its own room, so the answer is not "apply it to whatever is open" - it is to follow
+     * the token, and if the room or the entry is gone by the time the copy lands, to remove the
+     * file again instead of leaving it in private storage with nothing pointing at it.
      */
     fun attachFieldPhoto(token: String, uri: Uri, onDone: (Boolean) -> Unit = {}) {
-        val project = mutableState.value.openProject ?: return
+        val entryId = PhotoTokens.entryOf(token) ?: return
+        val ownerId = PhotoTokens.projectOf(token)
         viewModelScope.launch {
-            val saved = repository.savePhotoAs(token, uri)
-            if (!saved) {
+            // Both failure branches say so: the caller's callback was never wired, so a full
+            // phone swallowed the photograph without a word (finding 72).
+            if (!repository.savePhotoAs(token, uri)) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PHOTO_SAVE_FAILED)
                 onDone(false)
                 return@launch
             }
-            val entryId = PhotoTokens.entryOf(token)
-            val updated = when (PhotoTokens.kindOf(token)) {
-                PhotoKind.DIARY -> entryId?.let { project.withDiaryPhoto(it, token) } ?: project
-                PhotoKind.DEFECT -> entryId?.let { project.withDefectPhoto(it, token) } ?: project
-                PhotoKind.ROOM -> project
-            }
-            val thumbnail = repository.loadPhotoAs(token)
-            mutate(updated) { _ ->
-                val photos = if (thumbnail != null) {
-                    mutableState.value.fieldPhotos + (token to thumbnail)
-                } else {
-                    mutableState.value.fieldPhotos
+            val open = mutableState.value.openProject
+            val stored = if (open?.id == ownerId) null else repository.load(ownerId)
+            when (val target = fieldPhotoTarget(token, entryId, open, stored)) {
+                is FieldPhotoTarget.OnScreen -> {
+                    val thumbnail = repository.loadPhotoAs(token)
+                    // `onDone` carries the *disk* answer, not the screen's: the row now shows the
+                    // picture either way, and the caller uses this flag to decide whether the
+                    // cache copy of the capture may go. Reporting `true` for a project that was
+                    // never written would delete the only copy of a photo nothing points at
+                    // (findings 72, 128).
+                    mutate(target.project) { saved ->
+                        val photos = if (thumbnail != null) {
+                            mutableState.value.fieldPhotos + (token to thumbnail)
+                        } else {
+                            mutableState.value.fieldPhotos
+                        }
+                        mutableState.value = mutableState.value.copy(fieldPhotos = photos)
+                        onDone(saved != null)
+                    }
                 }
-                mutableState.value = mutableState.value.copy(fieldPhotos = photos)
-                onDone(true)
+                // Not the room the operator is looking at: write it where it belongs and let the
+                // list reload. Applying it to the open room would have shown the picture in the
+                // wrong room, and saving *that* project would have carried the entry's token into
+                // a room that never had the entry.
+                is FieldPhotoTarget.OffScreen -> {
+                    // The file is already on disk; if its room cannot be rewritten the entry keeps
+                    // no token and the copy is an orphan - reporting success here is exactly the
+                    // "attached" for a file nothing points at that finding 58 removed.
+                    val written = repository.save(target.project)
+                    if (!written) {
+                        mutableState.value = mutableState.value.copy(lastError = UiMessage.PHOTO_SAVE_FAILED)
+                    }
+                    refresh()
+                    onDone(written)
+                }
+                FieldPhotoTarget.Gone -> {
+                    // The room is gone, so the copy just made has to go too; if the phone refuses,
+                    // the file stays as an orphan and the operator is told (finding 93).
+                    if (!repository.deletePhotoAs(token)) {
+                        mutableState.value = mutableState.value.copy(lastError = UiMessage.PHOTO_DELETE_FAILED)
+                    }
+                    onDone(false)
+                }
             }
         }
     }
 
     private suspend fun loadFieldPhotos(project: ProjectRecord): Map<String, Bitmap> {
-        val tokens = buildList {
-            project.diary.forEach { entry -> entry.photo?.let { add(it) } }
-            project.defects.forEach { defect -> defect.photo?.let { add(it) } }
-        }.take(MAX_FIELD_PHOTOS)
+        // The order matters: the budget is small, so it is spent on the photos that carry the
+        // most - an open defect before a resolved one, and both before the diary (finding 42).
+        val tokens = FieldPhotos.ordered(project).take(FieldPhotos.SCREEN_BUDGET)
         if (tokens.isEmpty()) return emptyMap()
         val out = LinkedHashMap<String, Bitmap>(tokens.size)
         tokens.forEach { token ->
@@ -370,9 +671,35 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         return out
     }
 
+    /**
+     * Deletes a project file this build cannot read, freeing the room it occupies.
+     *
+     * Without this the free plan could be locked for good: the damaged file takes the one slot
+     * (finding 126), the button refuses to create (finding 149), a restore is granted no room -
+     * and the file itself could not be reached from any screen, so the app's own sentence
+     * "deleting it frees the slot - nothing is ever locked away" was untrue (finding 150).
+     */
+    fun deleteUnreadableFile(name: String) {
+        viewModelScope.launch {
+            // Asked, not assumed - a read-only folder keeps the file and the count (finding 93).
+            if (!repository.deleteUnreadable(name)) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_DELETE_FAILED)
+                return@launch
+            }
+            refresh()
+        }
+    }
+
     fun deleteProject(id: String, onDeleted: () -> Unit = {}) {
         viewModelScope.launch {
-            repository.delete(id)
+            // Asked, not assumed: on a read-only or revoked folder the file is still there, and
+            // the room reappears on the next refresh while the caller has already been told it was
+            // deleted (finding 93).
+            if (!repository.delete(id)) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_DELETE_FAILED)
+                return@launch
+            }
+            if (preferences.lastProjectId() == id) preferences.setLastProjectId(null)
             if (mutableState.value.openProject?.id == id) {
                 mutableState.value = mutableState.value.copy(openProject = null, materialList = null, photo = null)
             }
@@ -409,11 +736,15 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun closeProject() {
+        // Closing a room is the operator saying he is done with it: the next cold start goes to
+        // the list, not back into this room.
+        preferences.setLastProjectId(null)
         mutableState.value = mutableState.value.copy(
             openProject = null,
             materialList = null,
             photo = null,
             fieldPhotos = emptyMap(),
+            resumeReady = false,
         )
     }
 
@@ -426,6 +757,21 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val project = mutableState.value.openProject
         mutableState.value = mutableState.value.copy(
             wasteOverride = value,
+            materialList = project?.let { buildMaterialList(it) },
+        )
+    }
+
+    /**
+     * Sets the firm's clip spacing and rebuilds the open project's material list immediately.
+     *
+     * The same shape as [setWasteOverride], and for the same reason: the number the operator just
+     * changed has to be the number on the screen and in the export (finding 151).
+     */
+    fun setClipSpacingOverride(value: Float?) {
+        settings.setClipSpacingOverride(value)
+        val project = mutableState.value.openProject
+        mutableState.value = mutableState.value.copy(
+            clipSpacingOverride = value,
             materialList = project?.let { buildMaterialList(it) },
         )
     }
@@ -447,7 +793,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     private fun buildMaterialList(project: ProjectRecord): MaterialList =
         MaterialListBuilder.build(
             project = project,
-            options = MaterialListOptions(wasteFactorOverride = mutableState.value.wasteOverride),
+            options = MaterialListOptions(
+                wasteFactorOverride = mutableState.value.wasteOverride,
+                clipSpacingMetersOverride = mutableState.value.clipSpacingOverride,
+            ),
         )
 
     fun clearError() {
@@ -459,15 +808,17 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     /**
      * Restores a backup: projects first, then the photos that belong to them.
      *
-     * Photos are matched by file name (which is the project id) and only attached when that
-     * project exists on this phone, so a restore never leaves an orphan image or, worse, puts a
-     * photo on the wrong room. The open project is re-read afterwards, so a restored photo shows
-     * up without leaving the screen.
+     * A photo is attached to the project **this restore created**, never to one that was already
+     * on the phone: a restore of last week's backup must not overwrite the picture taken since,
+     * and it must not leave a copy without its photo either. When a project had to be re-keyed
+     * because its id was taken (finding 40), the photo is re-homed onto the new id, so the copy
+     * comes back complete and the original keeps its own picture. The open project is re-read
+     * afterwards, so a restored photo shows up without leaving the screen.
      */
     fun importBackup(
         texts: List<String>,
         photos: List<Pair<String, Uri>> = emptyList(),
-        onDone: (imported: Int, heldBack: Int) -> Unit = { _, _ -> },
+        onDone: (RestoreCounts) -> Unit = { _ -> },
     ) {
         viewModelScope.launch {
             // Restoring is a way to *create* projects, so it obeys the same plan as creating
@@ -475,23 +826,36 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             // else's backup - and the free plan would mean nothing. The files that are held
             // back are not deleted or altered; they stay in the operator's zip and can be
             // imported after upgrading.
-            val room = (mutableState.value.entitlements.maxProjects - mutableState.value.projects.size)
-                .coerceAtLeast(0)
-            var imported = 0
-            var heldBack = 0
-            texts.forEachIndexed { index, text ->
-                if (index >= room) {
-                    heldBack++
-                    return@forEachIndexed
+            // Counted through `ProjectSlots` for the same reason the create gate is: a room file
+            // that cannot be read still occupies its slot, so a restore may not hand a free
+            // installation a second room file (findings 126, 149).
+            val room = ProjectSlots.remaining(
+                entitlements = mutableState.value.entitlements,
+                readable = mutableState.value.projects.size,
+                unreadable = mutableState.value.unreadableProjects,
+            )
+            // The id each restored file was stored under, keyed by the id it carried: equal for a
+            // new room, a fresh id when the old one was taken. A photo follows its room, never
+            // the name it happened to have in the zip.
+            val homes = HashMap<String, String>()
+            val counts = restoreOutcome(
+                slots = room,
+                texts = texts,
+                parse = { text -> repository.parseProject(text) != null },
+            ) { text ->
+                val result = repository.importProjectDetailed(text)
+                if (result == null) {
+                    false
+                } else {
+                    homes[result.originalId] = result.project.id
+                    true
                 }
-                if (repository.importProject(text) != null) imported++ else heldBack++
             }
-            photos.forEach { (token, uri) ->
-                // `<project id>` for the room's own photo, `<project id>__diary_<entry>` for an
-                // entry photo: the room decides whether the photo has a home on this phone.
-                val projectId = PhotoTokens.projectOf(token)
-                if (repository.hasProject(projectId)) repository.savePhotoAs(token, uri)
-            }
+            // `<project id>` for the room's own photo, `<project id>__diary_<entry>` for an
+            // entry photo: only a room this restore created gives the photo a home - and a copy
+            // that this phone refuses is counted, because the card used to say "restored" while
+            // the documentation was still missing (finding 92).
+            val photoRestore = restorePhotos(photos, homes, repository::savePhotoAs)
             refresh()
             mutableState.value.openProject?.let { open ->
                 val reloaded = repository.load(open.id)
@@ -504,13 +868,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
             }
-            onDone(imported, heldBack)
+            onDone(counts.copy(photosFailed = photoRestore.failed))
         }
-    }
-
-    private companion object {
-        /** Enough documentation for a protocol appendix, few enough to keep the heap flat. */
-        const val MAX_FIELD_PHOTOS = 12
     }
 
     private fun mutate(updated: ProjectRecord, onSaved: (ProjectRecord?) -> Unit = {}) {
@@ -527,4 +886,164 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             onSaved(if (saved) updated else null)
         }
     }
+}
+
+/**
+ * Where an already-copied field photo belongs.
+ *
+ * Three answers, not two, because "the room is gone" and "the room is simply not on screen" have
+ * opposite consequences: the first means the file has to be removed again, the second means it has
+ * to be written to that room on disk. Everything this needs is a value, so the decision is decided
+ * - and tested - without a picker, a content resolver or a phone.
+ */
+internal sealed interface FieldPhotoTarget {
+    /** The room is open: apply it to the state the screen is showing. */
+    data class OnScreen(val project: ProjectRecord) : FieldPhotoTarget
+
+    /** The room exists but is not open: write it there without touching the open room. */
+    data class OffScreen(val project: ProjectRecord) : FieldPhotoTarget
+
+    /** The room or the entry it names no longer exists: the copy is an orphan and goes. */
+    data object Gone : FieldPhotoTarget
+}
+
+internal fun fieldPhotoTarget(
+    token: String,
+    entryId: String,
+    open: ProjectRecord?,
+    stored: ProjectRecord?,
+): FieldPhotoTarget {
+    val ownerId = PhotoTokens.projectOf(token)
+    val room = open?.takeIf { it.id == ownerId } ?: stored?.takeIf { it.id == ownerId }
+        ?: return FieldPhotoTarget.Gone
+    val updated = when (PhotoTokens.kindOf(token)) {
+        PhotoKind.DIARY -> room.withDiaryPhoto(entryId, token)
+        PhotoKind.DEFECT -> room.withDefectPhoto(entryId, token)
+        // A room photo is not attached through this path; the site photo has its own.
+        PhotoKind.ROOM -> return FieldPhotoTarget.Gone
+    }
+    // `with*Photo` maps over the entries, so an id that is not there comes back unchanged. That is
+    // the second way a copy can be an orphan, and it must not be mistaken for success.
+    val attached = when (PhotoTokens.kindOf(token)) {
+        PhotoKind.DIARY -> updated.diary.any { it.id == entryId && it.photo == token }
+        PhotoKind.DEFECT -> updated.defects.any { it.id == entryId && it.photo == token }
+        PhotoKind.ROOM -> false
+    }
+    if (!attached) return FieldPhotoTarget.Gone
+    return if (room.id == open?.id) {
+        FieldPhotoTarget.OnScreen(updated)
+    } else {
+        FieldPhotoTarget.OffScreen(updated)
+    }
+}
+
+/**
+ * What a restore reports as imported and held back.
+ *
+ * The plan limit has to be counted in **rooms actually created**, not in files attempted. The
+ * first version compared the file's position against the free slots, so a backup folder where the
+ * picker happened to hand over a stray `.json` first used up the slot with a file that could not
+ * be parsed: the operator was told one room was held back, and it was the only real room in the
+ * folder. A failed import frees its slot again, which is what this loop does.
+ *
+ * Pure on purpose - the count is the part that can be wrong, and it can be tested without an
+ * Android context.
+ */
+/**
+ * What one restore attempt did, room by room and photo by photo.
+ *
+ * Public, not `internal`: it travels through `importBackup`'s callback into `BackupCard`, and
+ * Kotlin refuses to expose an internal type from a public function - the compiler said so on CI
+ * when finding 92 first landed.
+ */
+data class RestoreCounts(
+    val imported: Int,
+    /** Rooms the plan had no slot for: still in the zip, imported after upgrading. */
+    val heldBack: Int,
+    /** Files that are not a room at all: no upgrade will ever import them. */
+    val unreadable: Int,
+    /**
+     * Rooms that were read fine but could not be stored on this phone.
+     *
+     * A third category, because the other two both describe the *file* and this one describes the
+     * phone: a full or read-only storage. Counting it as [unreadable] told the operator "this file
+     * is not a room" about a perfectly good room he had just backed up, and then pointed him at a
+     * file that is fine while the room was gone (finding 86).
+     */
+    val notWritten: Int,
+    /**
+     * Photos that belonged to a restored room and that this phone could not write.
+     *
+     * The copy was attempted and refused - a full or read-only storage - so the file is still in
+     * the operator's backup and the room in the app simply has no picture. The result of
+     * `savePhotoAs` used to be thrown away: the restore announced the rooms, the site page
+     * promised that restoring "brings the photos along", and the missing photograph was invisible
+     * on the one screen that could have said so (finding 92).
+     */
+    val photosFailed: Int = 0,
+)
+
+internal inline fun restoreOutcome(
+    slots: Int,
+    texts: List<String>,
+    parse: (String) -> Boolean,
+    import: (String) -> Boolean,
+): RestoreCounts {
+    var imported = 0
+    var heldBack = 0
+    var unreadable = 0
+    var notWritten = 0
+    for (text in texts) {
+        // Two questions, in this order, because they have different answers. "Is this a room at
+        // all?" is answered by parsing, for every file in the selection - a file past the free
+        // slots is still either a room waiting for Pro or a truncated file nobody can import, and
+        // calling the second one "held back" is the sentence that makes a customer pay for an
+        // upgrade that will import nothing. "Does the plan have a room left?" is the quota.
+        if (!parse(text)) {
+            unreadable++
+            continue
+        }
+        if (imported >= slots) {
+            heldBack++
+            continue
+        }
+        // The file parsed, so a refusal here is the phone's answer, not the file's: a full disk, a
+        // revoked folder, an unwritable file. Reported apart from `unreadable` (finding 86).
+        if (import(text)) imported++ else notWritten++
+    }
+    return RestoreCounts(
+        imported = imported,
+        heldBack = heldBack,
+        unreadable = unreadable,
+        notWritten = notWritten,
+    )
+}
+
+/** How a restore's photos went: copies that landed, and copies this phone refused. */
+internal data class PhotoRestore(val restored: Int, val failed: Int)
+
+/**
+ * Copies every restored photo into its room, and counts what happened.
+ *
+ * A photo is matched to its room by the id in its token, never by the file name it had in the
+ * backup folder: a room that was imported under a fresh id (its old one was taken) must take its
+ * pictures with it. A photo whose room was held back - the plan had no slot for it - is neither
+ * restored nor counted as a failure: it is still in the backup, waiting for the same upgrade the
+ * room is waiting for.
+ *
+ * Kept as its own function, taking the copy as a lambda, so the three outcomes can be tested
+ * without a content resolver, a file or a phone (finding 92).
+ */
+internal suspend fun <T> restorePhotos(
+    photos: List<Pair<String, T>>,
+    homes: Map<String, String>,
+    save: suspend (token: String, photo: T) -> Boolean,
+): PhotoRestore {
+    var restored = 0
+    var failed = 0
+    for ((token, photo) in photos) {
+        val home = homes[PhotoTokens.projectOf(token)] ?: continue
+        if (save(PhotoTokens.withProject(token, home), photo)) restored++ else failed++
+    }
+    return PhotoRestore(restored = restored, failed = failed)
 }

@@ -6,6 +6,7 @@
 
 package com.constructar.core.price
 
+import com.constructar.core.model.WorkTime
 import java.util.Currency
 import java.util.Locale
 import java.text.NumberFormat
@@ -23,17 +24,25 @@ object Pricing {
     /** 48,00 € an hour, the sort of figure a German handwerk shop bills a journeyman at. */
     const val DEFAULT_HOURLY_RATE_CENTS: Int = 4_800
 
-    private const val MILLIS_PER_HOUR = 3_600_000.0
-
     /**
      * Labour for [workMillis] at [hourlyRateCents], rounded to the nearest cent.
+     *
+     * Billed on [WorkTime.billableMinutes] - whole minutes, the quantity the protocol prints next
+     * to the rate - so the page adds up when a customer multiplies it himself (finding 76). The
+     * remainder under a minute is not billed, exactly as it is not printed.
+     *
+     * [workMillis] is the *summed* billable time of the job, i.e. `WorkTime.billableMillis`, not
+     * the raw total: the time table prints whole minutes per session, and the labour line has to
+     * multiply what those rows add up to (finding 81).
      *
      * Rounded once, at the end: accumulating rounded minutes is how timesheets end up two euros
      * off the invoice.
      */
     fun labourCents(workMillis: Long, hourlyRateCents: Int): Long {
         if (workMillis <= 0L || hourlyRateCents <= 0) return 0L
-        return Math.round(workMillis / MILLIS_PER_HOUR * hourlyRateCents)
+        val minutes = WorkTime.billableMinutes(workMillis)
+        if (minutes <= 0L) return 0L
+        return Math.round(minutes / 60.0 * hourlyRateCents)
     }
 
     /** Net total: labour plus the material lump sum. No VAT, no discount, no surprises. */

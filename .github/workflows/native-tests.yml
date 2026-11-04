@@ -8,6 +8,10 @@ name: native-tests
 # The C++ core (TSDF, Surface Nets, pose graph) has no Android dependency, so it is built and
 # tested with a plain compiler on every push. That keeps the geometry honest even when the
 # Gradle/NDK toolchain is unavailable in an environment.
+permissions:
+  contents: read
+  pull-requests: write
+
 on:
   push:
     paths:
@@ -28,16 +32,109 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The build log is captured, not just streamed, because a compiler diagnostic is exactly the
+      # thing the failure reporter could not see (finding 190): the reporter reads
+      # `/tmp/host_tests.log`, which does not exist when the build dies, so a `-Werror` diagnostic
+      # on clang arrived as "the build failed before the tests ran" and cost two CI cycles.
       - name: Build the host test binary (${{ matrix.compiler }} ${{ matrix.optimisation }})
         run: |
-          ${{ matrix.compiler }} -std=c++20 ${{ matrix.optimisation }} -pthread -Wall -Wextra -Werror \
-            -I native-slam/src/main/cpp \
-            native-slam/src/main/cpp/tsdf/volume.cpp \
-            native-slam/src/main/cpp/tsdf/surface_nets.cpp \
-            native-slam/src/main/cpp/slam/pose_graph.cpp \
-            native-slam/src/main/cpp/slam/rtabmap_bridge.cpp \
-            native-slam/src/main/cpp/tests/host_tests.cpp \
-            -o host_tests
+          set +e
+          (
+            ${{ matrix.compiler }} -std=c++20 ${{ matrix.optimisation }} -pthread -Wall -Wextra -Werror \
+              -I native-slam/src/main/cpp \
+              native-slam/src/main/cpp/tsdf/volume.cpp \
+              native-slam/src/main/cpp/tsdf/surface_nets.cpp \
+              native-slam/src/main/cpp/slam/pose_graph.cpp \
+              native-slam/src/main/cpp/geometry/manhattan_world.cpp \
+              native-slam/src/main/cpp/calibration/tag_scale.cpp \
+              native-slam/src/main/cpp/geometry/plane_fit.cpp \
+              native-slam/src/main/cpp/slam/rtabmap_bridge.cpp \
+              native-slam/src/main/cpp/tests/host_tests.cpp \
+              -o host_tests
+          ) > /tmp/build.log 2>&1
+          code=$?
+          bash scripts/ci_annotate.sh /tmp/build.log "host test build failed" "$code"
 
+      # The run output is captured so a failure can be reported on the pull request at the end of
+      # the job: the Actions log endpoint redirects to a host that is not always reachable, and a
+      # failing assertion whose message cannot be read wastes a full CI cycle (finding 111's fix
+      # was diagnosed from a runner that only said "Run failed").
       - name: Run
-        run: ./host_tests
+        id: run_tests
+        run: |
+          set -o pipefail
+          ./host_tests 2>&1 | tee /tmp/host_tests.log
+
+      # The suite above cannot see a lost voxel update: the weights only have to add up to the
+      # number of updates, and a race that drops one still adds up (finding 181 passed all 75
+      # checks against the racy volume). ThreadSanitizer can see it - it reported three races on
+      # the three lines of the fusion - so it runs here, in one cell of the matrix, and fails the
+      # job on any race. `tools/verify-native.sh` is the same script a developer runs locally.
+      - name: ThreadSanitizer pass (voxel fusion under the shard lock)
+        if: matrix.compiler == 'g++' && matrix.optimisation == '-O1'
+        run: ./tools/verify-native.sh --tsan
+
+      # The optional RTAB-Map branch, compiled in the configuration the app would use. No
+      # RTAB-Map checkout is available here, so the translation unit is built against
+      # `tests/rtabmap-stubs` - headers that mirror the API of the RTAB-Map version
+      # CMakeLists.txt pins (`rtabmap/core/Rtabmap.h`, `SensorData` with an odometry pose). This
+      # is a shape check, not a link: it is what proves the branch still compiles, which it did
+      # not for as long as the includes sat inside `namespace constructar` (finding 107).
+      - name: Compile the RTAB-Map branch against stub headers
+        run: |
+          ${{ matrix.compiler }} -std=c++20 ${{ matrix.optimisation }} -Wall -Wextra -Werror \
+            -DCONSTRUCTAR_WITH_RTABMAP=1 \
+            -I native-slam/src/main/cpp \
+            -I native-slam/src/main/cpp/tests/rtabmap-stubs \
+            -c native-slam/src/main/cpp/slam/rtabmap_bridge.cpp -o /tmp/rtabmap_bridge.o
+
+      # Switching the back-end on is a question about paths, not about code: the guard has to
+      # accept the layout upstream actually has, and the archives have to be found where the
+      # documented build puts them. No checkout exists here, so the probe runs in script mode
+      # against fake trees - `cmake` alone, no NDK, no compiler (finding 110).
+      - name: Check the RTAB-Map layout probe
+        run: cmake -P native-slam/src/main/cpp/tests/rtabmap-layout-check.cmake
+
+      - name: Report the failure on the pull request
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The pull request this run belongs to, from the event itself - see the same note in
+          # `.github/workflows/android-build.yml`. This workflow is triggered by a `pull_request`
+          # for every change under the C++ tree and by a `push` only for those paths, so every
+          # failure it ever reports comes from a run whose `GITHUB_REF_NAME` is `<pr>/merge`. The
+          # branch lookup therefore never matched, the step exited 0 and the comment was never
+          # posted: the reporter built because "a failing assertion whose message cannot be read
+          # wastes a full CI cycle" (finding 111) had been wasting them ever since (finding 157).
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
+        run: |
+          set -uo pipefail
+          pr="${PR_NUMBER:-}"
+          if [ -z "$pr" ]; then
+            pr=$(gh pr list --head "$HEAD_REF" --json number -q '.[0].number' 2>/dev/null || true)
+          fi
+          if [ -z "${pr:-}" ]; then
+            echo "::warning::no open pull request for '$HEAD_REF' - the failure report was not posted"
+            exit 0
+          fi
+          {
+            echo "### native-tests failed"
+            echo ""
+            echo "commit \`$GITHUB_SHA\` on \`$HEAD_REF\`, job ${{ matrix.compiler }} ${{ matrix.optimisation }}"
+            echo ""
+            echo '```'
+            # The build log first: when a `-Werror` diagnostic stops the compiler, the test log
+            # does not exist yet, and "the build failed before the tests ran" is not a diagnostic
+            # (finding 190).
+            if [ -s /tmp/build.log ] && [ ! -s /tmp/host_tests.log ]; then
+              grep -E "error:|warning:|note:" /tmp/build.log | head -n 25
+              tail -n 15 /tmp/build.log
+            elif [ -f /tmp/host_tests.log ]; then
+              tail -n 60 /tmp/host_tests.log
+            else
+              echo "the build failed before the tests ran, and the build log is empty"
+            fi
+            echo '```'
+          } > /tmp/comment.md
+          gh pr comment "$pr" --body-file /tmp/comment.md

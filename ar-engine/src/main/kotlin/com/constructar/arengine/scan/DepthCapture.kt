@@ -22,9 +22,11 @@ import java.nio.ByteBuffer
  *
  * ARCore's `Image` is only valid until the next `Frame.update()`; the TSDF worker runs on a
  * different thread and may still be busy. We therefore copy the depth plane (640×480×2 B ≈
- * 600 kB) into a pooled `ShortArray`. That is a `memcpy` of ~0.15 ms — an order of magnitude
- * cheaper than the integration it enables — and, thanks to [DepthBufferPool], it never
- * allocates after the first few frames.
+ * 600 kB) into a pooled `ShortArray`, and the confidence plane (160×120 B ≈ 19 kB) into a pooled
+ * `ByteArray` — both out of [DepthBufferPool]. That is a `memcpy` of ~0.15 ms — an order of
+ * magnitude cheaper than the integration it enables — and it never allocates after the first few
+ * frames. The confidence plane was the exception until finding 172: 19 kB per frame, 30 times a
+ * second, is 0.6 MB/s of garbage in the render loop this class exists to keep clean.
  *
  * ## Why not `acquireDepthImageMeters`
  *
@@ -35,12 +37,18 @@ import java.nio.ByteBuffer
  */
 class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity = 3)) {
 
-    /** Reusable stats container — the UI reads the fields, no allocation per frame. */
+    /**
+     * Reusable stats container — the UI reads [meanConfidence], no allocation per frame.
+     *
+     * `usableRatio` used to sit here as "the share of the frame with usable depth". Nothing read
+     * it: it was passed into the tracking monitor as `scanCoverage`, stored in the status under a
+     * doc claiming it "drives the scan quality gauge", shown nowhere - and because it changes on
+     * every frame, it also defeated the monitor's compare-first guard (finding 103).
+     */
     data class Stats(
         val width: Int = 0,
         val height: Int = 0,
         val meanConfidence: Int = 0,
-        val usableRatio: Float = 0f,
         val validPixels: Int = 0,
         val bestDepthMeters: Float = 0f,
     )
@@ -92,7 +100,10 @@ class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity 
                     confidenceWidth = image.width
                     confidenceHeight = image.height
                     confidenceRowStride = confPlane.rowStride
-                    val conf = ByteArray(confidenceRowStride * confidenceHeight)
+                    // Pooled like the depth plane: 19 kB per frame is not free in the render
+                    // loop, and this class's whole reason to exist is to not allocate here
+                    // (finding 172).
+                    val conf = pool.acquireConfidence(confidenceRowStride * confidenceHeight)
                     copyBytes(confPlane.buffer, confidenceRowStride, confidenceHeight, conf)
                     confidenceBytes = conf
                 }
@@ -107,12 +118,15 @@ class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity 
 
             lastStats = computeStats(target, width, height, confidenceBytes, confidenceWidth, confidenceHeight, confidenceRowStride, minConfidence)
 
+            // Read once, so the release below cannot see a different plane than the one this
+            // snapshot was built with.
+            val confidence = confidenceBytes
             return DepthFrameSnapshot(
                 depthMm = target,
                 width = width,
                 height = height,
                 rowStride = width,
-                confidence = confidenceBytes,
+                confidence = confidence,
                 confidenceWidth = confidenceWidth,
                 confidenceHeight = confidenceHeight,
                 confidenceRowStride = confidenceRowStride,
@@ -123,15 +137,17 @@ class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity 
                 // matters when mapping a *screen* tap to a depth pixel, which the caller does.
                 displayRotationDegrees = 0,
                 minDepthMm = 180,
+                // The pool is bound here, not at the point of return: the last holder of the
+                // snapshot knows nothing about pools, and the frame that replaced it is not
+                // necessarily the last holder (finding 168).
+                onLastRelease = {
+                    pool.release(target)
+                    confidence?.let(pool::releaseConfidence)
+                },
             )
         } finally {
             depthImage.close()
         }
-    }
-
-    /** Returns a buffer once the worker is done with it. */
-    fun recycle(snapshot: DepthFrameSnapshot) {
-        pool.release(snapshot.depthMm)
     }
 
     /**
@@ -202,12 +218,10 @@ class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity 
                 if (mm < nearest) nearest = mm.toFloat()
             }
         }
-        val sampled = ((width + step - 1) / step) * ((height + step - 1) / step)
         return Stats(
             width = width,
             height = height,
             meanConfidence = if (confidenceCount > 0) (confidenceSum / confidenceCount).toInt() else 0,
-            usableRatio = if (sampled > 0) valid.toFloat() / sampled else 0f,
             validPixels = valid,
             bestDepthMeters = if (nearest == Float.MAX_VALUE) 0f else nearest / 1000f,
         )

@@ -8,6 +8,7 @@ package com.constructar.core.model
 
 import com.constructar.core.math.Vec3
 import kotlinx.serialization.Serializable
+import java.util.Locale
 import kotlin.math.abs
 
 /**
@@ -89,8 +90,20 @@ data class ConduitSpec(
     /** Stable key used to aggregate the bill of materials. */
     val bomKey: String get() = "${kind.name}|${material}|$sizeLabel|${standoffMm.fmt()}"
 
+    /**
+     * `16.5` for a 16,5 mm cable - a dot, on every phone.
+     *
+     * `"%.1f".format(this)` uses the *device* locale, and this string is not a caption: it is part
+     * of the persisted run label, of the bill-of-materials key and of the CSV. A German phone wrote
+     * `Ø 16,5 mm`, so the same conduit bought on two phones became two order lines, each rounded up
+     * (finding 46). `Locale.ROOT` is the same rule the lengths, the CSV and the protocol follow.
+     */
     private fun Float.fmt(): String =
-        if (abs(this - Math.round(this).toFloat()) < 0.01f) Math.round(this).toString() else "%.1f".format(this)
+        if (abs(this - Math.round(this).toFloat()) < 0.01f) {
+            Math.round(this).toString()
+        } else {
+            String.format(Locale.ROOT, "%.1f", this)
+        }
 
     companion object {
         /** Site-signal orange — readable against concrete, plaster and brick. */

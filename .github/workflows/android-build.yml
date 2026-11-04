@@ -197,7 +197,7 @@ jobs:
           (
             cd native-slam/src/main/cpp
             g++ -std=c++20 -O2 -Wall -Wextra -Werror -I. \
-              tsdf/volume.cpp tsdf/surface_nets.cpp slam/pose_graph.cpp slam/rtabmap_bridge.cpp \
+              tsdf/volume.cpp tsdf/surface_nets.cpp slam/pose_graph.cpp geometry/manhattan_world.cpp geometry/plane_fit.cpp calibration/tag_scale.cpp slam/rtabmap_bridge.cpp \
               tests/host_tests.cpp -o /tmp/constructar_host_tests -pthread \
               && /tmp/constructar_host_tests
           ) > /tmp/step.log 2>&1
@@ -291,15 +291,30 @@ jobs:
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The pull request this run belongs to, from the event itself.
+          #
+          # On a `pull_request` run `GITHUB_REF_NAME` is `5/merge`, not a branch, so the branch
+          # lookup this step used to do found nothing, printed one line into a log nobody reads and
+          # exited *successfully*: the reporter written to end "Run failed with no message" was
+          # itself silent, on exactly the runs that fail (finding 157). `github.event.pull_request`
+          # is empty on a push run, so the branch name is the fallback there.
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
         run: |
           set -uo pipefail
-          pr=$(gh pr list --head "$GITHUB_REF_NAME" --json number -q '.[0].number' 2>/dev/null || true)
-          if [ -z "${pr:-}" ]; then echo "no open PR for $GITHUB_REF_NAME"; exit 0; fi
+          pr="${PR_NUMBER:-}"
+          if [ -z "$pr" ]; then
+            pr=$(gh pr list --head "$HEAD_REF" --json number -q '.[0].number' 2>/dev/null || true)
+          fi
+          if [ -z "${pr:-}" ]; then
+            echo "::warning::no open pull request for '$HEAD_REF' - the failure report was not posted"
+            exit 0
+          fi
           LOG=/tmp/step.log
           {
             echo "### android-build failed"
             echo ""
-            echo "commit \`$GITHUB_SHA\` on \`$GITHUB_REF_NAME\`"
+            echo "commit \`$GITHUB_SHA\` on \`$HEAD_REF\`"
             echo ""
             if [ -f "$LOG" ]; then
               tr -d '\r' < "$LOG" > /tmp/log.txt

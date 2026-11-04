@@ -19,7 +19,8 @@ package com.constructar.export.pdf
  * a script or a future CLI tool can generate a protocol without a resources table, and so a
  * missing field degrades to something readable instead of an empty page.
  *
- * Format arguments: [footer] takes `%1$s` (app version), [pageLabel] takes `%1$d` (page number).
+ * Format arguments: [footer] takes `%1$s` (app version), [pageLabel] takes `%1$d` (page number),
+ * [procurementExcluded] takes `%1$d` runs and `%2$s` metres.
  */
 data class PdfLabels(
     val title: String = "Measurement protocol",
@@ -34,7 +35,6 @@ data class PdfLabels(
     val labelClips: String = "Clips",
     val labelCouplings: String = "Couplings",
     val labelScannedTriangles: String = "Scanned triangles",
-    val labelCeilingHeight: String = "Ceiling height",
     val columnLabel: String = "Label",
     val columnType: String = "Type",
     val columnNetMeters: String = "Net (m)",
@@ -46,6 +46,91 @@ data class PdfLabels(
     val procurementNote: String =
         "Order lengths include the site waste factor. Figures are computed from anchor-refined " +
             "node positions; verify critical runs with a tape measure before cutting.",
+    /**
+     * One line per material whose bends make the cut piece shorter; `%1$s` = article, `%2$s` = metres.
+     *
+     * The screen has reported this since finding 114 ("the figure a fitter cuts to") and the
+     * printed procurement table never did: the customer signed a page whose order length is not the
+     * length of the piece that goes in, with no sentence saying why (finding 141).
+     */
+    val procurementDeduction: String =
+        "Bend deduction %2\$s on %1\$s - the cut piece is shorter than the run, the order length " +
+            "is not reduced.",
+    /**
+     * Printed under the procurement table when the list left the uncertain runs out; `%1$d` runs,
+     * `%2$s` their metres.
+     *
+     * The order list gained the same sentence in finding 161, for the same reason: every warning in
+     * the product counts the runs that **survived**, so a procurement table built with them excluded
+     * printed nothing about uncertainty at all while quietly ordering less than the job needs - on
+     * the one page the customer signs.
+     */
+    val procurementExcluded: String =
+        "%1\$d runs too uncertain to price were left out of this procurement table (%2\$s) - the " +
+            "totals above do not include them.",
+    /**
+     * The accuracy the protocol promises, printed under the summary; `%1$d` = the confidence bar.
+     *
+     * The shop page told every visitor, in six languages, that "the protocol states the expected
+     * error too" - and the protocol did not (finding 88). A customer signed a document that named
+     * no tolerance anywhere, next to a "Confidence" column that nobody had explained: a percentage
+     * with no unit and no bar is a number the reader has to take on trust, in the one file he signs.
+     *
+     * The figures are the design targets published in `README.md`, not new claims. The threshold
+     * is not written into the translation but filled in by `accuracyNote()`, so it cannot drift
+     * from [com.constructar.core.model.HitConfidence.RUN_TRUSTED] - the bar the HUD questions a
+     * run at and the bill of materials flags it by. Literal percent signs are `%%` because the
+     * writer formats this string.
+     */
+    val accuracyNote: String =
+        "Expected accuracy: 1-2 cm on a flat wall between 1 and 4 m, 3-6 cm where only depth " +
+            "data is available, about 1 %% of the length on a diagonal. Confidence is the " +
+            "weakest point of a run - below %1\$d %% it needs a second look.",
+    /**
+     * Printed under the summary when the scan volume hit its block budget; no placeholders.
+     *
+     * A full volume stops allocating blocks, so the mesh freezes at its current extent and the
+     * captured room is only part of the room (finding 100). The document has to say which part is
+     * affected: the lengths and the fittings come from anchor-refined taps and are unaffected,
+     * the 3D model is not. Without this line a partial capture was handed over looking complete.
+     */
+    val scanLimitedNote: String =
+        "Scan limit reached: the 3D model covers only part of the room. Lengths, fittings and " +
+            "prices are unaffected - what is missing is the geometry outside the captured volume.",
+    /** Printed under the runs table when part of the room could not be placed; `%1$s` = labels. */
+    val recoveredNote: String =
+        "Recovered after an interruption - lengths and fittings are exact, the 3D position is not " +
+            "in the model: %1\$s",
+    /**
+     * Printed under the runs table when a run is priced but could not be swept; `%1$s` = labels.
+     *
+     * The sibling of [recoveredNote], for the other way a run stays out of the GLB: not lost
+     * coordinates, but a spec or a node path the mesh generator refuses to build from.
+     */
+    val unbuildableNote: String =
+        "No 3D geometry could be built for these runs - their lengths and fittings are still " +
+            "counted: %1\$s",
+    /**
+     * The line under the photo appendix when the page does not hold every photo on the job.
+     *
+     * The appendix takes eight pictures - a page budget, not a taste - while a normal Tuesday
+     * leaves eighteen photos in the field book. Nothing said so: the operator handed the customer
+     * a "photo documentation" and both believed it was all of it, and the photos that were left
+     * out looked like photos that were never taken (finding 91). `%1$d` = printed, `%2$d` = on
+     * the job.
+     */
+    val photosNote: String =
+        "%1\$d of %2\$d photos from the site file are printed here - the rest stay in the app.",
     val footer: String = "ConstructAR %1\$s - generated on device",
     val pageLabel: String = "Page %1\$d",
+
+    /**
+     * A percent cell in a table, `%1$d` = the already-rounded percentage (finding 147).
+     *
+     * The template exists so the percent is not glued together as `"$value %"` inside the drawing
+     * code: the number comes from `PercentText`, the sentence from the labels. `%` is the same
+     * character in all six languages, which is exactly why the glue survived this long - but the
+     * rounded value and the template belong together, because the protocol is signed.
+     */
+    val percentValue: String = "%1\$d %%",
 )

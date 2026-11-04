@@ -98,6 +98,96 @@ class GlbWriterTest {
         assertTrue(json.contains("run \\\"A\\\"\\nlevel 2"))
     }
 
+    /**
+     * The container, byte by byte.
+     *
+     * A `.glb` is four little-endian integers, two chunk headers and two chunks whose lengths
+     * must be multiples of four - a single wrong field makes the file unreadable for every
+     * viewer, and the viewer on the customer's desk is the only test that matters. The earlier
+     * cases checked that *something* plausible came out; these pin the arithmetic: the header
+     * knows its own size, both chunk types are the ones the spec names, and the buffer the JSON
+     * declares is exactly as long as the data that follows it.
+     */
+    @Test
+    fun `the container declares its own size and both chunk types`() {
+        val bytes = GlbWriter.write(listOf(GlbWriter.GlbPart("quad", quad())))
+        val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+        assertEquals("magic", 0x46546C67, buffer.getInt(0))
+        assertEquals("version", 2, buffer.getInt(4))
+        assertEquals("declared file length", bytes.size, buffer.getInt(8))
+        assertEquals("total length must be 4-aligned", 0, bytes.size % 4)
+
+        val jsonChunkLength = buffer.getInt(12)
+        assertEquals("JSON chunk type", 0x4E4F534A, buffer.getInt(16))
+        assertEquals("JSON chunk must be 4-aligned", 0, jsonChunkLength % 4)
+
+        val binHeader = 20 + jsonChunkLength
+        val binChunkLength = buffer.getInt(binHeader)
+        assertEquals("BIN chunk type", 0x004E4942, buffer.getInt(binHeader + 4))
+        assertEquals("BIN chunk must be 4-aligned", 0, binChunkLength % 4)
+        assertEquals("chunks fill the file exactly", bytes.size, binHeader + 8 + binChunkLength)
+    }
+
+    @Test
+    fun `the json chunk is padded with spaces and the binary buffer matches its declaration`() {
+        val bytes = GlbWriter.write(listOf(GlbWriter.GlbPart("quad", quad())))
+        val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+        val jsonChunkLength = buffer.getInt(12)
+
+        val jsonBytes = ByteArray(jsonChunkLength)
+        buffer.position(20)
+        buffer.get(jsonBytes)
+        val json = String(jsonBytes, Charsets.UTF_8)
+
+        // Spaces, not NULs: a NUL after the closing brace breaks viewers that read the chunk as text.
+        val padding = json.length - json.trimEnd(' ').length
+        assertTrue("padding was $padding bytes, must be 0..3", padding in 0..3)
+        assertTrue("JSON chunk must start with a brace", json.trimEnd(' ').startsWith("{"))
+        assertTrue("JSON chunk must end with a brace", json.trimEnd(' ').endsWith("}"))
+
+        val declaredBuffer = Regex("\"buffers\":\\[\\{\"byteLength\":(\\d+)\\}").find(json)
+            ?.groupValues?.get(1)?.toInt()
+        val dataLength = requireNotNull(declaredBuffer) { "JSON declares no buffer length" }
+        val binChunkLength = buffer.getInt(20 + jsonChunkLength)
+        val binPadding = binChunkLength - dataLength
+        assertTrue("binary padding was $binPadding, must be 0..3", binPadding in 0..3)
+        // The BIN chunk is padded with zeros, so the declared length is the data length.
+        val binStart = 20 + jsonChunkLength + 8
+        repeat(binPadding) { offset ->
+            assertEquals(
+                "binary padding byte at ${binStart + dataLength + offset} must be zero",
+                0,
+                bytes[binStart + dataLength + offset].toInt(),
+            )
+        }
+    }
+
+    @Test
+    fun `every buffer view fits inside the buffer`() {
+        val bytes = GlbWriter.write(
+            listOf(
+                GlbWriter.GlbPart("cable", quad(), 0xFFFF8A00.toInt()),
+                GlbWriter.GlbPart("pipe", quad(), 0xFF2E9BFF.toInt()),
+            ),
+        )
+        val json = jsonOf(bytes)
+        val bufferLength = requireNotNull(
+            Regex("\"buffers\":\\[\\{\"byteLength\":(\\d+)\\}").find(json)
+                ?.groupValues?.get(1)?.toInt(),
+        ) { "JSON declares no buffer length" }
+        val views = Regex("\"byteOffset\":(\\d+),\"byteLength\":(\\d+)").findAll(json).toList()
+        assertEquals("two meshes x (position, normal, index)", 6, views.size)
+        views.forEach { match ->
+            val offset = match.groupValues[1].toInt()
+            val length = match.groupValues[2].toInt()
+            assertEquals("view offset $offset must be 4-aligned", 0, offset % 4)
+            assertTrue(
+                "view $offset+$length runs past the ${bufferLength}B buffer",
+                offset + length <= bufferLength,
+            )
+        }
+    }
+
     private fun jsonOf(bytes: ByteArray): String {
         val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
         val jsonLength = buffer.getInt(12)

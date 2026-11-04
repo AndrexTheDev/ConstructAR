@@ -15,11 +15,15 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -60,12 +64,41 @@ fun AppRoot(viewModel: ProjectViewModel) {
     val navController: NavHostController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // A licence that expires at midnight has to stop working at midnight, and it has to happen
+    // without a timer, a service or a background job (finding 132). `EntitlementStore` says so in
+    // its own documentation - "the app calls it on resume" - and nothing did: `refreshEntitlements`
+    // was reachable only from the paywall, so a monthly subscription or a seven-day trial stayed
+    // open for as long as the process lived, which on a site phone is days. The verification is
+    // one ECDSA check on the stored licence, so a resume is cheap enough to do it every time.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshEntitlements()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     val errorText = when (state.lastError) {
         UiMessage.PROJECT_OPEN_FAILED -> stringResource(R.string.error_project_open)
         UiMessage.PROJECT_SAVE_FAILED -> stringResource(R.string.error_project_save)
+        UiMessage.PHOTO_SAVE_FAILED -> stringResource(R.string.error_photo_save)
         UiMessage.PROJECT_LIMIT_REACHED -> stringResource(R.string.home_limit_title)
+        UiMessage.PROJECT_DELETE_FAILED -> stringResource(R.string.error_project_delete)
+        UiMessage.PHOTO_DELETE_FAILED -> stringResource(R.string.error_photo_delete)
         null -> null
     }
+    // Quick resume: a room that was open when the process died is opened on top of the list, so
+    // the back arrow still leads somewhere. The flag is consumed here - not cleared in the view
+    // model - because a second navigation would undo the operator's "back".
+    LaunchedEffect(state.resumeReady, state.onboardingDone) {
+        if (!state.onboardingDone || !state.resumeReady) return@LaunchedEffect
+        if (navController.currentDestination?.route == Routes.HOME) {
+            navController.navigate(Routes.PROJECT)
+        }
+        viewModel.consumeResume()
+    }
+
     LaunchedEffect(state.lastError) {
         errorText?.let {
             snackbarHostState.showSnackbar(it)
@@ -94,8 +127,25 @@ fun AppRoot(viewModel: ProjectViewModel) {
                 }
 
                 composable(Routes.HOME) {
+                    // The list is the destination that means "no room is open" (finding 134). The
+                    // arrow on the project screen closes the room, the system back gesture did
+                    // not - and neither did coming back from an export started here - so a room
+                    // the operator had left stayed "open" and the next cold start walked back
+                    // into it. A quick resume that has not been shown yet is left alone.
+                    LaunchedEffect(Unit) {
+                        if (OpenRoom.closesOnHome(
+                                hasOpenProject = state.openProject != null,
+                                resumePending = state.resumeReady,
+                            )
+                        ) {
+                            viewModel.closeProject()
+                        }
+                    }
                     HomeScreen(
                         projects = state.projects,
+                        unreadableProjects = state.unreadableProjects,
+                        unreadableFiles = state.unreadableFiles,
+                        onDeleteUnreadable = viewModel::deleteUnreadableFile,
                         loading = state.loading,
                         entitlements = state.entitlements,
                         trialDaysLeft = state.trialDaysLeft,
@@ -148,12 +198,12 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onSaveCustomer = { name, address, phone ->
                                 viewModel.updateCustomer(name, address, phone)
                             },
-                            hourlyRateCents = viewModel.hourlyRateCents(project),
+                            firmHourlyRateCents = state.firmHourlyRateCents,
                             onSavePricing = { rate, material ->
                                 viewModel.updatePricing(rate, material)
                             },
                             photo = state.photo,
-                            onPhoto = { uri -> viewModel.attachPhoto(uri) },
+                            onPhoto = { uri, onDone -> viewModel.attachPhoto(uri, onDone) },
                             onDelete = {
                                 viewModel.deleteProject(project.id) {
                                     navController.popBackStack(Routes.HOME, inclusive = false)
@@ -173,12 +223,22 @@ fun AppRoot(viewModel: ProjectViewModel) {
                         )
                         LaunchedEffect(Unit) { navController.popBackStack() }
                     } else {
+                        // Read once per visit to the viewfinder: a draft only matters to the
+                        // screen that can offer it back.
+                        LaunchedEffect(project.id) { viewModel.loadDraft() }
                         ArMeasureScreen(
                             project = project,
                             onBack = { navController.popBackStack() },
                             onRouteFinished = { route -> viewModel.upsertRoute(route) },
                             onScanSummary = { summary -> viewModel.updateScanSummary(summary) },
                             onOpenExport = { navController.navigate(Routes.EXPORT) },
+                            draft = state.pendingDraft,
+                            onDraftChanged = { draft -> viewModel.saveDraft(draft) },
+                            onDraftRecovered = { draft -> viewModel.recoverDraft(draft) },
+                            onDraftDiscarded = { viewModel.discardDraft() },
+                            // The factor lands on the project, which is what the protocol, the
+                            // bill of materials and the room screen read (calibration, tier 3).
+                            onCalibration = { scale -> viewModel.setCalibration(scale) },
                         )
                     }
                 }
@@ -196,6 +256,8 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             photo = state.photo,
                             fieldPhotos = state.fieldPhotos,
                             hourlyRateCents = viewModel.hourlyRateCents(project),
+                            wasteOverride = state.wasteOverride,
+                            clipSpacingOverride = state.clipSpacingOverride,
                             onBack = { navController.popBackStack() },
                             onUpgrade = { navController.navigate(Routes.PAYWALL) },
                         )
@@ -212,6 +274,8 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             materialList = state.materialList,
                             wasteOverride = state.wasteOverride,
                             onWasteChange = { viewModel.setWasteOverride(it) },
+                            clipSpacingOverride = state.clipSpacingOverride,
+                            onClipSpacingChange = { viewModel.setClipSpacingOverride(it) },
                             firmHourlyRateCents = state.firmHourlyRateCents,
                             onHourlyRateChange = { viewModel.setFirmHourlyRate(it) },
                             onBack = { navController.popBackStack() },
@@ -229,6 +293,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onBack = { navController.popBackStack() },
                             onStartWork = { viewModel.startWorkSession() },
                             onStopWork = { viewModel.stopWorkSession() },
+                            onDeleteSession = { id -> viewModel.deleteWorkSession(id) },
                             onAddDiary = { text -> viewModel.addDiaryEntry(text) },
                             onDeleteDiary = { id -> viewModel.deleteDiaryEntry(id) },
                             onAddDefect = { title, location, severity ->
@@ -237,7 +302,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onToggleDefect = { id -> viewModel.toggleDefect(id) },
                             onDeleteDefect = { id -> viewModel.deleteDefect(id) },
                             photoFor = { token -> state.fieldPhotos[token] },
-                            onAttachPhoto = { token, uri -> viewModel.attachFieldPhoto(token, uri) },
+                            onAttachPhoto = { token, uri, onDone -> viewModel.attachFieldPhoto(token, uri, onDone) },
                         )
                     } else {
                         Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())
@@ -250,11 +315,16 @@ fun AppRoot(viewModel: ProjectViewModel) {
                         deviceTag = state.deviceTag,
                         trialUsed = state.trialUsed,
                         trialDaysLeft = state.trialDaysLeft,
+                        localStateTampered = state.localStateTampered,
+                        trialAvailable = state.trialAvailable,
                         onBack = { navController.popBackStack() },
                         onActivate = { key -> viewModel.activateLicence(key) },
                         onStartTrial = {
-                            viewModel.startTrial()
-                            navController.popBackStack()
+                            // Only leave the paywall when the trial really started: the screen has
+                            // to stay if it did not, or it would announce a trial it never got.
+                            val started = viewModel.startTrial()
+                            if (started) navController.popBackStack()
+                            started
                         },
                     )
                 }
@@ -266,6 +336,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                         deviceTag = state.deviceTag,
                         clockRolledBack = state.clockRolledBack,
                         integrityFailed = state.integrityFailed,
+                        localStateTampered = state.localStateTampered,
                         demoSigningKey = state.demoSigningKey,
                         repository = viewModel.repository(),
                         onBack = { navController.popBackStack() },

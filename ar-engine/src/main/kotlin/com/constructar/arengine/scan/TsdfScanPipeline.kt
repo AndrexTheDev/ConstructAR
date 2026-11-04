@@ -17,14 +17,12 @@ import com.constructar.nativebridge.TsdfConfig
 import com.google.ar.core.Frame
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.asCoroutineDispatcher
 
 /**
@@ -47,18 +45,25 @@ import kotlinx.coroutines.asCoroutineDispatcher
  *
  * ## Back-pressure
  *
- * The channel is `CONFLATED` with capacity 1: if integration is slower than the camera, the
- * oldest unprocessed frame is dropped rather than queuing stale geometry. Dropped frames are
- * counted and surfaced in [ScanState], because a scan that silently integrates 8 frames per
- * second instead of 30 looks the same to the user but has half the coverage.
+ * The channel holds one frame: if integration is slower than the camera, the frame that
+ * arrives while one is queued is refused rather than queuing stale geometry. Dropped frames
+ * are counted and surfaced in [ScanState], because a scan that silently integrates 8 frames
+ * per second instead of 30 looks the same to the user but has half the coverage.
+ *
+ * The channel used to be `DROP_OLDEST`, which kept the *newest* frame by discarding the queued
+ * one — and, because a discarded channel element is never handed to anybody, its 600 kB depth
+ * array never went back to the pool: every dropped frame cost a fresh allocation in the render
+ * loop, in the thermal case where the pool exists for (finding 168). Refusing the new frame
+ * costs the same one frame of coverage and returns the buffer on the spot.
  *
  * ## Thermal / battery
  *
  * Extraction is throttled to **300 ms** (≈3.3 Hz) as required. When the platform reports
  * `THERMAL_STATUS_SEVERE`/`CRITICAL`, the pipeline drops to 700 ms and integrates every other
- * frame at a coarser pixel step. Measurements are never affected — only mesh refresh rate.
+ * frame — counted by [ThermalFrameGate], because the frame *timestamps* cannot answer that
+ * question (finding 169) — at a coarser pixel step. Measurements are never affected — only mesh
+ * refresh rate.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 class TsdfScanPipeline(
     private val config: TsdfConfig = TsdfConfig(),
     /**
@@ -72,25 +77,80 @@ class TsdfScanPipeline(
         .asCoroutineDispatcher(),
     private val onMesh: ((ScanMesh) -> Unit)? = null,
 ) {
-    /** Live state for the HUD: coverage, mesh stats, latency, thermal mode. */
+    /**
+     * Live state for the HUD: the detail budget, the frame queue, the volume limit, the thermal
+     * mode.
+     *
+     * Everything here is read by a screen, a document or a test — that is the whole point of a
+     * state object. Until finding 171 it also carried six fields that were none of those:
+     * `integrating` (only ever assigned `false`, so a spinner bound to it would never appear),
+     * `vertexCount` and `blockCount` (nothing read them; the renderer and the exporters ask the
+     * mesh, and the flag that matters is [hitBlockBudget]), and `error` (an English sentence
+     * that neither a screen printed nor the log recorded — the screen keys off [ready] and says
+     * its own localized sentence). A field in the HUD's contract that nothing can see is a
+     * promise, and the operator was paying for it in copies of the state on every frame.
+     */
     data class ScanState(
         val ready: Boolean = false,
-        val integrating: Boolean = false,
         val framesIntegrated: Int = 0,
         val framesDropped: Int = 0,
+        /** How long the last integration call took. Instrumentation — no screen shows it yet. */
         val lastIntegrationMillis: Int = 0,
+        /** How long the last mesh extraction took. Instrumentation — no screen shows it yet. */
         val lastExtractionMillis: Int = 0,
         val triangleCount: Int = 0,
-        val vertexCount: Int = 0,
-        val blockCount: Int = 0,
         val hitBlockBudget: Boolean = false,
         val throttleMode: ThrottleMode = ThrottleMode.NOMINAL,
         val meshVersion: Int = 0,
-        val error: String? = null,
     ) {
-        /** Rough "how much have I scanned" gauge, 0..1 (68 k triangles ≈ a full room). */
-        val coverage: Float
+        /**
+         * How much of the reference **detail** budget the mesh fills, 0..1 (68 k triangles ≈ a
+         * busy room).
+         *
+         * Deliberately not called coverage any more, and the HUD no longer calls it a room
+         * (finding 102). It is a triangle budget ratio: a cluttered cellar reaches 100 % with a
+         * third of its walls scanned, an empty hall may never get past 40 % with every wall
+         * captured. The old label promised a fraction of the room, which this number cannot know -
+         * the app never computes the room's total surface. What it does say is how much geometry
+         * the mesh holds, which is what the operator needs to judge whether the detail is enough
+         * to pick cables out of.
+         */
+        val detailFraction: Float
             get() = (triangleCount / 68_000f).coerceIn(0f, 1f)
+
+        /**
+         * Share of the frames that were offered to the integrator and never reached it, 0..1.
+         *
+         * The denominator is integrated **plus** dropped, not every camera frame: a frame the
+         * thermal gate skips (finding 169) never joined the queue and is a deliberate reduction,
+         * while a frame the queue refused is geometry the room will be missing. Until finding
+         * 170 the pipeline counted both and no screen read either, so the documents promising
+         * that "the scan looks sparse" is distinguishable from "the device is overloaded"
+         * described a number nobody could see.
+         */
+        val droppedFraction: Float
+            get() {
+                val offered = framesIntegrated + framesDropped
+                return if (offered <= 0) 0f else framesDropped.toFloat() / offered
+            }
+
+        /**
+         * The state after one integration call, however that call went.
+         *
+         * A `null` result means the call failed or the engine was already gone — nothing
+         * *known*, not "the volume is fine". The flag is therefore sticky: a spent block budget
+         * never comes back (the volume has no deallocation), and the old `?: false` cleared it on
+         * the first failed call, which silently took the "scan limit reached" sentence off the
+         * screen and out of the protocol's `scanLimited` note (findings 97, 171).
+         *
+         * [framesIntegrated] counts frames that were *offered* to the integrator, not frames
+         * that succeeded, because that is the denominator of [droppedFraction].
+         */
+        fun afterIntegration(result: IntegrationResult?, millis: Int): ScanState = copy(
+            framesIntegrated = framesIntegrated + 1,
+            lastIntegrationMillis = millis,
+            hitBlockBudget = hitBlockBudget || result?.hitBlockBudget == true,
+        )
     }
 
     enum class ThrottleMode { NOMINAL, WARM, THROTTLED }
@@ -103,9 +163,12 @@ class TsdfScanPipeline(
     /**
      * The most recently captured depth frame.
      *
-     * Kept alive for the hit-test cascade (tier 3) and the AI-depth calibration. It is only
-     * recycled when a *newer* frame replaces it — never by the integration worker, which
-     * would hand a buffer back to the pool while the UI thread is still sampling it.
+     * Kept alive for the hit-test cascade (tier 3) and the AI-depth calibration. The pipeline
+     * holds one reference to it and drops that reference when a newer frame replaces it; the
+     * buffer itself goes back to the pool only when the integration worker has also let go
+     * (`DepthFrameSnapshot.release`, finding 168). Readers on the render thread — the hit
+     * cascade, the AI pass, which copies what it needs immediately — may sample it for as long
+     * as it is published.
      */
     @Volatile
     var latestSnapshot: DepthFrameSnapshot? = null
@@ -114,7 +177,10 @@ class TsdfScanPipeline(
     /** Latest depth statistics (confidence, usable ratio) for the tracking monitor. */
     val depthStats: DepthCapture.Stats get() = capture.stats
 
-    private val frames = Channel<DepthFrameSnapshot>(capacity = 1, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
+    private val frames = Channel<DepthFrameSnapshot>(capacity = 1)
+
+    /** Picks every other frame while the device is hot — see [ThermalFrameGate]. */
+    private val thermalGate = ThermalFrameGate()
     private val capture = DepthCapture()
     private var scope: CoroutineScope? = null
 
@@ -123,7 +189,6 @@ class TsdfScanPipeline(
 
     private var workerJob: kotlinx.coroutines.Job? = null
 
-    private val workerBusy = AtomicBoolean(false)
     private val fusedDepth = java.util.concurrent.atomic.AtomicReference<FusedDepth?>(null)
 
     /**
@@ -147,17 +212,24 @@ class TsdfScanPipeline(
         engine = NativeSlamEngine.create(config)
         val created = engine
         if (created == null) {
-            mutableState.value = mutableState.value.copy(
-                ready = false,
-                error = "Native SLAM library unavailable on this ABI — scanning disabled, measuring still works.",
-            )
+            // The screen says its own localized sentence off `ready`; the reason belongs in the
+            // log, where a support call can find it (finding 171).
+            Log.w(TAG, "native SLAM library unavailable on this ABI — scanning disabled, measuring still works")
+            mutableState.value = mutableState.value.copy(ready = false)
             return
         }
         mutableState.value = mutableState.value.copy(ready = true)
         workerJob = scope.launch(dispatcher) {
-            // Ends when the channel is closed and drained — see `stop()`.
-            for (snapshot in frames) {
-                integrate(snapshot)
+            try {
+                // Ends when the channel is closed and drained — see `stop()`.
+                for (snapshot in frames) {
+                    integrate(snapshot)
+                }
+            } finally {
+                // The worker owns the free: it is the only thread that can still be inside the
+                // native volume, and `stop()` must never delete the context under it. `close()` is
+                // idempotent, so the path where `stop()` also closes costs one branch (finding 182).
+                created.close()
             }
         }
     }
@@ -176,30 +248,35 @@ class TsdfScanPipeline(
         val snapshot = capture.capture(frame, config.minConfidence) ?: return
         maybeUpdateThermalStatus(thermalStatus)
 
-        // Down-sample in time as well as in space when the device is hot.
-        if (mutableState.value.throttleMode == ThrottleMode.THROTTLED && frame.timestamp % 2L != 0L) {
-            capture.recycle(snapshot)
+        // Down-sample in time as well as in space when the device is hot. Counted, not read off
+        // the clock: the parity of `frame.timestamp` is the camera HAL's business and an even
+        // frame period makes it constant, which silently stopped the mesh from updating at all
+        // (finding 169).
+        if (mutableState.value.throttleMode == ThrottleMode.THROTTLED && !thermalGate.admits()) {
+            // Nobody else ever saw this frame, so this is the last reference.
+            snapshot.release()
             return
         }
 
         // Remember the stride the worker should use. Assigned before the send so the worker
         // can never observe a stride from a *newer* frame than the one it is integrating.
         pendingPixelStep = pixelStep
-        // Publish the new frame and retire the previous one. Retiring *after* the swap means
-        // any reader either sees the old snapshot (still valid) or the new one — never a
-        // buffer that has gone back to the pool.
+        // Publish the new frame and drop the previous publication. This releases *one*
+        // reference: if the worker is still integrating the old frame it holds the other, and
+        // its buffer stays out of the pool until it is done (finding 168).
         val previous = latestSnapshot
         latestSnapshot = snapshot
-        previous?.let(capture::recycle)
+        previous?.release()
 
-        // The channel is conflated, so `trySend` cannot fail on a full buffer — it replaces
-        // the pending frame. A replacement *is* a dropped frame, and the operator deserves to
-        // see it: a scan that integrates 15 of 30 frames/second looks the same on screen but
-        // has half the coverage.
-        if (workerBusy.get()) {
+        // Hand the worker its own reference; it releases when integration returns. A refused
+        // send means the worker still has a frame queued — that is the dropped frame the
+        // operator deserves to see, since a scan that integrates 15 of 30 frames/second looks
+        // the same on screen but has half the coverage.
+        snapshot.retain()
+        if (frames.trySend(snapshot).isFailure) {
             mutableState.value = mutableState.value.copy(framesDropped = mutableState.value.framesDropped + 1)
+            snapshot.release()
         }
-        frames.trySend(snapshot)
     }
 
     @Volatile
@@ -220,12 +297,18 @@ class TsdfScanPipeline(
     }
 
     private fun integrate(snapshot: DepthFrameSnapshot) {
-        val active = engine ?: return
-        workerBusy.set(true)
+        // Read once: `stop()` clears the field, and a frame still in the queue must then be
+        // released rather than integrated — a reference nobody drops keeps 600 kB out of the pool.
+        // The worker is also the owner of the engine's lifetime (see the launch above and
+        // `stop()`), so this call cannot outlive the volume (finding 182).
+        val active = engine
         try {
-            integrateLocked(active, snapshot)
+            if (active != null) integrateLocked(active, snapshot)
         } finally {
-            workerBusy.set(false)
+            // The worker's reference. If the frame is still the published one the UI is
+            // sampling, this only decrements; the array goes back to the pool when the render
+            // thread replaces it (or immediately, if it already has).
+            snapshot.release()
         }
     }
 
@@ -260,13 +343,7 @@ class TsdfScanPipeline(
             null
         }
         val integrationMillis = ((System.nanoTime() - startedNanos) / 1_000_000L).toInt()
-        mutableState.value = mutableState.value.copy(
-            integrating = false,
-            framesIntegrated = mutableState.value.framesIntegrated + 1,
-            lastIntegrationMillis = integrationMillis,
-            blockCount = result?.blocksTotal ?: mutableState.value.blockCount,
-            hitBlockBudget = result?.hitBlockBudget ?: false,
-        )
+        mutableState.value = mutableState.value.afterIntegration(result, integrationMillis)
 
         // ── Extraction, throttled to 300 ms (700 ms when throttled) ─────────────────────
         val now = System.nanoTime()
@@ -283,7 +360,6 @@ class TsdfScanPipeline(
                 mutableState.value = mutableState.value.copy(
                     lastExtractionMillis = extractMs,
                     triangleCount = extracted.triangleCount,
-                    vertexCount = extracted.vertexCount,
                     meshVersion = mutableState.value.meshVersion + 1,
                 )
             } else {
@@ -317,15 +393,13 @@ class TsdfScanPipeline(
     /** Clears the volume and pose graph (new room). */
     fun reset() {
         engine?.reset()
-        latestSnapshot?.let(capture::recycle)
+        latestSnapshot?.release()
         latestSnapshot = null
         mesh.value = null
         mutableState.value = mutableState.value.copy(
             framesIntegrated = 0,
             framesDropped = 0,
             triangleCount = 0,
-            vertexCount = 0,
-            blockCount = 0,
             meshVersion = 0,
         )
     }
@@ -333,25 +407,40 @@ class TsdfScanPipeline(
     /**
      * Stops the worker and releases the native volume.
      *
-     * The join is essential: closing the native engine while the worker is inside
-     * `integrateDepth` is a use-after-free. Closing the channel ends the loop after the current
-     * frame, and the join bounds the wait to half a second so a wedged device cannot hang the
-     * UI thread on teardown.
+     * Closing the channel ends the worker's loop after the frame it is on, and **the worker frees
+     * the engine** when that loop ends (`finally`, in the launch above): it is the only thread that
+     * can still be inside the native volume, so it is the only one that may delete the context.
+     *
+     * Until finding 182 this function did the opposite - it waited for the loop with a bounded
+     * `withTimeoutOrNull(500)`, and then called `engine?.close()` whether or not the wait had
+     * finished. Half a second is not a guarantee, it is a timeout: a mesh extraction on a large
+     * volume can take longer on a hot phone (the pipeline itself allows 700 ms between
+     * extractions when `THROTTLED`), so the context could be deleted while `gatherBlockGrid` was
+     * walking its shards - a native crash at teardown, on exactly the device class the thermal
+     * handling exists for. The wait remains, because the caller wants the screen torn down, but it
+     * no longer decides when the memory is freed.
      */
     fun stop() {
-        latestSnapshot?.let(capture::recycle)
+        latestSnapshot?.release()
         latestSnapshot = null
         frames.close()
         val job = workerJob
         workerJob = null
-        if (job != null) {
-            kotlinx.coroutines.runBlocking {
-                kotlinx.coroutines.withTimeoutOrNull(500) { job.join() }
-            }
-        }
-        engine?.close()
+        val active = engine
         engine = null
         scope = null
+        if (job == null) {
+            // No worker was ever started (the library was missing, or `start` failed before it
+            // launched): this thread is the only user of the volume, so it frees it itself.
+            active?.close()
+            return
+        }
+        // Bounded so a wedged device cannot hang teardown - and no longer a licence to free: if
+        // the worker never returns, the engine stays alive until it does, which is the safe
+        // direction (a leaked volume versus a use-after-free).
+        kotlinx.coroutines.runBlocking {
+            kotlinx.coroutines.withTimeoutOrNull(WORKER_JOIN_TIMEOUT_MS) { job.join() }
+        }
     }
 
     companion object {
@@ -362,5 +451,8 @@ class TsdfScanPipeline(
 
         /** Required by the specification: mesh refresh at ≈3.3 Hz, not per frame. */
         const val EXTRACT_INTERVAL_MS = 300L
+
+        /** How long `stop()` waits for the worker before returning; never how long it waits to free. */
+        private const val WORKER_JOIN_TIMEOUT_MS = 500L
     }
 }

@@ -36,11 +36,24 @@ enum class LengthUnit(val symbol: String, val metersPerUnit: Float, val defaultD
  */
 object LengthFormatter {
 
-    fun format(meters: Float, unit: LengthUnit = LengthUnit.METER, decimals: Int = unit.defaultDecimals): String {
+    fun format(meters: Float, unit: LengthUnit = LengthUnit.METER, decimals: Int = unit.defaultDecimals): String =
+        // "—", not "— m": the unit is not the unknown part, and the protocol prints this where a
+        // length was never measured, so a stray unit reads like a measurement of something.
+        if (!meters.isFinite()) "—" else number(meters, unit, decimals) + " " + unit.symbol
+
+    /**
+     * `number(14.8234f)` → `"14.82"` — the digits alone, `Locale.ROOT`, for a resource that
+     * carries the unit itself (`hud_length` is `%1$s m`, so the spacing stays translatable).
+     *
+     * This exists because the alternative was formatting the HUD through a `%1$.2f` resource,
+     * which takes its decimal mark from the device: a German phone wrote `12,50 m` for the run
+     * and `28.80 m` for the room total three lines below it, on one screen, about one room.
+     */
+    fun number(meters: Float, unit: LengthUnit = LengthUnit.METER, decimals: Int = unit.defaultDecimals): String {
         if (!meters.isFinite()) return "—"
         val value = meters / unit.metersPerUnit
         val pattern = "%." + decimals.coerceIn(0, 3) + "f"
-        return String.format(Locale.ROOT, pattern, value) + " " + unit.symbol
+        return String.format(Locale.ROOT, pattern, value)
     }
 
     /** `"Length: 14.82 m"` — the exact string used on the floating 3D HUD label. */
@@ -63,7 +76,7 @@ object LengthFormatter {
 
     /** Deliberate, documented waste factor formatting: `"+7 %"`. */
     fun formatWasteFactor(factor: Float): String =
-        "+" + String.format(Locale.ROOT, "%.0f %%", factor * 100f)
+        String.format(Locale.ROOT, "+%d %%", PercentText.of(factor))
 
     /** Timestamp used across exports; ISO-like and sortable, in the device time zone. */
     fun formatTimestamp(epochMillis: Long, timeZone: java.util.TimeZone = java.util.TimeZone.getDefault()): String {

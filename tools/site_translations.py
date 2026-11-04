@@ -10,7 +10,7 @@ easy to spot: every language must define exactly the same keys as the English so
 EXTRA: dict[str, dict[str, str]] = {
     "es": {
         "meta_title": "ConstructAR — medición AR offline para electricistas",
-        "meta_desc": "Escanea la estancia con el móvil, dibuja el trazado del cable o la tubería y obtén los metros, la lista de material y un protocolo PDF firmado. 100 % sin conexión, seis idiomas, PDF/CSV/GLB.",
+        "meta_desc": "Convierte el móvil en metro AR: escanea la estancia, marca el trazado y obtén metros, material y un PDF firmado. 100 % sin conexión.",
         "nav_features": "Funciones", "nav_how": "Cómo funciona", "nav_price": "Precios",
         "nav_faq": "Preguntas", "nav_repo": "GitHub",
         "hero_h1": "Mide la pared con el móvil.",
@@ -72,7 +72,7 @@ EXTRA: dict[str, dict[str, str]] = {
     },
     "fr": {
         "meta_title": "ConstructAR — métré AR hors ligne pour électriciens et plombiers",
-        "meta_desc": "Scannez la pièce avec le téléphone, tracez le chemin du câble ou du tuyau et obtenez les mètres, la liste de matériel et un procès-verbal PDF signé. 100 % hors ligne, six langues, PDF/CSV/GLB.",
+        "meta_desc": "Transformez le téléphone en mètre AR : scannez la pièce, tracez le câble, obtenez les mètres, le matériel et un PDF signé. 100 % hors ligne.",
         "nav_features": "Fonctions", "nav_how": "Fonctionnement", "nav_price": "Tarifs",
         "nav_faq": "FAQ", "nav_repo": "GitHub",
         "hero_h1": "Mesurez le mur avec le téléphone.",
@@ -134,7 +134,7 @@ EXTRA: dict[str, dict[str, str]] = {
     },
     "it": {
         "meta_title": "ConstructAR — misura AR offline per elettricisti e idraulici",
-        "meta_desc": "Scansiona la stanza con il telefono, traccia il percorso di cavi o tubi e ottieni i metri, la distinta materiali e un verbale PDF firmato. 100 % offline, sei lingue, PDF/CSV/GLB.",
+        "meta_desc": "Trasforma il telefono in un metro AR: scansiona la stanza, traccia il cavo e ottieni metri, materiale e un PDF firmato. 100 % offline.",
         "nav_features": "Funzioni", "nav_how": "Come funziona", "nav_price": "Prezzi",
         "nav_faq": "FAQ", "nav_repo": "GitHub",
         "hero_h1": "Misura la parete con il telefono.",
@@ -196,7 +196,7 @@ EXTRA: dict[str, dict[str, str]] = {
     },
     "pl": {
         "meta_title": "ConstructAR — pomiary AR offline dla elektryków i hydraulików",
-        "meta_desc": "Zeskanuj pomieszczenie telefonem, narysuj trasę kabla lub rury i otrzymaj metry, listę materiałów oraz podpisany protokół PDF. 100 % offline, sześć języków, PDF/CSV/GLB.",
+        "meta_desc": "Zamień telefon w miarkę AR: zeskanuj pomieszczenie, narysuj trasę kabla, otrzymaj metry, materiały i podpisany PDF. 100 % offline.",
         "nav_features": "Funkcje", "nav_how": "Jak to działa", "nav_price": "Cennik",
         "nav_faq": "Pytania", "nav_repo": "GitHub",
         "hero_h1": "Zmierz ścianę telefonem.",

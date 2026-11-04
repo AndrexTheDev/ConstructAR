@@ -69,7 +69,8 @@ Consequences that are enforced in code:
 
 * the integration channel holds **one** snapshot and drops the oldest — a slow device lowers
   scan *coverage*, never frame rate;
-* `ScanState.framesDropped` is surfaced, so "sparse scan" can be diagnosed rather than guessed;
+* `ScanState.framesDropped` is surfaced — `ScanHint.BEHIND` above one offered frame in six, with
+  the share in the sentence (finding 170) — so "sparse scan" can be diagnosed rather than guessed;
 * nothing in the frame callback allocates after warm-up (pooled depth, cached plane list,
   reused `HitRequest` fields).
 
@@ -81,9 +82,9 @@ Consequences that are enforced in code:
 |------|---------|--------|
 | `TsdfConfig.voxelSizeMeters` | 0.02 | 2 cm resolves a 16 mm cable; 3 cm is ~2× faster but merges thin geometry |
 | `TsdfConfig.truncationVoxels` | 4 | 8 cm tolerates ARCore's ±3 cm depth noise; lower values sharpen detail and add holes |
-| `TsdfConfig.maxBlocks` | 160 000 | ≈ 2 048 m³ of mapped volume at 2 cm; the budget hit is reported in the HUD |
-| integration `pixelStep` | 3 (2 at 3 cm voxels) | Linear cost; 3 keeps 640×480 at ~21 k rays |
-| `carveFreeSpace` / `freeSpaceStrideVoxels` | false / 4 | Ghost removal at ~3× integration cost |
+| `TsdfConfig.maxBlocks` | 160 000 | ≈ 655 m³ of mapped volume at 2 cm (160 000 blocks × 8³ voxels × 0.02³ m³ = 655.36 m³); the budget hit is reported in the HUD |
+| integration `pixelStep` | 3 (2 at 3 cm voxels) | Linear cost; 3 keeps 640×480 at ~34 k rays (214 × 160 samples) |
+| `TsdfConfig.carveFreeSpace` | false | Ghost removal (one-shot clean-up pass): 7.3 ms → 55.9 ms per 320×240 frame at `pixelStep = 2`, single worker, i.e. ~7.7× — sampled per voxel, because a coarser stride shreds a ghost into stripes instead of removing it (finding 111). Never allocates a block |
 | `EXTRACT_INTERVAL_MS` | 300 | Required by the brief; below 150 ms it dominates the worker |
 | Thermal mode | auto | SEVERE → 700 ms extraction, stride 5, every other frame |
 | `ConduitSpec` vertex density (`TubeMeshOptions`) | 2 cm arc sampling | A 10 m run is ~4 k triangles; halving the sampling halves it |
@@ -138,20 +139,26 @@ dropping depth, rendering or the room scan.
   on `Dispatchers.IO`; the UI reads a `StateFlow`.
 * **Nothing on a timer that is not needed.** The site file's clock only ticks (every 30 s) while
   a session is running; there is no background service, no job scheduler and no alarm.
-* **Field photos are bounded twice.** A diary or defect photo is decoded at 640 px for the site
-  file and only the first 12 are held in memory (`MAX_FIELD_PHOTOS`), so a punch list with forty
-  entries cannot grow the heap with the size of the folder. The export re-reads the same file at
-  1 200 px for the appendix, one page at a time — the bitmaps are never all resident at once.
-* **The reticle stabiliser is free.** Five `Vec3` samples and three median sorts per settled
-  frame: ~1 µs on the main thread, no allocation after the first window, and it removes the per
-  tap end-point scatter that would otherwise show up as measurement error.
+* **Field photos are bounded once, and the bound is the one in the code.** A diary or defect
+  photo is decoded at 640 px and only the first 12 are held in memory
+  (`FieldPhotos.SCREEN_BUDGET`), so a punch list with forty entries cannot grow the heap with the
+  size of the folder: 12 × 640 × 480 × 4 B ≈ 15 MB while a room is open. The printed appendix
+  takes the first eight of the same order from that same map — no second decode, no second copy
+  (finding 175). This paragraph used to promise a 1 200 px re-read for the appendix "one page at
+  a time"; no code did that, and doing it would cost ~35 MB of peak bitmaps for a cell that is
+  255 pt wide, where the 640 px thumbnail already prints at ~200 ppi.
+* **The reticle stabiliser is free.** Five `Vec3` samples and three median sorts per sampled
+  frame - about 1 µs, on the render thread where the sample is taken, at the reticle's 12 Hz -
+  with no allocation after the first window; it removes the per-tap end-point scatter that
+  would otherwise show up as measurement error.
 
 ---
 
 ## 5. What to re-measure on hardware
 
 1. Integration time per frame on the target SoC with `depthMode = RAW_DEPTH_ONLY`
-   (`ScanState.lastIntegrationMillis` is already in the HUD state).
+   (`ScanState.lastIntegrationMillis` carries it; the overlay does not print it yet — finding 171
+   removed the fields in that state that no screen read, not the instrumentation).
 2. Whether `pixelStep = 3` keeps integration under ~12 ms; if not, raise the step before
    touching the voxel size — resolution is what makes the tool useful.
 3. Filament upload cost at 30 k / 100 k / 300 k triangles (`SceneMeshRenderer.upload`).

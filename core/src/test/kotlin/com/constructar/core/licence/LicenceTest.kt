@@ -164,9 +164,11 @@ class LicenceTest {
     fun `free keeps one room and never blocks a measurement`() {
         val free = Entitlements.FREE
         assertFalse(free.isPro)
+        // The number only: whether another room may be created depends on what is on the phone
+        // (a file that cannot be read still takes a slot), so the decision lives in the app's
+        // `ProjectSlots` (finding 166).
         assertEquals(1, free.maxProjects)
-        assertTrue(free.allowsAnotherProject(0))
-        assertFalse(free.allowsAnotherProject(1))
+        assertEquals(Int.MAX_VALUE, Entitlements(plan = Plan.LIFETIME).maxProjects)
         assertTrue("the protocol PDF must always be produced", free.canExportPdf)
         assertTrue("the free PDF is watermarked", free.pdfWatermark)
         assertFalse("BIM export is the paid product", free.canExportMesh)

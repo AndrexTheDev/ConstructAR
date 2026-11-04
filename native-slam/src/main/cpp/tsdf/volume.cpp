@@ -56,16 +56,42 @@ int TsdfVolume::shardFor(int64_t key) {
   return static_cast<int>((mixed >> 58) & (kShardCount - 1));
 }
 
-TsdfVolume::Block* TsdfVolume::findOrCreateBlock(int32_t bx, int32_t by, int32_t bz) {
-  const int64_t key = blockKey(bx, by, bz);
-  Shard& shard = *shards_[shardFor(key)];
-  std::lock_guard<std::mutex> lock(shard.mutex);
+TsdfVolume::Touch TsdfVolume::findOrCreateBlockLocked(int32_t bx, int32_t by, int32_t bz, Shard& shard,
+                                                      int64_t key) {
   auto it = shard.index.find(key);
-  if (it != shard.index.end()) return &shard.blocks[it->second];
-  if (blockCount_.load(std::memory_order_relaxed) >= config_.maxBlocks) {
-    blockBudgetReported_ = true;
-    return nullptr;
+  if (it != shard.index.end()) {
+    Block* existing = &shard.blocks[it->second];
+    // The touch belongs under this lock, next to the header it writes. It used to be the caller's
+    // `if (block->lastFrame != frameCounter_) { …; ++allocated; }` - an unsynchronised read and
+    // write of a field another thread may own at the same moment (finding 160).
+    if (existing->lastFrame == frameCounter_) return Touch{existing, false};
+    existing->lastFrame = frameCounter_;
+    return Touch{existing, true};
   }
+  // The slot is claimed **before** the memory exists, and the claim is atomic.
+  //
+  // This used to be a relaxed load, a comparison and a `fetch_add` after the block was built.
+  // `integrate` splits a frame across worker threads and the shards have independent mutexes, so
+  // two threads could both read "3 of 4" and both allocate: five blocks against a budget of four,
+  // intermittently, depending on the core count of the machine. That budget is the guard that
+  // keeps a long scan from filling the phone's memory, and it is also what the native test asserted
+  // - which is why the suite failed on a CI runner with more cores than the machine it was written
+  // on (finding 159).
+  size_t claimed = blockCount_.load(std::memory_order_relaxed);
+  for (;;) {
+    if (claimed >= config_.maxBlocks) {
+      blockBudgetReported_.store(true, std::memory_order_relaxed);
+      return Touch{nullptr, false};
+    }
+    if (blockCount_.compare_exchange_weak(claimed, claimed + 1, std::memory_order_relaxed,
+                                          std::memory_order_relaxed)) {
+      break;
+    }
+  }
+
+  // The memory, after the claim. There is nothing to unwind to if this fails: the app's native
+  // build compiles with `-fno-exceptions`, so a refused allocation ends the process rather than
+  // leaving a slot to give back.
   shard.blocks.emplace_back();
   Block& block = shard.blocks.back();
   std::memset(block.sdf, 0, sizeof(block.sdf));
@@ -75,8 +101,22 @@ TsdfVolume::Block* TsdfVolume::findOrCreateBlock(int32_t bx, int32_t by, int32_t
   block.bz = bz;
   block.lastFrame = frameCounter_;
   shard.index.emplace(key, static_cast<uint32_t>(shard.blocks.size() - 1));
-  blockCount_.fetch_add(1, std::memory_order_relaxed);
-  return &block;
+  // A block that did not exist a moment ago is this frame's allocation, and it used to be counted
+  // as *nothing*: `lastFrame` was pre-set here, so the caller's "is this block new to me?" test
+  // always said no. One frame into an empty volume reported 572 blocks in the volume and 0
+  // allocated (finding 160).
+  return Touch{&block, true};
+}
+
+size_t TsdfVolume::totalVoxelWeight() const {
+  size_t total = 0;
+  for (const auto& shard : shards_) {
+    std::lock_guard<std::mutex> lock(shard->mutex);
+    for (const auto& block : shard->blocks) {
+      for (int i = 0; i < kVoxelsPerBlock; ++i) total += block.weight[i];
+    }
+  }
+  return total;
 }
 
 const TsdfVolume::Block* TsdfVolume::findBlock(int32_t bx, int32_t by, int32_t bz) const {
@@ -88,13 +128,49 @@ const TsdfVolume::Block* TsdfVolume::findBlock(int32_t bx, int32_t by, int32_t b
   return &shard.blocks[it->second];
 }
 
+TsdfVolume::Fusion TsdfVolume::fuseVoxel(int32_t ix, int32_t iy, int32_t iz, float normalizedSdf,
+                                         bool existingOnly) {
+  const int32_t bx = floorDiv(ix, kResolution);
+  const int32_t by = floorDiv(iy, kResolution);
+  const int32_t bz = floorDiv(iz, kResolution);
+  const int64_t key = blockKey(bx, by, bz);
+  Shard& shard = *shards_[shardFor(key)];
+
+  Fusion result;
+  // One lock for the lookup, the allocation and the fusion. The observation is a read-modify-write
+  // of `sdf` and `weight`; doing it after the lock was released is the race this exists to close
+  // (finding 181).
+  std::lock_guard<std::mutex> lock(shard.mutex);
+  Block* block = nullptr;
+  if (existingOnly) {
+    auto it = shard.index.find(key);
+    if (it == shard.index.end()) return result;
+    block = &shard.blocks[it->second];
+  } else {
+    const Touch touch = findOrCreateBlockLocked(bx, by, bz, shard, key);
+    block = touch.block;
+    result.allocated = touch.firstInFrame;
+    if (block == nullptr) return result;
+  }
+
+  const int idx = ((iz - bz * kResolution) * kResolution + (iy - by * kResolution)) * kResolution +
+                  (ix - bx * kResolution);
+  const float oldWeight = static_cast<float>(block->weight[idx]);
+  // A ghost only lives where something was observed once.
+  if (existingOnly && oldWeight <= 0.f) return result;
+  const float newWeight = std::min(oldWeight + 1.f, config_.maxWeight);
+  block->sdf[idx] = oldWeight > 0.f ? (block->sdf[idx] * oldWeight + normalizedSdf) / newWeight : normalizedSdf;
+  block->weight[idx] = static_cast<uint16_t>(std::min(newWeight, 65535.f));
+  result.written = true;
+  return result;
+}
+
 void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int rowBegin, int rowEnd,
                                IntegrationStats& stats) {
   const float vs = config_.voxelSize;
   const float trunc = truncationMeters();
   const float minDepth = config_.minDepth;
   const float maxDepth = config_.maxDepth;
-  const float maxWeight = config_.maxWeight;
   const float invFx = 1.f / frame.intrinsics.fx;
   const float invFy = 1.f / frame.intrinsics.fy;
   const Mat4& cameraToWorld = frame.cameraToWorld;
@@ -136,33 +212,25 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
       const float zStart = std::max(minDepth, d - trunc);
       const float zEnd = d + trunc;
 
-      // Coarse free-space pass: everything between the camera and the truncation band is
-      // known to be empty. Two voxels of stride keeps this cheaper than the surface band.
+      // Free-space pass: everything between the camera and the truncation band is known to be
+      // empty. Sampled one voxel at a time - a coarser stride writes a *lattice* of free voxels
+      // and leaves the voxels between two samples with their old (inside) value, which turns a
+      // ghost into a comb of extra iso-surfaces instead of removing it (finding 111: with a
+      // four-voxel stride a 1 m plane seen once and then cleared produced 9 218 vertices within
+      // 5 cm of it, three times the 2 961 of not carving at all).
       if (config_.carveFreeSpace) {
-        const float stride = vs * static_cast<float>(std::max(1, config_.freeSpaceStrideVoxels));
-        for (float zFree = minDepth; zFree < zStart; zFree += stride) {
+        for (float zFree = minDepth; zFree < zStart; zFree += vs) {
           const Vec3 cam(px * zFree, py * zFree, -zFree);
           const Vec3 world = cameraToWorld.transformPoint(cam);
           const int32_t ix = static_cast<int32_t>(std::floor(world.x / vs));
           const int32_t iy = static_cast<int32_t>(std::floor(world.y / vs));
           const int32_t iz = static_cast<int32_t>(std::floor(world.z / vs));
-          const int32_t bx = floorDiv(ix, kResolution);
-          const int32_t by = floorDiv(iy, kResolution);
-          const int32_t bz = floorDiv(iz, kResolution);
-          Block* block = findOrCreateBlock(bx, by, bz);
-          if (!block) continue;
-          if (block->lastFrame != frameCounter_) {
-            block->lastFrame = frameCounter_;
-            ++allocated;
-          }
-          const int idx = ((iz - bz * kResolution) * kResolution + (iy - by * kResolution)) * kResolution +
-                          (ix - bx * kResolution);
-          const float oldWeight = static_cast<float>(block->weight[idx]);
-          const float newWeight = std::min(oldWeight + 1.f, maxWeight);
+          // Only *existing* blocks can hold a ghost, and only a voxel that was ever observed
+          // (weight > 0) can be a surface. Allocating a block here instead - the earlier
+          // behaviour - spent 40 % of the voxels in the volume on empty air: 444 blocks for a
+          // single wall became 1 196 and every later gather walked them (finding 111).
           // Free space is fully outside: sdf = +1 in normalised units.
-          block->sdf[idx] = oldWeight > 0.f ? (block->sdf[idx] * oldWeight + 1.f) / newWeight : 1.f;
-          block->weight[idx] = static_cast<uint16_t>(std::min(newWeight, 65535.f));
-          ++updates;
+          if (fuseVoxel(ix, iy, iz, 1.f, /*existingOnly=*/true).written) ++updates;
         }
       }
       const int steps = std::max(2, static_cast<int>(std::ceil((zEnd - zStart) / vs)));
@@ -178,30 +246,22 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
         const int32_t iy = static_cast<int32_t>(std::floor(world.y / vs));
         const int32_t iz = static_cast<int32_t>(std::floor(world.z / vs));
 
-        const int32_t bx = floorDiv(ix, kResolution);
-        const int32_t by = floorDiv(iy, kResolution);
-        const int32_t bz = floorDiv(iz, kResolution);
-        Block* block = findOrCreateBlock(bx, by, bz);
-        if (!block) continue;
-        if (block->lastFrame != frameCounter_) {
-          block->lastFrame = frameCounter_;
-          ++allocated;
-        }
-
-        const int lx = ix - bx * kResolution;
-        const int ly = iy - by * kResolution;
-        const int lz = iz - bz * kResolution;
-        const int idx = (lz * kResolution + ly) * kResolution + lx;
-
         // Signed distance along the optical axis; positive in front of the surface.
-        const float sdf = frame.depthIsOpticalAxis ? (d - z) : (d - cam.length());
+        //
+        // `DepthFrameView` used to carry a `depthIsOpticalAxis` flag with a second branch here
+        // (`d - cam.length()`) for sources that hand out Euclidean range. Nothing ever set it -
+        // not the JNI, not the Kotlin pipeline - and it could not have worked if something had:
+        // the ray point above is built at *optical-axis* depth, so at the frame corner a 2 m
+        // range reading was compared against a 2.24 m point. Measured on a synthetic 30°-tilted
+        // plane, forcing it put the surface up to 8.8 cm off the true plane and threw away 87 %
+        // of it (finding 108). One convention, documented and tested: ARCore depth is z-depth.
+        const float sdf = d - z;
         const float clamped = clampf(sdf / trunc, -1.f, 1.f);
 
-        const float oldWeight = static_cast<float>(block->weight[idx]);
-        const float newWeight = std::min(oldWeight + 1.f, maxWeight);
-        block->sdf[idx] = oldWeight > 0.f ? (block->sdf[idx] * oldWeight + clamped) / newWeight : clamped;
-        block->weight[idx] = static_cast<uint16_t>(std::min(newWeight, 65535.f));
-        ++updates;
+        // Lookup, allocation and fusion in one locked step (finding 181).
+        const Fusion fused = fuseVoxel(ix, iy, iz, clamped);
+        if (fused.allocated) ++allocated;
+        if (fused.written) ++updates;
       }
     }
   }
@@ -247,7 +307,7 @@ IntegrationStats TsdfVolume::integrate(const DepthFrameView& frame, int pixelSte
   }
 
   stats.blocksTotal = static_cast<int>(blockCount());
-  stats.hitBlockBudget = blockBudgetReported_;
+  stats.hitBlockBudget = blockBudgetReported_.load(std::memory_order_relaxed);
   const auto finished = std::chrono::steady_clock::now();
   stats.milliseconds =
       std::chrono::duration_cast<std::chrono::microseconds>(finished - started).count() / 1000.0;
@@ -316,7 +376,7 @@ void TsdfVolume::reset() {
   }
   blockCount_.store(0, std::memory_order_relaxed);
   frameCounter_ = 0;
-  blockBudgetReported_ = false;
+  blockBudgetReported_.store(false, std::memory_order_relaxed);
 }
 
 }  // namespace constructar

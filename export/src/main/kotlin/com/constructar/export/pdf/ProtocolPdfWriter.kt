@@ -13,10 +13,13 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import com.constructar.core.bom.MaterialLine
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.model.ConduitRoute
+import com.constructar.core.model.HitConfidence
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.units.LengthFormatter
+import com.constructar.core.units.PercentText
 import java.io.OutputStream
 import java.util.Locale
 
@@ -97,6 +100,20 @@ class ProtocolPdfWriter(
         /** All visible text, localised by the caller. See [PdfLabels]. */
         val labels: PdfLabels = PdfLabels(),
         /**
+         * The calibration the metres on this page were corrected by, already localised.
+         *
+         * Blank when no reference calibration was applied. Printed as its own line under the
+         * header rather than appended to the meta line: a document that reports 5.25 m for a run
+         * the phone measured as 5.00 m has to say why, and an ellipsised meta line would drop the
+         * reason first. `:export` never composes the sentence - the app owns the string table.
+         */
+        val calibrationLabel: String = "",
+        /**
+         * Labels of runs that are in the paperwork but not in the 3D model because no geometry
+         * could be built for them; the export side knows them, the project record does not.
+         */
+        val unbuildableRuns: List<String> = emptyList(),
+        /**
          * The site file, already localised and formatted by the caller: customer block, working
          * time, diary, defects. Printed after the material table, before the signature page.
          */
@@ -105,6 +122,14 @@ class ProtocolPdfWriter(
         val photos: List<PdfPhoto> = emptyList(),
         /** Heading of the photo appendix, localised by the caller. */
         val photosTitle: String = "",
+        /**
+         * How many photos the job actually has - [photos] is only what fits on the page.
+         *
+         * Without it the appendix is a silent cut: eight pictures under a heading that says
+         * "photo documentation" while twelve more sit in the field book (finding 91). Zero means
+         * the caller did not say, and then nothing is claimed.
+         */
+        val photosTotal: Int = 0,
         /**
          * The product badge, printed top-right on the first page.
          *
@@ -146,6 +171,28 @@ class ProtocolPdfWriter(
 
             // ── Header ──────────────────────────────────────────────────────────────────
             var y = MARGIN
+
+            // ── Notes that cannot run off the page ──────────────────────────────────────
+            // Operator text ends up in these sentences (`namedRunsNote` joins the run labels),
+            // so their height is not ours to bound: draw, and turn the page when the next line
+            // would reach the footer. The old `drawNote` returned where to continue and two
+            // call sites ignored it, so the procurement note and the exclusion note under it
+            // printed on the same baseline (finding 174).
+            val notePaint = Paint(textPaint).apply { textSize = 8.5f; color = Color.DKGRAY }
+            val noteFlow = PageFlow(top = MARGIN, lineHeight = 11, bottom = pageHeight - FOOTER_HEIGHT - 12)
+            fun note(text: String) {
+                for (line in wrap(text, pageWidth - 2 * MARGIN, notePaint)) {
+                    if (!noteFlow.fits(y)) {
+                        drawFooter(page.canvas, pageNumber, content)
+                        document.finishPage(page)
+                        pageNumber++
+                        page = newPage(document, pageNumber)
+                        y = noteFlow.top
+                    }
+                    page.canvas.drawText(line, MARGIN.toFloat(), y.toFloat(), notePaint)
+                    y += noteFlow.lineHeight
+                }
+            }
             page.canvas.drawText(content.labels.title, MARGIN.toFloat(), y.toFloat(), titlePaint)
             content.logo?.let { logo ->
                 val target = 46
@@ -161,14 +208,33 @@ class ProtocolPdfWriter(
                 append(content.project.name)
                 if (content.project.siteName.isNotBlank()) append(" · ").append(content.project.siteName)
             }
-            page.canvas.drawText(subtitle, MARGIN.toFloat(), y.toFloat(), subtitlePaint)
+            page.canvas.drawText(
+                ellipsize(subtitle, pageWidth - 2 * MARGIN, subtitlePaint),
+                MARGIN.toFloat(),
+                y.toFloat(),
+                subtitlePaint,
+            )
             y += 16
             val metaLine = listOfNotNull(
                 content.generatedAtLabel.ifBlank { null },
                 content.operatorName.ifBlank { content.project.technician.ifBlank { null } },
                 content.labels.subtitle,
             ).joinToString("  ·  ")
-            page.canvas.drawText(metaLine, MARGIN.toFloat(), y.toFloat(), textPaint)
+            page.canvas.drawText(
+                ellipsize(metaLine, pageWidth - 2 * MARGIN, textPaint),
+                MARGIN.toFloat(),
+                y.toFloat(),
+                textPaint,
+            )
+            if (content.calibrationLabel.isNotBlank()) {
+                y += 12
+                page.canvas.drawText(
+                    ellipsize(content.calibrationLabel, pageWidth - 2 * MARGIN, notePaint),
+                    MARGIN.toFloat(),
+                    y.toFloat(),
+                    notePaint,
+                )
+            }
             y += 10
             page.canvas.drawLine(MARGIN.toFloat(), y.toFloat(), (pageWidth - MARGIN).toFloat(), y.toFloat(), rulePaint)
             y += 16
@@ -192,19 +258,22 @@ class ProtocolPdfWriter(
             // ── Summary ─────────────────────────────────────────────────────────────────
             y = drawSectionTitle(page.canvas, content.labels.sectionSummary, y)
             val scan = content.project.scan
-            val summary = ArrayList<Pair<String, String>>()
-            summary += content.labels.labelRuns to content.project.routes.size.toString()
-            summary += content.labels.labelTotalLength to LengthFormatter.format(content.project.totalLengthMeters)
-            summary += content.labels.labelWithWaste to LengthFormatter.format(content.materialList.totalWithWasteMeters)
-            summary += content.labels.labelClips to content.materialList.totalClips.toString()
-            summary += content.labels.labelCouplings to content.materialList.totalCouplings.toString()
-            if (scan != null && scan.meshTriangleCount > 0) {
-                summary += content.labels.labelScannedTriangles to "%,d".format(Locale.ROOT, scan.meshTriangleCount)
-                if (scan.ceilingHeightMeters > 0f) {
-                    summary += content.labels.labelCeilingHeight to LengthFormatter.format(scan.ceilingHeightMeters)
-                }
-            }
+            val summary = summaryRows(content.project, content.materialList, content.labels)
             y = drawKeyValueGrid(page.canvas, summary, y)
+
+            // A capture that hit the volume limit is a valid measurement of the runs it holds,
+            // but it is not the whole room (finding 100).
+            scanLimitedNote(scan?.scanLimited == true, content.labels.scanLimitedNote)?.let { text ->
+                y += 4
+                note(text)
+            }
+
+            // How exact the numbers on this page are, and what the confidence column means.
+            // The shop page promised this line in six languages while the protocol carried only
+            // an unexplained percentage (finding 88).
+            y += 6
+            note(accuracyNote(content.labels.accuracyNote))
+            y += 10
 
             // ── Runs table ──────────────────────────────────────────────────────────────
             if (content.project.routes.isNotEmpty()) {
@@ -227,7 +296,22 @@ class ProtocolPdfWriter(
                         y = MARGIN
                         y = drawTableHeader(page.canvas, header, columns, y)
                     }
-                    y = drawTableRow(page.canvas, routeRow(route), columns, y)
+                    y = drawTableRow(page.canvas, routeRow(route, content.labels), columns, y)
+                }
+                // A run that survived an interruption counts in every length, every fitting and
+                // the price - its coordinates belong to an ARCore session that no longer exists,
+                // so it is not in the GLB. The screen says so with a badge and the 3D export
+                // leaves it out; the protocol said nothing, so the office importing the model
+                // later found a run missing from it with no explanation anywhere in the file.
+                recoveredRunsNote(content.project.routes, content.labels.recoveredNote)?.let { text ->
+                    y += 6
+                    note(text)
+                }
+                // The other reason a run is missing from the model: its geometry could not be
+                // built at all (finding 80).
+                unbuildableRunsNote(content.unbuildableRuns, content.labels.unbuildableNote)?.let { text ->
+                    y += 6
+                    note(text)
                 }
             }
 
@@ -270,7 +354,7 @@ class ProtocolPdfWriter(
                             line.spec.material.ifBlank { line.spec.sizeLabel },
                             line.spec.sizeLabel,
                             format(line.totalMeters),
-                            "${(line.wasteFactor * 100).toInt()} %",
+                            PercentText.format(content.labels.percentValue, line.wasteFactor),
                             format(line.withWasteMeters),
                         ),
                         columns,
@@ -278,7 +362,21 @@ class ProtocolPdfWriter(
                     )
                 }
                 y += 6
-                drawNote(page.canvas, content.labels.procurementNote, y)
+                // The bend deduction is what a fitter cuts to, and it was on the screen only
+                // (finding 141): a printed page whose order length is not the length of the piece
+                // that goes in, with nothing saying why.
+                for (text in bendDeductionNotes(content.materialList.lines, content.labels.procurementDeduction)) {
+                    note(text)
+                }
+                note(content.labels.procurementNote)
+                // The table can be short by whole runs on purpose: the list was built with the
+                // uncertain ones excluded (finding 161). Every other warning counts what survived,
+                // so without this line the page says nothing about the metres it left out.
+                exclusionNote(
+                    content.materialList.excludedLowConfidenceRuns,
+                    content.materialList.excludedLowConfidenceMeters,
+                    content.labels.procurementExcluded,
+                )?.let { text -> note(text) }
                 y += 22
             }
 
@@ -326,8 +424,8 @@ class ProtocolPdfWriter(
                     }
                 }
                 if (section.note.isNotBlank()) {
-                    drawNote(page.canvas, section.note, y)
-                    y += 20
+                    note(section.note)
+                    y += 8
                 }
                 y += 6
             }
@@ -342,6 +440,10 @@ class ProtocolPdfWriter(
                 pageNumber++
                 page = newPage(document, pageNumber)
                 var py = drawSectionTitle(page.canvas, content.photosTitle, MARGIN)
+                // Said once, at the top of the appendix: this page holds part of the job's
+                // photos, and the rest are in the app rather than lost (finding 91).
+                photoAppendixNote(content.photos.size, content.photosTotal, content.labels.photosNote)
+                    ?.let { text -> py = drawNote(page.canvas, text, py) + 6 }
                 val cellWidth = (pageWidth - 2 * MARGIN - 12) / 2
                 val cellHeight = 150
                 var column = 0
@@ -443,7 +545,12 @@ class ProtocolPdfWriter(
         for ((index, entry) in entries.withIndex()) {
             val x = MARGIN + column * columnWidth
             canvas.drawText(entry.first, x.toFloat(), y.toFloat(), subtitlePaint)
-            canvas.drawText(entry.second, (x + 110).toFloat(), y.toFloat(), textPaint)
+            canvas.drawText(
+                ellipsize(entry.second, pageWidth - MARGIN - (x + 110), textPaint),
+                (x + 110).toFloat(),
+                y.toFloat(),
+                textPaint,
+            )
             if (column == 1 || index == entries.lastIndex) y += 15
             column = (column + 1) % 2
         }
@@ -470,13 +577,22 @@ class ProtocolPdfWriter(
         return y + 13
     }
 
-    private fun drawNote(canvas: Canvas, text: String, y: Int) {
+    /**
+     * A grey note that stays on the page it starts on, returning where the caller can continue.
+     *
+     * Only the photo appendix uses this now, for the sentence that says how many pictures are in
+     * the app rather than on the page: it is a fixed template with two numbers in it, it is drawn
+     * on a page whose layout that appendix owns, and it cannot borrow the flowing `note()` in
+     * `write()` which works on the main text column (finding 174).
+     */
+    private fun drawNote(canvas: Canvas, text: String, y: Int): Int {
         val paint = Paint(textPaint).apply { textSize = 8.5f; color = Color.DKGRAY }
         var lineY = y
         for (line in wrap(text, pageWidth - 2 * MARGIN, paint)) {
             canvas.drawText(line, MARGIN.toFloat(), lineY.toFloat(), paint)
             lineY += 11
         }
+        return lineY
     }
 
     /**
@@ -514,41 +630,50 @@ class ProtocolPdfWriter(
         canvas.drawText(pageLabel, pageWidth - MARGIN - footer.measureText(pageLabel), (y + 14).toFloat(), footer)
     }
 
-    private fun routeRow(route: ConduitRoute): List<String> {
+    /**
+     * One row of the runs table.
+     *
+     * The confidence is rounded by `PercentText` - the same rule the phone's weak-point warning
+     * uses - instead of being truncated on the way into the document that gets signed
+     * (finding 147).
+     */
+    private fun routeRow(route: ConduitRoute, labels: PdfLabels): List<String> {
         val metrics = com.constructar.core.geo.PolylineMetrics.measure(route)
-        val confidence = (metrics.minimumConfidence * 100).toInt()
         return listOf(
             route.label,
             route.spec.sizeLabel,
             format(route.polylineLengthMeters),
             metrics.bendCount.toString(),
-            "$confidence %",
+            PercentText.format(labels.percentValue, metrics.minimumConfidence),
         )
     }
 
-    private fun ellipsize(value: String, maxWidth: Int): String {
-        if (textPaint.measureText(value) <= maxWidth) return value
-        var end = value.length
-        while (end > 1 && textPaint.measureText(value.substring(0, end) + "…") > maxWidth) end--
-        return value.substring(0, end) + "…"
+    /**
+     * [value] on one line, no wider than [maxWidth], measured with the paint that will draw it.
+     *
+     * The header used to call `drawText` directly, so a long room name ran past the margin and a
+     * name pasted with a line break printed a row of missing-glyph boxes - on the first page of
+     * the document the customer keeps. Table cells were already clamped; the text around them
+     * was not. See [PdfText].
+     */
+    private fun ellipsize(
+        value: String,
+        maxWidth: Int,
+        paint: Paint = textPaint,
+    ): String = PdfText.ellipsize(PdfText.singleLine(value), maxWidth.toFloat()) { text ->
+        paint.measureText(text)
     }
 
-    private fun wrap(text: String, maxWidth: Int, paint: Paint): List<String> {
-        val words = text.split(' ')
-        val lines = ArrayList<String>()
-        var current = StringBuilder()
-        for (word in words) {
-            val candidate = if (current.isEmpty()) word else "$current $word"
-            if (paint.measureText(candidate) <= maxWidth) {
-                current = StringBuilder(candidate)
-            } else {
-                if (current.isNotEmpty()) lines += current.toString()
-                current = StringBuilder(word)
-            }
-        }
-        if (current.isNotEmpty()) lines += current.toString()
-        return lines
-    }
+    /**
+     * Paragraph text as drawable lines.
+     *
+     * Delegated to [PdfText] because a diary entry is typed into a *multi-line* field: the old
+     * version split on spaces only, so the `\n` stayed inside a word and printed as a missing
+     * glyph in the middle of a site note. [PdfText.wrap] keeps the author's line breaks and
+     * ellipsises a single word that is wider than the column.
+     */
+    private fun wrap(text: String, maxWidth: Int, paint: Paint): List<String> =
+        PdfText.wrap(text, maxWidth.toFloat()) { value -> paint.measureText(value) }
 
     private fun format(meters: Float): String = String.format(Locale.ROOT, "%.2f", meters)
 
@@ -559,4 +684,123 @@ class ProtocolPdfWriter(
         private const val MARGIN = 36
         private const val FOOTER_HEIGHT = 32
     }
+}
+
+/**
+ * The line the runs table gets when part of the room could not be placed, or `null` when it could.
+ *
+ * Kept out of the drawing code so the wording can be tested without a `PdfDocument`: which runs are
+ * named, in which order, and that a job with nothing recovered prints nothing at all.
+ */
+internal fun recoveredRunsNote(routes: List<ConduitRoute>, template: String): String? =
+    namedRunsNote(routes.filter { it.recovered }.map { it.label }, template)
+
+/**
+ * The same sentence for the runs whose geometry could not be built.
+ *
+ * Unlike [recoveredRunsNote] the list cannot be derived from the routes - a run carries no "this
+ * one failed to sweep" flag, and it should not: the failure depends on the machine and the version
+ * that built the mesh. The caller that built the meshes hands the labels over.
+ */
+internal fun unbuildableRunsNote(labels: List<String>, template: String): String? =
+    namedRunsNote(labels, template)
+
+/**
+ * The accuracy sentence with the confidence bar filled in, e.g. `... below 85 % it needs a look`.
+ *
+ * Kept out of the drawing code for the same reason as [recoveredRunsNote]: the wording can be
+ * tested without a `PdfDocument`, and - the point of the function - the threshold is *computed*
+ * from [HitConfidence.RUN_TRUSTED] rather than typed into six translations, so the protocol and
+ * the HUD cannot end up disagreeing about which run is trusted (finding 88).
+ */
+internal fun accuracyNote(template: String, trusted: Float = HitConfidence.RUN_TRUSTED): String =
+    PercentText.format(template, trusted)
+
+/**
+ * The key/value rows of the protocol's summary, in the order they are drawn (finding 103).
+ *
+ * Out of the drawing code so the row set is a contract a test can hold, and so no row can be
+ * drawn from a field the app never fills: the summary used to include a "Ceiling height" row
+ * behind `ceilingHeightMeters > 0f`, and `ceilingHeightMeters` was filled by nothing - a row that
+ * could not appear, next to a model field that read as a measurement nobody had taken. Every row
+ * here is a number the app computed, and a room whose scan holds no triangles prints no triangle
+ * row rather than a zero.
+ */
+internal fun summaryRows(
+    project: ProjectRecord,
+    materialList: MaterialList,
+    labels: PdfLabels,
+): List<Pair<String, String>> {
+    val rows = ArrayList<Pair<String, String>>(6)
+    rows += labels.labelRuns to project.routes.size.toString()
+    rows += labels.labelTotalLength to LengthFormatter.format(project.totalLengthMeters)
+    rows += labels.labelWithWaste to LengthFormatter.format(materialList.totalWithWasteMeters)
+    rows += labels.labelClips to materialList.totalClips.toString()
+    rows += labels.labelCouplings to materialList.totalCouplings.toString()
+    val scan = project.scan
+    if (scan != null && scan.meshTriangleCount > 0) {
+        rows += labels.labelScannedTriangles to "%,d".format(Locale.ROOT, scan.meshTriangleCount)
+    }
+    return rows
+}
+
+/**
+ * The line the summary gets when the volume ran out of blocks, or `null` when the whole capture
+ * fitted (finding 100).
+ *
+ * Out of the drawing code so the decision is testable, and so the two ways of having nothing to
+ * say - a whole-room capture, and a project with no scan at all - both end in `null` rather than
+ * in a sentence about a limit nobody reached.
+ */
+internal fun scanLimitedNote(scanLimited: Boolean, template: String): String? =
+    if (scanLimited) template else null
+
+/**
+ * The line the photo appendix gets when it cannot hold every photo on the job, or `null` when it
+ * can.
+ *
+ * Out of the drawing code for the same reason as the other notes: the wording is testable, and
+ * the two ways of having nothing to say - every photo fits, and the caller did not name a total -
+ * both end in `null` instead of in "8 of 0 photos".
+ */
+/** A bend deduction below this is rounding noise, not a number a fitter cuts to. */
+internal const val MIN_DEDUCTION_METERS: Float = 0.0005f
+
+/**
+ * One note per material whose bends make the cut piece shorter than the measured run.
+ *
+ * The screen has printed this since finding 114 - "the figure a fitter cuts to" - and the printed
+ * procurement table never did, so the document the customer signs carried an order length that is
+ * not the length of the piece that goes in, and no sentence saying why (finding 141). Lines without
+ * a bend produce nothing at all, so an ordinary job adds no noise to the page.
+ */
+internal fun bendDeductionNotes(lines: List<MaterialLine>, template: String): List<String> =
+    lines.filter { it.bendDeductionMeters > MIN_DEDUCTION_METERS }
+        .map { line ->
+            String.format(
+                Locale.ROOT,
+                template,
+                line.spec.material.ifBlank { line.spec.sizeLabel },
+                LengthFormatter.format(line.bendDeductionMeters),
+            )
+        }
+
+/**
+ * The line under the procurement table when runs were left out of it; `%1$d` runs, `%2$s` metres.
+ *
+ * `null` when nothing was excluded, so a complete table carries no sentence about completeness.
+ */
+internal fun exclusionNote(runs: Int, meters: Float, template: String): String? {
+    if (runs <= 0) return null
+    return String.format(Locale.ROOT, template, runs, LengthFormatter.format(meters))
+}
+
+internal fun photoAppendixNote(shown: Int, total: Int, template: String): String? {
+    if (total <= shown) return null
+    return String.format(Locale.ROOT, template, shown, total)
+}
+
+private fun namedRunsNote(labels: List<String>, template: String): String? {
+    if (labels.isEmpty()) return null
+    return String.format(Locale.ROOT, template, labels.joinToString(", "))
 }

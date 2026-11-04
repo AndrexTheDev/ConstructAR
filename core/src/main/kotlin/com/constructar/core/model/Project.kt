@@ -6,54 +6,40 @@
 
 package com.constructar.core.model
 
-import com.constructar.core.math.Aabb
 import kotlinx.serialization.Serializable
 
 /**
- * Statistics produced by the scan pipeline (TSDF in `:native-slam`) and attached to a
- * project for the protocol header and the BIM export metadata.
+ * What the scan pipeline (TSDF in `:native-slam`) measured, attached to a project for the
+ * protocol header.
+ *
+ * Deliberately two fields (finding 103). Everything here is written by
+ * `ArMeasureController.scanSummary()` when a run is finished and read by something that leaves
+ * the phone - the protocol's summary row and its partial-capture note, and the export screen.
+ * The model used to carry nine more: a vertex count, a floor area, a ceiling height, a bounding
+ * box, a voxel size, an accepted-loop-closure count, a pose-graph RMS and a derived volume. The
+ * scan filled **none** of them, so they travelled into every project file and every backup as
+ * zeros - a floor area of 0,00 m² and *0 accepted loop closures* reading as measurements the app
+ * had taken - and the protocol drew a "Ceiling height" row that could never print because
+ * nothing ever computed one. `ScanSummaryTest` pins this field list, so a new field has to
+ * arrive with a producer and a reader.
  */
 @Serializable
 data class ScanSummary(
-    val meshVertexCount: Int = 0,
+    /** Triangles the reconstructed mesh held when the run was finished. */
     val meshTriangleCount: Int = 0,
-    /** Horizon-normalised floor area in m² — "how much wall/ceiling we actually saw". */
-    val floorAreaSquareMeters: Float = 0f,
-    /** Free ceiling height derived from the floor/ceiling plane pair, metres. */
-    val ceilingHeightMeters: Float = 0f,
-    /** Bounding box of the reconstructed volume, metres (origin = AR world origin). */
-    val extentMin: List<Float> = emptyList(),
-    val extentMax: List<Float> = emptyList(),
-    val voxelSizeMeters: Float = 0f,
-    /** Loop closures accepted by the SLAM back-end during this scan. */
-    val loopClosures: Int = 0,
-    /** Final RMS residual of the pose-graph optimisation, metres. */
-    val poseGraphRmsMeters: Float = 0f,
-    /** Fraction of the depth buffer that passed the confidence filter, 0..1. */
-    val depthCoverage: Float = 0f,
-) {
-    val volumeCubicMeters: Float
-        get() = if (extentMin.size == 3 && extentMax.size == 3) {
-            val dx = extentMax[0] - extentMin[0]
-            val dy = extentMax[1] - extentMin[1]
-            val dz = extentMax[2] - extentMin[2]
-            (dx * dy * dz).coerceAtLeast(0f)
-        } else {
-            0f
-        }
-
-    companion object {
-        fun fromBounds(bounds: Aabb?, voxelSizeMeters: Float): ScanSummary = if (bounds == null) {
-            ScanSummary(voxelSizeMeters = voxelSizeMeters)
-        } else {
-            ScanSummary(
-                extentMin = listOf(bounds.min.x, bounds.min.y, bounds.min.z),
-                extentMax = listOf(bounds.max.x, bounds.max.y, bounds.max.z),
-                voxelSizeMeters = voxelSizeMeters,
-            )
-        }
-    }
-}
+    /**
+     * True when the TSDF block budget was spent during this scan (finding 100).
+     *
+     * A full volume refuses every new block, so the mesh freezes at its current extent while the
+     * operator keeps walking: the capture is only part of the room. The HUD says so while the
+     * scanner is on screen, and this field is what makes the warning survive the scan -
+     * `ArMeasureController.scanSummary()` copies `ScanState.hitBlockBudget` here, the protocol
+     * prints a note from it, and the export screen refuses to present a partial capture as a
+     * whole room. Defaults to false so a project file written before this field existed still
+     * loads (see `ScanSummaryTest`).
+     */
+    val scanLimited: Boolean = false,
+)
 
 /**
  * The on-device project: one room (or one zone) of one site.
@@ -86,16 +72,54 @@ data class ProjectRecord(
     val hourlyRateCents: Int? = null,
     /** Lump sum for material, in cents. The app never invents a material price. */
     val materialLumpSumCents: Long = 0L,
+    /**
+     * What every measured metre is multiplied by, from a reference calibration (1.0 = none).
+     *
+     * ARCore's metre is metric on its own; this factor is the operator's check of it against an
+     * object of known size - an ISO/IEC 7810 bank card or a folding rule at the 1 m / 2 m mark
+     * (`ReferenceCalibration`). It is stored on the project rather than baked into the node
+     * positions for one reason: a factor that has been multiplied into the geometry cannot be
+     * corrected by a better one tomorrow, and the nodes are also what the 3D overlay and the
+     * anchors are built from.
+     *
+     * Defaults to `1.0`, so a project written before this field existed loads and reports exactly
+     * what it always did. Only the *reported* metres scale: this number never reaches
+     * `route.nodes`, never reaches the mesh, and never reaches the AR HUD while measuring - the
+     * operator measures what the phone sees, and the paperwork says what the calibration says.
+     */
+    val calibrationScale: Double = 1.0,
     val schemaVersion: Int = SCHEMA_VERSION,
 ) {
     /** Defects still to be fixed — the number the project screen shows in red. */
     val openDefectCount: Int
         get() = defects.count { !it.resolved }
 
-    /** Everything recorded on site, including a session that has not been stopped yet. */
+    /**
+     * Everything recorded on site, including a session that has not been stopped yet: raw working
+     * time, milliseconds, nothing rounded - the truth about how long he was there.
+     *
+     * Not the number anything printed or billed uses: the protocol's table, its labour line and the
+     * room screen's preview all take `WorkTime.billableMillis`, which adds up the rounded session
+     * rows (finding 81). Anything that shows a duration to a human belongs there.
+     */
     fun totalWorkMillis(nowMs: Long = System.currentTimeMillis()): Long = WorkTime.totalMillis(sessions, nowMs)
+    /**
+     * The metres this project reports: the runs added up, then corrected by [calibrationScale].
+     *
+     * One number for every reader - the room screen, the protocol table, the bill of materials -
+     * so a calibrated project cannot print 40.0 m in one place and 41.2 m in another. With the
+     * default factor of 1.0 this is exactly the sum of the runs, which is what it always was.
+     */
     val totalLengthMeters: Float
-        get() = routes.sumOf { it.polylineLengthMeters.toDouble() }.toFloat()
+        get() = (routes.sumOf { it.polylineLengthMeters.toDouble() } * calibrationScale).toFloat()
+
+    /** One run's length as it is reported: measured by the phone, corrected by the calibration. */
+    fun calibratedMeters(route: ConduitRoute): Float =
+        (route.polylineLengthMeters.toDouble() * calibrationScale).toFloat()
+
+    /** True when a reference calibration has been applied to this project. */
+    val isCalibrated: Boolean
+        get() = calibrationScale != 1.0
 
     fun routeById(routeId: String): ConduitRoute? = routes.firstOrNull { it.id == routeId }
 
@@ -187,10 +211,40 @@ data class ProjectRecord(
         this
     } else {
         copy(
-            sessions = sessions.map { it.copy(endEpochMs = it.endEpochMs ?: nowMs) },
+            sessions = sessions.map {
+                // Never before the start. A phone whose clock stepped backwards while the session
+                // ran (an NTP correction after a dead spot, a manual change, an RTC that lost
+                // time) would otherwise print 09:00-08:40 in a document the customer signs, and
+                // an office has to reject that. The duration is no less true for it: a session
+                // whose end is not after its start already counts as zero minutes in `WorkTime`.
+                it.copy(endEpochMs = it.endEpochMs ?: maxOf(nowMs, it.startEpochMs))
+            },
             updatedAtEpochMs = System.currentTimeMillis(),
         )
     }
+
+    /**
+     * Drops one work session.
+     *
+     * Finding 44: a stopped session could not be corrected at all, and a running one could only
+     * be stopped *now*. Whoever came back the next morning to a clock he forgot to stop had one
+     * option left - delete the room and measure it again - because the 16 hours were already on
+     * the invoice line and in the protocol. Removing the session is the correction that costs the
+     * least: the room, the runs and the photos stay, and the price follows the times that are
+     * actually true.
+     *
+     * Removing the open session is deliberate and allowed: it is how a forgotten timer is
+     * cancelled without pretending the night was worked.
+     */
+    fun removeSession(sessionId: String): ProjectRecord =
+        if (sessions.none { it.id == sessionId }) {
+            this
+        } else {
+            copy(
+                sessions = sessions.filterNot { it.id == sessionId },
+                updatedAtEpochMs = System.currentTimeMillis(),
+            )
+        }
 
     companion object {
         /** Bump when the JSON shape changes; migrations live in `ProjectMigrations`. */

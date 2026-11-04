@@ -125,16 +125,21 @@ class TamperGuardTest {
             EntitlementRules.Input(trialStartEpochDay = start, watermarkEpochDay = day, nowEpochDay = day),
         )
 
+        // Seven days is start..start+6, which is what the paywall sells and what the counter
+        // says on day one. The old rule used `<=` and granted eight, and on the eighth the copy
+        // read "trial active, 0 days left" - a trial that was still running while its own
+        // counter had already run out.
         assertEquals(Plan.TRIAL, decideAt(start).entitlements.plan)
-        assertEquals(Plan.TRIAL, decideAt(start + Entitlements.TRIAL_DAYS).entitlements.plan)
-        assertEquals(0L, decideAt(start + Entitlements.TRIAL_DAYS).entitlements.daysLeft)
-        assertEquals(Plan.FREE, decideAt(start + Entitlements.TRIAL_DAYS + 1).entitlements.plan)
+        assertEquals(7L, decideAt(start).entitlements.daysLeft)
+        assertEquals(Plan.TRIAL, decideAt(start + 6).entitlements.plan)
+        assertEquals(1L, decideAt(start + 6).entitlements.daysLeft)
+        assertEquals(Plan.FREE, decideAt(start + Entitlements.TRIAL_DAYS).entitlements.plan)
         assertEquals(start + Entitlements.TRIAL_DAYS, decideAt(start).entitlements.expiresEpochDay)
     }
 
     @Test
     fun `a rollback does not resurrect an expired trial`() {
-        // The trial ran out at 20 007; the device clock is set back to 20 001.
+        // The trial ran out at 20 007 (seven days from 20 000); the clock is set back to 20 001.
         val out = EntitlementRules.decide(
             EntitlementRules.Input(
                 trialStartEpochDay = 20_000L,

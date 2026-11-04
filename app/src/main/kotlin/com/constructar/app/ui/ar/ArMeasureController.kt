@@ -64,6 +64,12 @@ class ArMeasureController(private val context: Context) {
     private val tsdfConfig = com.constructar.nativebridge.TsdfConfig()
     val pipeline = TsdfScanPipeline(config = tsdfConfig)
     val tracking = TrackingMonitor()
+
+    /**
+     * Runs finished in *this* AR session - the only ones whose world coordinates mean anything
+     * here. See [SessionRuns] and finding 129.
+     */
+    private val sessionRouteIds = LinkedHashSet<String>()
     private val sessionController = ArSessionController(context)
     private val anchors = DelegatingAnchorFactory()
     val routeSession = RouteSession(anchors)
@@ -83,6 +89,9 @@ class ArMeasureController(private val context: Context) {
 
     val torchOn = MutableStateFlow(false)
 
+    /** True when the camera refused the torch — the button is hidden rather than left dead. */
+    val torchUnavailable = MutableStateFlow(false)
+
     /**
      * Screen position (pixels) of the floating length label, or null when there is nothing to
      * label. Computed on the render thread from the camera matrices and published for the HUD.
@@ -97,6 +106,9 @@ class ArMeasureController(private val context: Context) {
      */
     val stability: MutableStateFlow<HitStabilizer.Reading?> = MutableStateFlow(null)
     private val hitStabilizer = HitStabilizer()
+
+    /** Keeps the reticle at the centre of a view that may have been rotated or resized. */
+    private val reticleCentre = ReticleCentre()
 
     /**
      * Set from the render thread when a tap has been resolved, consumed on the main thread.
@@ -120,9 +132,18 @@ class ArMeasureController(private val context: Context) {
     /** True when the live session has depth (drives the "plane only" warning). */
     val depthAvailable: Boolean get() = sessionController.depthAvailable
 
-    /** ARCore readiness check, surfaced as a localised blocking message when it is not [ArReadiness.Ready]. */
-    suspend fun checkReadiness(activity: android.app.Activity?, hasCameraPermission: Boolean): ArReadiness =
-        sessionController.checkReadiness(activity, hasCameraPermission)
+    /**
+     * ARCore readiness check, surfaced as a localised blocking message when it is not [ArReadiness.Ready].
+     *
+     * `requestInstallFromPlay = false` for the re-check the screen runs when it resumes: that one
+     * must not put the Play install dialog in front of the operator again (finding 146).
+     */
+    suspend fun checkReadiness(
+        activity: android.app.Activity?,
+        hasCameraPermission: Boolean,
+        requestInstallFromPlay: Boolean = true,
+    ): ArReadiness =
+        sessionController.checkReadiness(activity, hasCameraPermission, requestInstallFromPlay)
 
     /**
      * Called once when ARCore has a live session (also after a relocalisation).
@@ -188,28 +209,6 @@ class ArMeasureController(private val context: Context) {
     fun onFrame(session: Session, frame: Frame, viewWidth: Int, viewHeight: Int) {
         onSessionCreated(session)
         val thermalStatus = powerManager?.currentThermalStatus ?: PowerManager.THERMAL_STATUS_NONE
-        pipeline.onFrame(frame, thermalStatus)
-
-        val activeInteraction = interaction
-        if (activeInteraction != null) {
-            activeInteraction.latestSnapshot = pipeline.latestSnapshot
-            // Aim the reticle at the screen centre: the operator holds the phone in front of
-            // the wall, so the centre pixel is what they are pointing at.
-            if (activeInteraction.reticlePoint == null && viewWidth > 0) {
-                activeInteraction.reticlePoint = (viewWidth / 2f) to (viewHeight / 2f)
-            }
-            activeInteraction.onFrameEnter(frame, viewWidth, viewHeight, SystemClock.uptimeMillis())
-            // Live preview follows the reticle (throttled inside ArInteraction to 12 Hz).
-            val reticleHit = activeInteraction.reticle.value
-            routeSession.setLivePoint(reticleHit)
-            stability.value = hitStabilizer.sample(reticleHit, SystemClock.uptimeMillis())
-        }
-
-        routeSession.onFrame()
-        updateHudPosition(frame, viewWidth, viewHeight)
-
-        // Monocular depth: throttled internally to ~2 Hz; copies what it needs immediately.
-        pipeline.latestSnapshot?.let { snapshot -> monocularDepth?.onFrame(frame, snapshot) }
 
         val camera = frame.camera
         // ARCore's TrackingState has exactly three values. PAUSED covers both the warm-up
@@ -220,8 +219,66 @@ class ArMeasureController(private val context: Context) {
             TrackingState.PAUSED -> TrackingQuality.LIMITED
             TrackingState.STOPPED -> TrackingQuality.NOT_TRACKING
         }
+        // Nothing is placed with a frame that has no pose of its own (finding 163). This used to
+        // run for every frame: the depth was integrated at the last good camera position while
+        // the operator kept walking - a smear of wherever the phone was pointing when the tracker
+        // gave up - and a tap was answered against that same frozen pose, putting a node on a
+        // wall the phone was no longer looking at. `requiresRelocalisation()` was written to
+        // express this and was read by nobody; the condition is simply "this frame has a pose".
+        val poseUsable = tracking.canPlaceFrame(quality)
+        if (poseUsable) {
+            pipeline.onFrame(frame, thermalStatus)
+        } else {
+            // A tap made now must not wait for the next live frame to be answered: the pixel it
+            // names is meaningless by then, and `ArInteraction` would resolve it against whatever
+            // the camera has found in the meantime.
+            interaction?.clearTap()
+            hitStabilizer.reset()
+            stability.value = null
+        }
+
+        val activeInteraction = interaction
+        if (activeInteraction != null) {
+            activeInteraction.latestSnapshot = pipeline.latestSnapshot
+            // Aim the reticle at the screen centre: the operator holds the phone in front of
+            // the wall, so the centre pixel is what they are pointing at. Recomputed whenever the
+            // view changes size - `configChanges` keeps this screen alive across a rotation, so a
+            // centre computed once left the reticle sampling a pixel that had moved off the screen
+            // (finding 117).
+            reticleCentre.update(viewWidth, viewHeight)?.let { centre ->
+                activeInteraction.reticlePoint = centre
+            }
+            if (poseUsable) {
+                activeInteraction.onFrameEnter(frame, viewWidth, viewHeight, SystemClock.uptimeMillis())
+            }
+            // Live preview follows the reticle (throttled inside ArInteraction to 12 Hz).
+            val reticleHit = activeInteraction.reticle.value
+            routeSession.setLivePoint(reticleHit)
+            if (poseUsable) {
+                stability.value = hitStabilizer.sample(reticleHit, SystemClock.uptimeMillis())
+            }
+        }
+
+        routeSession.onFrame()
+        updateHudPosition(frame, viewWidth, viewHeight)
+
+        // Monocular depth: throttled internally to ~2 Hz; copies what it needs immediately. Also
+        // only for a frame that can be placed - it exists to densify depth *for integration*, and
+        // a frame that will not be integrated has nothing to densify (finding 163).
+        if (poseUsable) {
+            pipeline.latestSnapshot?.let { snapshot -> monocularDepth?.onFrame(frame, snapshot) }
+        }
+
         val stats = pipeline.depthStats
         val ambientLux = ambientLuxOf(frame.lightEstimate, colorCorrection)
+        // The automatic torch path can switch the light on and can be refused by the camera, so
+        // the UI has to hear about both - and the tracking status should see the torch as it is
+        // now, not as it was on the previous frame (finding 106).
+        torchController?.let { torch ->
+            torch.onAmbientIntensity(ambientLux, batteryPercent())
+            torchOn.value = torch.isOn
+            torchUnavailable.value = torch.unavailable
+        }
         tracking.onFrame(
             tracking = quality,
             // `trackingFailureReason` is non-null (NONE while tracking is fine); it only
@@ -236,9 +293,7 @@ class ArMeasureController(private val context: Context) {
             ambientLux = ambientLux,
             torchOn = torchOn.value,
             thermallyThrottled = pipeline.state.value.throttleMode == TsdfScanPipeline.ThrottleMode.THROTTLED,
-            scanCoverage = stats.usableRatio,
         )
-        torchController?.onAmbientIntensity(ambientLux, batteryPercent())
     }
 
     /** Called from the UI thread when the operator taps the AR view. */
@@ -289,6 +344,25 @@ class ArMeasureController(private val context: Context) {
         routeSession.setLivePoint(hit)
     }
 
+    /**
+     * Draws the run being measured: the nodes placed so far plus the segment to the reticle.
+     *
+     * `RouteSession` has built this mesh on every node and every reticle move since the routing
+     * state was written, and `RouteSceneController.syncLiveRoute` has existed to upload it - but
+     * nothing ever called it, so the only thing the operator saw while measuring was the crosshair
+     * and the numbers: the conduit appeared in one piece when the run was finished, and the
+     * preview mesh was rebuilt up to twelve times a second for nobody (finding 162). The upload is
+     * deduped on the mesh identity inside the controller, so a still reticle costs nothing.
+     */
+    fun syncLiveRoute() {
+        val state = routeSession.state.value
+        sceneController?.syncLiveRoute(
+            nodes = state.nodes,
+            spec = state.spec,
+            previewGeometry = state.preview?.mesh,
+        )
+    }
+
     fun setSpec(spec: ConduitSpec) = routeSession.setSpec(spec)
 
     fun undo() {
@@ -300,7 +374,10 @@ class ArMeasureController(private val context: Context) {
 
     fun finish(label: String): ConduitRoute? {
         val route = routeSession.finish(label) ?: return null
-        // Keep the anchors alive: the committed run keeps following ARCore's refinement.
+        sessionRouteIds += route.id
+        // `finish()` has already released this run's anchors: the committed geometry is drawn
+        // from the node positions it was measured with, and nothing refines those afterwards
+        // (finding 164).
         routeSession.startNewRun()
         hitStabilizer.reset()
         stability.value = null
@@ -308,21 +385,29 @@ class ArMeasureController(private val context: Context) {
         return route
     }
 
-    /** Uploads/refreshes every committed run of the project. */
+    /**
+     * Uploads/refreshes the committed runs that can be placed in this session.
+     *
+     * A run measured in another session is not drawn: its coordinates belong to a world origin
+     * that no longer exists, and a tube in the wrong spot is worse than no tube at all
+     * (finding 129).
+     */
     fun syncCommittedRoutes(routes: List<ConduitRoute>) {
-        sceneController?.syncCommittedRoutes(routes)
+        sceneController?.syncCommittedRoutes(SessionRuns.placeable(sessionRouteIds, routes))
     }
 
     fun toggleTorch(): Boolean {
         val controller = torchController ?: return false
         val result = controller.toggle()
         torchOn.value = controller.isOn
+        torchUnavailable.value = controller.unavailable
         return result
     }
 
     fun resetScan() = pipeline.reset()
 
     fun release() {
+        sessionRouteIds.clear()
         routeSession.release()
         (anchors.delegate as? ArCoreAnchorFactory)?.detachAll()
         monocularDepth?.close()
@@ -335,14 +420,12 @@ class ArMeasureController(private val context: Context) {
         sceneController = null
     }
 
-    /** Scan statistics for the protocol header and the BIM export. */
+    /** Scan statistics for the protocol header: two numbers, both measured (finding 103). */
     fun scanSummary(): ScanSummary {
         val state = pipeline.state.value
-        val bounds = pipeline.mesh.value?.bounds
-        return ScanSummary.fromBounds(bounds, tsdfConfig.voxelSizeMeters).copy(
-            meshVertexCount = state.vertexCount,
+        return ScanSummary(
             meshTriangleCount = state.triangleCount,
-            depthCoverage = tracking.status.value.scanCoverage,
+            scanLimited = state.hitBlockBudget,
         )
     }
 

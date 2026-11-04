@@ -51,11 +51,7 @@ android {
         buildConfig = true
     }
 
-    /**
-     * Robolectric needs the merged resources to render a screen, and the screenshot matrix is
-     * the only thing in this module that uses it. Kept behind a property so the normal gate
-     * (`testDebugUnitTest`) never pays for the extra classpath.
-     */
+    /** Robolectric needs the merged resources: the tests read real strings in six locales. */
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
@@ -123,25 +119,6 @@ kotlin {
     }
 }
 
-/**
- * The screenshot matrix is opt-in: `-Pconstructar.screenshots=true` turns recording on and lets
- * the matrix classes run. Without it they are filtered out of `testDebugUnitTest`, so the
- * release gate keeps measuring the shipping product, not the renderer.
- */
-val renderScreenshots = providers.gradleProperty("constructar.screenshots").isPresent
-
-tasks.withType<Test>().configureEach {
-    systemProperty("roborazzi.test.record", renderScreenshots.toString())
-    if (renderScreenshots) {
-        // Roborazzi's PixelCopy path needs the emulated hardware renderer under Robolectric.
-        systemProperty("robolectric.pixelCopyRenderMode", "hardware")
-        systemProperty("roborazzi.output.dir", "build/screenshot-matrix")
-        maxHeapSize = "2g"
-    } else {
-        filter { excludeTestsMatching("com.constructar.app.screenshots.*") }
-    }
-}
-
 dependencies {
     implementation(project(":core"))
     implementation(project(":ar-engine"))
@@ -172,14 +149,8 @@ dependencies {
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 
-    // Screenshot matrix only (see `renderScreenshots` above): Robolectric + Compose test +
-    // Roborazzi render every screen in every locale on the JVM.
+    // Robolectric runs the storage, signature and locale tests on the JVM; `androidx.test`
+    // provides `ApplicationProvider` for them.
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.junit)
-    testImplementation(libs.roborazzi)
-    testImplementation(libs.roborazzi.compose)
-    testImplementation(libs.roborazzi.junit.rule)
-    testImplementation(platform(libs.compose.bom))
-    testImplementation(libs.compose.ui.test.junit4)
-    debugImplementation(libs.compose.ui.test.manifest)
 }

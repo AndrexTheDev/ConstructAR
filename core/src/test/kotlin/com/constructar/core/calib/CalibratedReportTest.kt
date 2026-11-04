@@ -1,0 +1,137 @@
+/*
+ * Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+ * All rights reserved. Proprietary and confidential - see LICENSE.
+ * SPDX-License-Identifier: LicenseRef-Proprietary
+ */
+
+package com.constructar.core.calib
+
+import com.constructar.core.bom.MaterialListBuilder
+import com.constructar.core.bom.MaterialListOptions
+import com.constructar.core.math.Vec3
+import com.constructar.core.model.ConduitRoute
+import com.constructar.core.model.ConduitSpec
+import com.constructar.core.model.HitSource
+import com.constructar.core.model.ProjectRecord
+import com.constructar.core.model.RouteNodeRecord
+import com.constructar.core.model.SurfaceKind
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+/**
+ * What a calibration factor does to the numbers a project *reports*.
+ *
+ * The factor is stored on the project and applied to metres at the point they are printed or
+ * summed - never to the node positions, never to the mesh, never to the AR HUD. These tests pin
+ * exactly that boundary: the reported metres move, the geometry and the fitting counts do not.
+ */
+class CalibratedReportTest {
+
+    private fun route(id: String, lengthMeters: Float, confidence: Float = 0.95f) = ConduitRoute(
+        id = id,
+        label = id,
+        spec = ConduitSpec.cable(10f),
+        nodes = listOf(
+            RouteNodeRecord(
+                id = "$id-1",
+                position = Vec3(0f, 1.2f, 0f),
+                normal = Vec3(0f, 0f, 1f),
+                surface = SurfaceKind.WALL,
+                hitSource = HitSource.PLANE_POLYGON,
+                confidence = confidence,
+            ),
+            RouteNodeRecord(
+                id = "$id-2",
+                position = Vec3(lengthMeters, 1.2f, 0f),
+                normal = Vec3(0f, 0f, 1f),
+                surface = SurfaceKind.WALL,
+                hitSource = HitSource.PLANE_POLYGON,
+                confidence = confidence,
+            ),
+        ),
+        createdAtEpochMs = 1_000L,
+    )
+
+    private fun project(vararg routes: ConduitRoute, scale: Double = 1.0) = ProjectRecord(
+        id = "p1",
+        name = "Room",
+        createdAtEpochMs = 0L,
+        updatedAtEpochMs = 0L,
+        routes = routes.toList(),
+        calibrationScale = scale,
+    )
+
+    @Test
+    fun `a project without a calibration reports what the phone measured`() {
+        val project = project(route("a", 3f), route("b", 2f))
+
+        assertFalse(project.isCalibrated)
+        assertEquals(5f, project.totalLengthMeters, 1e-4f)
+        assertEquals(3f, project.calibratedMeters(project.routes.first()), 1e-4f)
+    }
+
+    @Test
+    fun `a calibrated project reports corrected metres, and names itself calibrated`() {
+        // The phone measured 5.00 m; the folding rule says every metre is 5 % short.
+        val project = project(route("a", 3f), route("b", 2f), scale = 1.05)
+
+        assertTrue(project.isCalibrated)
+        assertEquals(5.25f, project.totalLengthMeters, 1e-4f)
+        assertEquals(3.15f, project.calibratedMeters(project.routes.first()), 1e-4f)
+    }
+
+    @Test
+    fun `the bill of materials follows the same factor`() {
+        val list = MaterialListBuilder.build(
+            project(route("a", 3f), route("b", 2f), scale = 1.05),
+            nowMs = 7L,
+        )
+
+        val line = list.lines.single()
+        assertEquals(5.25f, line.totalMeters, 1e-3f)
+        assertEquals(5.25f, list.totalMeters, 1e-3f)
+        // Waste is a percentage of the corrected metres, so the order length moves with them.
+        assertEquals(5.25f * (1f + line.wasteFactor), line.withWasteMeters, 1e-3f)
+    }
+
+    @Test
+    fun `fitting counts are not scaled, because a clip per spacing is a ratio`() {
+        // Length and clip spacing were both measured in the same, equally short, metre. Scaling
+        // the length and not the spacing - or both - leaves the count where it was; a certified
+        // calibration must therefore not change what is ordered in clips.
+        val uncalibrated = MaterialListBuilder.build(project(route("a", 4f)), nowMs = 7L)
+        val calibrated = MaterialListBuilder.build(project(route("a", 4f), scale = 1.05), nowMs = 7L)
+
+        assertEquals(
+            uncalibrated.lines.single().clipCount,
+            calibrated.lines.single().clipCount,
+        )
+        assertEquals(
+            uncalibrated.lines.single().couplingCount,
+            calibrated.lines.single().couplingCount,
+        )
+        assertEquals(
+            uncalibrated.lines.single().elbow90Count,
+            calibrated.lines.single().elbow90Count,
+        )
+    }
+
+    @Test
+    fun `an excluded run's metres are corrected too, or the page would not add up`() {
+        // The low-confidence run is taken out of the list, and the metres it would have added are
+        // kept so the page can say what is missing. Those metres have to be in the same unit as
+        // the printed ones.
+        val soft = route("soft", 2f, confidence = 0.2f)
+        val list = MaterialListBuilder.build(
+            project(route("a", 3f), soft, scale = 1.05),
+            options = MaterialListOptions(includeLowConfidenceRuns = false),
+            nowMs = 7L,
+        )
+
+        assertEquals(1, list.excludedLowConfidenceRuns)
+        assertEquals(2.1f, list.excludedLowConfidenceMeters, 1e-3f)
+        assertEquals(3.15f, list.totalMeters, 1e-3f)
+    }
+}

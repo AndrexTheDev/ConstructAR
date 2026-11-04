@@ -124,7 +124,17 @@ class ArSessionController(private val context: Context) {
      * Checks ARCore availability *without* creating a session. Suspending because the Play
      * install flow starts an activity and must not block the main thread.
      */
-    suspend fun checkReadiness(activity: Activity?, hasCameraPermission: Boolean): ArReadiness {
+    suspend fun checkReadiness(
+        activity: Activity?,
+        hasCameraPermission: Boolean,
+        /**
+         * `false` for a re-check the operator did not ask for: the screen re-asks when it comes
+         * back from the Play Store or from the settings app, and calling `requestInstall` again
+         * there would put the install dialog in front of somebody who already declined it once -
+         * every resume, forever (finding 146).
+         */
+        requestInstallFromPlay: Boolean = true,
+    ): ArReadiness {
         if (!hasCameraPermission) return ArReadiness.CameraPermissionMissing
         val availability = try {
             ArCoreApk.getInstance().checkAvailability(context)
@@ -135,6 +145,19 @@ class ArSessionController(private val context: Context) {
         // While the query is still in flight, Play has not answered yet: treat as ready and
         // let session creation produce the definitive answer.
         if (availability.isTransient) return ArReadiness.Ready
+        // A silent re-check answers from the availability query alone. It is the same answer the
+        // install flow would end in, minus the dialog.
+        if (!requestInstallFromPlay) {
+            return when (availability) {
+                ArCoreApk.Availability.SUPPORTED_INSTALLED -> ArReadiness.Ready
+                ArCoreApk.Availability.SUPPORTED_NOT_INSTALLED,
+                ArCoreApk.Availability.SUPPORTED_APK_TOO_OLD ->
+                    ArReadiness.NeedsInstall("availability=${availability.name}")
+                ArCoreApk.Availability.UNSUPPORTED_DEVICE_NOT_CAPABLE ->
+                    ArReadiness.Unsupported("availability=${availability.name}")
+                else -> ArReadiness.Ready
+            }
+        }
         if (!availability.isSupported) return ArReadiness.Unsupported("availability=${availability.name}")
         val installer = activity ?: return ArReadiness.Ready
         return try {
@@ -181,12 +204,28 @@ class TorchController(
     var isOn: Boolean = false
         private set
 
+    /**
+     * True once a switch to *on* was refused by the camera.
+     *
+     * ARCore refuses the torch on a device without a flash - most tablets - and while another
+     * camera client holds the camera. The refusal used to be invisible: the operator tapped the
+     * torch, `isOn` stayed false, and nothing said why (finding 106). The screen hides the button
+     * while this is true instead of leaving a control that cannot do anything.
+     */
+    var unavailable: Boolean = false
+        private set
+
     private var lastSwitchMillis: Long = Long.MIN_VALUE / 2
     private var manualOverride: Boolean? = null
 
     /** Feeds one ambient-intensity sample (ARCore reports 0 when unknown). */
     fun onAmbientIntensity(lux: Float, batteryPercent: Int = 100) {
         if (lux <= 0f) return // ARCore could not estimate — keep the current state.
+        if (lux >= offAboveLux && unavailable) {
+            // Light came back. The refusal was about this attempt, not about the device for ever,
+            // so the flag clears and the next dark room may ask again (finding 106).
+            unavailable = false
+        }
         val override = manualOverride
         if (override != null) {
             // A manual tap wins until the user taps again, but still respects the dwell time.
@@ -195,24 +234,35 @@ class TorchController(
         }
         if (lux > offAboveLux && isOn) {
             if (dwellElapsed()) apply(false)
-        } else if (lux < onBelowLux && !isOn && batteryPercent > LOW_BATTERY_PERCENT) {
+        } else if (lux < onBelowLux && !isOn && !unavailable && batteryPercent > LOW_BATTERY_PERCENT) {
+            // `!unavailable`: once the camera has refused the torch, the automatic path stops
+            // asking. It used to re-ask on every ambient sample - four seconds apart by the dwell
+            // rule, for as long as the AR screen stayed open - on a device that has no flash.
             if (dwellElapsed()) apply(true)
         }
     }
 
-    /** Operator tapped the torch button. */
+    /** Operator tapped the torch button. Returns the state the torch is in afterwards. */
     fun toggle(): Boolean {
-        manualOverride = !isOn
-        apply(!isOn)
+        val desired = !isOn
+        // The operator asked again: the camera gets another chance, and a second refusal is
+        // reported again rather than remembered from last time.
+        unavailable = false
+        apply(desired)
+        // Only a switch that actually happened is a decision to remember. Recording the override
+        // before the attempt meant a device whose camera refused the torch kept a permanent
+        // "wants the light on" and re-attempted the switch on every ambient sample, every four
+        // seconds, for the rest of the session (finding 106).
+        manualOverride = if (isOn == desired) desired else null
         return isOn
     }
 
-    /** Clears the manual override (e.g. when a scan finishes). */
-    fun releaseManualOverride() {
-        manualOverride = null
-    }
-
-    fun forceOff() = apply(false)
+    // Two lifecycle hooks used to live here - one to clear the manual override "when a scan
+    // finishes", one to force the light off - and nothing in the app ever called either of them.
+    // The class documented a lifecycle that did not exist, and the only thing that ever switched
+    // the torch off was the AR session being released. They are gone rather than called from a
+    // place that would have no effect: in a dark room the automatic path turns the light straight
+    // back on (finding 106).
 
     private fun dwellElapsed(): Boolean = clock() - lastSwitchMillis >= minDwellMillis
 
@@ -221,6 +271,11 @@ class TorchController(
         if (switch(desired)) {
             isOn = desired
             lastSwitchMillis = clock()
+            unavailable = false
+        } else if (desired) {
+            // Turning the torch *off* cannot fail in a way the operator needs to know about; a
+            // refused "on" is the answer the button was hiding.
+            unavailable = true
         }
     }
 

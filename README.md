@@ -42,12 +42,15 @@ a 3D model for BIM — **without a single byte leaving the device**.
 | **A** | Live room scan → TSDF volume → Surface Nets mesh, drawn as a translucent overlay | `native-slam/src/main/cpp/tsdf`, `ar-engine/.../scan` | 2 cm voxels, 8 cm truncation, extraction throttled to **300 ms** |
 | **B** | Strict hit-test cascade: **plane polygon → `DepthPoint` → direct depth raycast → feature point** | `ar-engine/.../hit` | Each tier is strictly less trustworthy; a node inherits the reliability of its tier and the export flags soft ones |
 | **C** | Surface-normal aligned procedural geometry: tubes for cables/pipes, channels for ducts, Bézier/fillet smoothing at bends | `core/.../mesh`, `core/.../geo` | Normals come from the hit tier, then are blended along the run so a tube hugs a wall without twisting |
-| **D** | Polyline length `L = Σ‖Pᵢ − Pᵢ₊₁‖`, every node bound to an ARCore `Anchor`, live HUD label from the `hud_length` format (`%1$.2f m`, localised) | `ar-engine/.../route`, `core/.../geo/PolylineMetrics.kt`, `app/src/main/res/values*/strings.xml` | Measured on the **surface** points, never the offset centreline |
+| **D** | Polyline length `L = Σ‖Pᵢ − Pᵢ₊₁‖`, every node bound to an ARCore `Anchor`, live HUD label from the `hud_length` resource (`%1$s m`, the digits from `LengthFormatter`) | `ar-engine/.../route`, `core/.../geo/PolylineMetrics.kt`, `app/src/main/res/values*/strings.xml` | Measured on the **surface** points, never the offset centreline |
+| **D2** | Crosshair snapping: a tap - or the resting reticle, so the HUD already shows the committed length - within 4 cm of a corner the run already has **is** that corner | `ar-engine/.../route/RouteSession.kt` | Exact geometry and an exact fitting count when a run returns to a corner or closes a ring on its start; the last node is never a target, and a snap that would land inside the 2 cm spacing guard is refused |
 | **E** | Local export: PDF protocol, CSV material list, `.glb` (glTF 2.0 binary) and `.ply` | `export/` | Written through the Storage Access Framework; no media storage permission, no share-to-cloud |
+| **F** | Reference calibration against a known object: an ISO/IEC 7810 ID-1 bank card (85.60 x 53.98 mm) or a folding rule at the 1 m / 2 m mark, `S = d_real / ||P2 - P1||`, refused outside `[0.85, 1.15]`, applied about the reference point rather than the world origin | `core/.../calib`, `app/.../ui` | Arithmetic and its unit tests are in place (docs/CALIBRATION.md); *Calibrate* on the AR screen takes the reticle point twice against a card or a folding rule, and the resulting factor is stored on the project (`calibrationScale`) and applied once to every printed length and to the bill of materials — never to the geometry; the protocol and the CSV say which factor was in force |
 
 Plus: auto-torch with hysteresis, monocular depth (Depth Anything V2 Small) fused into the
-metric depth field, loop-closure pose graph, thermal-aware degradation, and explicit handling
-for every way AR can fail on a site.
+metric depth field, a loop-closure pose graph (built and host-tested — *not yet driven by the
+scan pipeline*, see finding 98), thermal-aware degradation, and explicit handling for every way
+AR can fail on a site.
 
 **Depth fusion policy.** ARCore depth is metric but holey; the network is dense but only
 relative. `AiDepthFusion` therefore lets the network **fill holes only** — a confident ARCore
@@ -74,7 +77,8 @@ Four screens, in the order of the job, and no screen that exists only to show of
    clips, couplings and bends the runs actually need. The person who drives to the wholesaler is
    standing in the room with this phone, not reading the PDF at a desk.
 4. **Measure → Export** — the AR viewfinder with its HUD, then the export screen, where the
-   operator picks a folder once and gets PDF, CSV and (with Pro) GLB/PLY. The customer can sign
+   operator picks a folder once and gets PDF, CSV (plus an optional one-line-per-article order
+   list for the wholesaler) and, with Pro, GLB/PLY. The customer can sign
    on the glass with a finger; the signature is rasterised black-on-white and written onto its
    own final page of the protocol, because a handover document without a signature is a note.
 
@@ -188,7 +192,10 @@ therefore fails the *build* if an API moved, instead of failing silently on a de
 ARCore (proprietary but free, ships in Google Play Services for AR), RTAB-Map compiled
 **without** OpenCV non-free / SURF (BSD-3-Clause, SIFT/ORB only), Depth Anything V2 **Small
 only** (Apache-2.0; Base/Large are CC-BY-NC and are refused by a checksum in
-`MonocularDepthEstimator`). See [docs/LICENSING.md](docs/LICENSING.md).
+`MonocularDepthEstimator`). The notices those licences require are shown in the app itself
+(**Help → Third-party components**), listed in [NOTICE](NOTICE) with the verbatim texts under
+`licenses/`, and cross-checked by `scripts/verify_sources.py` rule 20. See
+[docs/LICENSING.md](docs/LICENSING.md).
 
 ---
 
@@ -266,7 +273,7 @@ and the sitemap are absolute.
 | Module | Language | Responsibility |
 |--------|----------|----------------|
 | `:core` | Kotlin/JVM, **no Android deps** | Maths (`Vec3`, `Quat`, `Mat4`, `Plane3`, polygon containment), routing model, fillet/RMF smoothing, tube & duct mesh generation, measurement, bill of materials, formatting. This is the trust boundary: everything that decides a *number* lives here and is unit-tested on the JVM. |
-| `:native-slam` | C++20 + JNI | TSDF volume (block-hashed, free-space carving optional), Surface Nets extraction, pose graph with loop closures, RTAB-Map bridge. Host-testable: `native-slam/src/main/cpp/tests`. |
+| `:native-slam` | C++20 + JNI | TSDF volume (block-hashed, free-space carving optional), Surface Nets extraction, Manhattan-World frame solver, plane fitting, AprilTag detector contract and marker-to-scale arithmetic, pose graph with loop closures, RTAB-Map bridge. Host-testable: `native-slam/src/main/cpp/tests`; the optional RTAB-Map branch is compile-checked in CI against stub headers that mirror upstream's declarations (finding 183). |
 | `:ar-engine` | Kotlin/Android | ARCore session & config, torch policy, tracking monitor, depth capture, TSDF pipeline, hit cascade, AI depth, anchors, routing state, Filament mesh upload, Compose AR surface. |
 | `:export` | Kotlin/Android | PDF protocol, CSV bill of materials, GLB writer, PLY writer. Storage-agnostic (works on `OutputStream`). |
 | `:app` | Kotlin/Android | Single activity, Compose Material 3 UI with glove-sized controls, project storage (JSON files), navigation. |
@@ -305,6 +312,9 @@ g++ -std=c++20 -O2 -pthread -I native-slam/src/main/cpp \
     native-slam/src/main/cpp/tsdf/volume.cpp \
     native-slam/src/main/cpp/tsdf/surface_nets.cpp \
     native-slam/src/main/cpp/slam/pose_graph.cpp \
+    native-slam/src/main/cpp/geometry/manhattan_world.cpp \
+    native-slam/src/main/cpp/geometry/plane_fit.cpp \
+    native-slam/src/main/cpp/calibration/tag_scale.cpp \
     native-slam/src/main/cpp/slam/rtabmap_bridge.cpp \
     native-slam/src/main/cpp/tests/host_tests.cpp -o /tmp/host_tests && /tmp/host_tests
 ```
@@ -315,8 +325,12 @@ Optional pieces (both are opt-in, the app works without them):
   `app/src/main/assets/models/` and set `constructar.depthModelAsset` if the name differs.
   Without it the app uses ARCore depth only.
 * **RTAB-Map** — set `constructar.rtabmap.dir=<path to RTAB-Map source>` in
-  `gradle.properties`; the CMake build then compiles the BSD-only bridge. Without it, the
-  built-in pose graph and proximity loop-closure proposer are used.
+  `gradle.properties`; the CMake build then compiles the BSD-only bridge. Note what is wired
+  today: the app measures on ARCore's own tracking. The pose graph, the proximity loop-closure
+  proposer and the bridge are built, host-tested and reachable through `NativeSlamEngine`, but
+  **nothing in `:app` or `:ar-engine` feeds them a keyframe yet**, so no closure is optimised -
+  the pose graph is *not yet driven by the scan pipeline* (finding 98), and
+  `verify_sources.py` refuses this file if it ever claims otherwise while that is still true.
 
 Full step-by-step setup — including how to convert the depth model and how to build RTAB-Map
 without non-free modules — is in **[docs/SETUP.md](docs/SETUP.md)**.
@@ -346,21 +360,59 @@ Known limitations, deliberately documented rather than hidden:
 * **Reflective and transparent surfaces** (windows, mirrors, polished steel) break both depth
   and tracking. The tracking monitor catches the *symptom* (depth confidence collapse) and
   coaches the operator; it cannot fix the physics.
-* **Drift.** With no loop closure, ARCore drift is ~1 % of travelled distance; the pose graph
-  redistributes a closure over the whole trajectory, so a 1.4 m closure error becomes ~0.1 m of
-  per-edge residual rather than a kink in the mesh.
+* **The HUD percentage is detail, not area.** The number next to the triangle count is the share
+  of a 68 k-triangle reference budget (`ScanState.detailFraction`), not a fraction of the room: a
+  cluttered cellar fills it with a third of the walls captured, an empty hall may never reach it.
+  It answers "is there enough geometry in the mesh to pick a cable out of", which is what a run
+  is measured on. How much of the *room* was captured is what the scan-limit warning in the HUD
+  (finding 97) and the protocol's scan note (finding 100) report; the app never computes a room's
+  total surface, so it does not print a room percentage anywhere.
+* **Drift.** ARCore drift is ~1 % of travelled distance and the shipped pipeline does not
+  correct it: the pose graph that would redistribute a closure over the whole trajectory is
+  host-tested but never fed (see *Optional pieces*), so a long run accumulates the error instead
+  of folding it back. Re-measure a run longer than ~8 m, or measure it as two runs from a shared
+  corner.
 
 ---
 
 ## Testing
 
-* **Native (C++) — 44 assertions, all green**, exercised with plain `g++` (no Android SDK):
+* **Native (C++) — 185 assertions, all green**, exercised with plain `g++` (no Android SDK):
   SE(3) exp/log round trip, TSDF integration on synthetic depth, sphere/wall reconstruction
-  areas and extents, triangle budget, invalid input, pose-graph closure, proximity loop closure.
+  areas and extents, a 30°-tilted plane (which pins the depth convention), free-space carving
+  (a ghost disappears, the real wall does not), triangle budget, invalid input, pose-graph
+  closure, proximity loop closure, every observation the integration counted is still in the
+  volume's weights, and the Manhattan-World frame (finding 187): a 4 x 3 x 2.5 m room with one
+  wall 8° off square and a 35° bay window comes back square to a fifth of a degree, the crooked
+  wall is squared and stays where its points are, the bay is returned untouched, a set of parallel
+  walls is refused rather than guessed at, and a room turned 30° yields the turned frame.
+  It is host-tested and **not yet wired**: nothing in the app feeds it, so nothing the app prints
+  is squared by it today.
+* **Plane fitting** — the step in front of it: RANSAC for the consensus set, a covariance
+  eigen-decomposition for the plane itself, the explained points removed, the next plane looked
+  for. RANSAC is seeded from the options and from nothing else, so a fit is reproducible from its
+  options alone; the triples only decide *which* points belong to a plane, never where it is; a
+  plane has to be flat (`planarity`) and to cover something (`extentMetres`), which is what stops a
+  line of points and a sliver of skirting board becoming walls, and a refused candidate is spent
+  rather than ending the fit — one bolt head in front of a wall cost the scan every plane behind
+  it (finding 191). The host suite runs the whole
+  chain — a synthetic 4 × 3 m room cloud with 3 mm of noise and one wall 8° off square, six
+  surfaces, one frame, five snapped planes and the crooked wall left at the 4 m it was measured
+  at.
+* **AprilTag — detector contract, no detector.** `calibration/tag_scale.hpp` holds the interface a
+  decoder will implement (whose only implementation says it is unavailable, and why) and the
+  marker-to-scale arithmetic: pair ratios against the printed layout, a median, a deviation
+  filter, and a baseline-weighted mean. It publishes a factor and its evidence and decides
+  nothing - the window stays in `:core`. No decoder is vendored, nothing exposes it over JNI and
+  no screen has a button for it; `docs/CALIBRATION.md` says the same. `tools/verify-native.sh` builds and runs all of it the way CI does;
+  `--tsan` runs the same suite under ThreadSanitizer, which is a gate: the fusion of a voxel is a
+  read-modify-write of two arrays done by several workers, and only the sanitizer can see it when
+  that update escapes the shard lock (finding 181). It reports none.
 * **JVM (`:core`)** — transform maths, plane fits and polygon containment, fillet smoothing,
   measurement, tube/duct mesh invariants, BOM aggregation, the working-time clock, the money
   arithmetic (`Pricing`: rounding, both decimal separators, thousand dots, euro forced on a
-  `pl-PL` phone) and the photo-token naming contract.
+  `pl-PL` phone), the photo-token naming contract and the third-party notice list the Help screen
+  shows (every linked component attributed, only fee-free licences).
 * **JVM (`:app`, Robolectric)** — the storage layer against a real filesystem: a room survives
   a save and a load, a blank name falls back, restoring a backup of a room that is still on the
   phone keeps both, text that is not a project is refused, a corrupt file is reported as
@@ -371,9 +423,18 @@ Known limitations, deliberately documented rather than hidden:
 * **JVM (`:app`)** — the printed cost block: no block without time or material, labour +
   material = net total through the same formatter the PDF uses, a running session billed to now,
   a project rate overriding the firm's.
+* **JVM (`:native-slam`)** — the pose-graph report as it crosses the JNI bridge: the
+  optimiser's convergence verdict is carried across instead of being re-derived from the two
+  costs, and the pose block is read past that flag rather than from it. Plus the engine's
+  lifetime: `close()` frees the native context once however often it is called (three calls in a
+  row, or two threads at the same moment), and every other method is a no-op afterwards instead of
+  handing a freed pointer to the JNI layer (finding 182).
 * **JVM (`:ar-engine`, `:export`)** — hit cascade priority and rejection reasons, metric depth
   calibration (including "refuses to fit on noise"), routing/anchor behaviour, GLB/PLY/CSV
-  structural validation, and the ten rules of the reticle stabiliser (a settled median, an
+  structural validation, the protocol's note for a capture that hit the scan limit, the rows of
+  its summary, the order list's uncertain-hit note, the HUD's detail budget, the tracking
+  monitor's steady state (a frame that changes nothing publishes nothing), the torch's refusal
+  path (a camera that says no is not asked again), and the ten rules of the reticle stabiliser (a settled median, an
   outvoted stray frame, a moving hand that never locks, a plane or tier change that resets the
   window, a miss that clears it).
 * **JVM (`:core` licence)** — the freemium gate: a signed licence verifies, a tampered payload
@@ -385,14 +446,63 @@ Known limitations, deliberately documented rather than hidden:
 * **Instrumented tests** would need a physical ARCore device; none are included, and nothing in
   this repository claims to have run on one.
 * **CI**: `.github/workflows/native-tests.yml` builds and runs the native suite with both `g++`
-  and `clang++` at `-O1`/`-O2` with `-Werror`, on every push that touches the C++ core.
+  and `clang++` at `-O1`/`-O2` with `-Werror`, on every push that touches the C++ core. It also
+  compiles the optional RTAB-Map branch against stub headers that mirror upstream's own
+  declarations — so the check has an opinion — and runs
+  `cmake -P native-slam/src/main/cpp/tests/rtabmap-layout-check.cmake` — six checks on where a
+  real checkout keeps its headers and archives, without an NDK, because that switch had never
+  once been satisfied by the documented build (finding 110).
 * **CI**: `.github/workflows/android-build.yml` runs `gradle assembleDebug testDebugUnitTest`
   (warnings are errors), asserts `libconstructar_slam.so` is inside the arm64 APK, and uploads
   the test reports. That workflow — not a local machine — is where the "it compiles" claim is
   proven.
 * **Static gates**: `scripts/verify_sources.py` checks copyright headers, the reflection ban,
+  the published test and assertion counts against the suites themselves,
   hardcoded UI text in shipped code, string-resource references, locale parity, XML
-  well-formedness and the manifest hardening — without needing a JDK.
+  well-formedness and the manifest hardening — without needing a JDK. One of its rules holds the
+  native layer to its four build lists at once (a `geometry/*.cpp` must be compiled by CMake, the
+  host script and both workflows, or it is dead code in the configuration nobody tried), and
+  another refuses an Eigen include in the self-contained build. Two more keep a
+  *claim* tied to the code: no document may describe a loop closure while nothing feeds the pose
+  graph (finding 98), the native assertion count in this file must equal the call sites in
+  `host_tests.cpp` (finding 99), and a project file's `schemaVersion` must actually be compared
+  before a restore accepts it (finding 101). A third holds a *document* to an *artefact*: every
+  component the release checklist promises to attribute must exist in `ThirdPartyNotices.ALL`
+  and in `NOTICE`, and any licence text `NOTICE` points at must be there (finding 109). And a
+  *screen* to its *promise*: the AR gate may not fetch ARCore's answer once and keep it, because
+  an install finishes in the Play Store while the screen is stopped (finding 146), and a
+  percentage may not be truncated on its way to the signed page (finding 147), and a printed
+  clock may not take its convention or its digits from the phone's language (finding 148), and
+  the plan's room budget may only be computed in `ProjectSlots` (finding 149), and a room file
+  the build cannot read has to be reachable and deletable from the list (finding 150), and both
+  estimating options the engine reads must be passed where the list is built (finding 151), and the
+  order list that leaves the shop must state the waste it applied (finding 152), and a backup has to
+  copy the bytes it found rather than re-encode them (finding 153), and every length total has to be
+  the sum of the rows the documents print (finding 154), and a column of numbers may not sit under a
+  blank header (finding 155), and a control may not ask the operator to pick a value it never shows
+  (finding 156), a CI failure reporter has to be able to find its pull request (finding 157), and
+  the phone may not read a legal confidence as an absent one (finding 158), a memory budget may only
+  be spent atomically (finding 159), a block's per-frame bookkeeping may only happen under the lock
+  that owns it (finding 160), a run left out of the order sheet has to be counted somewhere
+  (finding 161), the run the operator is measuring has to reach the screen (finding 162), and a
+  frame may only be placed where the tracker actually knows the phone is (finding 163), and a
+  finished run must give back what it was measured with (finding 164), and a runtime handle must
+  not be written into the project file (finding 165), and a rule that was fixed twice may not
+  keep a second implementation around for the tests to hold (finding 166), and a format the
+  export can actually produce has to be the one it produces (finding 167), and a buffer handed
+  to two threads may not go back to the pool on one reader's word (finding 168), and a rule
+  about frames may not be read off a clock that ticks in someone else's steps (finding 169), and
+  a counter the documents promise the operator can see has to reach a screen (finding 170), and
+  a state object may not carry a field nothing reads (finding 171), and the render loop may not
+  allocate a plane it already has a pool for (finding 172), and a pass that must copy may reuse
+  the buffer it copied into last time (finding 173), and a sentence the operator's own labels
+  made longer has to move down the page rather than print over the footer (finding 174), and a
+  document may not promise a second read of a photo that nothing performs (finding 175), and a
+  failed save may not delete the room it was saving (finding 176), and a clamp may not cut an
+  emoji in half on its way into the customer's PDF (finding 177), and a run name may not reach
+  the mesh hand-off as a row of question marks (finding 178), and a warning the app derived from
+  the geometry has to be able to go away again (finding 179), and a control that offers "the trade
+  default" has to say what that is before it is chosen (finding 180).
 * **Site gate**: `tools/seo_audit.py` reads the *generated* landing pages and refuses a
   regression: canonical and the six `hreflang` pairs, title/description lengths, Open Graph and
   Twitter cards with a real image size, JSON-LD whose offers match the four real prices, every
@@ -400,13 +510,16 @@ Known limitations, deliberately documented rather than hidden:
   (declared size checked against the file), and a 404 that is `noindex` with absolute URLs only.
 * **Agreement gates**: `tools/i18n_audit.py` fails when a translated locale still carries the
   English string (with a reviewed allowlist for words that are genuinely the same — "Export" is
-  German, "Surface" is French), and `tools/consistency_audit.py` fails when the landing page and
-  the app disagree on the three wallet addresses, the four prices, the six languages or the
-  version.
-* **The temporary screenshot matrix** (`.github/workflows/screenshots.yml`) renders every screen
-  in all six languages on the JVM and every landing page in real Chromium at three viewports. It
-  lives in build output, is not part of the release gate, and is meant to be deleted after the
-  review — [docs/TESTING.md](docs/TESTING.md) says exactly what it touches.
+  German, "Surface" is French), when a surface mixes address forms (the app says *du/tú/tu*
+  throughout; the French page says *vous* throughout, which is its own decision and not a
+  defect), when French or Italian writes `\'` where every other string uses `’`, and
+  `tools/consistency_audit.py` fails when the landing page and the app disagree on the three
+  wallet addresses, the four prices, the six languages or the version.
+* **No screenshot matrix, on purpose.** One existed during the systematic beta test and was
+  deleted with it: a pipeline that renders screens nobody can compare against is coverage in
+  appearance only. Layout is a device-matrix item
+  ([docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)); the six locales are held by the
+  string gates above.
 
 The pre-release gate (device matrix, measurement verification against a laser, licensing,
 performance) is [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md). How each layer is run,
@@ -422,14 +535,16 @@ errors:
 
 | Gate | Result |
 |------|--------|
-| `scripts/verify_sources.py` (headers, reflection ban, i18n parity) | pass — 162 files |
+| `scripts/verify_sources.py` (headers, reflection ban, i18n parity, no stale claim) | pass — every tracked source file |
 | `tools/seo_audit.py` (metadata, structured data, links, sitemap, manifest) | pass — 6 pages + 404 |
-| `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, no price or address drift |
+| `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 210 tests in the app+core+ar-engine+export suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 715 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
-| Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 44 checks, 0 failures |
+| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 185 checks, 0 failures |
+| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 185 checks, 0 failures, no data race reported |
+| RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
 | APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |
 
@@ -463,7 +578,9 @@ reverse engineering are prohibited. Every source file carries the corresponding 
 (`SPDX-License-Identifier: LicenseRef-Proprietary`).
 
 Third-party components remain under their own licences (Apache-2.0 / BSD-3-Clause / ARCore SDK
-terms); see [docs/LICENSING.md](docs/LICENSING.md) for the inventory and obligations.
+terms) and keep their notices: [NOTICE](NOTICE) and `licenses/` reproduce them, and the app shows
+the same list on the Help screen. See [docs/LICENSING.md](docs/LICENSING.md) for the inventory and
+obligations.
 
 ---
 

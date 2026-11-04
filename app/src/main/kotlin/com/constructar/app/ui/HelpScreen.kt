@@ -41,6 +41,7 @@ import com.constructar.app.R
 import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.licence.Entitlements
+import com.constructar.core.licence.ThirdPartyNotices
 
 /**
  * Help, accuracy and licence in one place.
@@ -57,6 +58,7 @@ fun HelpScreen(
     deviceTag: String,
     clockRolledBack: Boolean = false,
     integrityFailed: Boolean = false,
+    localStateTampered: Boolean = false,
     demoSigningKey: Boolean = false,
     repository: ProjectRepository,
     onBack: () -> Unit,
@@ -64,7 +66,7 @@ fun HelpScreen(
     onRestore: (
         texts: List<String>,
         photos: List<Pair<String, android.net.Uri>>,
-        done: (imported: Int, heldBack: Int) -> Unit,
+        done: (com.constructar.app.RestoreCounts) -> Unit,
     ) -> Unit,
 ) {
     Column(
@@ -124,14 +126,32 @@ fun HelpScreen(
 
         BackupCard(repository = repository, onRestore = onRestore)
 
+        // Apache-2.0 §4 and BSD-3-Clause make the notice an obligation of distribution, and the
+        // release checklist has asked for this section since the first release. The list itself
+        // lives in `:core` (`ThirdPartyNotices`), so the UI holds no literals and the fast JVM
+        // tests can hold it to what the app links (finding 109).
+        Section(title = stringResource(R.string.licences_title)) {
+            Text(stringResource(R.string.licences_intro), style = MaterialTheme.typography.bodyMedium)
+            ThirdPartyNotices.ALL.forEach { notice ->
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(notice.title, style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        notice.copyright,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
         Section(title = stringResource(R.string.help_licence_title)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PlanChip(entitlements = entitlements, trialDaysLeft = trialDaysLeft, onClick = onUpgrade)
-                Text(
-                    text = deviceTag,
+                DeviceCodeLine(
+                    tag = deviceTag,
+                    modifier = Modifier.padding(start = 12.dp),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 12.dp),
                 )
             }
             // Everything below is a *diagnosis*, shown only when it applies: a normal
@@ -148,6 +168,15 @@ fun HelpScreen(
                     stringResource(R.string.licence_integrity_failed),
                     style = MaterialTheme.typography.bodySmall,
                     color = SiteColors.danger,
+                )
+            }
+            // The diagnosis the store has always computed and no screen ever showed: without it
+            // the paywall's "already used" is the only thing the operator hears (finding 139).
+            if (localStateTampered) {
+                Text(
+                    stringResource(R.string.paywall_trial_tampered),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SiteColors.warning,
                 )
             }
             if (demoSigningKey) {

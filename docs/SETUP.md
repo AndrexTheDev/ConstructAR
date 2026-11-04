@@ -184,16 +184,50 @@ constructar.rtabmap.dir=/absolute/path/to/rtabmap
 `native-slam/build.gradle.kts` forwards this as `-DCONSTRUCTAR_WITH_RTABMAP=ON
 -DRTABMAP_SOURCE_DIR=…` to CMake.
 
-### 5.2 What the bridge does
+CMake finds the checkout's headers and archives instead of assuming one layout: upstream keeps
+them in `corelib/include`, an in-source build writes `build/bin/librtabmap_core.a`, and the
+`-B rtabmap-build` above writes `rtabmap-build/bin/` next to the checkout. All three are
+recognised (`native-slam/src/main/cpp/cmake/rtabmap_layout.cmake`); if none matches, the configure
+step stops and names every path it looked for, so a typo is one line of output rather than a wall
+of missing-header errors. That probe is itself tested by
+`cmake -P native-slam/src/main/cpp/tests/rtabmap-layout-check.cmake` (fake trees, no NDK), which
+`native-tests` runs on every push.
 
-* adds keyframes (RGB feature descriptors + pose) at a spatial threshold;
-* asks RTAB-Map for loop-closure candidates, which are turned into `PoseGraph` edges with a
-  high weight **only** after a geometric consistency check (`ProximityLoopClosureDetector`
-  in the C++ layer, if RTAB-Map is absent);
-* runs the optimiser and refreshes the node poses.
+### 5.2 What the bridge does — and what is wired today
 
-With RTAB-Map off, the built-in pose graph and proximity proposer are used — the app never
-depends on RTAB-Map being present.
+The C++ side is complete, and the optional branch is **compiled** by the `native-tests` job on
+every push — in the `-DCONSTRUCTAR_WITH_RTABMAP=1` configuration, against the stub headers in
+`native-slam/src/main/cpp/tests/rtabmap-stubs`. It cannot be *linked* or run there (no RTAB-Map
+checkout in CI). What that check proves is the *shape* of the calls: those headers mirror
+upstream's declarations — the parameter keys are functions returning `std::string`, parameters go
+to `init()`, the odometry pose is a `process(data, odomPose)` argument, `CameraModel` takes its
+optical rotation and a `cv::Size` — and they are mutated in review to make sure they still
+refuse a wrong call.
+
+It has not always been like that. Until finding 107 the branch could not compile at all (the
+RTAB-Map includes sat inside `namespace constructar`); until finding 183 it still could not,
+because the stubs had been written from the bridge: seven signatures differed from upstream
+(`setParameters`, `setOptimized`, a nine-argument `CameraModel`, an odometry pose inside
+`SensorData`, `kFeatureORB`, the keys as values, and a one-argument `process`), so the job was
+green for a build that would have failed. A real checkout is still the only thing that can prove
+a link, and no run of this app has done that.
+
+* `RtabMapBridge::processKeyframe` feeds one keyframe (RGB + the ARCore odometry pose) and
+  reports whether RTAB-Map accepted a loop closure and which node it matched. It does **not**
+  return an optimised pose list — the poses come from the pose-graph call below, which the app
+  does not make yet;
+* `ProximityLoopClosureDetector` proposes a revisit by pose proximity (proposals only — a false
+  closure folds a room in half, so nothing is promoted silently);
+* `PoseGraph::optimize` redistributes a closure over the whole trajectory.
+
+**It is not yet driven from the app.** No line in `:app` or `:ar-engine` calls
+`optimizePoseGraph`, `addPoseNode`, `addPoseEdge` or `loopClosureCandidates`, and the JNI exposes
+no keyframe feed, so compiling RTAB-Map in changes nothing the operator sees: today the app
+measures on ARCore's own tracking and no closure is optimised. The loop closure is therefore
+**not yet driven by the scan pipeline** (finding 98), and `scripts/verify_sources.py` fails if
+this document claims the optimiser runs while it is still true. Wiring it is a real piece of
+work — keyframe extraction, a verified closure policy and a re-anchor of the measured nodes —
+not a build flag.
 
 ---
 
@@ -235,9 +269,9 @@ proves the pin compiles.
 |---------|-------|-----|
 | `UnsatisfiedLinkError: libconstructar_slam.so` | ABI not built (e.g. an x86 emulator) | The app detects it (`NativeSlamEngine.isAvailable == false`) and disables scanning; add `x86_64` to `abiFilters` or use a real device |
 | Black AR view, `CameraNotAvailableException` | Another app holds the camera | `ArSessionController.resume()` retries once after 250 ms; otherwise the UI says "camera unavailable" |
-| Scan looks holey at silhouettes | Free-space carving is off by default (it triples integration cost) | Enable `TsdfConfig.carveFreeSpace` for a final clean-up pass, or rescan from a second angle |
-| Mesh is shifted after a relocalisation | Anchors were recreated from the persisted node positions | Expected: run the loop closure (or finish and re-measure that run); the protocol flags low-confidence runs |
-| Depth hits land behind the surface | Stale depth frame used for the raycast | Must not happen: `TsdfScanPipeline` only recycles a snapshot when a newer one replaces it |
+| Scan looks holey at silhouettes | Free-space carving is off by default (it costs ~7.7× integration: 7.3 → 55.9 ms per 320×240 frame) | Enable `TsdfConfig.carveFreeSpace` for a final clean-up pass, or rescan from a second angle |
+| Mesh is shifted after a relocalisation | Anchors were recreated from the persisted node positions | Nothing folds the trajectory back yet - the app does not run a loop closure (finding 98) - so finish the run and re-measure it, or scan again; the protocol flags low-confidence runs |
+| Depth hits land behind the surface | Stale depth frame used for the raycast | Must not happen: a snapshot's array goes back to `DepthBufferPool` only when its last reference is released, so a frame the hit cascade or the worker is still reading cannot be overwritten (finding 168) |
 | Torch does nothing | Device reports `FlashMode.TORCH` unsupported, or the front camera is in use | SceneView silently downgrades the typed `flashMode`; `TorchController` keeps the button state honest |
 | `FAIL_ON_PROJECT_REPOS` failure | A dependency pulled in `jcenter`/a second repo | Keep everything on `google()` + `mavenCentral()`; see `settings.gradle.kts` |
 
