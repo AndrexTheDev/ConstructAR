@@ -126,8 +126,17 @@ class ArHitSource(
         viewHeight: Int,
         snapshot: DepthFrameSnapshot?,
         previousNode: RouteNodeRecord? = null,
-    ): HitResolution = SurfaceHitResolver(cascade)
-        .resolve(buildRequest(frame, x, y, viewWidth, viewHeight, snapshot, previousNode))
+    ): HitResolution {
+        val request = buildRequest(frame, x, y, viewWidth, viewHeight, snapshot, previousNode)
+        val resolution = SurfaceHitResolver(cascade).resolve(request)
+        // Plane hits are pulled onto the room's real edges and corners before they become
+        // route nodes; every other tier is returned untouched. See [ReticleSnap].
+        return ReticleSnap.snap(
+            resolution = resolution,
+            planes = request.planes,
+            enabled = cascade.snapToArchitecturalFeatures,
+        )
+    }
 
     // ── Planes ──────────────────────────────────────────────────────────────────────────
 

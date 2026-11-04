@@ -69,6 +69,13 @@ which said nothing about the worker that was still pinning it.
    * *tier 4* — `HitResult.Type.POINT`, confidence 0.4.
    * A normal is derived per tier (plane normal, least-squares fit of a 5×5 depth patch, or
      flipped towards the camera) and always oriented towards the operator.
+   * **Snap** (`ReticleSnap`, tier 1 only) — the accepted plane hit is measured against the
+     room's derived edges and corners: each pair of tracked, non-subsumed polygons is
+     intersected and the resulting line is clipped to *both* polygons, so two walls that do
+     not touch produce no corner. Within 10 cm the hit becomes the feature's closest point.
+     Depth and feature-point hits keep their raw point — they carry no polygon to derive an
+     edge from — and the normal stays the aimed wall's. Toggle:
+     `HitCascadeConfig.snapToArchitecturalFeatures`.
 4. **Node** → `RouteSession.addNode(hit)`: rejects taps closer than 2 cm to the previous node,
    creates an `Anchor` whose +Y axis is the surface normal, appends a `RouteNodeRecord`.
 5. **Anchor refinement** → every frame `RouteSession.onFrame()` re-reads anchor poses and moves

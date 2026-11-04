@@ -70,6 +70,23 @@ intersection (a segment through the *middle* of a beam touches none of its twelv
 edge-only check calls a penetration "0.5 m clear"), exact segment-to-box distances, and the default
 or per-obstacle clearance enforced.
 
+**Architectural snapping** (`ar-engine/.../hit`, **and it is wired**: `ReticleSnap` runs inside
+`ArHitSource.resolve`, so every accepted plane hit - the reticle's and the tap's - is pulled onto
+the room's own geometry before it can become a route node): the edges and corners of a room are
+derived from the tracked plane polygons by intersecting each pair and clipping the result to
+*both* polygons, because two walls that do not touch still intersect in an infinite line and
+snapping to that line would put a measurement on a wall that is not there. A hit within 10 cm of
+a derived edge or corner *is* that edge or corner - 3 cm short of a corner is the corner - so a
+run ends exactly where the fitter stopped and the exported plan shows the room that was measured
+rather than the room ARCore happened to see. Only `HitSource.PLANE_POLYGON` hits move: a depth or
+feature-point hit has no polygon of its own, and pulling it onto a corner would claim precision
+the sensor never measured; the accepted normal likewise stays the aimed wall's, so a corner does
+not silently move the line onto the perpendicular wall. The minimum feature length (20 cm) is
+deliberately longer than the tolerance (10 cm) - a corner whose clipped segment is shorter than
+the tolerance could never be reached from a hit near its end, and would disappear. This is the
+room's geometry; the 4 cm crosshair snap above is a different rule, and still snaps to corners the
+*run* already has.
+
 **Depth fusion policy.** ARCore depth is metric but holey; the network is dense but only
 relative. `AiDepthFusion` therefore lets the network **fill holes only** — a confident ARCore
 sample is never overwritten — after `MetricDepthCalibrator` fits `1/z = s·d + t` against
@@ -479,7 +496,10 @@ Known limitations, deliberately documented rather than hidden:
   lifetime: `close()` frees the native context once however often it is called (three calls in a
   row, or two threads at the same moment), and every other method is a no-op afterwards instead of
   handing a freed pointer to the JNI layer (finding 182).
-* **JVM (`:ar-engine`, `:export`)** — hit cascade priority and rejection reasons, metric depth
+* **JVM (`:ar-engine`, `:export`)** — hit cascade priority and rejection reasons, architectural
+  snapping (a derived corner found, an edge clipped out of two polygons, walls that stop short
+  producing no corner, the tie that a corner wins over an edge, and the tiers that are never
+  snapped), metric depth
   calibration (including "refuses to fit on noise"), routing/anchor behaviour, GLB/PLY/CSV
   structural validation, the protocol's note for a capture that hit the scan limit, the rows of
   its summary, the order list's uncertain-hit note, the HUD's detail budget, the tracking
@@ -590,7 +610,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 763 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 786 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 272 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 272 checks, 0 failures, no data race reported |

@@ -146,4 +146,10 @@ data class HitCascadeConfig(
      * Always true for planes: the closest valid plane is the one the user is aiming at.
      */
     val preferNearestPlane: Boolean = true,
+    /**
+     * Pull accepted plane hits onto architectural edges and corners ([ReticleSnap]).
+     * Off = the reticle reports the raw polygon hit; useful when a device's plane polygons
+     * are too ragged for the derived edges to be trusted.
+     */
+    val snapToArchitecturalFeatures: Boolean = true,
 )
