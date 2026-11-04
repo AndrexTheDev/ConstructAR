@@ -300,6 +300,16 @@ origin, so the recovered route is marked `recovered`: it counts fully in the bil
 and the protocol, and it is kept out of the 3D export and the AR preview, where its coordinates
 would be a length of conduit floating somewhere in the room.
 
+**The room's picture.** Next to the JSON, in `filesDir/projects/`, the product plan puts a
+`thumbnail.svg` for the home screen's card — a few hundred bytes of polygon instead of a camera
+frame, drawn by `:export`'s `FloorplanSvg` from the outline in world metres (one scale for both
+axes, plan view: world `x` right, world `z` down, walls 10 cm thick to scale with a 1 px floor).
+The generator is in place and tested; **nothing writes the file yet**, because no part of the app
+produces a room outline: the native floorplan vectoriser exists but is not exposed over JNI, so
+`ReticleSnap` can give a run exact corners without anyone having asked for the *closed* outline a
+thumbnail needs. That is the next wiring step, and until it happens the card has no picture and
+the README says so.
+
 Schema version `1`; `ProjectMigrations` is the place for the next one.
 
 ---

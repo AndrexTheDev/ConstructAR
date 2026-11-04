@@ -2817,6 +2817,59 @@ def kotlin_function_bodies(text: str):
         index += 1
 
 
+FORMAT_CALL = re.compile(r"String\.format\(")
+
+
+def first_call_argument(code: str, open_paren: int) -> str:
+    """Text of the first argument of the call whose `(` sits at [open_paren]."""
+    depth = 0
+    index = open_paren + 1
+    start = index
+    while index < len(code):
+        character = code[index]
+        if character == "(":
+            depth += 1
+        elif character == ")":
+            if depth == 0:
+                return code[start:index]
+            depth -= 1
+        elif character == "," and depth == 0:
+            return code[start:index]
+        index += 1
+    return code[start:]
+
+
+def check_exported_numbers_use_the_c_locale() -> None:
+    """Every number that leaves the device is formatted in the C locale (finding 193).
+
+    Three files carry numbers to a customer, and all three break in the same way under a German
+    default locale: a CSV column becomes two (`14,82` is the next column), an SVG `points`
+    attribute loses its polygon because a comma there is a *separator*, and the PDF prints a
+    decimal comma into a document the customer signs. None of it raises - the CSV opens, the SVG
+    parses, the PDF prints - so nothing downstream ever reports it, and the phone's locale is the
+    one variable nobody sets while testing.
+
+    `Locale.ROOT` is the whole fix and it is already the convention in every one of these files;
+    this rule is here because the new SVG writer is the third place to need it and a convention
+    with three copies is a convention that gets forgotten once. `:app` is deliberately out of
+    scope: a screen *should* print the operator's own decimal comma.
+    """
+    for module in ("core", "export"):
+        root = ROOT / module / "src" / "main"
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*.kt")):
+            code = kotlin_code_only(path.read_text(encoding="utf-8"))
+            for match in FORMAT_CALL.finditer(code):
+                argument = first_call_argument(code, match.end() - 1).strip()
+                if argument.startswith("Locale.ROOT"):
+                    continue
+                line = code.count("\n", 0, match.start()) + 1
+                add(path, f"`String.format(` at line {line} does not take `Locale.ROOT` as its "
+                          f"first argument: on a phone set to German the decimal comma reaches a "
+                          f"CSV column, an SVG polygon or a signed PDF, and nothing raises")
+
+
 def check_the_reticle_snap_stays_wired() -> None:
     """The README's "and it is wired" is derived from the code, not remembered (finding 100's rule).
 
@@ -2974,6 +3027,7 @@ def main() -> int:
     check_manifest_hardening()
     check_a_stable_value_is_asserted_once()
     check_the_reticle_snap_stays_wired()
+    check_exported_numbers_use_the_c_locale()
     check_kotlin_structure()
     check_resource_xml()
     check_licence_key()
