@@ -171,6 +171,39 @@ class ExportTextFormatsTest {
     }
 
     @Test
+    fun `the ply the export writes is text while a person might read it`() {
+        // Findings 161-166 were all one shape: a documented variant nobody produced. Here the
+        // export produced only the ascii one and the class comment claimed both (finding 167), so
+        // the layout is now a decision with a rule and this pins both sides of it.
+        val small = PlyWriter.write(listOf(PlyWriter.PlyPart("run", triangleMesh())))
+        assertTrue(
+            "a run-sized bundle stays readable text",
+            String(small, Charsets.US_ASCII).startsWith("ply\nformat ascii 1.0\n"),
+        )
+    }
+
+    @Test
+    fun `a ply too big to read is written as binary`() {
+        // Same geometry either way; past the limit the bytes are what matters. The mesh needs only
+        // the triangle count to clear it, so the fixture stays three vertices.
+        val triangles = PlyWriter.ASCII_LIMIT_TRIANGLES + 1
+        val huge = MeshData(
+            positions = floatArrayOf(0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f, 0f),
+            normals = FloatArray(9),
+            uvs = null,
+            indices = IntArray(triangles * 3) { it % 3 },
+        )
+
+        val bytes = PlyWriter.write(listOf(PlyWriter.PlyPart("scan", huge)))
+
+        val header = String(bytes, 0, 64, Charsets.US_ASCII)
+        assertTrue("the header has to say which layout it is: $header", header.startsWith("ply\nformat binary_little_endian 1.0\n"))
+        // And the payload is the size the header declares, not the ascii text.
+        val headerEnd = indexOf(bytes, "end_header\n".toByteArray()) + "end_header\n".length
+        assertEquals(headerEnd + 3 * 6 * 4 + triangles * (1 + 3 * 4), bytes.size)
+    }
+
+    @Test
     fun `ply binary length matches the declared header`() {
         val bytes = PlyWriter.writeBinaryLittleEndian(listOf(PlyWriter.PlyPart("tri", triangleMesh())))
         val headerEnd = indexOf(bytes, "end_header\n".toByteArray()) + "end_header\n".length

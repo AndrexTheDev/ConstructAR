@@ -1814,6 +1814,26 @@ def check_one_home_for_the_room_limit() -> None:
         add(app, "the restore gate must ask `ProjectSlots.remaining` - a restore brings rooms in "
                  "bulk and is the other way past the limit (finding 149)")
 
+def check_ply_layout_is_decided_once() -> None:
+    """The PLY layout is chosen in the writer, by size (finding 167).
+
+    `PlyWriter` documents two layouts of the same geometry, and `ExportService` called only
+    `writeAscii` - so every PLY the app ever produced was the text one, including a bundle big
+    enough that nobody opens it, and the binary writer existed, was tested, and shipped with the
+    app as dead code. The choice is now `PlyWriter.write`, which reads the triangle count; the
+    export must not go round it and pick a layout of its own.
+    """
+    service = ROOT / "export" / "src" / "main" / "kotlin" / "com" / "constructar" / "export" / "ExportService.kt"
+    text = service.read_text(encoding="utf-8")
+    if "PlyWriter.write(" not in text:
+        add(service, "the export does not go through `PlyWriter.write`, so the layout is decided "
+                     "somewhere else - which is how every PLY the app produced ended up as text "
+                     "while the binary writer sat unused (finding 167)")
+    for bypass in ("PlyWriter.writeAscii(", "PlyWriter.writeBinaryLittleEndian("):
+        if bypass in text:
+            add(service, f"the export calls `{bypass.rstrip('(')}` directly, so the size rule in "
+                         "`PlyWriter.write` is bypassed (finding 167)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1858,6 +1878,7 @@ def main() -> int:
     check_finished_runs_release_their_anchors()
     check_anchor_id_is_transient()
     check_one_home_for_the_room_limit()
+    check_ply_layout_is_decided_once()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

@@ -13,12 +13,21 @@ import java.util.Locale
  * PLY (Stanford polygon format) writer — the lowest-common-denominator hand-off.
  *
  * Cloud-point-processing tools, MeshLab, CloudCompare and most survey pipelines read PLY even
- * when they cannot open glTF, and a scanned room is as much a point cloud as it is a mesh. Two
- * variants are produced:
+ * when they cannot open glTF, and a scanned room is as much a point cloud as it is a mesh.
  *
- *  * **ASCII** — human-inspectable, diff-able, and the one to send to a client;
- *  * **binary little-endian** — ~4× smaller, for a 300 k-triangle room scan it is the
- *    difference between 40 MB and 10 MB.
+ * There are two layouts of the same geometry, and [write] is the one the export calls:
+ *
+ *  * **ASCII** — human-inspectable and diff-able: a vertex is six numbers at five decimals, about
+ *    60 bytes, and a face is a line of about 22;
+ *  * **binary little-endian** — the same vertex is 24 bytes and the same face 13, so the file is
+ *    a little over half the size and grows that way on every vertex.
+ *
+ * Which one a bundle gets is decided by how much geometry is in it, not by taste: a flat of
+ * carried runs is a megabyte or two of text that a surveyor can open, read the header of and
+ * diff against last week's export, and a bundle big enough to stop being readable is the case
+ * where the bytes are the only thing that matters ([ASCII_LIMIT_TRIANGLES]). The writer used to
+ * describe both variants as "produced" while `ExportService` only ever called [writeAscii], which
+ * also left the size claim around them unmeasured (finding 167).
  *
  * Both use metres and Y-up (PLY has no up-axis convention, so it is written as a comment —
  * losers of the format, but a comment has saved more imports than it cost).
@@ -33,6 +42,28 @@ object PlyWriter {
 
     /** What the file is: an export, in metres, Y-up. See the class comment (finding 87). */
     const val DEFAULT_COMMENT: String = "ConstructAR export, metres, Y-up"
+
+    /**
+     * Past this many triangles the text form stops being worth having.
+     *
+     * The number is a reading budget, not a measurement limit: 100 000 triangles is roughly three
+     * megabytes of text, which is about as much as anyone opens to look at, and past it the file
+     * is going to a tool - and that tool reads binary just as well for half the bytes.
+     */
+    const val ASCII_LIMIT_TRIANGLES: Int = 100_000
+
+    /**
+     * The PLY artifact the export writes, in the layout that suits its size.
+     *
+     * See [ASCII_LIMIT_TRIANGLES] for where the line is drawn; both layouts carry exactly the same
+     * geometry, and the file says which one it is in its second line.
+     */
+    fun write(parts: List<PlyPart>, comment: String = DEFAULT_COMMENT): ByteArray =
+        if (parts.sumOf { it.mesh.triangleCount } > ASCII_LIMIT_TRIANGLES) {
+            writeBinaryLittleEndian(parts, comment)
+        } else {
+            writeAscii(parts, comment).toByteArray(Charsets.US_ASCII)
+        }
 
     data class PlyPart(val name: String, val mesh: MeshData)
 

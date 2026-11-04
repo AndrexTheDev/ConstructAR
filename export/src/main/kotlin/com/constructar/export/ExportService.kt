@@ -228,11 +228,14 @@ class ExportService(
 
         if (request.includePly && parts.isNotEmpty()) {
             val plyParts = parts.map { PlyWriter.PlyPart(it.name, it.mesh) }
-            val ascii = PlyWriter.writeAscii(plyParts)
             artifacts += ExportArtifact(
                 fileName = "$stem.ply",
                 mimeType = "application/octet-stream",
-                write = { output -> output.write(ascii.toByteArray(Charsets.US_ASCII)) },
+                // `PlyWriter.write` decides the layout by size: text while a person might still
+                // open it, binary little-endian once the geometry is too big to read anyway
+                // (finding 167). Written inside the lambda like every other artifact, so a bundle
+                // never holds the page, the sheet and the model at once.
+                write = { output -> output.write(PlyWriter.write(plyParts)) },
             )
         }
 
