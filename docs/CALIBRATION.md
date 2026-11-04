@@ -19,7 +19,7 @@ drifts.
 |---|---|---|
 | 1 | ARCore VIO + Raw Depth (+ AI depth fused into holes, when the model asset ships) | ARCore and Raw Depth path **built**; the AI fusion is coded and unit-tested but **not wired** — `MonocularDepthEstimator` is never constructed in `:app`/`:ar-engine` and `app/src/main/assets/models/*.tflite` is not in the repository |
 | 2 | Passive marker detection (AprilTag 3 / ArUco) in a native worker | **Not built.** A background detector needs a decoder (its own vendored source and license entry) and cannot be built or verified in the development sandbox; see "Not built" below |
-| 3 | Active reference calibration: bank card or folding rule | **Complete in the app**: arithmetic, sweep, storage and application (`core/.../calib`, `ProjectRecord.calibrationScale`), a *Calibrate* button and dialog on the AR screen that takes the reticle point twice, six locales, and a correction notice on the room screen. What still follows: the calibration line in the protocol header and the CSV preamble |
+| 3 | Active reference calibration: bank card or folding rule | **Complete in the app**: arithmetic, sweep, storage and application (`core/.../calib`, `ProjectRecord.calibrationScale`), a *Calibrate* button and dialog on the AR screen that takes the reticle point twice, six locales, and a correction notice on the room screen. The protocol header and both CSV files carry the factor as their own line, so a document showing corrected metres also shows what corrected them |
 
 ## Tier 3 — the arithmetic
 
@@ -63,6 +63,14 @@ applied to:
   calibration changes what the customer is charged for in metres, not how many clips are needed;
 * the AR HUD while measuring — the operator measures what the phone sees; the paperwork is where
   the correction belongs, and the room screen says so in words when a factor is in force.
+
+**What the paperwork says.** When a factor is in force the protocol prints one line under its
+header — *Calibrated: factor 1.053* — and the full CSV and the wholesaler's order list print a
+`Calibration;…` preamble row, above the metres it qualifies. It is a row and not a `#` comment
+because these files are opened in Excel; it is a separate line and not part of the meta line
+because that line is ellipsised, and the reason for a corrected number must not be the first thing
+cut. `:export` never composes the sentence: the app owns the string table and passes a localised
+label, which is also why the label is resolved in composition and not inside the export coroutine.
 
 **Where the number goes.** `formatScale` prints three decimals in the root locale: it is a ratio,
 not a measurement, and a German phone must not write `1,053` inside a sentence that already calls

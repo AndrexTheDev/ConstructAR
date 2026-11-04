@@ -100,6 +100,15 @@ class ProtocolPdfWriter(
         /** All visible text, localised by the caller. See [PdfLabels]. */
         val labels: PdfLabels = PdfLabels(),
         /**
+         * The calibration the metres on this page were corrected by, already localised.
+         *
+         * Blank when no reference calibration was applied. Printed as its own line under the
+         * header rather than appended to the meta line: a document that reports 5.25 m for a run
+         * the phone measured as 5.00 m has to say why, and an ellipsised meta line would drop the
+         * reason first. `:export` never composes the sentence - the app owns the string table.
+         */
+        val calibrationLabel: String = "",
+        /**
          * Labels of runs that are in the paperwork but not in the 3D model because no geometry
          * could be built for them; the export side knows them, the project record does not.
          */
@@ -217,6 +226,15 @@ class ProtocolPdfWriter(
                 y.toFloat(),
                 textPaint,
             )
+            if (content.calibrationLabel.isNotBlank()) {
+                y += 12
+                page.canvas.drawText(
+                    ellipsize(content.calibrationLabel, pageWidth - 2 * MARGIN, notePaint),
+                    MARGIN.toFloat(),
+                    y.toFloat(),
+                    notePaint,
+                )
+            }
             y += 10
             page.canvas.drawLine(MARGIN.toFloat(), y.toFloat(), (pageWidth - MARGIN).toFloat(), y.toFloat(), rulePaint)
             y += 16

@@ -66,6 +66,54 @@ class ExportTextFormatsTest {
     }
 
     @Test
+    fun `a calibrated metres column says what corrected it`() {
+        // The number in the file is the corrected one. A buyer who compares it against a tape and
+        // finds 5.25 m where the phone said 5.00 m has to be able to read why, in the same file.
+        val project = sampleProject()
+        val list: MaterialList = MaterialListBuilder.build(project, nowMs = 0L)
+
+        val withLabel = MaterialCsvWriter.write(
+            list,
+            MaterialCsvWriter.Options(includeBom = false),
+            "2026-03-14 10:15",
+            calibrationLabel = "Calibrated: factor 1.053",
+        )
+        val without = MaterialCsvWriter.write(
+            list,
+            MaterialCsvWriter.Options(includeBom = false),
+            "2026-03-14 10:15",
+        )
+
+        assertTrue(withLabel.contains("Calibration;Calibrated: factor 1.053"))
+        // It is a preamble row, above the table it qualifies.
+        assertTrue(
+            withLabel.indexOf("Calibration;") < withLabel.indexOf("Kind;Specification"),
+        )
+        assertFalse(without.contains("Calibration;"))
+        // A blank label adds no row at all, so an uncalibrated export is byte-for-byte what it was.
+        assertEquals(without, MaterialCsvWriter.write(list, MaterialCsvWriter.Options(includeBom = false), "2026-03-14 10:15", calibrationLabel = ""))
+    }
+
+    @Test
+    fun `the wholesaler's order list carries the calibration too`() {
+        val project = sampleProject()
+        val list: MaterialList = MaterialListBuilder.build(project, nowMs = 0L)
+
+        val orderList = MaterialCsvWriter.writeOrderList(
+            list,
+            MaterialCsvWriter.Options(includeBom = false),
+            "2026-03-14 10:15",
+            calibrationLabel = "Calibrated: factor 1.053",
+        )
+
+        assertTrue(orderList.contains("Calibration;Calibrated: factor 1.053"))
+        // In the preamble, with the other qualifiers - not after the articles it applies to.
+        assertTrue(
+            orderList.lineSequence().take(5).any { it.startsWith("Calibration;") },
+        )
+    }
+
+    @Test
     fun `csv escaping doubles internal quotes`() {
         assertEquals("\"a\"\"b\"", MaterialCsvWriter.escape("a\"b"))
         assertEquals("plain", MaterialCsvWriter.escape("plain"))

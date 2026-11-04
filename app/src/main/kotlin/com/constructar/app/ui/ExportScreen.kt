@@ -48,6 +48,7 @@ import androidx.documentfile.provider.DocumentFile
 import com.constructar.app.BuildConfig
 import com.constructar.app.R
 import com.constructar.app.ui.theme.SiteColors
+import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.licence.Entitlements
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.bom.MaterialListBuilder
@@ -120,6 +121,17 @@ fun ExportScreen(
     }
     val signatureTitle = stringResource(R.string.signature_pdf_title)
     val signatureCaption = stringResource(R.string.signature_pdf_caption)
+    // The document has to say what corrected it: a protocol reporting 5.25 m for a run the phone
+    // measured as 5.00 m, with no word about the factor, is one nobody can check. Resolved here
+    // because the export coroutine below runs off the main thread, where no string can be read.
+    val calibrationLabel = if (project.isCalibrated) {
+        stringResource(
+            R.string.calib_success_toast,
+            ReferenceCalibration.formatScale(project.calibrationScale),
+        )
+    } else {
+        ""
+    }
 
     // The site file, resolved here rather than in the coroutine below: by the time the operator
     // has picked a folder there is no composition left to read a string from.
@@ -226,6 +238,7 @@ fun ExportScreen(
                             signatureTitle = signatureTitle,
                             signatureCaption = signatureCaption,
                             labels = pdfLabels,
+                            calibrationLabel = calibrationLabel,
                             sections = sectionsNow(),
                             photos = photoAppendix,
                             photosTitle = siteFileTexts.photosTitle,

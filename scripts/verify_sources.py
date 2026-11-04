@@ -443,6 +443,29 @@ def check_pdf_accuracy_note() -> None:
     six locales, with the figures a reader can act on and the placeholder the writer fills the
     confidence bar into, so a translator cannot quietly reduce it to "accurate measurement".
     """
+    pdf_writer = (ROOT / "export" / "src" / "main" / "kotlin" / "com" / "constructar" / "export" /
+                  "pdf" / "ProtocolPdfWriter.kt")
+    pdf_text = pdf_writer.read_text(encoding="utf-8")
+    if "val calibrationLabel: String = \"\"" not in pdf_text:
+        add(pdf_writer, "the protocol no longer carries the calibration line, so a document with "
+                        "corrected metres would not say what corrected them")
+    elif "if (content.calibrationLabel.isNotBlank()) {" not in pdf_text:
+        add(pdf_writer, "the protocol accepts a calibration label but no longer prints it")
+    csv_writer = (ROOT / "export" / "src" / "main" / "kotlin" / "com" / "constructar" / "export" /
+                  "csv" / "MaterialCsvWriter.kt")
+    csv_text = csv_writer.read_text(encoding="utf-8")
+    if csv_text.count("calibrationLabel.isNotBlank()") < 2:
+        add(csv_writer, "the CSV writers no longer print the calibration row - both the full bill "
+                        "and the wholesaler's order list need it")
+    export_screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" /
+                     "ui" / "ExportScreen.kt")
+    screen_text = export_screen.read_text(encoding="utf-8")
+    if "calibrationLabel = calibrationLabel" not in screen_text:
+        add(export_screen, "the export screen no longer hands the calibration label to the "
+                           "service, so the parameter would always be blank in the field")
+    elif "stringResource(" in screen_text.split("scope.launch")[-1].split("ExportService.Request")[0]:
+        add(export_screen, "a string resource is read inside the export coroutine - that is not a "
+                           "composable context and cannot compile")
     ar_screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
                  "ar" / "ArMeasureScreen.kt")
     ar_text = ar_screen.read_text(encoding="utf-8")

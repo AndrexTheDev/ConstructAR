@@ -47,6 +47,12 @@ object MaterialCsvWriter {
         options: Options = Options(),
         generatedAtLabel: String = "",
         runDetails: List<Triple<String, String, Float>> = emptyList(),
+        /**
+         * The calibration the metres were corrected by, already localised; blank when there is
+         * none. A preamble row rather than a trailing one, because it qualifies every metre below
+         * it - and a row rather than a `#` comment, because this file is opened in Excel.
+         */
+        calibrationLabel: String = "",
     ): String {
         val sb = StringBuilder(1024)
         if (options.includeBom) sb.append('\uFEFF')
@@ -54,6 +60,7 @@ object MaterialCsvWriter {
 
         row(sb, sep, listOf("Project", materialList.projectName))
         row(sb, sep, listOf("Material list generated", generatedAtLabel.ifBlank { materialList.generatedAtEpochMs.toString() }))
+        if (calibrationLabel.isNotBlank()) row(sb, sep, listOf("Calibration", calibrationLabel))
         row(sb, sep, listOf("Total metres (net)", number(materialList.totalMeters)))
         row(sb, sep, listOf("Total metres (incl. waste)", number(materialList.totalWithWasteMeters)))
         row(sb, sep, listOf("Total clips", materialList.totalClips.toString()))
@@ -138,6 +145,8 @@ object MaterialCsvWriter {
         materialList: MaterialList,
         options: Options = Options(),
         generatedAtLabel: String = "",
+        /** See [write]'s `calibrationLabel`; blank when no calibration was applied. */
+        calibrationLabel: String = "",
     ): String {
         val sb = StringBuilder(512)
         if (options.includeBom) sb.append('\uFEFF')
@@ -148,6 +157,7 @@ object MaterialCsvWriter {
             sb, sep,
             listOf("Order list", generatedAtLabel.ifBlank { materialList.generatedAtEpochMs.toString() }),
         )
+        if (calibrationLabel.isNotBlank()) row(sb, sep, listOf("Calibration", calibrationLabel))
         sb.append(lineEnding)
         // One column per bend article, not one for "bends": the buyer orders 90° elbows and 45°
         // elbows as different articles, and a single total told him only that there were four of

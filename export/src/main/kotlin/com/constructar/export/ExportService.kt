@@ -104,6 +104,12 @@ class ExportService(
         val signatureCaption: String = "",
         /** All text on the protocol, localised by the caller. See [PdfLabels]. */
         val labels: PdfLabels = PdfLabels(),
+        /**
+         * The calibration the reported metres were corrected by, already localised; blank when
+         * none was applied. Printed in the protocol header and as a CSV preamble row, so a
+         * document that shows corrected metres also shows what corrected them.
+         */
+        val calibrationLabel: String = "",
         /** The product badge drawn on the first page. */
         val logo: Bitmap? = null,
         /** Site file sections (customer, time, diary, defects, costs), localised by the caller. */
@@ -162,6 +168,7 @@ class ExportService(
                             signatureTitle = request.signatureTitle,
                             signatureCaption = request.signatureCaption,
                             labels = request.labels,
+                            calibrationLabel = request.calibrationLabel,
                             unbuildableRuns = request.routeMeshes.unbuildable,
                             sections = request.sections,
                             photos = request.photos,
@@ -184,6 +191,7 @@ class ExportService(
                 options = MaterialCsvWriter.Options(includeRunDetail = true),
                 generatedAtLabel = timestampLabel,
                 runDetails = runDetails,
+                calibrationLabel = request.calibrationLabel,
             )
             artifacts += ExportArtifact(
                 fileName = "$stem.csv",
@@ -196,6 +204,7 @@ class ExportService(
             val orderList = MaterialCsvWriter.writeOrderList(
                 materialList = request.materialList,
                 generatedAtLabel = timestampLabel,
+                calibrationLabel = request.calibrationLabel,
             )
             artifacts += ExportArtifact(
                 fileName = "$stem-order.csv",
