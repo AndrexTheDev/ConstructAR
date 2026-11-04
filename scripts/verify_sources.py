@@ -2009,6 +2009,24 @@ def check_the_protocol_notes_can_turn_the_page() -> None:
     if not flow.is_file():
         add(flow, "the page-break arithmetic for notes is missing (finding 174)")
 
+def check_the_appendix_prints_the_photos_the_screen_holds() -> None:
+    """The protocol appendix is filled from the thumbnails in memory (finding 175).
+
+    `docs/PERFORMANCE.md` promised that "the export re-reads the same file at 1 200 px for the
+    appendix, one page at a time", and `ProjectRepository.loadPhotoAs` said the same thing. No
+    code did it - the appendix printed the 640 px thumbnails the site file already held - so the
+    paragraph described ~35 MB of peak bitmaps that were never allocated and ~430 ppi that was
+    never printed. The design that shipped is the safe one; the documents now say it.
+    """
+    screen = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" / "ExportScreen.kt"
+    text = screen.read_text(encoding="utf-8")
+    if "buildPhotoAppendix(project, fieldPhotos" not in text:
+        add(screen, "the appendix is no longer built from the decoded thumbnails, so something "
+                    "else is decoding the same files again (finding 175)")
+    if "loadPhotoAs(" in text:
+        add(screen, "the export screen decodes a photo itself, which is the second read the "
+                    "appendix never needed (finding 175)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -2061,6 +2079,7 @@ def main() -> int:
     check_the_confidence_plane_is_pooled()
     check_the_fusion_pass_reuses_its_planes()
     check_the_protocol_notes_can_turn_the_page()
+    check_the_appendix_prints_the_photos_the_screen_holds()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

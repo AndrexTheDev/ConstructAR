@@ -423,10 +423,13 @@ class ProjectRepository(private val context: Context) {
         isSafeToken(token) && photoFileByName(token).delete()
 
     /**
-     * Decodes a stored photo at a size fit for its purpose.
+     * Decodes a stored entry photo at 640 px, the size the field book and the printed appendix
+     * both use.
      *
-     * Thumbnails in the site file are 640 px; the export re-reads the same file larger for the
-     * appendix. Sampling is power-of-two, so the working set stays a few megabytes either way.
+     * There is no second, larger read: the appendix prints the same thumbnails the screen holds,
+     * because its cell is 255 pt wide and 640 px across 3.1 in is already ~200 ppi (finding 175 —
+     * this comment used to promise a 1 200 px re-read for the appendix that no code performed).
+     * Sampling is power-of-two, so the working set stays a few megabytes.
      */
     suspend fun loadPhotoAs(token: String, maxDimensionPx: Int = 640): Bitmap? =
         withContext(Dispatchers.IO) {
@@ -451,11 +454,12 @@ class ProjectRepository(private val context: Context) {
     suspend fun savePhoto(projectId: String, source: Uri): Boolean = savePhotoAs(projectId, source)
 
     /**
-     * Decodes the photo at a size fit for a screen and an A4 page.
+     * Decodes **the room's own photo** — the one picture attached to the project, printed across
+     * the first protocol page — at 1 200 px.
      *
-     * A modern phone camera writes 12 MP; decoding that at full size would be ~48 MB twice over
-     * (thumbnail + PDF). Sampling keeps the working set at a few megabytes, and a protocol page
-     * cannot use more detail than this anyway.
+     * Not an entry photo: those come from [loadPhotoAs] at 640 px. A modern phone camera writes
+     * 12 MP; decoding that at full size would be ~48 MB per picture. Sampling keeps the working
+     * set at a few megabytes, and a half-page A4 image cannot use more detail than this.
      */
     suspend fun loadPhoto(projectId: String, maxDimensionPx: Int = 1_200): Bitmap? =
         loadPhotoAs(projectId, maxDimensionPx)

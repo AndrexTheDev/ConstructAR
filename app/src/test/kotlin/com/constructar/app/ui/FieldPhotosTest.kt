@@ -125,6 +125,34 @@ class FieldPhotosTest {
         assertEquals(10, shown.count { it.contains("__diary_") })
     }
 
+    /**
+     * Finding 175: the printed appendix prints the thumbnails the screen already holds, so what
+     * it may ask for is bounded by what the screen decoded.
+     *
+     * The documents promised a second, larger read for the appendix that no code performed. The
+     * real invariant is this one: eight printed pictures must be a subset of the twelve in memory,
+     * or the appendix silently prints fewer than it says it does on a job of twenty photos.
+     */
+    @Test
+    fun `the printed appendix lives inside what the screen holds`() {
+        assertTrue(
+            FieldPhotos.PDF_BUDGET <= FieldPhotos.SCREEN_BUDGET,
+            "the appendix cannot print more pictures than the app keeps decoded",
+        )
+        val many = project(
+            diary = (20 downTo 1).map { diary("e$it") },
+            defects = listOf(defect("d1", resolved = false), defect("d2", resolved = true)),
+        )
+        val printed = FieldPhotos.ordered(many).take(FieldPhotos.PDF_BUDGET)
+        val inMemory = FieldPhotos.ordered(many).take(FieldPhotos.SCREEN_BUDGET)
+        assertEquals(FieldPhotos.PDF_BUDGET, printed.size, "the appendix prints its whole budget")
+        assertTrue(inMemory.containsAll(printed), "every printed token must already be decoded")
+        assertTrue(
+            printed.contains(PhotoTokens.forDefect("p1", "d1")),
+            "the open defect's photo is printed, not just shown",
+        )
+    }
+
     @Test
     fun `an empty job asks for nothing`() {
         assertEquals(emptyList(), FieldPhotos.ordered(project()))

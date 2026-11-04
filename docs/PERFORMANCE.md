@@ -139,10 +139,14 @@ dropping depth, rendering or the room scan.
   on `Dispatchers.IO`; the UI reads a `StateFlow`.
 * **Nothing on a timer that is not needed.** The site file's clock only ticks (every 30 s) while
   a session is running; there is no background service, no job scheduler and no alarm.
-* **Field photos are bounded twice.** A diary or defect photo is decoded at 640 px for the site
-  file and only the first 12 are held in memory (`FieldPhotos.SCREEN_BUDGET`), so a punch list with forty
-  entries cannot grow the heap with the size of the folder. The export re-reads the same file at
-  1 200 px for the appendix, one page at a time — the bitmaps are never all resident at once.
+* **Field photos are bounded once, and the bound is the one in the code.** A diary or defect
+  photo is decoded at 640 px and only the first 12 are held in memory
+  (`FieldPhotos.SCREEN_BUDGET`), so a punch list with forty entries cannot grow the heap with the
+  size of the folder: 12 × 640 × 480 × 4 B ≈ 15 MB while a room is open. The printed appendix
+  takes the first eight of the same order from that same map — no second decode, no second copy
+  (finding 175). This paragraph used to promise a 1 200 px re-read for the appendix "one page at
+  a time"; no code did that, and doing it would cost ~35 MB of peak bitmaps for a cell that is
+  255 pt wide, where the 640 px thumbnail already prints at ~200 ppi.
 * **The reticle stabiliser is free.** Five `Vec3` samples and three median sorts per sampled
   frame - about 1 µs, on the render thread where the sample is taken, at the reticle's 12 Hz -
   with no allocation after the first window; it removes the per-tap end-point scatter that

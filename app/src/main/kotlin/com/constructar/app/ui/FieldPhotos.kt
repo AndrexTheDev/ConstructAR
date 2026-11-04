@@ -26,7 +26,13 @@ object FieldPhotos {
     /** Thumbnails kept in memory for the field book. One screenful with room to scroll. */
     const val SCREEN_BUDGET: Int = 12
 
-    /** Pictures the printed appendix carries. The page budget, not a taste. */
+    /**
+     * Pictures the printed appendix carries. The page budget, not a taste.
+     *
+     * It may never exceed [SCREEN_BUDGET]: the appendix prints the thumbnails that are already in
+     * memory (finding 175), so a print budget larger than the screen budget would ask for photos
+     * the app has not decoded — the appendix would quietly print fewer than it promises.
+     */
     const val PDF_BUDGET: Int = 8
 
     /**
