@@ -14,6 +14,7 @@
 //       native-slam/src/main/cpp/slam/pose_graph.cpp
 //       native-slam/src/main/cpp/geometry/manhattan_world.cpp
 //       native-slam/src/main/cpp/calibration/tag_scale.cpp
+//       native-slam/src/main/cpp/geometry/plane_fit.cpp
 //       native-slam/src/main/cpp/slam/rtabmap_bridge.cpp
 //       native-slam/src/main/cpp/tests/host_tests.cpp -o /tmp/constructar_host_tests
 //   /tmp/constructar_host_tests
@@ -37,6 +38,7 @@
 #include "../calibration/tag_scale.hpp"
 #include "../core/types.hpp"
 #include "../geometry/manhattan_world.hpp"
+#include "../geometry/plane_fit.hpp"
 #include "../slam/pose_graph.hpp"
 #include "../slam/rtabmap_bridge.hpp"
 #include "../tsdf/volume.hpp"
@@ -826,6 +828,30 @@ void testManhattanFrame() {
   checkNear(turnedSnapped[6].offset, 4.0, 0.02,
             "the squared wall is still 4 m from the room's own axis after the turn");
 
+  // A room whose floor and walls carry equal weight. The two horizontal families then couple
+  // through the crooked wall, their rotated pair out-eigenvalues the vertical, and a solver that
+  // trusts the top eigenvector puts the "vertical" 35 degrees off the floor (finding 189). The
+  // frame is a set of three axes: which one is vertical is what the room decides.
+  section("Manhattan-World frame: the vertical is not the top eigenvector");
+  std::vector<constructar::PlaneObservation> evenRoom{
+      {{0.f, 1.f, 0.f}, 0.f, 1000, constructar::Vec3(2.f, 0.f, 1.5f)},
+      {{0.f, -1.f, 0.f}, -2.5f, 1000, constructar::Vec3(2.f, 2.5f, 1.5f)},
+      {{1.f, 0.f, 0.f}, 0.f, 1000, constructar::Vec3(0.f, 1.25f, 1.5f)},
+      {{-1.f, 0.f, 0.f}, -4.f, 1000, constructar::Vec3(4.f, 1.25f, 1.5f)},
+      {{0.f, 0.f, 1.f}, 0.f, 1000, constructar::Vec3(2.f, 1.25f, 0.f)},
+      {{0.f, 0.f, -1.f}, -3.f, 1000, constructar::Vec3(2.f, 1.25f, 3.f)},
+  };
+  const auto evenFrame = constructar::solveManhattanFrame(evenRoom, {});
+  check(evenFrame.valid, "a room with equal surfaces still determines a frame");
+  check(axisFor(evenFrame, {0.f, 1.f, 0.f}) >= 0,
+        "and the vertical is an axis of it, not a 35-degree diagonal");
+  check(axisFor(evenFrame, {1.f, 0.f, 0.f}) >= 0 && axisFor(evenFrame, {0.f, 0.f, 1.f}) >= 0,
+        "with the two wall families on the other two axes");
+  // The floor and ceiling alone are still one direction and not a frame.
+  const auto floorsOnly = constructar::solveManhattanFrame(
+      {evenRoom[0], evenRoom[1]}, {});
+  check(!floorsOnly.valid, "floor and ceiling alone is still one direction, not a frame");
+
   section("Manhattan-World frame: what it refuses to invent");
   const std::vector<constructar::PlaneObservation> parallel{planes[0], planes[1]};
   const auto flat = constructar::solveManhattanFrame(parallel, {});
@@ -1028,6 +1054,204 @@ void testTagScaleContract() {
         "estimating twice gives the same factor");
 }
 
+
+/** Deterministic pseudo-noise for the synthetic clouds: no <random>, no clock, same on any host. */
+struct SyntheticNoise {
+  std::uint32_t state = 0x1BADB002u;
+  float unit() {
+    state ^= state << 13;
+    state ^= state >> 17;
+    state ^= state << 5;
+    return static_cast<float>(state & 0xFFFFu) / 65535.f;
+  }
+  float symmetric(float amplitude) { return (unit() * 2.f - 1.f) * amplitude; }
+};
+
+/**
+ * A 4 x 3 m room, 2.5 m high, 800 points per surface, 3 mm of noise - and one wall deliberately
+ * 8 degrees off square about its own centre, so its distance from the room is 4.00 m and only its
+ * angle is wrong. That is the case the whole chain exists for.
+ */
+std::vector<constructar::Vec3> makeRoomCloud() {
+  SyntheticNoise noise;
+  std::vector<constructar::Vec3> cloud;
+  const float amplitude = 0.003f;
+  const int perSurface = 800;
+
+  // A patch on the plane through `centre` spanned by `u` and `v`.
+  const auto surface = [&cloud, &noise, amplitude, perSurface](
+                           constructar::Vec3 centre, constructar::Vec3 u, constructar::Vec3 v,
+                           float halfU, float halfV) {
+    for (int i = 0; i < perSurface; ++i) {
+      const float a = (noise.unit() * 2.f - 1.f) * halfU;
+      const float b = (noise.unit() * 2.f - 1.f) * halfV;
+      const constructar::Vec3 point = centre + u * a + v * b;
+      cloud.push_back({point.x + noise.symmetric(amplitude),
+                       point.y + noise.symmetric(amplitude),
+                       point.z + noise.symmetric(amplitude)});
+    }
+  };
+
+  const constructar::Vec3 x{1.f, 0.f, 0.f};
+  const constructar::Vec3 y{0.f, 1.f, 0.f};
+  const constructar::Vec3 z{0.f, 0.f, 1.f};
+  surface({2.f, 0.f, 1.5f}, x, z, 2.f, 1.5f);      // floor
+  surface({2.f, 2.5f, 1.5f}, x, z, 2.f, 1.5f);     // ceiling
+  surface({0.f, 1.25f, 1.5f}, z, y, 1.5f, 1.25f);  // x = 0
+  surface({2.f, 1.25f, 0.f}, x, y, 2.f, 1.25f);    // z = 0
+  surface({2.f, 1.25f, 3.f}, x, y, 2.f, 1.25f);    // z = 3
+
+  // The crooked wall: the plane x = 4 turned 8 degrees about the vertical through its centre.
+  const float turn = 8.f * constructar::kPi / 180.f;
+  const constructar::Vec3 turned{std::sin(turn), 0.f, std::cos(turn)};
+  surface({4.f, 1.25f, 1.5f}, turned, y, 1.5f, 1.25f);
+  return cloud;
+}
+
+void testPlaneFit() {
+  section("Plane fitting: six surfaces, one of them crooked");
+  const auto cloud = makeRoomCloud();
+  constructar::PlaneFitOptions options;
+  const auto planes = constructar::fitPlanes(cloud, options);
+  check(planes.size() == 6, "a six-surface room yields six planes (got " +
+                                std::to_string(planes.size()) + ")");
+
+  bool everyPlaneBigEnough = true;
+  bool everyPlaneFlat = true;
+  bool everyNormalPointsIn = true;
+  const constructar::Vec3 roomCentre{2.f, 1.25f, 1.5f};
+  for (const auto& plane : planes) {
+    if (plane.inliers < 700) everyPlaneBigEnough = false;
+    if (plane.planarity < 0.999f) everyPlaneFlat = false;
+    if (plane.normal.dot(roomCentre - plane.centroid) <= 0.f) everyNormalPointsIn = false;
+  }
+  check(everyPlaneBigEnough, "each plane explains most of the points on its surface");
+  check(everyPlaneFlat, "each fitted plane is flat to four nines: the noise is 3 mm");
+  check(everyNormalPointsIn,
+        "every normal points into the room, so two fits of one room agree on the sign");
+
+  // No surface may arrive in two pieces. This is what a RANSAC budget that is too small looks
+  // like from the outside - not a failure, a wall split in half - so it is asserted directly.
+  bool noSurfaceSplit = true;
+  for (size_t i = 0; i < planes.size(); ++i) {
+    for (size_t j = i + 1; j < planes.size(); ++j) {
+      if (std::fabs(planes[i].normal.dot(planes[j].normal)) > 0.999f &&
+          std::fabs(planes[i].offset - planes[j].offset) < 0.05f) {
+        noSurfaceSplit = false;
+      }
+    }
+  }
+  check(noSurfaceSplit, "no surface is reported twice, which is how a small RANSAC budget fails");
+
+  const auto axisPlane = [&planes](constructar::Vec3 axis) -> const constructar::FittedPlane* {
+    for (const auto& plane : planes) {
+      if (std::fabs(plane.normal.dot(axis)) > 0.999f) return &plane;
+    }
+    return nullptr;
+  };
+  check(axisPlane({0.f, 1.f, 0.f}) != nullptr, "the floor and ceiling are found on the vertical");
+  check(axisPlane({0.f, 0.f, 1.f}) != nullptr, "the two square walls are found");
+
+  // The crooked wall is the one whose normal is close to -x but not on it: that is what 8 degrees
+  // off square looks like after a least-squares fit, and it is the whole point of the chain.
+  const constructar::FittedPlane* crooked = nullptr;
+  for (const auto& plane : planes) {
+    const float alongX = std::fabs(plane.normal.dot(constructar::Vec3(1.f, 0.f, 0.f)));
+    if (alongX > 0.95f && alongX < 0.999f) crooked = &plane;
+  }
+  check(crooked != nullptr, "the crooked wall is fitted, and fitted crooked");
+  check(crooked != nullptr &&
+            std::fabs(std::acos(std::fabs(crooked->normal.x)) * 180.f / constructar::kPi - 8.f) <
+                1.f,
+        "the fit reports it 8 degrees off the room's axis");
+
+  const constructar::FittedPlane* floor = axisPlane({0.f, 1.f, 0.f});
+  check(floor != nullptr && std::fabs(floor->offset) < 0.005f,
+        "the floor's offset is where the floor is");
+  check(floor != nullptr && floor->normal.y > 0.f, "the floor's normal points up, into the room");
+
+  // Determinism: same input, same seed, same planes - down to the bytes.
+  const auto again = constructar::fitPlanes(cloud, options);
+  bool identical = again.size() == planes.size();
+  if (identical) {
+    for (size_t i = 0; i < planes.size(); ++i) {
+      if (std::memcmp(&planes[i].normal, &again[i].normal, sizeof(constructar::Vec3)) != 0 ||
+          planes[i].offset != again[i].offset || planes[i].inliers != again[i].inliers) {
+        identical = false;
+        break;
+      }
+    }
+  }
+  check(identical, "the same cloud and seed give the same planes, bit for bit");
+  constructar::PlaneFitOptions otherSeed;
+  otherSeed.seed = 0xC0FFEE01u;
+  const auto reseeded = constructar::fitPlanes(cloud, otherSeed);
+  check(reseeded.size() == 6,
+        "a different seed finds the same six surfaces: the seed changes the sampling, not the room");
+
+  // The endpoint of the chain: cloud -> planes -> frame -> snapped planes.
+  section("Plane fitting: the frame the room is trying to be");
+  const auto observations = constructar::asPlaneObservations(planes, 3);
+  check(observations.size() == planes.size() && observations[0].hasCentroid,
+        "the solver is handed centroids, so it can square a plane through its own points");
+  check(observations[0].roomId == 3 && observations[0].inliers > 0,
+        "the room id and the inlier count travel with the plane");
+
+  const auto frame = constructar::solveManhattanFrame(observations, {});
+  check(frame.valid, "six fitted planes determine a frame");
+  int verticalAxis = -1;
+  for (int i = 0; i < 3; ++i) {
+    if (std::fabs(frame.axes[i].direction.dot(constructar::Vec3(0.f, 1.f, 0.f))) > 0.999f) {
+      verticalAxis = i;
+    }
+  }
+  check(verticalAxis >= 0, "one of the frame's axes is the room's vertical");
+  check(axisFor(frame, {1.f, 0.f, 0.f}) >= 0 && axisFor(frame, {0.f, 0.f, 1.f}) >= 0,
+        "and the other two are the room's horizontal axes, not the crooked wall's");
+  check(frame.residualDegrees > 2.f && frame.residualDegrees < 12.f,
+        "the residual is the crooked wall's share of the evidence, and nothing else");
+
+  const auto snapped = constructar::snapPlanes(observations, frame, {});
+  size_t snappedCount = 0;
+  for (const auto& plane : snapped) {
+    if (plane.snapped) ++snappedCount;
+  }
+  check(snappedCount == 6, "every surface in a normal room is close enough to snap");
+
+  size_t crookedIndex = 0;
+  for (size_t i = 0; i < planes.size(); ++i) {
+    if (&planes[i] == crooked) crookedIndex = i;
+  }
+  check(std::fabs(snapped[crookedIndex].angleDegrees - 8.f) < 1.5f,
+        "the crooked wall is reported as 8 degrees off square");
+  check(snapped[crookedIndex].snapped &&
+            std::fabs(std::fabs(snapped[crookedIndex].normal.x) - 1.f) < 0.001f,
+        "squaring it makes its normal the room's axis");
+  check(std::fabs(std::fabs(snapped[crookedIndex].offset) - 4.f) < 0.02f,
+        "and leaves it at the 4 m the operator measured, not at 4 m times a cosine");
+
+  section("Plane fitting: what it refuses");
+  constructar::PlaneFitOptions threeOnly;
+  threeOnly.maxPlanes = 3;
+  check(constructar::fitPlanes(cloud, threeOnly).size() == 3, "maxPlanes is respected");
+  constructar::PlaneFitOptions greedy;
+  greedy.minInliers = 5000;
+  check(constructar::fitPlanes(cloud, greedy).empty(),
+        "a room's surfaces are each ~800 points: a 5000-point floor finds nothing");
+  check(constructar::fitPlanes({}, options).empty(), "no points, no planes");
+
+  std::vector<constructar::Vec3> line;
+  for (int i = 0; i < 200; ++i) line.push_back({static_cast<float>(i) * 0.01f, 0.f, 0.f});
+  check(constructar::fitPlanes(line, options).empty(),
+        "a line fits infinitely many planes and reports none of them");
+
+  std::vector<constructar::Vec3> withNaN = cloud;
+  withNaN.push_back({std::nanf(""), 0.f, 0.f});
+  withNaN.push_back({0.f, std::nanf(""), 0.f});
+  check(constructar::fitPlanes(withNaN, options).size() == 6,
+        "a non-finite point is skipped, not fitted");
+}
+
 void testRtabMapBridgeWithoutTheBackEnd() {
   section("RTAB-Map bridge: what a build without the back-end promises");
   constructar::RtabMapBridge bridge;
@@ -1080,6 +1304,7 @@ int main() {
   testVoxelFusionUnderConcurrency();
   testManhattanFrame();
   testTagScaleContract();
+  testPlaneFit();
   testRtabMapBridgeWithoutTheBackEnd();
   testInvalidInput();
 

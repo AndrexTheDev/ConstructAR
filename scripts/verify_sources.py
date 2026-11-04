@@ -2468,6 +2468,8 @@ MANHATTAN_SOURCE = (ROOT / "native-slam" / "src" / "main" / "cpp" / "geometry" /
                     "manhattan_world.cpp")
 TAG_SCALE_HEADER = (ROOT / "native-slam" / "src" / "main" / "cpp" / "calibration" /
                     "tag_scale.hpp")
+PLANE_FIT_HEADER = (ROOT / "native-slam" / "src" / "main" / "cpp" / "geometry" / "plane_fit.hpp")
+PLANE_FIT_SOURCE = (ROOT / "native-slam" / "src" / "main" / "cpp" / "geometry" / "plane_fit.cpp")
 TAG_SCALE_SOURCE = (ROOT / "native-slam" / "src" / "main" / "cpp" / "calibration" /
                     "tag_scale.cpp")
 CALIBRATION_DOC = ROOT / "docs" / "CALIBRATION.md"
@@ -2517,6 +2519,49 @@ def check_the_frame_solver_is_built_everywhere() -> None:
         if "#include <Eigen" in path.read_text(encoding="utf-8"):
             add(path, "Eigen in the self-contained native build - the NDK library must stay "
                       "BSD-3/MIT only (docs/LICENSING.md)")
+
+
+def check_the_plane_fitter_is_reproducible() -> None:
+    """A fit that differs every run cannot be tested, reproduced or reported (finding 189).
+
+    RANSAC is randomised, so the native layer has exactly one legitimate source of randomness and
+    it is `PlaneFitOptions::seed`. A `std::random_device`, a clock seed or a bare `rand()` would
+    make a bad room unreproducible by the person reporting it and would make "it worked on my
+    scan" a statement about nothing - and neither would fail a single test, because the fit would
+    be *good* most of the time. This rule is static for the same reason: the behavioural half
+    (same seed, same planes, bit for bit) is asserted in the host suite, but a hard-coded seed
+    behind an ignored option passes every behavioural test there is.
+    """
+    native_root = ROOT / "native-slam" / "src" / "main" / "cpp"
+    banned = {
+        "std::random_device": "a hardware-seeded generator makes every fit different",
+        "std::time(": "a clock seed makes a reported room unreproducible",
+        "time(nullptr)": "a clock seed makes a reported room unreproducible",
+        "std::rand(": "`rand()` has no seed in the options and no reproducibility across libc",
+        "srand(": "seeding the C generator puts the randomness outside `PlaneFitOptions::seed`",
+    }
+    for path in [item for item in native_root.rglob("*")
+                 if item.suffix in (".cpp", ".hpp") and "tests" not in item.parts]:
+        text = path.read_text(encoding="utf-8")
+        for needle, why in banned.items():
+            if needle in text:
+                add(path, f"`{needle}`: {why} - the fit must be reproducible from its options")
+    if not PLANE_FIT_SOURCE.exists():
+        return
+    source = PLANE_FIT_SOURCE.read_text(encoding="utf-8")
+    if "Xorshift32 random(options.seed);" not in source:
+        add(PLANE_FIT_SOURCE, "the sampler is not constructed from `options.seed`, so the "
+                              "documented seed is not the seed the fit uses")
+    header = PLANE_FIT_HEADER.read_text(encoding="utf-8") if PLANE_FIT_HEADER.exists() else ""
+    budget = re.search(r"int ransacIterations = (\d+);", header)
+    if budget is None:
+        add(PLANE_FIT_HEADER, "the RANSAC budget has no stated default - the count is derived "
+                              "from the inlier ratio and it is the number that decides whether a "
+                              "wall arrives whole or in two pieces")
+    elif int(budget.group(1)) < 500:
+        add(PLANE_FIT_HEADER, f"the RANSAC budget is {budget.group(1)} samples; a six-surface "
+                              f"room needs ~990 for 99 % confidence, and a smaller budget fails "
+                              f"by splitting a wall rather than by reporting nothing (finding 189)")
 
 
 def check_the_tag_contract_is_not_sold_as_a_detector() -> None:
@@ -2722,6 +2767,7 @@ def main() -> int:
     check_the_frame_solver_is_built_everywhere()
     check_the_squared_wall_keeps_its_distance()
     check_the_tag_contract_is_not_sold_as_a_detector()
+    check_the_plane_fitter_is_reproducible()
     check_totals_are_sums_of_printed_rows()
     check_csv_headers_name_their_cells()
     check_screen_states_the_trade_defaults()

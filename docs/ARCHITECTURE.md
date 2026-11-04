@@ -99,6 +99,19 @@ an explicit "ghost removal" pass.
 crossings; one quad per sign-changing edge, split into two triangles with a winding consistent
 with the SDF gradient. Output is un-welded per face, which is what both Filament and glTF want.
 
+**Plane fitting** (`geometry/plane_fit.cpp`). The step in front of the frame solver: RANSAC for
+the consensus set, the covariance's smallest eigenvector for the plane itself, the explained points
+removed and the next plane looked for. Three things decide whether it is trustworthy. The RANSAC
+budget is derived, not chosen: a sample is clean with probability `w³` for a surface holding a
+fraction `w` of the cloud, so a six-surface room needs ~990 samples for 99 % confidence, and a
+budget below that fails *quietly* — it reports a facet of a real surface, so a wall arrives in two
+pieces and every downstream count is plausible. The plane is re-fitted by least squares before it
+is reported, so the noisy triple decides membership and never position. And the sampler is seeded
+from `PlaneFitOptions::seed` alone: a fit that differs every run cannot be regression-tested or
+reproduced by the person reporting a bad room. `planarity` and `extentMetres` reject the line of
+points and the sliver that would otherwise become walls; the normal's sign is fixed towards the
+centre of the cloud, so two fits of one room agree.
+
 **Manhattan-World frame** (`geometry/manhattan_world.cpp`). A room is meant to be orthogonal;
 the planes fitted from depth are not, because each carries its own noise and the pose graph's
 drift, and the error is systematic - two walls that should be 4.00 m apart read 4.03 m and the
@@ -115,7 +128,12 @@ problem nothing else in the app checks. A plane with a centroid is squared *thro
 centroid, so a wall 8° off stays at the distance it was measured at instead of moving by its
 cosine; a plane more than 20° off (a bay window, a chamfer) is returned untouched, bit for bit,
 and a set of parallel walls produces no frame at all rather than an invented one. The solver
-decides geometry only: no length, no node position and no fitting count passes through it. It is
+decides geometry only: no length, no node position and no fitting count passes through it. The
+frame's vertical is *not* taken from the top eigenvector (finding 189): in a room whose floor and
+walls carry comparable weight the two horizontal families couple through one crooked wall and their
+rotated pair out-eigenvalues the vertical, so each eigenvector is tried as the primary and the frame
+that explains the most inliers wins; a frame also needs two of its three axes evidenced, which is
+what separates "a room" from "a floor and a ceiling". It is
 host-tested and **not yet wired** - no plane fit in the app feeds it, so the app does not square
 anything today; what exists is the engine a plane-fitting pass will call, not a behaviour a user
 can observe (the same distinction finding 98 had to make about the pose graph).

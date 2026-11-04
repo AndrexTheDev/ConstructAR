@@ -20,6 +20,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "../core/eigen3.hpp"
+
 namespace constructar {
 namespace {
 
@@ -35,53 +37,6 @@ bool isEvidence(const PlaneObservation& plane, const ManhattanOptions& options) 
 }
 
 float clampCosine(float value) { return value > 1.f ? 1.f : (value < -1.f ? -1.f : value); }
-
-/**
- * Cyclic Jacobi eigen-decomposition of a symmetric 3×3 matrix, in place.
- *
- * On return `a` holds the eigenvalues on its diagonal and `vectors[k]` is the unit eigenvector
- * for `a[k][k]`. Sixteen sweeps is far more than the three or four a 3×3 needs; the loop exits
- * as soon as the off-diagonal mass is below rounding.
- */
-void jacobiEigen(float a[3][3], Vec3 vectors[3]) {
-  float v[3][3] = {{1.f, 0.f, 0.f}, {0.f, 1.f, 0.f}, {0.f, 0.f, 1.f}};
-  for (int sweep = 0; sweep < 16; ++sweep) {
-    const float offDiagonal =
-        std::fabs(a[0][1]) + std::fabs(a[0][2]) + std::fabs(a[1][2]);
-    if (offDiagonal < 1e-10f) break;
-    for (int p = 0; p < 2; ++p) {
-      for (int q = p + 1; q < 3; ++q) {
-        if (std::fabs(a[p][q]) < 1e-12f) continue;
-        const float theta = (a[q][q] - a[p][p]) / (2.f * a[p][q]);
-        const float sign = theta >= 0.f ? 1.f : -1.f;
-        const float t = sign / (std::fabs(theta) + std::sqrt(theta * theta + 1.f));
-        const float c = 1.f / std::sqrt(t * t + 1.f);
-        const float s = t * c;
-        for (int k = 0; k < 3; ++k) {
-          const float akp = a[k][p];
-          const float akq = a[k][q];
-          a[k][p] = c * akp - s * akq;
-          a[k][q] = s * akp + c * akq;
-        }
-        for (int k = 0; k < 3; ++k) {
-          const float apk = a[p][k];
-          const float aqk = a[q][k];
-          a[p][k] = c * apk - s * aqk;
-          a[q][k] = s * apk + c * aqk;
-        }
-        for (int k = 0; k < 3; ++k) {
-          const float vkp = v[k][p];
-          const float vkq = v[k][q];
-          v[k][p] = c * vkp - s * vkq;
-          v[k][q] = s * vkp + c * vkq;
-        }
-      }
-    }
-  }
-  for (int i = 0; i < 3; ++i) {
-    vectors[i] = Vec3(v[0][i], v[1][i], v[2][i]);
-  }
-}
 
 /** Index of the axis a normal is closest to, or -1 when it is outside the tolerance. */
 int nearestAxis(const Vec3& normal, const ManhattanFrame& frame, float minAlignment,
@@ -99,6 +54,115 @@ int nearestAxis(const Vec3& normal, const ManhattanFrame& frame, float minAlignm
   }
   if (alignedOut != nullptr) *alignedOut = clampCosine(bestAlignment);
   return bestAlignment >= minAlignment ? best : -1;
+}
+
+}  // namespace
+
+namespace {
+
+/** The frame that `primary` implies: the axis itself, one searched axis, and the cross product. */
+bool buildFrameFor(const Vec3& primary, const std::vector<Vec3>& normals,
+                   const std::vector<float>& weights, const ManhattanOptions& options,
+                   ManhattanFrame& frame) {
+  if (!primary.isFinite() || std::fabs(primary.length() - 1.f) > 1e-3f) return false;
+  const Vec3 vertical = primary.normalized();
+
+  // An orthonormal basis of the plane perpendicular to the primary, seeded from whichever world
+  // axis is least aligned with it, so the basis never degenerates.
+  const Vec3 seed = std::fabs(vertical.x) < std::fabs(vertical.y)
+                        ? (std::fabs(vertical.x) < std::fabs(vertical.z) ? Vec3(1.f, 0.f, 0.f)
+                                                                        : Vec3(0.f, 0.f, 1.f))
+                        : (std::fabs(vertical.y) < std::fabs(vertical.z) ? Vec3(0.f, 1.f, 0.f)
+                                                                        : Vec3(0.f, 0.f, 1.f));
+  const Vec3 u = (seed - vertical * seed.dot(vertical)).normalized();
+  const Vec3 v = vertical.cross(u).normalized();
+
+  std::vector<float> alongU;
+  std::vector<float> alongV;
+  alongU.reserve(normals.size());
+  alongV.reserve(normals.size());
+  for (const Vec3& normal : normals) {
+    alongU.push_back(normal.dot(u));
+    alongV.push_back(normal.dot(v));
+  }
+
+  // The score one axis is judged by: its Tukey-weighted support among the inliers. Two decisions
+  // are in here, and both were paid for:
+  //
+  //  * the Tukey kernel, not an "inside the tolerance or not" cut. A cliff is worse than it
+  //    looks: the moment the axis steps just inside the tolerance it collects a whole plane's
+  //    weight, so a bay window 35° off square was worth enough at 19.4° to tilt a four-wall room
+  //    by 15° - the optimiser finds that cliff.
+  //  * inliers, not planes. 40 000 points of wall outvote 300 points of skirting board.
+  const float toleranceAngle = std::acos(clampCosine(options.minAlignment));
+  const auto score = [&alongU, &alongV, &weights, toleranceAngle](float phi) {
+    const float c = std::cos(phi);
+    const float s = std::sin(phi);
+    float total = 0.f;
+    for (size_t i = 0; i < alongU.size(); ++i) {
+      const float aligned = std::fabs(alongU[i] * c + alongV[i] * s);
+      if (aligned <= 1e-6f) continue;  // a floor normal says nothing about the other two axes
+      const float angle = std::acos(aligned > 1.f ? 1.f : aligned);
+      if (angle >= toleranceAngle) continue;
+      const float ratio = angle / toleranceAngle;
+      const float weight = 1.f - ratio * ratio;
+      total += weights[i] * weight * weight;
+    }
+    return total;
+  };
+
+  // One-dimensional search over the turn of the second axis: the primary is fixed, so the frame
+  // has exactly one degree of freedom and the third axis is the cross product.
+  constexpr int kCoarseSteps = 180;
+  const float step = (kPiLocal * 0.5f) / static_cast<float>(kCoarseSteps);
+  int bestStep = 0;
+  float bestScore = -1.f;
+  for (int i = 0; i < kCoarseSteps; ++i) {
+    const float value = score(step * static_cast<float>(i));
+    if (value > bestScore) {
+      bestScore = value;
+      bestStep = i;
+    }
+  }
+  float low = step * static_cast<float>(bestStep) - step;
+  float high = step * static_cast<float>(bestStep) + step;
+  constexpr float kGolden = 0.6180339887498949f;
+  for (int i = 0; i < 40; ++i) {
+    const float left = high - kGolden * (high - low);
+    const float right = low + kGolden * (high - low);
+    if (score(left) > score(right)) {
+      high = right;
+    } else {
+      low = left;
+    }
+  }
+  const float phi = 0.5f * (low + high);
+
+  frame = ManhattanFrame{};
+  frame.axes[0].direction = vertical;
+  frame.axes[1].direction = (u * std::cos(phi) + v * std::sin(phi)).normalized();
+  frame.axes[2].direction = frame.axes[0].direction.cross(frame.axes[1].direction).normalized();
+  return true;
+}
+
+/** How well a whole frame explains the planes: each plane voted for its nearest of the three. */
+float frameSupport(const ManhattanFrame& frame, const std::vector<Vec3>& normals,
+                   const std::vector<float>& weights, const ManhattanOptions& options) {
+  const float toleranceAngle = std::acos(clampCosine(options.minAlignment));
+  float total = 0.f;
+  for (size_t i = 0; i < normals.size(); ++i) {
+    float aligned = 0.f;
+    for (int axis = 0; axis < 3; ++axis) {
+      aligned = std::max(aligned, std::fabs(normals[i].dot(frame.axes[axis].direction)));
+    }
+    if (aligned <= 1e-6f) continue;  // a floor normal says nothing about the other two axes
+    const float angle = std::acos(clampCosine(aligned));
+    if (angle >= toleranceAngle) continue;
+    const float ratio = angle / toleranceAngle;
+    const float weight = 1.f - ratio * ratio;
+    total += weights[i] * weight * weight;
+  }
+  return total;
 }
 
 }  // namespace
@@ -128,121 +192,38 @@ ManhattanFrame solveManhattanFrame(const std::vector<PlaneObservation>& planes,
   float totalWeight = 0.f;
   for (float w : weights) totalWeight += w;
   if (totalWeight <= 0.f) return frame;
+  if (scatter[0][0] + scatter[1][1] + scatter[2][2] <= kTiny) return frame;
 
-  // 1. The dominant direction: the top eigenvector of the weighted scatter. This one is
-  //    well-conditioned whenever the room has a floor worth the name, which is why the
-  //    degenerate case (below) is the only one that is refused.
-  Vec3 eigenvectors[3];
-  jacobiEigen(scatter, eigenvectors);
-  const float eigenvalues[3] = {scatter[0][0], scatter[1][1], scatter[2][2]};
-  int dominantIndex = 0;
-  for (int i = 1; i < 3; ++i) {
-    if (eigenvalues[i] > eigenvalues[dominantIndex]) dominantIndex = i;
-  }
-  const Vec3 vertical = eigenvectors[dominantIndex].normalized();
-  if (!vertical.isFinite() || std::fabs(vertical.length() - 1.f) > 1e-3f) return frame;
+  // Three candidate directions, not one. The eigen-decomposition's top vector is *not* the
+  // vertical in any room whose floor and walls carry comparable weight: the two horizontal
+  // families couple through one crooked wall, and their rotated pair can out-eigenvalue the
+  // vertical outright - a 4 x 3 m room sampled evenly put the top vector 35 degrees off vertical
+  // (finding 189). So each eigenvector is tried as the primary, each gets the full search for its
+  // perpendicular pair, and the frame that explains the most inliers wins. The frame is a *set*
+  // of three axes; which of them is called vertical is what the room decides, not the eigenvalues.
+  const Eigen3 eigen = eigenDecomposeSymmetric(scatter);
+  float bestSupport = -1.f;
+  for (int candidate = 0; candidate < 3; ++candidate) {
+    ManhattanFrame attempt;
+    if (!buildFrameFor(eigen.vectors[candidate], normals, weights, options, attempt)) continue;
 
-  // How much of the evidence lies *outside* that direction? Floor and ceiling alone leave
-  // nothing, and one axis is not a frame: a lone wall determines where a second axis could be,
-  // not where it is. Report "keep the measurement" rather than inventing one.
-  float perpendicularWeight = 0.f;
-  for (size_t i = 0; i < normals.size(); ++i) {
-    const float along = normals[i].dot(vertical);
-    perpendicularWeight += weights[i] * (1.f - along * along);
-  }
-  if (perpendicularWeight < options.minDirectionRatio * totalWeight) return frame;
-  // Note: floor and ceiling contribute nothing here (their normals *are* the vertical), which is
-  // exactly the point - they say where the vertical is and nothing about the other two axes.
-
-  // 2. An orthonormal basis of the perpendicular plane, seeded from whichever world axis is
-  //    least aligned with the dominant one, so the basis never degenerates.
-  Vec3 seed = std::fabs(vertical.x) < std::fabs(vertical.y)
-                  ? (std::fabs(vertical.x) < std::fabs(vertical.z) ? Vec3(1.f, 0.f, 0.f)
-                                                                   : Vec3(0.f, 0.f, 1.f))
-                  : (std::fabs(vertical.y) < std::fabs(vertical.z) ? Vec3(0.f, 1.f, 0.f)
-                                                                   : Vec3(0.f, 0.f, 1.f));
-  const Vec3 u = (seed - vertical * seed.dot(vertical)).normalized();
-  const Vec3 v = vertical.cross(u).normalized();
-
-  // Each plane's components in the (u, v) basis, so the score below is two multiplies per plane
-  // per sample instead of a dot product.
-  std::vector<float> alongU;
-  std::vector<float> alongV;
-  alongU.reserve(normals.size());
-  alongV.reserve(normals.size());
-  for (const Vec3& normal : normals) {
-    alongU.push_back(normal.dot(u));
-    alongV.push_back(normal.dot(v));
-  }
-
-  // The score a frame is judged by: the turn angle that puts one axis on a wall family, with each
-  // plane weighted by a Tukey biweight on the angle between its normal and that axis, falling to
-  // zero exactly at the snap tolerance. Two decisions are in here, and both were paid for:
-  //
-  //  * the Tukey kernel, not an "inside the tolerance or not" cut. A cliff is worse than it
-  //    looks: the moment the frame steps just inside the tolerance it collects a whole plane's
-  //    weight, so a bay window 35° off square was worth enough at 19.4° to tilt a four-wall room
-  //    by 15° - the optimiser finds that cliff, and it is exactly the error this solver exists to
-  //    remove.
-  //  * inliers, not planes. 40 000 points of wall outvote 300 points of skirting board, which is
-  //    the only sane ordering when the two disagree about where "forward" is.
-  //
-  // The search is over one angle because the frame has one degree of freedom once the dominant
-  // direction is fixed: the other axis of the pair is the cross product. Taking *that* axis from
-  // the eigen-decomposition instead is the defect this replaced (finding 187) - in a square room
-  // the two horizontal eigenvalues are within a few percent, so a single crooked wall decided
-  // their directions and the "square" frame came out 15.7° off the walls it was squaring.
-  const float toleranceAngle = std::acos(clampCosine(options.minAlignment));
-  const auto score = [&alongU, &alongV, &weights, toleranceAngle](float phi) {
-    const float c = std::cos(phi);
-    const float s = std::sin(phi);
-    float total = 0.f;
-    for (size_t i = 0; i < alongU.size(); ++i) {
-      const float aligned = std::fabs(alongU[i] * c + alongV[i] * s);
-      if (aligned <= 1e-6f) continue;  // a floor normal says nothing about the other two axes
-      const float angle = std::acos(aligned > 1.f ? 1.f : aligned);
-      if (angle >= toleranceAngle) continue;
-      const float ratio = angle / toleranceAngle;
-      const float weight = 1.f - ratio * ratio;
-      total += weights[i] * weight * weight;
+    // One direction is not a frame. Floor and ceiling alone leave nothing perpendicular, and a
+    // lone wall determines where a second axis could be, not where it is: refuse rather than
+    // invent.
+    float perpendicularWeight = 0.f;
+    for (size_t i = 0; i < normals.size(); ++i) {
+      const float along = normals[i].dot(attempt.axes[0].direction);
+      perpendicularWeight += weights[i] * (1.f - along * along);
     }
-    return total;
-  };
+    if (perpendicularWeight < options.minDirectionRatio * totalWeight) continue;
 
-  // 3. One-dimensional search over the turn of the second axis. Cos² has a 180° period, so a
-  //    quarter turn covers every distinct frame; the coarse pass cannot miss a maximum that a
-  //    plane family creates, and the golden-section pass pins it to ~1e-4 rad.
-  constexpr int kCoarseSteps = 180;
-  constexpr float kQuarter = kPiLocal * 0.5f;
-  const float step = kQuarter / static_cast<float>(kCoarseSteps);
-  int bestStep = 0;
-  float bestScore = -1.f;
-  for (int i = 0; i < kCoarseSteps; ++i) {
-    const float value = score(step * static_cast<float>(i));
-    if (value > bestScore) {
-      bestScore = value;
-      bestStep = i;
+    const float support = frameSupport(attempt, normals, weights, options);
+    if (support > bestSupport) {
+      bestSupport = support;
+      frame = attempt;
     }
   }
-  float low = step * static_cast<float>(bestStep) - step;
-  float high = step * static_cast<float>(bestStep) + step;
-  constexpr float kGolden = 0.6180339887498949f;
-  float phi = step * static_cast<float>(bestStep);
-  for (int i = 0; i < 40; ++i) {
-    const float left = high - kGolden * (high - low);
-    const float right = low + kGolden * (high - low);
-    if (score(left) > score(right)) {
-      high = right;
-    } else {
-      low = left;
-    }
-  }
-  phi = 0.5f * (low + high);
-
-  frame.axes[0].direction = vertical;
-  frame.axes[1].direction = (u * std::cos(phi) + v * std::sin(phi)).normalized();
-  // The third axis is derived, never fitted.
-  frame.axes[2].direction = frame.axes[0].direction.cross(frame.axes[1].direction).normalized();
+  if (bestSupport < 0.f) return frame;  // no candidate determined a frame
 
   double weightedSquaredDegrees = 0.0;
   double assignedWeight = 0.0;
@@ -260,6 +241,17 @@ ManhattanFrame solveManhattanFrame(const std::vector<PlaneObservation>& planes,
   if (assignedWeight > 0.0) {
     frame.residualDegrees = static_cast<float>(std::sqrt(weightedSquaredDegrees / assignedWeight));
   }
+
+  // A frame is determined when at least two of its three axes are evidenced. A floor and a
+  // ceiling give one: the vertical, and then *any* pair of horizontal directions explains the
+  // data equally well, which is a frame with a free parameter and not a frame. Three axes from a
+  // normal room, two from a corridor whose vertical is fixed by two perpendicular walls - both
+  // are determined, and both are accepted.
+  int supportedAxes = 0;
+  for (const ManhattanAxis& axis : frame.axes) {
+    if (axis.supportingPlanes > 0) ++supportedAxes;
+  }
+  if (supportedAxes < 2) return ManhattanFrame{};
   frame.valid = true;
   return frame;
 }

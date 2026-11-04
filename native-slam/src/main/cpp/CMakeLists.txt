@@ -29,6 +29,7 @@ set(SLAM_SOURCES
     slam/pose_graph.cpp
     geometry/manhattan_world.cpp
     calibration/tag_scale.cpp
+    geometry/plane_fit.cpp
     slam/rtabmap_bridge.cpp
 )
 
