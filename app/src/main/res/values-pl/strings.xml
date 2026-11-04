@@ -333,7 +333,7 @@
     <string name="clips_title">Rozstaw uchwytów</string>
     <string name="clips_default">Standard branżowy</string>
     <string name="clips_value">%1$s</string>
-    <string name="clips_hint">Uchwyty i złączki są liczone od tego rozstawu. Zmień go, jeśli Twoja firma mocuje inaczej na tej budowie.</string>
+    <string name="clips_hint">Standard branżowy: kabel %1$s, rura %2$s, kanał %3$s — rozstaw tutaj zastępuje wszystkie trzy. Uchwyty i złączki są liczone od niego.</string>
     <string name="photo_title">Zdjęcie budowy</string>
     <string name="photo_hint">Jedno zdjęcie ściany lub gotowej trasy - trafia na protokół.</string>
     <string name="photo_take">Zrób zdjęcie</string>

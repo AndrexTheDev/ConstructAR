@@ -321,7 +321,7 @@
     <string name="clips_title">Separación de clips</string>
     <string name="clips_default">Según el gremio</string>
     <string name="clips_value">%1$s</string>
-    <string name="clips_hint">Los clips y los empalmes se cuentan a partir de esta separación. Cámbiala si tu taller fija de otra forma en esta obra.</string>
+    <string name="clips_hint">Según el gremio: cable %1$s, tubo %2$s, canal %3$s: una separación aquí sustituye las tres. Los clips y los empalmes se cuentan a partir de ella.</string>
     <string name="photo_title">Foto de la obra</string>
     <string name="photo_hint">Una foto de la pared o del tramo terminado: se imprime en el protocolo.</string>
     <string name="photo_take">Hacer una foto</string>

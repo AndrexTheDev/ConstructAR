@@ -321,7 +321,7 @@
     <string name="clips_title">Distanza delle fascette</string>
     <string name="clips_default">Standard di categoria</string>
     <string name="clips_value">%1$s</string>
-    <string name="clips_hint">Fascette e raccordi si contano da questa distanza. Cambiala se la tua azienda fissa diversamente in questo cantiere.</string>
+    <string name="clips_hint">Standard di categoria: cavo %1$s, tubo %2$s, canale %3$s: una distanza qui sostituisce tutte e tre. Fascette e raccordi si contano da essa.</string>
     <string name="photo_title">Foto del cantiere</string>
     <string name="photo_hint">Una foto della parete o del tratto finito: compare sul protocollo.</string>
     <string name="photo_take">Scatta una foto</string>

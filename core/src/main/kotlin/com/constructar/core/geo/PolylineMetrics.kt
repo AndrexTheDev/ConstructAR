@@ -125,12 +125,27 @@ object PolylineMetrics {
 
     fun defaultWasteFactor(spec: ConduitSpec): Float = defaultWasteFactor(spec.kind)
 
-    /** Clip spacing in metres by trade practice (cables/pipes 60 cm, channels 50 cm). */
-    fun defaultClipSpacing(spec: ConduitSpec): Float = when (spec.kind) {
+    /**
+     * Clip spacing in metres by trade practice: cables 60 cm, pipes 90 cm, channels 50 cm.
+     *
+     * Answered per **family**, like [defaultWasteFactor] and for the same reason (finding 156):
+     * the material screen has to say what "the trade default" stands for *before* the operator
+     * picks it, and it has no spec to ask about. The spec overload routes through this one, so the
+     * number the screen states and the number the engine counts with cannot drift apart.
+     *
+     * This KDoc said "cables/pipes 60 cm, channels 50 cm" while the code has counted pipe clips at
+     * 90 cm since finding 138 - a sentence a maintainer reads *before* changing the number, and one
+     * that every other document contradicts: findings 113, 151 and the material screen all quote
+     * 90 cm for pipe (finding 180).
+     */
+    fun defaultClipSpacing(kind: com.constructar.core.model.ConduitKind): Float = when (kind) {
         com.constructar.core.model.ConduitKind.CABLE -> 0.6f
         com.constructar.core.model.ConduitKind.PIPE -> 0.9f
         com.constructar.core.model.ConduitKind.DUCT -> 0.5f
     }
+
+    /** The spacing the engine counts a spec's clips with — see the per-family overload. */
+    fun defaultClipSpacing(spec: ConduitSpec): Float = defaultClipSpacing(spec.kind)
 
     /**
      * The length one piece of this family is bought in, or `null` for a reel that has no joint.

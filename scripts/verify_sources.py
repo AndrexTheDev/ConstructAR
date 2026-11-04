@@ -2112,6 +2112,25 @@ def check_a_derived_warning_can_be_cleared() -> None:
                          "bend verdict stay on the old profile (finding 179)")
 
 
+def check_the_clip_row_states_its_defaults() -> None:
+    """The material screen says what "the trade default" clip spacing is, before it is picked.
+
+    The waste row got this sentence in finding 156; the clip row directly below it kept asking the
+    operator to choose between a named default and 30/60/90/100 cm without saying that the default
+    is 0.60 m of cable, 0.90 m of pipe and 0.50 m of duct - and 0.50 m is not one of the chips, so
+    on a duct job the selected value appeared nowhere on the screen. The three numbers have to come
+    from `PolylineMetrics.defaultClipSpacing`, never from the screen (finding 180).
+    """
+    screen = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" / "MaterialsScreen.kt"
+    text = screen.read_text(encoding="utf-8")
+    if "R.string.clips_hint" not in text:
+        add(screen, "the clip row prints no hint at all (finding 180)")
+    for kind in ("CABLE", "PIPE", "DUCT"):
+        if f"defaultClipSpacing(ConduitKind.{kind})" not in text:
+            add(screen, f"the clip hint does not state the {kind} default from the engine, so the "
+                        f"row is back to a named default nobody can read (finding 180)")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -2169,6 +2188,7 @@ def main() -> int:
     check_the_ellipsis_does_not_cut_a_character()
     check_the_ply_header_keeps_the_run_names()
     check_a_derived_warning_can_be_cleared()
+    check_the_clip_row_states_its_defaults()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

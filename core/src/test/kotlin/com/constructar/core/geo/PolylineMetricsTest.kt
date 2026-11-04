@@ -47,6 +47,34 @@ class PolylineMetricsTest {
         }
     }
 
+    /**
+     * Finding 180: the clip row asked the operator to choose between "the trade default" and
+     * 30/60/90/100 cm without saying what the default is - and it is three numbers (60 cm of
+     * cable, 90 cm of pipe, 50 cm of duct; the last of which is not even a chip). The screen now
+     * states them from the family overload, so that overload has to be the spec overload.
+     */
+    @Test
+    fun `the clip spacing the screen states is the one the engine counts`() {
+        ConduitKind.entries.forEach { kind ->
+            val spec = when (kind) {
+                ConduitKind.CABLE -> ConduitSpec.cable(16f)
+                ConduitKind.PIPE -> ConduitSpec.pipe(20f)
+                ConduitKind.DUCT -> ConduitSpec.duct(60f, 40f)
+            }
+            assertEquals(
+                "the per-family spacing must be the per-spec spacing for $kind",
+                PolylineMetrics.defaultClipSpacing(kind),
+                PolylineMetrics.defaultClipSpacing(spec),
+                0f,
+            )
+        }
+        // And the three families really are three different numbers, or the screen would say
+        // nothing worth saying.
+        assertEquals(0.6f, PolylineMetrics.defaultClipSpacing(ConduitKind.CABLE), 0f)
+        assertEquals(0.9f, PolylineMetrics.defaultClipSpacing(ConduitKind.PIPE), 0f)
+        assertEquals(0.5f, PolylineMetrics.defaultClipSpacing(ConduitKind.DUCT), 0f)
+    }
+
     @Test
     fun `straight run length is the euclidean sum`() {
         val points = listOf(Vec3(0f, 0f, 0f), Vec3(1f, 0f, 0f), Vec3(1f, 0f, 2f))

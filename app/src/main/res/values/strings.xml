@@ -321,7 +321,7 @@
     <string name="clips_title">Clip spacing</string>
     <string name="clips_default">Trade default</string>
     <string name="clips_value">%1$s</string>
-    <string name="clips_hint">Clips and couplings are counted from this spacing. Change it if your shop fixes this job differently.</string>
+    <string name="clips_hint">Trade defaults: cable %1$s, pipe %2$s, duct %3$s — a spacing here replaces all three. Clips and couplings are counted from it.</string>
     <string name="photo_title">Site photo</string>
     <string name="photo_hint">One photo of the wall or the finished run - it is printed on the protocol.</string>
     <string name="photo_take">Take a photo</string>

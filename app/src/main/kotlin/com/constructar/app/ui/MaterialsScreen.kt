@@ -206,6 +206,16 @@ fun MaterialsScreen(
             )
         }
 
+        // The same treatment as the row above, for the row that was left behind: "the trade
+        // default" is 0.60 m of cable, 0.90 m of pipe and 0.50 m of duct, none of which was on the
+        // screen before the choice - and 0.50 m is not even one of the chips, so on a duct job the
+        // selected value appeared nowhere at all (finding 180).
+        val clipDefaultsText = stringResource(
+            R.string.clips_hint,
+            LengthFormatter.format(PolylineMetrics.defaultClipSpacing(ConduitKind.CABLE)),
+            LengthFormatter.format(PolylineMetrics.defaultClipSpacing(ConduitKind.PIPE)),
+            LengthFormatter.format(PolylineMetrics.defaultClipSpacing(ConduitKind.DUCT)),
+        )
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 stringResource(R.string.clips_title),
@@ -230,7 +240,7 @@ fun MaterialsScreen(
                 }
             }
             Text(
-                stringResource(R.string.clips_hint),
+                clipDefaultsText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 4.dp),

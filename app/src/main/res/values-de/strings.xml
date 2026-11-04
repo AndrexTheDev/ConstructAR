@@ -321,7 +321,7 @@
     <string name="clips_title">Clipabstand</string>
     <string name="clips_default">Standard der Gewerke</string>
     <string name="clips_value">%1$s</string>
-    <string name="clips_hint">Schellen und Muffen werden aus diesem Abstand gezählt. Ändere ihn, wenn dein Betrieb auf dieser Baustelle anders befestigt.</string>
+    <string name="clips_hint">Standard der Gewerke: Kabel %1$s, Rohr %2$s, Kanal %3$s – ein Abstand hier ersetzt alle drei. Schellen und Muffen werden daraus gezählt.</string>
     <string name="photo_title">Foto der Baustelle</string>
     <string name="photo_hint">Ein Foto der Wand oder der fertigen Strecke - es erscheint auf dem Protokoll.</string>
     <string name="photo_take">Foto aufnehmen</string>
