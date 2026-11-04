@@ -1985,6 +1985,30 @@ def check_the_fusion_pass_reuses_its_planes() -> None:
             add(source, f"the fusion pass no longer copies into `{required.rstrip('(')}`, so the "
                         "reused planes are gone or unused (finding 173)")
 
+def check_the_protocol_notes_can_turn_the_page() -> None:
+    """Notes carry operator text, so they cannot be drawn as one fixed line (finding 174).
+
+    `drawNote` returned where the caller could continue, and two call sites threw that value
+    away: the procurement note ("order lengths include the site waste factor", two lines in every
+    translation) and the exclusion note under it printed on the same baseline, two sentences on
+    top of each other. No note could turn a page at all, so the list of runs that are in the
+    paperwork but not in the model - built by joining the operator's own labels - ran into the
+    footer. The notes go through one local `note()` that advances the cursor and breaks pages.
+    """
+    writer = (ROOT / "export" / "src" / "main" / "kotlin" / "com" / "constructar" / "export" /
+              "pdf" / "ProtocolPdfWriter.kt")
+    text = writer.read_text(encoding="utf-8")
+    if re.search(r"(?<![A-Za-z])y = drawNote\(", text):
+        add(writer, "a note's returned cursor is thrown away again, so the next sentence prints "
+                    "on the same baseline (finding 174)")
+    if "fun note(text: String)" not in text:
+        add(writer, "the flowing note is gone, so a note longer than the space left runs into "
+                    "the footer (finding 174)")
+    flow = (ROOT / "export" / "src" / "main" / "kotlin" / "com" / "constructar" / "export" /
+            "pdf" / "PageFlow.kt")
+    if not flow.is_file():
+        add(flow, "the page-break arithmetic for notes is missing (finding 174)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -2036,6 +2060,7 @@ def main() -> int:
     check_the_hud_state_holds_only_what_is_read()
     check_the_confidence_plane_is_pooled()
     check_the_fusion_pass_reuses_its_planes()
+    check_the_protocol_notes_can_turn_the_page()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

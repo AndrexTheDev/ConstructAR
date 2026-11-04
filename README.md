@@ -458,7 +458,8 @@ Known limitations, deliberately documented rather than hidden:
   a counter the documents promise the operator can see has to reach a screen (finding 170), and
   a state object may not carry a field nothing reads (finding 171), and the render loop may not
   allocate a plane it already has a pool for (finding 172), and a pass that must copy may reuse
-  the buffer it copied into last time (finding 173).
+  the buffer it copied into last time (finding 173), and a sentence the operator's own labels
+  made longer has to move down the page rather than print over the footer (finding 174).
 * **Site gate**: `tools/seo_audit.py` reads the *generated* landing pages and refuses a
   regression: canonical and the six `hreflang` pairs, title/description lengths, Open Graph and
   Twitter cards with a real image size, JSON-LD whose offers match the four real prices, every
@@ -496,7 +497,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 664 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 667 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite (`-O2 -Wall -Wextra -Werror`) | pass — 66 checks, 0 failures |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |

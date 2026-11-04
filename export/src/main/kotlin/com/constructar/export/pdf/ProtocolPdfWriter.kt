@@ -162,6 +162,28 @@ class ProtocolPdfWriter(
 
             // ── Header ──────────────────────────────────────────────────────────────────
             var y = MARGIN
+
+            // ── Notes that cannot run off the page ──────────────────────────────────────
+            // Operator text ends up in these sentences (`namedRunsNote` joins the run labels),
+            // so their height is not ours to bound: draw, and turn the page when the next line
+            // would reach the footer. The old `drawNote` returned where to continue and two
+            // call sites ignored it, so the procurement note and the exclusion note under it
+            // printed on the same baseline (finding 174).
+            val notePaint = Paint(textPaint).apply { textSize = 8.5f; color = Color.DKGRAY }
+            val noteFlow = PageFlow(top = MARGIN, lineHeight = 11, bottom = pageHeight - FOOTER_HEIGHT - 12)
+            fun note(text: String) {
+                for (line in wrap(text, pageWidth - 2 * MARGIN, notePaint)) {
+                    if (!noteFlow.fits(y)) {
+                        drawFooter(page.canvas, pageNumber, content)
+                        document.finishPage(page)
+                        pageNumber++
+                        page = newPage(document, pageNumber)
+                        y = noteFlow.top
+                    }
+                    page.canvas.drawText(line, MARGIN.toFloat(), y.toFloat(), notePaint)
+                    y += noteFlow.lineHeight
+                }
+            }
             page.canvas.drawText(content.labels.title, MARGIN.toFloat(), y.toFloat(), titlePaint)
             content.logo?.let { logo ->
                 val target = 46
@@ -223,16 +245,16 @@ class ProtocolPdfWriter(
 
             // A capture that hit the volume limit is a valid measurement of the runs it holds,
             // but it is not the whole room (finding 100).
-            scanLimitedNote(scan?.scanLimited == true, content.labels.scanLimitedNote)?.let { note ->
+            scanLimitedNote(scan?.scanLimited == true, content.labels.scanLimitedNote)?.let { text ->
                 y += 4
-                y = drawNote(page.canvas, note, y)
+                note(text)
             }
 
             // How exact the numbers on this page are, and what the confidence column means.
             // The shop page promised this line in six languages while the protocol carried only
             // an unexplained percentage (finding 88).
             y += 6
-            y = drawNote(page.canvas, accuracyNote(content.labels.accuracyNote), y)
+            note(accuracyNote(content.labels.accuracyNote))
             y += 10
 
             // ── Runs table ──────────────────────────────────────────────────────────────
@@ -263,15 +285,15 @@ class ProtocolPdfWriter(
                 // so it is not in the GLB. The screen says so with a badge and the 3D export
                 // leaves it out; the protocol said nothing, so the office importing the model
                 // later found a run missing from it with no explanation anywhere in the file.
-                recoveredRunsNote(content.project.routes, content.labels.recoveredNote)?.let { note ->
+                recoveredRunsNote(content.project.routes, content.labels.recoveredNote)?.let { text ->
                     y += 6
-                    y = drawNote(page.canvas, note, y)
+                    note(text)
                 }
                 // The other reason a run is missing from the model: its geometry could not be
                 // built at all (finding 80).
-                unbuildableRunsNote(content.unbuildableRuns, content.labels.unbuildableNote)?.let { note ->
+                unbuildableRunsNote(content.unbuildableRuns, content.labels.unbuildableNote)?.let { text ->
                     y += 6
-                    y = drawNote(page.canvas, note, y)
+                    note(text)
                 }
             }
 
@@ -325,17 +347,10 @@ class ProtocolPdfWriter(
                 // The bend deduction is what a fitter cuts to, and it was on the screen only
                 // (finding 141): a printed page whose order length is not the length of the piece
                 // that goes in, with nothing saying why.
-                for (note in bendDeductionNotes(content.materialList.lines, content.labels.procurementDeduction)) {
-                    if (y > pageHeight - FOOTER_HEIGHT - 30) {
-                        drawFooter(page.canvas, pageNumber, content)
-                        document.finishPage(page)
-                        pageNumber++
-                        page = newPage(document, pageNumber)
-                        y = MARGIN
-                    }
-                    y = drawNote(page.canvas, note, y)
+                for (text in bendDeductionNotes(content.materialList.lines, content.labels.procurementDeduction)) {
+                    note(text)
                 }
-                drawNote(page.canvas, content.labels.procurementNote, y)
+                note(content.labels.procurementNote)
                 // The table can be short by whole runs on purpose: the list was built with the
                 // uncertain ones excluded (finding 161). Every other warning counts what survived,
                 // so without this line the page says nothing about the metres it left out.
@@ -343,7 +358,7 @@ class ProtocolPdfWriter(
                     content.materialList.excludedLowConfidenceRuns,
                     content.materialList.excludedLowConfidenceMeters,
                     content.labels.procurementExcluded,
-                )?.let { note -> y = drawNote(page.canvas, note, y) }
+                )?.let { text -> note(text) }
                 y += 22
             }
 
@@ -391,8 +406,8 @@ class ProtocolPdfWriter(
                     }
                 }
                 if (section.note.isNotBlank()) {
-                    drawNote(page.canvas, section.note, y)
-                    y += 20
+                    note(section.note)
+                    y += 8
                 }
                 y += 6
             }
@@ -410,7 +425,7 @@ class ProtocolPdfWriter(
                 // Said once, at the top of the appendix: this page holds part of the job's
                 // photos, and the rest are in the app rather than lost (finding 91).
                 photoAppendixNote(content.photos.size, content.photosTotal, content.labels.photosNote)
-                    ?.let { note -> py = drawNote(page.canvas, note, py) + 6 }
+                    ?.let { text -> py = drawNote(page.canvas, text, py) + 6 }
                 val cellWidth = (pageWidth - 2 * MARGIN - 12) / 2
                 val cellHeight = 150
                 var column = 0
@@ -544,7 +559,14 @@ class ProtocolPdfWriter(
         return y + 13
     }
 
-    /** Draws a grey note and returns the y the caller can continue from. */
+    /**
+     * A grey note that stays on the page it starts on, returning where the caller can continue.
+     *
+     * Only the photo appendix uses this now, for the sentence that says how many pictures are in
+     * the app rather than on the page: it is a fixed template with two numbers in it, it is drawn
+     * on a page whose layout that appendix owns, and it cannot borrow the flowing `note()` in
+     * `write()` which works on the main text column (finding 174).
+     */
     private fun drawNote(canvas: Canvas, text: String, y: Int): Int {
         val paint = Paint(textPaint).apply { textSize = 8.5f; color = Color.DKGRAY }
         var lineY = y
