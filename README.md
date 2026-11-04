@@ -385,6 +385,8 @@ Known limitations, deliberately documented rather than hidden:
   wall 8° off square and a 35° bay window comes back square to a fifth of a degree, the crooked
   wall is squared and stays where its points are, the bay is returned untouched, a set of parallel
   walls is refused rather than guessed at, and a room turned 30° yields the turned frame.
+  It is host-tested and **not yet wired**: no plane fit in the app feeds it, so nothing the
+  app prints is squared by it today.
 * **AprilTag — detector contract, no detector.** `calibration/tag_scale.hpp` holds the interface a
   decoder will implement (whose only implementation says it is unavailable, and why) and the
   marker-to-scale arithmetic: pair ratios against the printed layout, a median, a deviation

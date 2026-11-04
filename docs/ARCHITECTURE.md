@@ -115,7 +115,10 @@ problem nothing else in the app checks. A plane with a centroid is squared *thro
 centroid, so a wall 8° off stays at the distance it was measured at instead of moving by its
 cosine; a plane more than 20° off (a bay window, a chamfer) is returned untouched, bit for bit,
 and a set of parallel walls produces no frame at all rather than an invented one. The solver
-decides geometry only: no length, no node position and no fitting count passes through it.
+decides geometry only: no length, no node position and no fitting count passes through it. It is
+host-tested and **not yet wired** - no plane fit in the app feeds it, so the app does not square
+anything today; what exists is the engine a plane-fitting pass will call, not a behaviour a user
+can observe (the same distinction finding 98 had to make about the pose graph).
 
 **Passive marker contract** (`calibration/tag_scale.cpp`). Tier 2 of the calibration ladder — a
 printed AprilTag of known size, seen in enough frames, gives the scan a length that does not depend
