@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicReference
  * render thread                       inference worker (1 thread, ~2 Hz)
  * ─────────────                       ─────────────────────────────────
  * throttle to every 500 ms            YUV → ARGB → Bitmap
- * copy YUV planes  (memcpy)           Depth Anything V2 (NNAPI/GPU/CPU)
+ * copy YUV planes  (memcpy)           Depth Anything V2 (XNNPACK, 4 threads)
  * copy depth + confidence             sample ARCore↔network pairs
  * submit ───────────────────────────► MetricDepthCalibrator (IRLS + Huber)
  *                                     AiDepthFusion → fused millimetre depth
@@ -30,7 +30,9 @@ import java.util.concurrent.atomic.AtomicReference
  *
  * Why the copies: the ARCore `Image` and the pipeline's pooled depth buffer both become
  * invalid moments after the frame they belong to. The copies cost ~0.25 ms on the render
- * thread (two `memcpy`s) and buy a worker job that can take 80 ms without touching anything
+ * thread (two `memcpy`s into [ScratchPlanes], which the previous pass already allocated — the
+ * delegate ladder in this diagram is gone too: the graph runs on XNNPACK, see
+ * `MonocularDepthEstimator`) and buy a worker job that can take 80 ms without touching anything
  * ARCore owns.
  *
  * If anything fails — model missing, delegate unavailable, calibration refused — [onFused] is
@@ -52,6 +54,8 @@ class MonocularDepthSource(
     private val latest = AtomicReference<MonocularDepthEstimator?>(null)
     /** Reused ARGB buffer for YUV conversion; grown only if the camera resolution grows. */
     private var pixels = IntArray(640 * 480)
+    /** Reused copies of the frame's depth and confidence planes (finding 173). */
+    private val scratch = ScratchPlanes()
     @Volatile private var fusedBuffer = ShortArray(640 * 480)
 
     @Volatile private var lastRunMillis = 0L
@@ -94,21 +98,24 @@ class MonocularDepthSource(
         lastRunMillis = now
 
         // ── Copies taken here, while the ARCore frame is still valid ────────────────────
+        // The camera frame first: a capture that fails must not cost a 600 kB copy.
         val yuv = YuvFrame.capture(frame)
-        val depthCopy = snapshot.depthMm.copyOf()
-        val confidenceCopy = snapshot.confidence?.copyOf()
         if (yuv == null) {
             busy.set(false)
             return
         }
+        // These two are copied into reused planes — `busy` is set, so no other pass is holding
+        // them (finding 173).
+        val arcoreMm = scratch.depthFrom(snapshot)
+        val confidence = scratch.confidenceFrom(snapshot)
 
         executor.execute {
             try {
                 runFusion(
                     estimator = estimator,
                     yuv = yuv,
-                    arcoreMm = depthCopy,
-                    confidence = confidenceCopy,
+                    arcoreMm = arcoreMm,
+                    confidence = confidence,
                     snapshot = snapshot,
                 )
             } catch (error: Throwable) {

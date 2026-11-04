@@ -1965,6 +1965,26 @@ def check_the_confidence_plane_is_pooled() -> None:
     if "releaseConfidence" not in text:
         add(capture, "the confidence plane is never returned to the pool (finding 172)")
 
+def check_the_fusion_pass_reuses_its_planes() -> None:
+    """The monocular pass copies into padded planes, not into fresh arrays (finding 173).
+
+    The pass runs on its own worker and outlives the frame's pooled arrays, so it must copy -
+    but `snapshot.depthMm.copyOf()` allocates 600 kB on the render thread every 500 ms (about
+    1.2 MB/s), in a class that already reuses its ARGB buffer and its output buffer for the same
+    reason. `ScratchPlanes` holds the pair, safe because `busy` keeps one pass at a time.
+    """
+    source = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
+              "arengine" / "ai" / "MonocularDepthSource.kt")
+    text = source.read_text(encoding="utf-8")
+    for fresh in (".depthMm.copyOf()", "confidence?.copyOf()"):
+        if fresh in text:
+            add(source, f"`{fresh}` allocates a plane per pass on the render thread again "
+                        "(finding 173)")
+    for required in ("scratch.depthFrom(", "scratch.confidenceFrom("):
+        if required not in text:
+            add(source, f"the fusion pass no longer copies into `{required.rstrip('(')}`, so the "
+                        "reused planes are gone or unused (finding 173)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -2015,6 +2035,7 @@ def main() -> int:
     check_the_dropped_frames_reach_a_screen()
     check_the_hud_state_holds_only_what_is_read()
     check_the_confidence_plane_is_pooled()
+    check_the_fusion_pass_reuses_its_planes()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
