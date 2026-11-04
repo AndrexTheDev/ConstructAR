@@ -56,10 +56,8 @@ int TsdfVolume::shardFor(int64_t key) {
   return static_cast<int>((mixed >> 58) & (kShardCount - 1));
 }
 
-TsdfVolume::Touch TsdfVolume::findOrCreateBlock(int32_t bx, int32_t by, int32_t bz) {
-  const int64_t key = blockKey(bx, by, bz);
-  Shard& shard = *shards_[shardFor(key)];
-  std::lock_guard<std::mutex> lock(shard.mutex);
+TsdfVolume::Touch TsdfVolume::findOrCreateBlockLocked(int32_t bx, int32_t by, int32_t bz, Shard& shard,
+                                                      int64_t key) {
   auto it = shard.index.find(key);
   if (it != shard.index.end()) {
     Block* existing = &shard.blocks[it->second];
@@ -110,6 +108,17 @@ TsdfVolume::Touch TsdfVolume::findOrCreateBlock(int32_t bx, int32_t by, int32_t 
   return Touch{&block, true};
 }
 
+size_t TsdfVolume::totalVoxelWeight() const {
+  size_t total = 0;
+  for (const auto& shard : shards_) {
+    std::lock_guard<std::mutex> lock(shard->mutex);
+    for (const auto& block : shard->blocks) {
+      for (int i = 0; i < kVoxelsPerBlock; ++i) total += block.weight[i];
+    }
+  }
+  return total;
+}
+
 const TsdfVolume::Block* TsdfVolume::findBlock(int32_t bx, int32_t by, int32_t bz) const {
   const int64_t key = blockKey(bx, by, bz);
   const Shard& shard = *shards_[shardFor(key)];
@@ -119,13 +128,41 @@ const TsdfVolume::Block* TsdfVolume::findBlock(int32_t bx, int32_t by, int32_t b
   return &shard.blocks[it->second];
 }
 
-TsdfVolume::Block* TsdfVolume::findBlockMutable(int32_t bx, int32_t by, int32_t bz) {
+TsdfVolume::Fusion TsdfVolume::fuseVoxel(int32_t ix, int32_t iy, int32_t iz, float normalizedSdf,
+                                         bool existingOnly) {
+  const int32_t bx = floorDiv(ix, kResolution);
+  const int32_t by = floorDiv(iy, kResolution);
+  const int32_t bz = floorDiv(iz, kResolution);
   const int64_t key = blockKey(bx, by, bz);
   Shard& shard = *shards_[shardFor(key)];
+
+  Fusion result;
+  // One lock for the lookup, the allocation and the fusion. The observation is a read-modify-write
+  // of `sdf` and `weight`; doing it after the lock was released is the race this exists to close
+  // (finding 181).
   std::lock_guard<std::mutex> lock(shard.mutex);
-  auto it = shard.index.find(key);
-  if (it == shard.index.end()) return nullptr;
-  return &shard.blocks[it->second];
+  Block* block = nullptr;
+  if (existingOnly) {
+    auto it = shard.index.find(key);
+    if (it == shard.index.end()) return result;
+    block = &shard.blocks[it->second];
+  } else {
+    const Touch touch = findOrCreateBlockLocked(bx, by, bz, shard, key);
+    block = touch.block;
+    result.allocated = touch.firstInFrame;
+    if (block == nullptr) return result;
+  }
+
+  const int idx = ((iz - bz * kResolution) * kResolution + (iy - by * kResolution)) * kResolution +
+                  (ix - bx * kResolution);
+  const float oldWeight = static_cast<float>(block->weight[idx]);
+  // A ghost only lives where something was observed once.
+  if (existingOnly && oldWeight <= 0.f) return result;
+  const float newWeight = std::min(oldWeight + 1.f, config_.maxWeight);
+  block->sdf[idx] = oldWeight > 0.f ? (block->sdf[idx] * oldWeight + normalizedSdf) / newWeight : normalizedSdf;
+  block->weight[idx] = static_cast<uint16_t>(std::min(newWeight, 65535.f));
+  result.written = true;
+  return result;
 }
 
 void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int rowBegin, int rowEnd,
@@ -134,7 +171,6 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
   const float trunc = truncationMeters();
   const float minDepth = config_.minDepth;
   const float maxDepth = config_.maxDepth;
-  const float maxWeight = config_.maxWeight;
   const float invFx = 1.f / frame.intrinsics.fx;
   const float invFy = 1.f / frame.intrinsics.fy;
   const Mat4& cameraToWorld = frame.cameraToWorld;
@@ -189,24 +225,12 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
           const int32_t ix = static_cast<int32_t>(std::floor(world.x / vs));
           const int32_t iy = static_cast<int32_t>(std::floor(world.y / vs));
           const int32_t iz = static_cast<int32_t>(std::floor(world.z / vs));
-          const int32_t bx = floorDiv(ix, kResolution);
-          const int32_t by = floorDiv(iy, kResolution);
-          const int32_t bz = floorDiv(iz, kResolution);
           // Only *existing* blocks can hold a ghost, and only a voxel that was ever observed
           // (weight > 0) can be a surface. Allocating a block here instead - the earlier
           // behaviour - spent 40 % of the voxels in the volume on empty air: 444 blocks for a
           // single wall became 1 196 and every later gather walked them (finding 111).
-          Block* block = findBlockMutable(bx, by, bz);
-          if (!block) continue;
-          const int idx = ((iz - bz * kResolution) * kResolution + (iy - by * kResolution)) * kResolution +
-                          (ix - bx * kResolution);
-          const float oldWeight = static_cast<float>(block->weight[idx]);
-          if (oldWeight <= 0.f) continue;
-          const float newWeight = std::min(oldWeight + 1.f, maxWeight);
           // Free space is fully outside: sdf = +1 in normalised units.
-          block->sdf[idx] = (block->sdf[idx] * oldWeight + 1.f) / newWeight;
-          block->weight[idx] = static_cast<uint16_t>(std::min(newWeight, 65535.f));
-          ++updates;
+          if (fuseVoxel(ix, iy, iz, 1.f, /*existingOnly=*/true).written) ++updates;
         }
       }
       const int steps = std::max(2, static_cast<int>(std::ceil((zEnd - zStart) / vs)));
@@ -222,19 +246,6 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
         const int32_t iy = static_cast<int32_t>(std::floor(world.y / vs));
         const int32_t iz = static_cast<int32_t>(std::floor(world.z / vs));
 
-        const int32_t bx = floorDiv(ix, kResolution);
-        const int32_t by = floorDiv(iy, kResolution);
-        const int32_t bz = floorDiv(iz, kResolution);
-        const Touch touch = findOrCreateBlock(bx, by, bz);
-        Block* block = touch.block;
-        if (!block) continue;
-        if (touch.firstInFrame) ++allocated;
-
-        const int lx = ix - bx * kResolution;
-        const int ly = iy - by * kResolution;
-        const int lz = iz - bz * kResolution;
-        const int idx = (lz * kResolution + ly) * kResolution + lx;
-
         // Signed distance along the optical axis; positive in front of the surface.
         //
         // `DepthFrameView` used to carry a `depthIsOpticalAxis` flag with a second branch here
@@ -247,11 +258,10 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
         const float sdf = d - z;
         const float clamped = clampf(sdf / trunc, -1.f, 1.f);
 
-        const float oldWeight = static_cast<float>(block->weight[idx]);
-        const float newWeight = std::min(oldWeight + 1.f, maxWeight);
-        block->sdf[idx] = oldWeight > 0.f ? (block->sdf[idx] * oldWeight + clamped) / newWeight : clamped;
-        block->weight[idx] = static_cast<uint16_t>(std::min(newWeight, 65535.f));
-        ++updates;
+        // Lookup, allocation and fusion in one locked step (finding 181).
+        const Fusion fused = fuseVoxel(ix, iy, iz, clamped);
+        if (fused.allocated) ++allocated;
+        if (fused.written) ++updates;
       }
     }
   }

@@ -15,10 +15,15 @@
 //       native-slam/src/main/cpp/slam/rtabmap_bridge.cpp
 //       native-slam/src/main/cpp/tests/host_tests.cpp -o /tmp/constructar_host_tests
 //   /tmp/constructar_host_tests
-// (the script tools/verify-native.sh runs exactly this)
+// (tools/verify-native.sh runs exactly this, for every compiler and optimisation it finds)
 //
 // Or via CMake: -DCONSTRUCTAR_BUILD_HOST_TESTS=ON then run the `constructar_host_tests`
-// target. CI runs exactly this (see docs/VALIDATION.md).
+// target. CI does both (`native-tests.yml`).
+//
+// ./tools/verify-native.sh --tsan runs the same suite under ThreadSanitizer. That is a gate,
+// not an experiment: the integration fuses voxels from several worker threads, and a lost
+// observation is invisible to the assertions - the weights only have to add up to the number of
+// updates, and a race that drops one still does (finding 181).
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -523,8 +528,8 @@ void testBlockBudget() {
  * The block budget under the threading it actually runs with.
  *
  * A budget is a memory guard: `maxBlocks` is what keeps a ten-minute scan from filling the phone.
- * It is spent inside `findOrCreateBlock`, which runs on every worker thread, and the shards have
- * independent mutexes - so the check and the increment have to be one atomic step. The older code
+ * It is spent inside `findOrCreateBlockLocked`, which runs on every worker thread, and the
+ * shards have independent mutexes - so the check and the increment have to be one atomic step. The older code
  * read the count, compared it with the budget and incremented afterwards, which let two threads
  * both take the last slot: five blocks where the budget said four, intermittently, depending on how
  * many cores the machine has. This case runs twelve volumes with eight workers and a step of one
@@ -600,6 +605,70 @@ void testBlocksAllocatedPerFrame() {
   check(bounded, "twelve eight-worker frames counted within the volume");
 }
 
+/**
+ * Every counted voxel write has to be in the volume.
+ *
+ * The fusion is a read-modify-write of two arrays - `sdf` and `weight` - and it used to run
+ * *outside* the shard lock: `findOrCreateBlock` locked, handed out the block pointer, released,
+ * and the caller then did `oldWeight = block->weight[idx]; block->sdf[idx] = …;
+ * block->weight[idx] = …`. It now happens inside `fuseVoxel`, under the same lock.
+ * Two worker threads whose rays cross the same voxel - which is the normal case, the truncation
+ * band is four voxels thick and the rows are split across threads - wrote each other's work away:
+ * ThreadSanitizer reports it as three races on those three lines, and what it loses is an
+ * observation in the running average (finding 181).
+ *
+ * The identity this asserts is exact rather than statistical: a voxel's weight goes up by one for
+ * every observation the volume accepted, so the sum over all voxels must equal the sum of
+ * `voxelUpdates` over all frames. One lost update anywhere in the volume breaks it.
+ *
+ * It is not, on its own, the guard for the race: losing an update needs the two threads inside the
+ * same three instructions, and eight workers over eight rounds did not manage that on this
+ * machine - the case passed against the racy volume, with all 75 checks green. The guard is
+ * `tools/verify-native.sh --tsan`, which reports the three races and fails, and which CI runs.
+ * What this case is for is the accounting on either side of the fix: a weight that is capped but
+ * not written, an observation dropped by the carve pass, a reset that forgets a block.
+ */
+void testVoxelFusionUnderConcurrency() {
+  section("Voxel fusion: every counted observation is in the volume");
+  SyntheticCamera camera;
+  const auto depth = renderSphereDepth(camera, Vec3(0.f, 0.f, -2.f), 0.5f);
+  constexpr int kRounds = 8;
+  constexpr int kFrames = 4;
+  // One assertion for the whole sweep, not one per round: `verify_sources.py` holds the README's
+  // native count to the number of `check` call sites, which is only honest as long as every call
+  // site runs exactly once (finding 99).
+  size_t worstShortfall = 0;
+  size_t countedTotal = 0;
+  size_t storedTotal = 0;
+  int worstRound = -1;
+  for (int round = 0; round < kRounds; ++round) {
+    TsdfConfig config;
+    config.voxelSize = 0.01f;
+    config.minConfidence = 0;
+    config.workerThreads = 8;
+    TsdfVolume volume(config);
+    size_t counted = 0;
+    for (int frame = 0; frame < kFrames; ++frame) {
+      counted += static_cast<size_t>(volume.integrate(makeFrame(camera, depth, Mat4::identity()), 1).voxelUpdates);
+    }
+    const size_t stored = volume.totalVoxelWeight();
+    countedTotal += counted;
+    storedTotal += stored;
+    if (stored < counted) {
+      worstShortfall = std::max(worstShortfall, counted - stored);
+      worstRound = round;
+    }
+  }
+  check(worstShortfall == 0,
+        "every counted observation is in a voxel: " + std::to_string(storedTotal) + " stored of " +
+            std::to_string(countedTotal) + " counted over " + std::to_string(kRounds) + " rounds" +
+            (worstRound < 0 ? std::string()
+                            : ", round " + std::to_string(worstRound) + " lost " +
+                                  std::to_string(worstShortfall)));
+  check(storedTotal > countedTotal / 2,
+        "the sweep really exercised the volume: " + std::to_string(storedTotal) + " voxel observations");
+}
+
 void testInvalidInput() {
   section("Invalid input handling");
   TsdfConfig config;
@@ -630,6 +699,7 @@ int main() {
   testBlockBudget();
   testBlockBudgetUnderConcurrency();
   testBlocksAllocatedPerFrame();
+  testVoxelFusionUnderConcurrency();
   testInvalidInput();
 
   std::printf("\n%d checks, %d failures\n", g_checks, g_failures);

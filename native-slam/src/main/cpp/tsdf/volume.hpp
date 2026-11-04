@@ -153,6 +153,16 @@ class TsdfVolume {
   void reset();
 
   size_t blockCount() const { return blockCount_.load(std::memory_order_relaxed); }
+
+  /**
+   * Sum of every voxel's weight: the amount of evidence the volume holds.
+   *
+   * Each accepted observation adds exactly one to one voxel, so for a volume that was never
+   * reset this equals the sum of `IntegrationStats::voxelUpdates` over its frames. That identity
+   * is what the host suite asserts: a write that is counted but overwritten by another worker
+   * thread breaks it, which is how the unsynchronised fusion showed up (finding 181).
+   */
+  size_t totalVoxelWeight() const;
   size_t voxelCount() const { return blockCount() * static_cast<size_t>(kVoxelsPerBlock); }
   const TsdfConfig& config() const { return config_; }
 
@@ -167,6 +177,32 @@ class TsdfVolume {
                 (static_cast<float>(vy) + 0.5f) * vs,
                 (static_cast<float>(vz) + 0.5f) * vs);
   }
+
+  /** What one [fuseVoxel] call did. */
+  struct Fusion {
+    /** The observation reached its voxel. */
+    bool written = false;
+    /** A block was created for it, and this frame is the first to touch that block. */
+    bool allocated = false;
+  };
+
+  /**
+   * Adds one SDF observation to voxel (ix, iy, iz) — the whole read-modify-write, **under the
+   * shard lock**.
+   *
+   * `findOrCreateBlock` can only hand the block out and release the lock, so the fusion that
+   * followed it ran unprotected: `oldWeight = weight[idx]`, then `sdf[idx]` and `weight[idx]`
+   * written back. Two worker threads whose rays cross the same voxel - which is the normal case,
+   * the truncation band is four voxels thick and the frame is split into row bands - therefore
+   * read-modify-wrote the same two words without synchronisation. ThreadSanitizer reports it as
+   * three races on those three lines; what it costs is an observation that is counted and then
+   * written away, so the running average weights some views twice and others not at all
+   * (finding 181). Fusing inside the lock the lookup already takes costs nothing extra.
+   *
+   * @param normalizedSdf observation, already divided by the truncation distance
+   * @param existingOnly the carve pass: never allocates, and skips voxels without evidence
+   */
+  Fusion fuseVoxel(int32_t ix, int32_t iy, int32_t iz, float normalizedSdf, bool existingOnly = false);
 
   /** Copies the (res+1)³ voxel grid covering block (bx,by,bz); 0 where unobserved. */
   void gatherBlockGrid(int32_t bx, int32_t by, int32_t bz, float* out) const;
@@ -212,11 +248,10 @@ class TsdfVolume {
     bool firstInFrame = false;
   };
 
-  Touch findOrCreateBlock(int32_t bx, int32_t by, int32_t bz);
+  /** [findOrCreateBlock] without the lock - the caller holds the shard's mutex. */
+  Touch findOrCreateBlockLocked(int32_t bx, int32_t by, int32_t bz, Shard& shard, int64_t key);
   /** Existing block, or null. Read-only, for the gather paths. */
   const Block* findBlock(int32_t bx, int32_t by, int32_t bz) const;
-  /** Existing block, or null - never allocates. The carving pass needs to write into it. */
-  Block* findBlockMutable(int32_t bx, int32_t by, int32_t bz);
 
   void integrateRows(const DepthFrameView& frame, int pixelStep, int rowBegin, int rowEnd,
                      IntegrationStats& stats);

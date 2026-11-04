@@ -1596,6 +1596,22 @@ def check_confidence_zero_is_a_reading() -> None:
         add(hud, "the HUD still reads a confidence of 0 as 'no reading', while the bill of "
                  "materials counts it as the weakest possible point (finding 158)")
 
+def find_or_create_block_body(text: str) -> str:
+    """The body of the block lookup, whichever name it currently carries.
+
+    Findings 159 and 160 both grep inside `findOrCreateBlock`. Finding 181 split the lock out of
+    it - the lookup is now `findOrCreateBlockLocked`, called with the shard mutex already held -
+    and a rule that only knows the old name silently degrades to "`findOrCreateBlock` is gone;
+    this rule has nothing to check", which reads like a finding and gets ignored. Both names are
+    accepted here, and neither being present is what the callers report.
+    """
+    for name in ("TsdfVolume::findOrCreateBlockLocked(", "TsdfVolume::findOrCreateBlock("):
+        start = text.find(name)
+        if start >= 0:
+            return text[start:text.find("\n}\n", start)]
+    return ""
+
+
 def check_block_budget_claim_is_atomic() -> None:
     """A budget spent from several threads has to be claimed atomically (finding 159).
 
@@ -1607,11 +1623,10 @@ def check_block_budget_claim_is_atomic() -> None:
     """
     volume = (ROOT / "native-slam" / "src" / "main" / "cpp" / "tsdf" / "volume.cpp")
     text = volume.read_text(encoding="utf-8")
-    start = text.find("TsdfVolume::findOrCreateBlock(")
-    if start < 0:
+    body = find_or_create_block_body(text)
+    if not body:
         add(volume, "`findOrCreateBlock` is gone; this rule has nothing to check")
         return
-    body = text[start:text.find("\n}\n", start)]
     if "maxBlocks" not in body:
         return
     if "compare_exchange_weak" not in body:
@@ -1635,7 +1650,7 @@ def check_block_touch_is_locked() -> None:
     """
     volume = (ROOT / "native-slam" / "src" / "main" / "cpp" / "tsdf" / "volume.cpp")
     text = volume.read_text(encoding="utf-8")
-    start = text.find("TsdfVolume::findOrCreateBlock(")
+    start = text.find("TsdfVolume::findOrCreateBlock")
     if start < 0:
         add(volume, "`findOrCreateBlock` is gone; this rule has nothing to check")
         return
@@ -2131,6 +2146,45 @@ def check_the_clip_row_states_its_defaults() -> None:
                         f"row is back to a named default nobody can read (finding 180)")
 
 
+def check_the_native_fusion_is_locked() -> None:
+    """The voxel update happens under the shard lock that found the block.
+
+    `findOrCreateBlock` returns a `Block*` and releases the shard mutex, so the fusion that
+    followed it - read `weight`, read `sdf`, write both - ran on every worker thread at once
+    against the same two arrays. Two rays through the truncation band of one voxel is the normal
+    case, not an edge case, so the writes were simply lost: ThreadSanitizer reports three races on
+    those three lines and the running average counts some views twice (finding 181). The fix is
+    `fuseVoxel`, which does the lookup, the allocation and the read-modify-write under one lock;
+    `integrateRows` must not write voxels itself again, and the carve pass must use it too. The
+    real gate is `tools/verify-native.sh --tsan` in CI - this rule is the shape of it, so the
+    pattern cannot come back without a compiler to prove it.
+    """
+    source = (ROOT / "native-slam" / "src" / "main" / "cpp" / "tsdf" / "volume.cpp").read_text(encoding="utf-8")
+    marker = "TsdfVolume::Fusion TsdfVolume::fuseVoxel"
+    if marker not in source:
+        add(ROOT / "native-slam/src/main/cpp/tsdf/volume.cpp",
+            "there is no fuseVoxel, so the fusion is back outside the lock (finding 181)")
+        return
+    body = source[source.index(marker):source.index("void TsdfVolume::integrateRows")]
+    if "std::lock_guard<std::mutex> lock(shard.mutex)" not in body:
+        add(ROOT / "native-slam/src/main/cpp/tsdf/volume.cpp",
+            "fuseVoxel does not hold the shard lock (finding 181)")
+    for index, field in (("weight", "block->weight[idx]"), ("sdf", "block->sdf[idx]")):
+        if field not in body:
+            add(ROOT / "native-slam/src/main/cpp/tsdf/volume.cpp",
+                f"fuseVoxel does not touch {field}, so the fusion moved somewhere else (finding 181)")
+    rows = source[source.index("void TsdfVolume::integrateRows"):source.index("IntegrationStats TsdfVolume::integrate(")]
+    for field in ("block->sdf[", "block->weight[", "->sdf[idx]", "->weight[idx]"):
+        if field in rows:
+            add(ROOT / "native-slam/src/main/cpp/tsdf/volume.cpp",
+                f"integrateRows writes a voxel itself ({field}) instead of calling fuseVoxel, "
+                f"which is the unlocked read-modify-write of finding 181")
+    if rows.count("fuseVoxel(") < 2:
+        add(ROOT / "native-slam/src/main/cpp/tsdf/volume.cpp",
+            "the integrator no longer routes both the depth pass and the carve pass through "
+            "fuseVoxel (finding 181)")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -2189,6 +2243,7 @@ def main() -> int:
     check_the_ply_header_keeps_the_run_names()
     check_a_derived_warning_can_be_cleared()
     check_the_clip_row_states_its_defaults()
+    check_the_native_fusion_is_locked()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

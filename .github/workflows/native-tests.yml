@@ -53,6 +53,15 @@ jobs:
           set -o pipefail
           ./host_tests 2>&1 | tee /tmp/host_tests.log
 
+      # The suite above cannot see a lost voxel update: the weights only have to add up to the
+      # number of updates, and a race that drops one still adds up (finding 181 passed all 75
+      # checks against the racy volume). ThreadSanitizer can see it - it reported three races on
+      # the three lines of the fusion - so it runs here, in one cell of the matrix, and fails the
+      # job on any race. `tools/verify-native.sh` is the same script a developer runs locally.
+      - name: ThreadSanitizer pass (voxel fusion under the shard lock)
+        if: matrix.compiler == 'g++' && matrix.optimisation == '-O1'
+        run: ./tools/verify-native.sh --tsan
+
       # The optional RTAB-Map branch, compiled in the configuration the app would use. No
       # RTAB-Map checkout is available here, so the translation unit is built against
       # `tests/rtabmap-stubs` - headers that mirror the API of the RTAB-Map version
