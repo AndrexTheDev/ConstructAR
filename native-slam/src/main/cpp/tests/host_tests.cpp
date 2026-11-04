@@ -1612,8 +1612,7 @@ void testObservationWeight() {
   // What an observation deposits, exactly: the wall's total evidence divided by the number of
   // writes is the 1/Z² of the frame that made them. This is the identity that fails the moment the
   // weighting is removed from the integration path - a flat weight gives 1.0 at every range.
-  std::vector<uint16_t> farDepth(static_cast<size_t>(camera.width * camera.height), 4000);
-  const auto evidencePerWrite = [&camera, &farDepth](float depthMetres) {
+  const auto evidencePerWrite = [&camera](float depthMetres) {
     std::vector<uint16_t> depth(static_cast<size_t>(camera.width * camera.height),
                                 static_cast<uint16_t>(depthMetres * 1000.f));
     TsdfConfig config;
