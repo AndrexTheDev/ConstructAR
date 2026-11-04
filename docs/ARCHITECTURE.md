@@ -109,7 +109,9 @@ pieces and every downstream count is plausible. The plane is re-fitted by least 
 is reported, so the noisy triple decides membership and never position. And the sampler is seeded
 from `PlaneFitOptions::seed` alone: a fit that differs every run cannot be regression-tested or
 reproduced by the person reporting a bad room. `planarity` and `extentMetres` reject the line of
-points and the sliver that would otherwise become walls; the normal's sign is fixed towards the
+points and the sliver that would otherwise become walls, and a rejected candidate is *spent* — its
+points leave the cloud so the same set cannot be proposed again, and the next surface is looked
+for, because ending the fit there cost a scan every plane behind a bolt head (finding 191); the normal's sign is fixed towards the
 centre of the cloud, so two fits of one room agree.
 
 **Manhattan-World frame** (`geometry/manhattan_world.cpp`). A room is meant to be orthogonal;

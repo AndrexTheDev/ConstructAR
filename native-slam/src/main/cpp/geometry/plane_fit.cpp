@@ -110,7 +110,23 @@ std::vector<FittedPlane> fitPlanes(const std::vector<Vec3>& points,
   std::vector<char> best(cloud.size(), 0);
   int remaining = static_cast<int>(cloud.size());
 
-  for (int slot = 0; slot < options.maxPlanes; ++slot) {
+  // `attempts` counts candidates tried, not planes reported: a candidate that is refused spends
+  // its consensus and the next attempt looks elsewhere, so the loop is bounded by the number of
+  // *rejections* the fit is willing to absorb rather than by the number of surfaces it reports.
+  int reported = 0;
+  const int maxAttempts = options.maxPlanes + 8;
+  // A refused candidate's points leave the cloud, so the same set cannot be proposed again - that
+  // is what bounds the loop - and the fit carries on instead of ending. Both refusals below spend
+  // and continue, and this lambda is the only place that behaves differently from reporting.
+  const auto spendConsensus = [&used, &best, &remaining, &cloud](void) {
+    for (std::size_t i = 0; i < cloud.size(); ++i) {
+      if (best[i]) {
+        used[i] = 1;
+        --remaining;
+      }
+    }
+  };
+  for (int attempt = 0; attempt < maxAttempts && reported < options.maxPlanes; ++attempt) {
     if (remaining < options.minInliers) break;
 
     int bestCount = 0;
@@ -150,9 +166,14 @@ std::vector<FittedPlane> fitPlanes(const std::vector<Vec3>& points,
     if (candidate.inliers < options.minInliers ||
         candidate.planarity < options.minPlanarity ||
         candidate.extentMetres < options.minExtentMetres) {
-      // The consensus set is not a plane. Its points stay in the cloud and no further plane is
-      // reported: the alternative is a loop that re-samples the same rejected set for ever.
-      break;
+      // The consensus set is not a plane - a chord across a curved wall, a line of points, a
+      // sliver. It is *spent* rather than abandoned: its points leave the cloud so the same set
+      // cannot be proposed again (that is what bounds the loop), and the next attempt looks for
+      // the next surface. Ending the fit here was wrong in the obvious way (finding 191): one
+      // curved wall in front of a straight one cost the room every plane behind it, and the
+      // caller cannot tell "no planes" from "the first candidate was refused".
+      spendConsensus();
+      continue;
     }
 
     // Sign convention: point at the middle of the cloud, i.e. into the room.
@@ -171,7 +192,12 @@ std::vector<FittedPlane> fitPlanes(const std::vector<Vec3>& points,
       best[i] = static_cast<char>(onPlane);
       if (onPlane) ++inliers;
     }
-    if (inliers < options.minInliers) break;
+    if (inliers < options.minInliers) {
+      // Same rule as above: the refined plane explains too little, so those points are spent and
+      // the fit carries on rather than reporting nothing.
+      spendConsensus();
+      continue;
+    }
     candidate.inliers = inliers;
 
     for (std::size_t i = 0; i < cloud.size(); ++i) {
@@ -181,6 +207,7 @@ std::vector<FittedPlane> fitPlanes(const std::vector<Vec3>& points,
       }
     }
     planes.push_back(candidate);
+    ++reported;
   }
   return planes;
 }

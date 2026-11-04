@@ -377,7 +377,7 @@ Known limitations, deliberately documented rather than hidden:
 
 ## Testing
 
-* **Native (C++) — 184 assertions, all green**, exercised with plain `g++` (no Android SDK):
+* **Native (C++) — 185 assertions, all green**, exercised with plain `g++` (no Android SDK):
   SE(3) exp/log round trip, TSDF integration on synthetic depth, sphere/wall reconstruction
   areas and extents, a 30°-tilted plane (which pins the depth convention), free-space carving
   (a ghost disappears, the real wall does not), triangle budget, invalid input, pose-graph
@@ -393,7 +393,9 @@ Known limitations, deliberately documented rather than hidden:
   for. RANSAC is seeded from the options and from nothing else, so a fit is reproducible from its
   options alone; the triples only decide *which* points belong to a plane, never where it is; a
   plane has to be flat (`planarity`) and to cover something (`extentMetres`), which is what stops a
-  line of points and a sliver of skirting board becoming walls. The host suite runs the whole
+  line of points and a sliver of skirting board becoming walls, and a refused candidate is spent
+  rather than ending the fit — one bolt head in front of a wall cost the scan every plane behind
+  it (finding 191). The host suite runs the whole
   chain — a synthetic 4 × 3 m room cloud with 3 mm of noise and one wall 8° off square, six
   surfaces, one frame, five snapped planes and the crooked wall left at the 4 m it was measured
   at.
@@ -540,8 +542,8 @@ errors:
 | `:ar-engine` unit tests | pass |
 | `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 715 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
-| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 184 checks, 0 failures |
-| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 184 checks, 0 failures, no data race reported |
+| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 185 checks, 0 failures |
+| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 185 checks, 0 failures, no data race reported |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
 | APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |

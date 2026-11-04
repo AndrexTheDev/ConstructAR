@@ -1242,6 +1242,43 @@ void testPlaneFit() {
         "a room's surfaces are each ~800 points: a 5000-point floor finds nothing");
   check(constructar::fitPlanes({}, options).empty(), "no points, no planes");
 
+  // A refused candidate must not end the fit. A bolt head 10 cm from the lens puts 3000 points on
+  // a 3 cm sphere into the cloud; the slab RANSAC finds through it is refused (a ball is not a
+  // plane), and the straight wall a metre behind it must still be found. Ending the fit at the
+  // first refusal returned *zero* planes for this scan (finding 191). The generator is its own so
+  // the cloud is exactly the one that reproduces the order: refusal first, wall second.
+  struct BoltNoise {
+    std::uint32_t state = 0x99u;
+    float unit() {
+      state ^= state << 13;
+      state ^= state >> 17;
+      state ^= state << 5;
+      return static_cast<float>(state & 0xFFFFu) / 65535.f;
+    }
+  };
+  BoltNoise boltNoise;
+  std::vector<constructar::Vec3> clutter;
+  for (int i = 0; i < 3000; ++i) {
+    const float z = (boltNoise.unit() * 2.f - 1.f) * 0.03f;
+    const float phi = boltNoise.unit() * 2.f * constructar::kPi;
+    const float radius = std::sqrt(std::max(0.f, 0.03f * 0.03f - z * z));
+    clutter.push_back({radius * std::cos(phi), radius * std::sin(phi), z});
+  }
+  for (int i = 0; i < 400; ++i) {
+    const float x = (boltNoise.unit() * 2.f - 1.f) * 0.2f;
+    const float y = (boltNoise.unit() * 2.f - 1.f) * 0.175f;
+    clutter.push_back({x, y, 1.f});
+  }
+  const auto pastClutter = constructar::fitPlanes(clutter, options);
+  bool wallFound = false;
+  for (const auto& plane : pastClutter) {
+    if (std::fabs(plane.normal.z) > 0.999f && std::fabs(std::fabs(plane.offset) - 1.f) < 0.01f) {
+      wallFound = true;
+    }
+  }
+  check(wallFound,
+        "a refused candidate does not end the fit: the wall behind the bolt head is still found");
+
   std::vector<constructar::Vec3> line;
   for (int i = 0; i < 200; ++i) line.push_back({static_cast<float>(i) * 0.01f, 0.f, 0.f});
   check(constructar::fitPlanes(line, options).empty(),
