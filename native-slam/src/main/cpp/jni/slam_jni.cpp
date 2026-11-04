@@ -80,12 +80,19 @@ struct EngineContext {
   Bounds lastBounds;
   int lastTriangleCount = 0;
   /**
-   * Serialises *every* access to the volume.
+   * Serialises every access to the volume: integrate, extract and reset.
    *
    * The Kotlin pipeline already funnels integration and extraction onto one worker thread, but
-   * `reset()` arrives from the UI thread (a new room was started) and `destroy()` from whatever
-   * thread closed the engine. Without this lock a reset racing an integration corrupts the
-   * block table silently — the kind of bug that shows up as "the scan went weird" days later.
+   * `reset()` arrives from the UI thread (a new room was started). Without this lock a reset
+   * racing an integration corrupts the block table silently — the kind of bug that shows up as
+   * "the scan went weird" days later.
+   *
+   * `nativeDestroy` deliberately does **not** take it: a mutex cannot be locked and then destroyed
+   * with the lock held, so freeing cannot be made safe from inside this file. The contract is that
+   * destroy is the last call on a context, and `NativeSlamEngine` now enforces it on the Kotlin
+   * side twice over - the handle is claimed and zeroed under a lock, so a second close has nothing
+   * to free, and the scan worker that owns the engine frees it only after its loop has ended, so
+   * an integration or extraction in flight is never deleted underneath itself (finding 182).
    */
   std::mutex volumeMutex;
 };

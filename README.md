@@ -399,7 +399,10 @@ Known limitations, deliberately documented rather than hidden:
   a project rate overriding the firm's.
 * **JVM (`:native-slam`)** — the pose-graph report as it crosses the JNI bridge: the
   optimiser's convergence verdict is carried across instead of being re-derived from the two
-  costs, and the pose block is read past that flag rather than from it.
+  costs, and the pose block is read past that flag rather than from it. Plus the engine's
+  lifetime: `close()` frees the native context once however often it is called (three calls in a
+  row, or two threads at the same moment), and every other method is a no-op afterwards instead of
+  handing a freed pointer to the JNI layer (finding 182).
 * **JVM (`:ar-engine`, `:export`)** — hit cascade priority and rejection reasons, metric depth
   calibration (including "refuses to fit on noise"), routing/anchor behaviour, GLB/PLY/CSV
   structural validation, the protocol's note for a capture that hit the scan limit, the rows of
@@ -507,7 +510,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 682 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 686 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 68 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 68 checks, 0 failures, no data race reported |

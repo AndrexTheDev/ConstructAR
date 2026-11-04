@@ -2185,6 +2185,67 @@ def check_the_native_fusion_is_locked() -> None:
             "fuseVoxel (finding 181)")
 
 
+def check_the_native_engine_is_freed_once() -> None:
+    """The native TSDF context is freed once, by the thread that was last inside it.
+
+    `NativeSlamEngine` wraps a raw `EngineContext*` in a `Long`. Until finding 182 that handle was
+    a `val`, so `close()` left it standing: a second close passed the same pointer to `delete`
+    twice (a double free), and every call after the first close handed freed memory to the JNI
+    layer, where `contextFrom()` cannot tell it from a live context. The `handle == 0L` guard in
+    each entry point could never fire.
+
+    The other half is the scan pipeline. `stop()` waited for its worker with a bounded
+    `withTimeoutOrNull(500)` and then called `engine?.close()` whether or not the wait had finished
+    - so a mesh extraction that ran longer than half a second on a hot phone was deleted out from
+    under itself, in `gatherBlockGrid`, which is the crash the KDoc above the function says the
+    join exists to prevent. The worker owns the free now: it is the last thread that can be inside
+    the volume, and it closes the engine when its loop ends.
+
+    This rule refuses the three shapes that reintroduce the defect: a `val` handle, a `close()`
+    that does not zero it, a native call that passes the field instead of the local copy, and a
+    `stop()` that frees the engine itself after a timeout.
+    """
+    engine = (ROOT / "native-slam" / "src" / "main" / "kotlin" / "com" / "constructar" /
+              "nativebridge" / "NativeSlamEngine.kt")
+    text = engine.read_text(encoding="utf-8")
+    if "private var handle: Long" not in text:
+        add(engine, "the native handle is not a `var` any more, so `close()` cannot invalidate it "
+                    "- a second close is a double free and every call after it a use-after-free "
+                    "(finding 182)")
+    close_start = text.find("override fun close()")
+    if close_start < 0:
+        add(engine, "`close()` has disappeared; nothing frees the native context (finding 182)")
+    else:
+        close_body = text[close_start:text.find("\n    }\n", close_start)]
+        if "handle = 0L" not in close_body:
+            add(engine, "`close()` does not zero the handle, so it is not idempotent and the "
+                        "guards in the other methods never fire after it (finding 182)")
+    for match in re.finditer(r"native[A-Za-z]+\(\s*handle\s*[,)]", text):
+        line = text.count("\n", 0, match.start()) + 1
+        add(engine, f"line {line}: a native call passes the field instead of the local copy, so a "
+                    f"`close()` that lands mid-call can hand the JNI layer a freed context "
+                    f"(finding 182)")
+
+    pipeline = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" / "arengine" /
+                "scan" / "TsdfScanPipeline.kt")
+    pipeline_text = pipeline.read_text(encoding="utf-8")
+    stop_start = pipeline_text.find("fun stop()")
+    if stop_start < 0:
+        add(pipeline, "`stop()` has disappeared; the native volume is never released (finding 182)")
+        return
+    stop_body = pipeline_text[stop_start:pipeline_text.find("\n    }\n", stop_start)]
+    if "close()" in stop_body and "job == null" not in stop_body:
+        add(pipeline, "`stop()` frees the engine itself, so a worker still inside the native volume "
+                      "loses its context - a use-after-free after a bounded join (finding 182)")
+    if "withTimeoutOrNull" in stop_body and re.search(r"withTimeoutOrNull[^\n]*\n(?:[^\n]*\n){0,4}[^\n]*close\(\)", stop_body):
+        add(pipeline, "`stop()` waits with a timeout and then frees the engine, which is the "
+                      "use-after-free of finding 182 - the wait must not decide when it is freed")
+    start_body = pipeline_text[pipeline_text.find("fun start("):pipeline_text.find("fun onFrame(")]
+    if "created.close()" not in start_body:
+        add(pipeline, "the scan worker no longer closes the engine when its loop ends, so `stop()` "
+                      "is the only closer again (finding 182)")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -2244,6 +2305,7 @@ def main() -> int:
     check_a_derived_warning_can_be_cleared()
     check_the_clip_row_states_its_defaults()
     check_the_native_fusion_is_locked()
+    check_the_native_engine_is_freed_once()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()

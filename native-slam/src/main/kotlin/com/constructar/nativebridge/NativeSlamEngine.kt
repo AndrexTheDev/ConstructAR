@@ -26,8 +26,37 @@ import java.nio.ByteBuffer
  *
  * Every method degrades gracefully: if the library fails to load, [isAvailable] is false
  * and the AR UI still runs (route measuring does not depend on TSDF meshing).
+ *
+ * [close] frees the native context and **zeroes the handle**, which is what makes the guards in
+ * every other method mean something. Until finding 182 the handle was a `val`: `close()` kept it,
+ * so a second `close()` handed the same `EngineContext*` to `delete` twice - a double free - and
+ * every call after the first close passed a dangling pointer straight to the JNI layer, where
+ * `contextFrom()` cannot tell freed memory from a live context. The class read as if it degraded
+ * after close; it did the opposite.
  */
-class NativeSlamEngine private constructor(private val handle: Long) : AutoCloseable {
+class NativeSlamEngine internal constructor(
+    initialHandle: Long,
+    /**
+     * Frees the native context.
+     *
+     * Injectable because the JVM test suite has no `libconstructar_slam.so`: the double-close this
+     * class has to survive is exactly the thing that cannot be tested through the real library
+     * (finding 182). Production always uses the JNI entry point.
+     */
+    private val destroy: (Long) -> Unit,
+) : AutoCloseable {
+
+    /**
+     * The native context, or 0 once [close] has freed it.
+     *
+     * Volatile: `close()` arrives from the thread that closes the screen while the scan worker is
+     * the one calling into the volume, so the zeroing has to be visible to the worker immediately.
+     * Every entry point reads it **once** into a local and uses that value for the whole call - a
+     * second read could pass the guard and then hand the native layer a handle that was just
+     * zeroed.
+     */
+    @Volatile
+    private var handle: Long = initialHandle
 
     /**
      * Integrates one raw-depth frame from a pooled `ShortArray` (the normal path).
@@ -49,11 +78,12 @@ class NativeSlamEngine private constructor(private val handle: Long) : AutoClose
         timestampNs: Long,
         pixelStep: Int,
     ): IntegrationResult? {
-        if (handle == 0L) return null
+        val active = handle
+        if (active == 0L) return null
         require(cameraToWorld.size == 16) { "cameraToWorld must be a column-major 4×4 matrix" }
         if (width <= 0 || height <= 0) return null
         val raw = nativeIntegrateDepth(
-            handle,
+            active,
             depthMm,
             width,
             height,
@@ -92,13 +122,14 @@ class NativeSlamEngine private constructor(private val handle: Long) : AutoClose
         timestampNs: Long,
         pixelStep: Int,
     ): IntegrationResult? {
-        if (handle == 0L) return null
+        val active = handle
+        if (active == 0L) return null
         if (!depthMm.isDirect) {
             Log.w(TAG, "integrateDepthBuffer needs a direct ByteBuffer")
             return null
         }
         val raw = nativeIntegrateDepthBuffer(
-            handle,
+            active,
             depthMm,
             width,
             height,
@@ -137,9 +168,10 @@ class NativeSlamEngine private constructor(private val handle: Long) : AutoClose
         timestampNs: Long,
         pixelStep: Int,
     ): IntegrationResult? {
-        if (handle == 0L) return null
+        val active = handle
+        if (active == 0L) return null
         val raw = nativeIntegrateDepthHardwareBuffer(
-            handle,
+            active,
             hardwareBuffer,
             width,
             height,
@@ -160,8 +192,9 @@ class NativeSlamEngine private constructor(private val handle: Long) : AutoClose
 
     /** Runs Surface Nets. Returns null when nothing has been scanned yet. */
     fun extractMesh(isoLevel: Float = 0f): ScanMesh? {
-        if (handle == 0L) return null
-        val payload = nativeExtractMesh(handle, isoLevel) ?: return null
+        val active = handle
+        if (active == 0L) return null
+        val payload = nativeExtractMesh(active, isoLevel) ?: return null
         val vertices = payload[0] as? FloatArray ?: return null
         val indices = payload[1] as? IntArray ?: return null
         return ScanMesh.fromPayload(vertices, indices)
@@ -169,12 +202,14 @@ class NativeSlamEngine private constructor(private val handle: Long) : AutoClose
 
     /** Axis-aligned bounds of the last extracted mesh: `[minX, minY, minZ, maxX, maxY, maxZ]`. */
     fun lastBounds(): FloatArray? {
-        if (handle == 0L) return null
-        return nativeLastBounds(handle)
+        val active = handle
+        if (active == 0L) return null
+        return nativeLastBounds(active)
     }
 
     fun reset() {
-        if (handle != 0L) nativeReset(handle)
+        val active = handle
+        if (active != 0L) nativeReset(active)
     }
 
     // ── Pose graph (loop closure) ────────────────────────────────────────────────────────
@@ -182,13 +217,15 @@ class NativeSlamEngine private constructor(private val handle: Long) : AutoClose
     // app measures on ARCore's own tracking. See docs/SETUP.md §5.2 before quoting a closure.
 
     fun resetPoseGraph() {
-        if (handle != 0L) nativePoseGraphReset(handle)
+        val active = handle
+        if (active != 0L) nativePoseGraphReset(active)
     }
 
     /** Adds a keyframe pose (column-major, camera→world). Returns the node index. */
     fun addPoseNode(pose: FloatArray, fixed: Boolean = false): Int {
-        if (handle == 0L) return -1
-        return nativePoseGraphAddNode(handle, pose, fixed)
+        val active = handle
+        if (active == 0L) return -1
+        return nativePoseGraphAddNode(active, pose, fixed)
     }
 
     fun addPoseEdge(
@@ -199,8 +236,9 @@ class NativeSlamEngine private constructor(private val handle: Long) : AutoClose
         translationWeight: Double = 1.0,
         loopClosure: Boolean = false,
     ) {
-        if (handle == 0L) return
-        nativePoseGraphAddEdge(handle, from, to, measurement, rotationWeight, translationWeight, loopClosure)
+        val active = handle
+        if (active == 0L) return
+        nativePoseGraphAddEdge(active, from, to, measurement, rotationWeight, translationWeight, loopClosure)
     }
 
     /**
@@ -210,25 +248,40 @@ class NativeSlamEngine private constructor(private val handle: Long) : AutoClose
      * so this returns a report that carries no poses. See docs/SETUP.md §5.2.
      */
     fun optimizePoseGraph(iterations: Int = 20): PoseGraphResult? {
-        if (handle == 0L) return null
-        val raw = nativePoseGraphOptimize(handle, iterations) ?: return null
+        val active = handle
+        if (active == 0L) return null
+        val raw = nativePoseGraphOptimize(active, iterations) ?: return null
         return PoseGraphResult.from(raw)
     }
 
     /** Proximity loop-closure candidates `[from, to, distance]` — proposals only. */
     fun loopClosureCandidates(): List<LoopCandidate> {
-        if (handle == 0L) return emptyList()
-        val raw = nativeLoopCandidates(handle) ?: return emptyList()
+        val active = handle
+        if (active == 0L) return emptyList()
+        val raw = nativeLoopCandidates(active) ?: return emptyList()
         return raw.toList().chunked(3).mapNotNull { triple ->
             if (triple.size < 3) null else LoopCandidate(triple[0].toInt(), triple[1].toInt(), triple[2])
         }
     }
 
     /** True when this build was compiled with the RTAB-Map back-end. */
-    fun isRtabMapAvailable(): Boolean = handle != 0L && nativeRtabMapAvailable(handle)
+    fun isRtabMapAvailable(): Boolean {
+        val active = handle
+        return active != 0L && nativeRtabMapAvailable(active)
+    }
 
+    /**
+     * Frees the native context. Idempotent: the handle is claimed and zeroed under one lock, so
+     * two closes free one context, and every call after the first returns null without touching
+     * the native layer (finding 182).
+     */
     override fun close() {
-        if (handle != 0L) nativeDestroy(handle)
+        val claimed = synchronized(this) {
+            val current = handle
+            handle = 0L
+            current
+        }
+        if (claimed != 0L) destroy(claimed)
     }
 
     companion object {
@@ -263,7 +316,7 @@ class NativeSlamEngine private constructor(private val handle: Long) : AutoClose
                 Log.e(TAG, "nativeCreate failed", error)
                 return null
             }
-            return if (handle == 0L) null else NativeSlamEngine(handle)
+            return if (handle == 0L) null else NativeSlamEngine(handle) { nativeDestroy(it) }
         }
 
         @JvmStatic

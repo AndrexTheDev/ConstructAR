@@ -220,9 +220,16 @@ class TsdfScanPipeline(
         }
         mutableState.value = mutableState.value.copy(ready = true)
         workerJob = scope.launch(dispatcher) {
-            // Ends when the channel is closed and drained — see `stop()`.
-            for (snapshot in frames) {
-                integrate(snapshot)
+            try {
+                // Ends when the channel is closed and drained — see `stop()`.
+                for (snapshot in frames) {
+                    integrate(snapshot)
+                }
+            } finally {
+                // The worker owns the free: it is the only thread that can still be inside the
+                // native volume, and `stop()` must never delete the context under it. `close()` is
+                // idempotent, so the path where `stop()` also closes costs one branch (finding 182).
+                created.close()
             }
         }
     }
@@ -290,8 +297,10 @@ class TsdfScanPipeline(
     }
 
     private fun integrate(snapshot: DepthFrameSnapshot) {
-        // `engine` is only null after `stop()`, which joins this loop first; the null case is
-        // still released, because a reference nobody drops keeps 600 kB out of the pool.
+        // Read once: `stop()` clears the field, and a frame still in the queue must then be
+        // released rather than integrated — a reference nobody drops keeps 600 kB out of the pool.
+        // The worker is also the owner of the engine's lifetime (see the launch above and
+        // `stop()`), so this call cannot outlive the volume (finding 182).
         val active = engine
         try {
             if (active != null) integrateLocked(active, snapshot)
@@ -398,10 +407,18 @@ class TsdfScanPipeline(
     /**
      * Stops the worker and releases the native volume.
      *
-     * The join is essential: closing the native engine while the worker is inside
-     * `integrateDepth` is a use-after-free. Closing the channel ends the loop after the current
-     * frame, and the join bounds the wait to half a second so a wedged device cannot hang the
-     * UI thread on teardown.
+     * Closing the channel ends the worker's loop after the frame it is on, and **the worker frees
+     * the engine** when that loop ends (`finally`, in the launch above): it is the only thread that
+     * can still be inside the native volume, so it is the only one that may delete the context.
+     *
+     * Until finding 182 this function did the opposite - it waited for the loop with a bounded
+     * `withTimeoutOrNull(500)`, and then called `engine?.close()` whether or not the wait had
+     * finished. Half a second is not a guarantee, it is a timeout: a mesh extraction on a large
+     * volume can take longer on a hot phone (the pipeline itself allows 700 ms between
+     * extractions when `THROTTLED`), so the context could be deleted while `gatherBlockGrid` was
+     * walking its shards - a native crash at teardown, on exactly the device class the thermal
+     * handling exists for. The wait remains, because the caller wants the screen torn down, but it
+     * no longer decides when the memory is freed.
      */
     fun stop() {
         latestSnapshot?.release()
@@ -409,14 +426,21 @@ class TsdfScanPipeline(
         frames.close()
         val job = workerJob
         workerJob = null
-        if (job != null) {
-            kotlinx.coroutines.runBlocking {
-                kotlinx.coroutines.withTimeoutOrNull(500) { job.join() }
-            }
-        }
-        engine?.close()
+        val active = engine
         engine = null
         scope = null
+        if (job == null) {
+            // No worker was ever started (the library was missing, or `start` failed before it
+            // launched): this thread is the only user of the volume, so it frees it itself.
+            active?.close()
+            return
+        }
+        // Bounded so a wedged device cannot hang teardown - and no longer a licence to free: if
+        // the worker never returns, the engine stays alive until it does, which is the safe
+        // direction (a leaked volume versus a use-after-free).
+        kotlinx.coroutines.runBlocking {
+            kotlinx.coroutines.withTimeoutOrNull(WORKER_JOIN_TIMEOUT_MS) { job.join() }
+        }
     }
 
     companion object {
@@ -427,5 +451,8 @@ class TsdfScanPipeline(
 
         /** Required by the specification: mesh refresh at ≈3.3 Hz, not per frame. */
         const val EXTRACT_INTERVAL_MS = 300L
+
+        /** How long `stop()` waits for the worker before returning; never how long it waits to free. */
+        private const val WORKER_JOIN_TIMEOUT_MS = 500L
     }
 }
