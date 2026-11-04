@@ -60,7 +60,9 @@ import kotlinx.coroutines.asCoroutineDispatcher
  *
  * Extraction is throttled to **300 ms** (≈3.3 Hz) as required. When the platform reports
  * `THERMAL_STATUS_SEVERE`/`CRITICAL`, the pipeline drops to 700 ms and integrates every other
- * frame at a coarser pixel step. Measurements are never affected — only mesh refresh rate.
+ * frame — counted by [ThermalFrameGate], because the frame *timestamps* cannot answer that
+ * question (finding 169) — at a coarser pixel step. Measurements are never affected — only mesh
+ * refresh rate.
  */
 class TsdfScanPipeline(
     private val config: TsdfConfig = TsdfConfig(),
@@ -132,6 +134,9 @@ class TsdfScanPipeline(
     val depthStats: DepthCapture.Stats get() = capture.stats
 
     private val frames = Channel<DepthFrameSnapshot>(capacity = 1)
+
+    /** Picks every other frame while the device is hot — see [ThermalFrameGate]. */
+    private val thermalGate = ThermalFrameGate()
     private val capture = DepthCapture()
     private var scope: CoroutineScope? = null
 
@@ -192,8 +197,11 @@ class TsdfScanPipeline(
         val snapshot = capture.capture(frame, config.minConfidence) ?: return
         maybeUpdateThermalStatus(thermalStatus)
 
-        // Down-sample in time as well as in space when the device is hot.
-        if (mutableState.value.throttleMode == ThrottleMode.THROTTLED && frame.timestamp % 2L != 0L) {
+        // Down-sample in time as well as in space when the device is hot. Counted, not read off
+        // the clock: the parity of `frame.timestamp` is the camera HAL's business and an even
+        // frame period makes it constant, which silently stopped the mesh from updating at all
+        // (finding 169).
+        if (mutableState.value.throttleMode == ThrottleMode.THROTTLED && !thermalGate.admits()) {
             // Nobody else ever saw this frame, so this is the last reference.
             snapshot.release()
             return

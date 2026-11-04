@@ -1870,6 +1870,32 @@ def check_depth_arrays_go_back_to_the_pool_by_themselves() -> None:
         add(pipeline, "the pipeline never releases a snapshot, so no depth array can go back to "
                       "the pool (finding 168)")
 
+def check_thermal_down_sampling_counts_frames() -> None:
+    """The hot-device skip counts frames, it does not read the clock (finding 169).
+
+    `TsdfScanPipeline` skipped `frame.timestamp % 2L != 0L` frames while throttled. That is the
+    parity of a nanosecond counter kept by the camera HAL; a 30 fps stream quantised to
+    microseconds arrives in 33 333 000 ns steps - even - so the parity of every stamp equals the
+    parity of the first, and the pipeline skipped either all frames (the mesh silently stops
+    updating on a hot device) or none (the thermal saving never happens). The count lives in
+    `ThermalFrameGate`, which no timestamp can influence.
+    """
+    pipeline = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
+                "arengine" / "scan" / "TsdfScanPipeline.kt")
+    text = pipeline.read_text(encoding="utf-8")
+    if "frame.timestamp %" in text:
+        add(pipeline, "the thermal down-sample is decided by the parity of `frame.timestamp`, "
+                      "which the camera HAL controls - an even frame period makes it constant, "
+                      "so a hot device skips every frame or none (finding 169)")
+    if "thermalGate.admits()" not in text:
+        add(pipeline, "the pipeline no longer asks `ThermalFrameGate` which throttled frames to "
+                      "integrate, so the rule lives nowhere (finding 169)")
+    gate = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" / "arengine" /
+            "scan" / "ThermalFrameGate.kt")
+    if not gate.is_file():
+        add(gate, "the frame-counting gate is missing, so nothing decides the throttled cadence "
+                  "(finding 169)")
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -1916,6 +1942,7 @@ def main() -> int:
     check_one_home_for_the_room_limit()
     check_ply_layout_is_decided_once()
     check_depth_arrays_go_back_to_the_pool_by_themselves()
+    check_thermal_down_sampling_counts_frames()
     check_signature_tap()
     check_typed_fields_are_saved()
     check_pdf_accuracy_note()
