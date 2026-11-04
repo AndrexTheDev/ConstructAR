@@ -83,11 +83,11 @@ class ReticleSnapTest {
     @Test
     fun `a plane hit near the corner is moved onto it`() {
         val original = hit(Vec3(0.05f, 1.2f, 0.03f))
-        val snapped = ReticleSnap.snap(resolution(original), planes)
+        val point = requireNotNull(ReticleSnap.snap(resolution(original), planes).hit).point
 
-        assertEquals(0f, snapped.hit!!.point.x, 1e-5f)
-        assertEquals(0f, snapped.hit!!.point.z, 1e-5f)
-        assertEquals(1.2f, snapped.hit!!.point.y, 1e-5f)
+        assertEquals(0f, point.x, 1e-5f)
+        assertEquals(0f, point.z, 1e-5f)
+        assertEquals(1.2f, point.y, 1e-5f)
     }
 
     @Test

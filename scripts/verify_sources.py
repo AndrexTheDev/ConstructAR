@@ -2729,6 +2729,168 @@ def check_the_calibration_has_one_home() -> None:
                           f"fall back to English mid-sentence")
 
 
+FUN_DECLARATION = re.compile(
+    r"^\s*(?:(?:private|internal|public|protected|override|suspend|inline|operator|tailrec)\s+)*fun\b"
+)
+BANG_ON_STABLE = re.compile(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)!!")
+
+
+def kotlin_code_only(text: str) -> str:
+    """The same text with comments and string/char literals blanked, newlines kept.
+
+    A brace count over raw Kotlin is wrong the moment a test writes JSON into a file - the
+    ``"{ this is not json"`` in the corrupt-file case opens a block that never closes, and the
+    scanner then reads three functions as one. Blanking the literals (rather than deleting them)
+    keeps every line and column where it was, so a message can still point at the real line.
+    """
+    out: list[str] = []
+    index = 0
+    length = len(text)
+    while index < length:
+        if text.startswith("//", index):
+            while index < length and text[index] != "\n":
+                out.append(" ")
+                index += 1
+        elif text.startswith("/*", index):
+            while index < length and not text.startswith("*/", index):
+                out.append("\n" if text[index] == "\n" else " ")
+                index += 1
+            out.append("  ")
+            index += 2
+        elif text.startswith('"""', index):
+            out.append("   ")
+            index += 3
+            while index < length and not text.startswith('"""', index):
+                out.append("\n" if text[index] == "\n" else " ")
+                index += 1
+            out.append("   ")
+            index += 3
+        elif text[index] in "\"'":
+            quote = text[index]
+            out.append(" ")
+            index += 1
+            while index < length:
+                character = text[index]
+                if character == "\\":
+                    out.append("  ")
+                    index += 2
+                    continue
+                out.append("\n" if character == "\n" else " ")
+                index += 1
+                if character == quote:
+                    break
+        else:
+            out.append(text[index])
+            index += 1
+    return "".join(out)
+
+
+def kotlin_function_bodies(text: str):
+    """Yield ``(first line number, body)`` for every Kotlin function, braces balanced.
+
+    Bodies are cut from the literal-free copy, so ``{`` inside a JSON string cannot swallow the
+    rest of the file. An expression body (``fun x() = ...``) that spans more than three lines is
+    reported as its declaration line alone rather than guessed at: this rule only needs the
+    function's own locals, and a wrong boundary could attribute one function's assertions to
+    another.
+    """
+    code = kotlin_code_only(text).splitlines()
+    original = text.splitlines()
+    index = 0
+    while index < len(code):
+        if not FUN_DECLARATION.search(code[index]):
+            index += 1
+            continue
+        start = index
+        depth = 0
+        opened = False
+        while index < len(code):
+            depth += code[index].count("{") - code[index].count("}")
+            if "{" in code[index]:
+                opened = True
+            if opened and depth <= 0:
+                break
+            if not opened and index - start >= 3:
+                break
+            index += 1
+        yield start + 1, "\n".join(original[start:index + 1])
+        index += 1
+
+
+def check_the_reticle_snap_stays_wired() -> None:
+    """The README's "and it is wired" is derived from the code, not remembered (finding 100's rule).
+
+    Architectural snapping is the one engine in this round that ships *inside* a live path - the
+    reticle and every tap pass through `ReticleSnap` in `ArHitSource.resolve` - while the wall
+    take-off, the DIN zones and the clash check are still unwired and are labelled that way. A
+    claim of wiring is worth exactly the call site behind it: delete the call (or move the
+    cascade to a resolver that forgets it) and the README keeps promising a snap no operator can
+    see, which is the failure mode finding 98 found in five documents at once. So the truth is
+    read from the file and the README must agree in both directions, and the toggle that turns
+    the snap off on a device with ragged polygons is pinned too - without it, the only way out of
+    a bad snap is an uninstall.
+    """
+    source = ROOT / "ar-engine/src/main/kotlin/com/constructar/arengine/hit/ArHitSource.kt"
+    readme = ROOT / "README.md"
+    if not source.exists() or not readme.exists():
+        return  # a missing file is already a finding above
+    text = source.read_text(encoding="utf-8")
+    wired = "ReticleSnap.snap(" in text
+    claims_wired = "**and it is wired**" in readme.read_text(encoding="utf-8")
+    if wired and not claims_wired:
+        add(readme, "the architectural snap is called from `ArHitSource.resolve` and the README no "
+                    "longer says so - a wired engine documented as unwired is a feature nobody "
+                    "turns on")
+    if not wired and claims_wired:
+        add(readme, "the README says the architectural snap 'is wired', and no line in "
+                    "`ArHitSource.resolve` calls `ReticleSnap.snap` - the reticle would show the "
+                    "raw polygon hit while the document promises the room's corners")
+    if not wired:
+        return
+    if "enabled = cascade.snapToArchitecturalFeatures" not in text:
+        add(source, "the snap is called without the cascade's toggle, so a device whose plane "
+                    "polygons are too ragged to measure to has no way to turn it off")
+    if "planes = request.planes" not in text:
+        add(source, "the snap is fed something other than the request's own planes, so the "
+                    "features it derives need not be the surfaces the hit cascade just chose "
+                    "between")
+
+
+def check_a_stable_value_is_asserted_once() -> None:
+    """A second ``!!`` on a stable property is a compiler warning, and CI is ``-Werror`` (finding 192).
+
+    Kotlin smart-casts a stable ``val`` property after the first ``!!``, so
+    ``result.hit!!.x`` three lines in a row compiles into one real assertion and two
+    "unnecessary non-null assertion" warnings. With ``allWarningsAsErrors`` those warnings are a
+    build failure, and the sandbox this repository is developed in has no JVM: the first time
+    anyone sees it is the pull request's `android-build`, one round later, on a test whose
+    *behaviour* was already right. This is the third CI-only failure in three rounds (a clang
+    capitalisation, a missing default argument, this), and each was found by a human re-reading a
+    signature; a property asserted twice in one function is the one shape that can be found by a
+    machine, so it is found here instead.
+
+    ``var`` is exempt by construction: a mutable receiver is never smart-cast, so repeating the
+    assertion on it is both legal and warning-free.
+    """
+    for path in tracked_sources():
+        if path.suffix != ".kt":
+            continue
+        text = path.read_text(encoding="utf-8")
+        for first_line, body in kotlin_function_bodies(text):
+            asserted: dict[str, int] = {}
+            for match in BANG_ON_STABLE.finditer(body):
+                expression = match.group(1)
+                if re.search(r"\bvar\s+" + re.escape(expression.split(".")[0]) + r"\b", body):
+                    continue
+                asserted[expression] = asserted.get(expression, 0) + 1
+            for expression, count in sorted(asserted.items()):
+                if count > 1:
+                    add(path, f"`{expression}!!` is asserted {count} times in the function starting "
+                              f"at line {first_line}: the first `!!` smart-casts the property, so the "
+                              f"rest are warnings and `allWarningsAsErrors` turns them into a build "
+                              f"failure the sandbox cannot see - bind it once (`requireNotNull`)")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -2810,6 +2972,8 @@ def main() -> int:
     check_backticked_names()
     check_money_fields_are_not_rekeyed()
     check_manifest_hardening()
+    check_a_stable_value_is_asserted_once()
+    check_the_reticle_snap_stays_wired()
     check_kotlin_structure()
     check_resource_xml()
     check_licence_key()
