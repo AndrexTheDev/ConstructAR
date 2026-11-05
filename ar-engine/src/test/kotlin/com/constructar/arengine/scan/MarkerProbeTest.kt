@@ -99,6 +99,41 @@ class MarkerProbeTest {
     }
 
     @Test
+    fun `two tags in one frame are two markers, not one`() {
+        // The field that proves it is `markerIds`: until finding 236 this probe took the nearest
+        // tag only, so a printed sheet of tags arrived as a single marker and the count could
+        // never exceed 1.
+        val decoder = StubDecoder(AprilTagReport(listOf(tag(id = 3), tag(id = 4, x = -0.3f, z = 2.4f))))
+        val probe = probe(decoder)
+
+        val state = probe.onFrame(buffer, plane, camera, pose)
+
+        assertEquals(MarkerSweepState.Watching(sightings = 2, markerIds = 2, ignoredForeign = 0), state)
+    }
+
+    @Test
+    fun `a tag behind the camera does not take the tag beside it with it`() {
+        val decoder = StubDecoder(AprilTagReport(listOf(tag(id = 3, z = -2f), tag(id = 4, z = 2.4f))))
+        val probe = probe(decoder)
+
+        val state = probe.onFrame(buffer, plane, camera, pose)
+
+        assertEquals(MarkerSweepState.Watching(sightings = 1, markerIds = 1, ignoredForeign = 0), state)
+    }
+
+    @Test
+    fun `more sightings from one spot are still no factor`() {
+        // Two frames of two tags is four sightings, and every pair of them shares a camera pose:
+        // the baseline is zero, so `MarkerBaseline` refuses the pair instead of publishing a 1.0.
+        val decoder = StubDecoder(AprilTagReport(listOf(tag(id = 3), tag(id = 4, x = -0.3f, z = 2.4f))))
+        val probe = probe(decoder)
+        probe.onFrame(buffer, plane, camera, pose)
+        val state = probe.onFrame(buffer, plane, camera, pose)
+
+        assertEquals(MarkerSweepState.Watching(sightings = 4, markerIds = 2, ignoredForeign = 0), state)
+    }
+
+    @Test
     fun `a tag behind the camera is not a place to have been`() {
         val probe = probe(StubDecoder(AprilTagReport(listOf(tag(z = -2f)))))
         assertEquals(MarkerSweepState.Watching(0, 0, 0), probe.onFrame(buffer, plane, camera, pose))

@@ -27,12 +27,21 @@ import java.nio.ByteBuffer
  * the camera callback, and the screen reads [state] after the fact. The sweep is immutable, so a
  * reader that catches `state` between two frames gets a consistent one.
  *
- * **Which tag.** The nearest one (`AprilTagReport.nearest`): its corners are the largest in the
- * picture, so its metres are the least noisy. **Which sightings count.** All of them - the margin
- * is carried on the observation and never used as a filter here. Grading a read is the decoder's
- * `isClean`, and a read that is wrong by half a metre is what [MarkerSweep]'s deviation filter is
- * for; a second judgement in this class would be a second definition of "a sighting worth
- * trusting", competing with the one the native `TagScaleOptions` already makes.
+ * **Which tags.** Every tag the decoder read, one sighting each. Taking only the nearest one
+ * (`AprilTagReport.nearest`, which is what this class did until finding 236) made `MarkerSweep`'s
+ * `markerIds` a field that could never exceed 1: a printed *sheet* of tags - the evidence the
+ * layout path is built around - would have arrived as a single marker, and the sweep's whole reason
+ * for counting ids would have been unreachable through the one caller it has. Two tags in one
+ * frame share the camera pose, so a pair between them measures a zero baseline and is refused by
+ * [com.constructar.core.calib.MarkerBaseline] rather than silently averaged in; ids are never
+ * paired with each other either, so a sheet contributes one baseline per tag and the mean is taken
+ * over all of them.
+ *
+ * **Which sightings count.** All of them - the margin is carried on the observation and never used
+ * as a filter here. Grading a read is the decoder's `isClean`, and a read that is wrong by half a
+ * metre is what [MarkerSweep]'s deviation filter is for; a second judgement in this class would be
+ * a second definition of "a sighting worth trusting", competing with the one the native
+ * `TagScaleOptions` already makes.
  */
 class MarkerProbe(
     private val reader: MarkerFrameReader,
@@ -61,19 +70,23 @@ class MarkerProbe(
         cameraPose: Pose,
     ): MarkerSweepState {
         val report = reader.read(source, plane, camera) ?: return sweep.state
-        val sighting = report.nearest ?: return sweep.state
-        val observation = MarkerObservation(
-            id = sighting.id,
-            tagInCamera = Vec3(sighting.xMetres, sighting.yMetres, sighting.zMetres),
-            cameraPose = cameraPose,
-            sessionId = sweep.options.sessionId,
-            decisionMargin = sighting.decisionMargin,
-            hamming = sighting.hamming,
-        )
-        // A tag behind the camera or a NaN pose is not a place to have been. The sweep would keep
-        // it and the median would throw it out, but there is no reason to carry it that far.
-        if (!observation.isFinite) return sweep.state
-        sweep = sweep.observe(observation)
+        if (report.tags.isEmpty()) return sweep.state
+        var next = sweep
+        for (sighting in report.tags) {
+            val observation = MarkerObservation(
+                id = sighting.id,
+                tagInCamera = Vec3(sighting.xMetres, sighting.yMetres, sighting.zMetres),
+                cameraPose = cameraPose,
+                sessionId = sweep.options.sessionId,
+                decisionMargin = sighting.decisionMargin,
+                hamming = sighting.hamming,
+            )
+            // A tag behind the camera or a NaN pose is not a place to have been. It is dropped on
+            // its own: one unreadable corner of a sheet must not throw away the tags beside it.
+            if (!observation.isFinite) continue
+            next = next.observe(observation)
+        }
+        sweep = next
         return sweep.state
     }
 

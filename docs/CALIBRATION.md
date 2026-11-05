@@ -170,7 +170,9 @@ nowhere. What exists is the frame path and the sequence on top of it:
 packs an ARCore plane with `:core`'s `LuminancePlane` - the Y plane is *strided*, and a buffer that
 ignored the padding would shear every row and decode nothing - and calls the decoder with the
 session's intrinsics and the printed size; the composition is unit-tested with a decoder that
-records what it was handed. Above it, `MarkerProbe` (`:ar-engine`) turns a frame into a sighting and
+records what it was handed. Above it, `MarkerProbe` (`:ar-engine`) turns a frame into one sighting
+per tag it holds - a printed sheet is several markers, and a probe that kept only the nearest one
+made the sweep's marker count a field that could never exceed 1 (finding 236) - and
 `MarkerSweep` (`:core`) holds the sequence: every sighting carries the ARCore session it came from
 and a sighting from another one is counted, never paired (a new session is a new world origin -
 finding 217 one layer up); older sightings of the same marker fall off after eight, so a tag in the

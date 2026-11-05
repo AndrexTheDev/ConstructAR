@@ -300,7 +300,10 @@ and the printed size, and keeps the three answers apart: nothing at all for a qu
 ask, an empty report for a frame without a tag, metres otherwise. `CameraPlanes` is the only adapter
 that touches `android.media.Image`, and it closes the image on every path: ARCore's CPU image queue
 is two deep, so a leak stalls the camera within a second. `MarkerProbe` composes reader and sweep
-(nearest tag - its corners are the sharpest - then the camera pose), and `MarkerSweep` (`:core`)
+(every tag the decoder read - a printed sheet is several markers, and taking only the nearest
+made `markerIds` a count that could never exceed 1 (finding 236) - then the camera pose, shared by
+all the sightings of one frame, so a pair inside a frame has a zero baseline and is refused), and
+`MarkerSweep` (`:core`)
 holds what a screen actually has: a *sequence*. Three things are refused there rather than in a
 composable: a sighting from another ARCore session (a new session is a new world origin - finding
 217 one layer up), a sighting older than the newest eight of its marker, and the temptation to

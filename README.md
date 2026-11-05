@@ -634,7 +634,8 @@ Known limitations, deliberately documented rather than hidden:
   calls the decoder with the session's intrinsics and the printed size - unit-tested with a decoder
   that records what it was handed, three answers kept apart: `null` for a broken question, an empty
   report for "no tag in view", metres otherwise. Since finding 235 the path reaches a screen:
-  `MarkerProbe` (`:ar-engine`) composes reader and sweep, `CameraPlanes` is the one adapter that
+  `MarkerProbe` (`:ar-engine`) composes reader and sweep (one sighting per tag in the frame, so a
+  printed sheet of tags counts as several markers rather than one), `CameraPlanes` is the one adapter that
   touches `android.media.Image` (and closes it on every path - ARCore's CPU image queue is two
   deep, so a leaked image stalls the camera), and `MarkerSweep` (`:core`) holds the sequence a
   screen has: sightings stamped with the ARCore session, so a re-localisation cannot pair two
@@ -801,7 +802,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1009 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1012 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 332 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 332 checks, 0 failures, no data race reported |
