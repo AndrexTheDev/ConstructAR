@@ -274,6 +274,17 @@ fun ArMeasureScreen(
     // "highest plane wins" got wrong (finding 218). When the evaluator is not sure, the HUD says
     // so instead of the app quietly recording a floor it will later print mounting heights from.
     val floorUncertain = floorDecision?.status == FloorReferenceStatus.UNCERTAIN
+    val aiDepthRunning by controller.aiDepthRunning.collectAsStateWithLifecycle()
+    // Which depth is actually in use. A phone with neither ARCore's depth API nor the bundled
+    // model still measures - on the planes it has detected - and the operator has to know that,
+    // because it changes where a tap can land (finding 221).
+    val depthStatus = remember(aiDepthRunning, tracking.depthSupported, controller.depthModelBundled) {
+        com.constructar.arengine.ai.DepthAvailability.of(
+            modelBundled = controller.depthModelBundled,
+            arcoreDepthSupported = tracking.depthSupported,
+            aiRunning = aiDepthRunning,
+        )
+    }
     // Handed to the caller as soon as a floor is seen, and not again for the same plane: the
     // project's write path ignores a repeat within a centimetre and coalesces the burst
     // (findings 214 and 219).
@@ -701,6 +712,13 @@ fun ArMeasureScreen(
                             tracking.quality == TrackingQuality.NOT_TRACKING -> SiteColors.danger
                             else -> HudStyle.text
                         },
+                    )
+                }
+                if (depthStatus.state == com.constructar.arengine.ai.DepthSourceState.PLANES_ONLY) {
+                    Text(
+                        text = stringResource(R.string.ar_depth_planes_only),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SiteColors.warning,
                     )
                 }
                 if (floorUncertain) {

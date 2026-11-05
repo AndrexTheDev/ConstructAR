@@ -90,6 +90,7 @@
     <string name="ar_confidence_weak">Point le plus faible %1$d %% : retouche-le pour améliorer le tracé</string>
     <string name="ar_no_surface">Aucune surface trouvée. Vise un mur ou le sol.</string>
     <string name="ar_floor_uncertain">Hauteur du sol incertaine : une table gêne peut-être. Vise le sol avec la caméra et fais le tour de la pièce.</string>
+    <string name="ar_depth_planes_only">Ni capteur de profondeur ni modèle d’IA sur ce téléphone : les points viennent des plans reconnus. Vise des surfaces nettes et texturées.</string>
     <string name="ar_scan_progress">Détail %1$d %% · %2$d k triangles</string>
     <string name="ar_scan_full">Limite de scan atteinte : seule une partie de la pièce est capturée. Les tracés comptent quand même.</string>
     <string name="ar_scan_behind">Le téléphone est à la traîne : %1$d %% des images non scannées. Avance plus lentement.</string>

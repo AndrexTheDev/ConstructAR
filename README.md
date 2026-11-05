@@ -54,9 +54,12 @@ a 3D model for BIM — **without a single byte leaving the device**.
 | **F** | Reference calibration against a known object: an ISO/IEC 7810 ID-1 bank card (85.60 x 53.98 mm) or a folding rule at the 1 m / 2 m mark, `S = d_real / ||P2 - P1||`, refused outside `[0.85, 1.15]`, applied about the reference point rather than the world origin | `core/.../calib`, `app/.../ui` | Arithmetic and its unit tests are in place (docs/CALIBRATION.md); *Calibrate* on the AR screen takes the reticle point twice against a card or a folding rule, and the resulting factor is stored on the project (`calibrationScale`) and applied once to every printed length and to the bill of materials — never to the geometry; the protocol and the CSV say which factor was in force |
 
 Plus: auto-torch with hysteresis, monocular depth (Depth Anything V2 Small) fused into the
-metric depth field, a loop-closure pose graph (built and host-tested — *not yet driven by the
-scan pipeline*, see finding 98), thermal-aware degradation, and explicit handling for every way
-AR can fail on a site.
+metric depth field — wired from `ArMeasureController` with the model's path taken from
+`BuildConfig.DEPTH_MODEL_ASSET`; the weights are **not in the repository**, so a build without them
+says which depth it is measuring with (`DepthAvailability`: AI-fused, ARCore depth, or planes
+only) instead of quietly falling back — a loop-closure pose graph (built and host-tested — *not yet
+driven by the scan pipeline*, see finding 98), thermal-aware degradation, and explicit handling for
+every way AR can fail on a site.
 
 **Drywall take-off** (`core/.../wall`, **and it is wired**: the project card's *Walls* button
 renders `WallPlan`, which builds the room's ring from the stored outline, calls `wallSurface` and
@@ -773,7 +776,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 939 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 943 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 287 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 287 checks, 0 failures, no data race reported |

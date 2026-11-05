@@ -274,7 +274,13 @@ appearance-verified. The graph is *not yet driven by the scan pipeline* (finding
 host-tested and reachable from `NativeSlamEngine`, but no keyframe reaches it today, so the app
 measures on ARCore's own tracking.
 
-**Monocular depth fusion.** Optional and strictly additive:
+**Monocular depth fusion.** Optional and strictly additive, and it names itself: the model's asset
+path comes from `BuildConfig.DEPTH_MODEL_ASSET` (one declaration, so a variant that ships a
+different export cannot look for the old file and switch the feature off without a compile error),
+`MonocularDepthSource` reports whether the load succeeded, and `DepthAvailability` turns that plus
+ARCore's `depthSupported` into one of three states — `AI_FUSED`, `ARCORE_ONLY`, `PLANES_ONLY` — which
+the HUD prints when the answer is the third one. The weights are not in this repository.
+
 `YuvFrame` copies the camera planes on the render thread (~0.2 ms), the inference worker runs
 Depth Anything V2 Small through LiteRT on XNNPACK, `MetricDepthCalibrator` fits
 `1/z = s·d + t` to ARCore's metric samples on the *same* frame, and `AiDepthFusion` writes a

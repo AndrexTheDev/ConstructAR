@@ -46,6 +46,15 @@ class MonocularDepthSource(
     private val minConfidence: Int = 96,
     /** Called on the worker thread when a fused depth frame is ready. */
     private val onFused: (depthMm: ShortArray, width: Int, height: Int, timestampNs: Long) -> Unit,
+    /**
+     * Called once, on the worker thread, with whether the model loaded.
+     *
+     * The screen has to be able to say which depth it is measuring with, and `isRunning` is set
+     * inside the loader's thread: without this callback the first composable to read it would see
+     * `false` and never be recomposed. The state flips exactly once, so one callback is the whole
+     * protocol - a flow would be a second source of truth for the same boolean (finding 221).
+     */
+    private val onModelState: ((loaded: Boolean) -> Unit)? = null,
 ) {
     private val executor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "mono-depth").apply { isDaemon = true }
@@ -78,11 +87,14 @@ class MonocularDepthSource(
         if (latest.get() != null) return
         if (!MonocularDepthEstimator.isModelPresent(context, config)) {
             Log.i(TAG, "no monocular depth model bundled — using ARCore depth only")
+            onModelState?.invoke(false)
             return
         }
         executor.execute {
             latest.set(MonocularDepthEstimator.create(context, config))
-            isRunning = latest.get() != null
+            val loaded = latest.get() != null
+            isRunning = loaded
+            onModelState?.invoke(loaded)
         }
     }
 

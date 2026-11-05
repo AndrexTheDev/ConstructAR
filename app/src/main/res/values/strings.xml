@@ -90,6 +90,7 @@
     <string name="ar_confidence_weak">Weakest point %1$d %% - tap it again to improve the run</string>
     <string name="ar_no_surface">No surface found. Aim at a wall or the floor.</string>
     <string name="ar_floor_uncertain">Floor height uncertain: a table or a shelf may be in the way. Point the camera at the floor and walk the room.</string>
+    <string name="ar_depth_planes_only">No depth sensor and no AI depth model on this phone: points come from the planes the camera has recognised. Aim at clear, textured surfaces.</string>
     <string name="ar_scan_progress">Detail %1$d %% · %2$d k triangles</string>
     <string name="ar_scan_full">Scan limit reached - only part of the room is captured. Your runs still count.</string>
     <string name="ar_scan_behind">The phone is behind: %1$d %% of frames not scanned. Walk slower.</string>

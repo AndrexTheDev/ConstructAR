@@ -40,6 +40,8 @@ import com.google.ar.core.TrackingState
 import io.github.sceneview.loaders.MaterialLoader
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /** Anchor factory that can be created before the ARCore session exists. */
 class DelegatingAnchorFactory : AnchorFactory {
@@ -88,6 +90,32 @@ class ArMeasureController(private val context: Context) {
     private var sceneController: RouteSceneController? = null
     private var torchController: TorchController? = null
     private var monocularDepth: com.constructar.arengine.ai.MonocularDepthSource? = null
+
+    /**
+     * The monocular model's asset path, from the build variant rather than from a second literal.
+     *
+     * `MonocularDepthEstimator.Config` carries a default for the tests and for a caller that has
+     * no BuildConfig; the app must not rely on that default, or a build that ships the model under
+     * another name (a smaller int8 export, a Pro variant) would look for the old file, find
+     * nothing, and switch itself off without a compile error anywhere (finding 221).
+     */
+    private val depthConfig = com.constructar.arengine.ai.MonocularDepthEstimator.Config(
+        assetPath = com.constructar.app.BuildConfig.DEPTH_MODEL_ASSET,
+    )
+
+    /** True when this APK carries the model file - i.e. the fallback could run at all. */
+    val depthModelBundled: Boolean by lazy {
+        com.constructar.arengine.ai.MonocularDepthEstimator.isModelPresent(context, depthConfig)
+    }
+
+    /**
+     * True once the model has loaded and produced a frame; flipped on the loader's thread.
+     *
+     * A flow rather than a plain boolean because the screen *is* the reader: a value that changes
+     * on a worker thread and is read once during composition would never show up.
+     */
+    private val aiDepthRunningState = MutableStateFlow(false)
+    val aiDepthRunning: StateFlow<Boolean> = aiDepthRunningState.asStateFlow()
     private var powerManager: PowerManager? = null
 
     /**
@@ -189,7 +217,9 @@ class ArMeasureController(private val context: Context) {
             // Optional: silently inactive when no model is bundled or calibration is refused.
             monocularDepth = com.constructar.arengine.ai.MonocularDepthSource(
                 context = context,
+                config = depthConfig,
                 onFused = { depth, width, height, _ -> pipeline.submitFusedDepth(depth, width, height) },
+                onModelState = { loaded -> aiDepthRunningState.value = loaded },
             ).also { it.warmUp() }
         }
         // The torch is applied by SceneView through the typed `flashMode` parameter; this

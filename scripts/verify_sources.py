@@ -3808,6 +3808,83 @@ def check_a_contract_assertion_is_believed() -> None:
                           f"turns it into a build failure the sandbox cannot see - read `{name}.`")
 
 
+def check_the_depth_fallback_is_named() -> None:
+    """Three ways to get a millimetre, and the app has to know which one it is using (finding 221).
+
+    ARCore's depth API, the optional monocular model and - failing both - the planes the camera has
+    recognised. The operator cannot tell them apart by looking at the viewfinder, and the third is
+    the one that produces a reticle which finds nothing on a chair's edge. Nothing here adds a
+    dependency or a decoder: the *contract* of the depth fallback is what has to stay true.
+
+    Five links, and not one of them fails to compile when it is cut:
+
+     1. the model's path comes from the build variant (`BuildConfig.DEPTH_MODEL_ASSET`), not from
+        a second literal that agrees with it by accident;
+     2. the app passes that config to the source instead of letting the default decide;
+     3. the source reports whether the model loaded, on the thread that learns it;
+     4. `DepthAvailability` turns the three booleans into one named state, in `:ar-engine`, where it
+        can be tested without a device;
+     5. the HUD says so when there is no depth field at all.
+
+    The last link is the reason the rule exists. A phone with no depth reports nothing today, and
+    the operator reads a reticle that cannot find a surface as the app being broken.
+    """
+    gradle = ROOT / "app" / "build.gradle.kts"
+    gradle_text = gradle.read_text(encoding="utf-8") if gradle.exists() else ""
+    if "DEPTH_MODEL_ASSET" not in gradle_text:
+        add(gradle, "the model's asset path is not a build field any more - every place that names "
+                    "the model file would have to agree by hand")
+
+    controller = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" /
+                  "ui" / "ar" / "ArMeasureController.kt")
+    if not controller.exists():
+        add(controller, "there is no AR controller - nothing decides which depth is in use")
+        return
+    controller_text = controller.read_text(encoding="utf-8")
+    if "BuildConfig.DEPTH_MODEL_ASSET" not in controller_text:
+        add(controller, "the app never reads `BuildConfig.DEPTH_MODEL_ASSET`, so the model path it "
+                        "looks for is a second literal and a variant that renames the file "
+                        "switches the fallback off without a compile error")
+    if "config = depthConfig" not in controller_text:
+        add(controller, "the monocular source is constructed without the build's config, so the "
+                        "estimator's default - not the APK's - decides where the model is")
+    if "onModelState" not in controller_text:
+        add(controller, "nothing observes whether the model loaded, so the HUD would report the "
+                        "build's intent instead of the measurement")
+
+    availability = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
+                    "arengine" / "ai" / "DepthAvailability.kt")
+    if not availability.exists():
+        add(availability, "no one decides which depth the session is measuring with - three "
+                          "screens would each invent an answer")
+    else:
+        text = availability.read_text(encoding="utf-8")
+        for state in ("AI_FUSED", "ARCORE_ONLY", "PLANES_ONLY"):
+            if state not in text:
+                add(availability, f"`{state}` is gone - a state the operator is in has no name")
+        if "fun of(" not in text:
+            add(availability, "the decision is not a function, so it cannot be tested without a "
+                              "device")
+
+    screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+              "ar" / "ArMeasureScreen.kt")
+    screen_text = screen.read_text(encoding="utf-8")
+    if "DepthAvailability.of(" not in screen_text:
+        add(screen, "the HUD never asks which depth is in use")
+    if "R.string.ar_depth_planes_only" not in screen_text:
+        add(screen, "a phone with no depth at all is not told: the reticle finds nothing on a "
+                    "chair's edge and the operator reads that as a fault")
+
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if not path.exists():
+            continue
+        strings, _ = load_locale(folder)
+        if not strings.get("ar_depth_planes_only"):
+            add(path, "missing string 'ar_depth_planes_only' - the no-depth case would be silent "
+                      "in that language")
+
+
 def check_the_wall_screen_uses_the_core_numbers() -> None:
     """Three engines, one screen, and every link in the chain can be cut silently (finding 214).
 
@@ -4220,6 +4297,7 @@ def main() -> int:
     check_every_interactive_row_announces_itself()
     check_the_hud_says_when_the_reticle_moved()
     check_the_wall_screen_uses_the_core_numbers()
+    check_the_depth_fallback_is_named()
     check_the_generated_pages_keep_their_notice()
     check_the_docs_do_not_call_a_live_path_dead()
     check_the_reticle_snap_stays_wired()
