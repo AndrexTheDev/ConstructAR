@@ -31,10 +31,12 @@
 // way), but a convention means two fits of the same room agree, and the room solver can then
 // sign-match a snapped plane to the measurement rather than to the fit's mood.
 //
-// **Not wired.** Nothing feeds this a cloud yet: the app still measures on ARCore's own tracking
-// and the TSDF mesh is drawn, not fitted. This is the engine a scan-side caller will use, and the
-// host suite runs the whole chain - cloud, planes, frame, snapped planes - so the day it is wired
-// the arithmetic is already proved.
+// **Wired, for the floorplan's frame only.** `nativeFloorplan` builds a wall cloud out of three
+// bands of the volume (0.40, 1.10 and 1.90 m) and runs it through `fitPlanes` and
+// `solveManhattanFrame`, and the resulting frame is what the waist-height slice is squared onto -
+// a single band gives each wall a plane 10 cm tall, enough to fit a line and not enough to trust a
+// normal. That is the whole of the wiring: no wall thickness, no clearance check and no report
+// quotes these planes yet, and nothing feeds them back into the mesh.
 #pragma once
 
 #include <cstdint>

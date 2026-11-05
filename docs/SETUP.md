@@ -226,14 +226,29 @@ a link, and no run of this app has done that.
   closure folds a room in half, so nothing is promoted silently);
 * `PoseGraph::optimize` redistributes a closure over the whole trajectory.
 
-**It is not yet driven from the app.** No line in `:app` or `:ar-engine` calls
-`optimizePoseGraph`, `addPoseNode`, `addPoseEdge` or `loopClosureCandidates`, and the JNI exposes
-no keyframe feed, so compiling RTAB-Map in changes nothing the operator sees: today the app
-measures on ARCore's own tracking and no closure is optimised. The loop closure is therefore
-**not yet driven by the scan pipeline** (finding 98), and `scripts/verify_sources.py` fails if
-this document claims the optimiser runs while it is still true. Wiring it is a real piece of
-work — keyframe extraction, a verified closure policy and a re-anchor of the measured nodes —
-not a build flag.
+**Both halves are driven now (findings 243 and 245), the verification is not.** `KeyframeFeed`
+(`ar-engine/.../keyframe/`) decides on each placed frame whether the pose is worth keeping -
+0.5 m of translation, 15 degrees of rotation, tracker valid, at least 30 features, 200 ms since
+the last one - and hands accepted keyframes to `KeyframeQueue`, which the pipeline's worker
+applies through `NativePoseGraphSink` as a node plus the odometry edge to the previous one. That
+runs on the worker because `NativeSlamEngine` requires every pose-graph call to be serialised by
+it.
+
+The correction is `PoseGraphCloser`. It asks `ProximityLoopClosureDetector` for candidates - the
+C++ thresholds (twenty keyframes apart, 0.35 m, half a radian) remain the only definition of
+"close", because a second copy in Kotlin would be a second answer to one question - filters them
+through `ClosurePolicy` in `:core` (a room's worth of nodes before the question is asked, one
+question at a time, a refusal remembered for that pair and for a minute), and puts **one**
+question on screen. A confirmation adds the closure edge at 100x the odometry weight and runs
+`optimizePoseGraph` on the worker, which reports the residual before and after. Nothing is
+closed without that confirmation: a false closure folds a room in half and looks fine afterwards.
+
+Two things stay open, and the code says so: the closure is **operator-asserted, not
+appearance-verified** (RTAB-Map's verification needs a checkout CI does not have), and the
+corrected poses are **reported, not written back** into the measured runs - re-anchoring measured
+nodes is finding 217's problem, and an inference may not replace a measurement.
+`scripts/verify_sources.py` reads the wiring from the code, so this text cannot claim more than
+the tree does.
 
 ---
 

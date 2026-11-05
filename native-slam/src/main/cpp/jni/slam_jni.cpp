@@ -25,7 +25,22 @@
 //   nativePoseGraphOptimize(handle, iterations) -> FloatArray (report + flattened poses)
 //   nativeLoopCandidates(handle) -> FloatArray (triples: from, to, distance)
 //   nativeFloorplan(handle, heightMetres, bandMetres, cellMetres, rdpEpsilonMetres,
-//                   minSegmentMetres) -> FloatArray                      (see below)
+//                   minSegmentMetres, manhattanToleranceDegrees) -> FloatArray   (see below)
+//   nativeTagScaleDefaults() -> FloatArray  [minBaselineMetres, maxRelativeDeviation] - the two
+//               knobs the marker path shares with the native layout path, read out of
+//               `TagScaleOptions` so that no other layer has to invent its own numbers.
+//   nativeDetectAprilTagScale(gray, w, h, stride, fx, fy, cx, cy, tagSizeMetres) -> FloatArray
+//               [count, (id, x, y, z, margin, hamming) x count] - tags in the camera frame, in
+//               metres, from the vendored tag36h11 decoder. `null` means the arguments were not a
+//               frame (no buffer, no size); count 0 means the frame held no tag. Two different
+//               answers, and the app must be able to tell them apart.
+//   nativeAlignManhattanFrame(handle) -> FloatArray
+//               [valid, residualDeg, planes, snappedPlanes, axis0(3), axis1(3), axis2(3)] - the
+//               frame the last floorplan was squared onto, fitted from the room's walls.
+//   nativeLastManhattan(handle) -> FloatArray  [applied, residualDeg, snappedRuns, movedCorners]
+//               What the floorplan's Manhattan step did. Separate from the payload on purpose: the
+//               payload layout is a pinned contract and appending statistics to it is how a Kotlin
+//               parser reads a different room on a mismatched library.
 //
 // Mesh payload: FloatArray = [vertexCount, triangleCount, positions(3n), normals(3n)],
 //               IntArray   = indices(3t). Both arrays come from the same snapshot, so they
@@ -55,7 +70,10 @@
 #include <mutex>
 #include <vector>
 
+#include "../calibration/apriltag_detector.hpp"
 #include "../geometry/floorplan.hpp"
+#include "../geometry/manhattan_world.hpp"
+#include "../geometry/plane_fit.hpp"
 #include "../geometry/surface_mask.hpp"
 #include "../slam/pose_graph.hpp"
 #include "../slam/rtabmap_bridge.hpp"
@@ -89,6 +107,27 @@ struct EngineContext {
   PoseGraph poseGraph;
   RtabMapBridge rtabMap;
   Bounds lastBounds;
+  /**
+   * What the last floorplan's Manhattan step did.
+   *
+   * Kept on the context because the payload is a fixed contract with Kotlin (a header of eight
+   * floats pinned by both sides): appending statistics to it would mean a Kotlin parser that reads
+   * a different room on a build with an older library. A separate getter cannot be misread - it is
+   * four floats or it is null.
+   */
+  constructar::ManhattanFit lastManhattan;
+  /**
+   * The frame the last floorplan was squared onto, and what produced it.
+   *
+   * Kept so `nativeAlignManhattanFrame` can answer with the frame that was *used* rather than
+   * refitting one on demand: two fits would be two answers to one question, and the plan on the
+   * card is the one that matters. Zeroed when the fit did not produce a frame.
+   */
+  struct {
+    constructar::ManhattanFrame frame;
+    int planes = 0;
+    int snappedPlanes = 0;
+  } lastFrame;
   int lastTriangleCount = 0;
   /**
    * Serialises every access to the volume: integrate, extract and reset.
@@ -527,7 +566,8 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeFloorplan(JNIEnv* env, 
                                                                  jlong handle, jfloat heightMetres,
                                                                  jfloat bandMetres, jfloat cellMetres,
                                                                  jfloat rdpEpsilonMetres,
-                                                                 jfloat minSegmentMetres) {
+                                                                 jfloat minSegmentMetres,
+                                                                 jfloat manhattanToleranceDegrees) {
   EngineContext* context = contextFrom(handle);
   if (context == nullptr) return nullptr;
   if (!(bandMetres > 0.f) || !(bandMetres <= 1.f)) {
@@ -543,6 +583,13 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeFloorplan(JNIEnv* env, 
          static_cast<double>(rdpEpsilonMetres), static_cast<double>(minSegmentMetres));
     return nullptr;
   }
+  // Zero is the documented "leave the room as measured"; anything else has to be a tolerance a
+  // wall can actually be off by, or the snap would square a bay window.
+  if (!(manhattanToleranceDegrees >= 0.f) || !(manhattanToleranceDegrees <= 45.f)) {
+    LOGE("floorplan refused: Manhattan tolerance %f deg outside [0, 45]",
+         static_cast<double>(manhattanToleranceDegrees));
+    return nullptr;
+  }
 
   std::vector<float> payload;
   {
@@ -553,11 +600,59 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeFloorplan(JNIEnv* env, 
         context->volume->sliceSurfacesAtHeight(heightMetres, bandMetres);
     const constructar::WallMask mask = constructar::maskVerticalSurfaces(slice);
 
+    // The room's own frame, from its own walls: three bands instead of one, because a single waist
+    // slice gives each wall a plane 10 cm tall - enough to fit a line, not enough to trust a
+    // normal. That is the difference between squaring the plan onto the room and squaring it onto
+    // whichever run of the slice happened to be longest (finding 230).
+    //
+    // Bounded, because the call has a budget (400 ms on the Kotlin side, shared with the slice and
+    // the trace) and a fit that overruns it does not produce a worse plan, it produces no plan at
+    // all: 4 800 points and 1 500 RANSAC iterations measured 24.9 ms on a desktop at -O2, which a
+    // phone multiplies several fold. Eight hundred points per band and 700 iterations measure
+    // 12.6 ms, and a plane is a plane whether it is fitted to 800 points or 4 800.
+    constexpr int kPlaneCloudPerBand = 800;
+    std::vector<constructar::Vec3> wallCloud;
+    wallCloud.reserve(3 * kPlaneCloudPerBand);
+    for (const float bandCentre : {0.40f, 1.10f, 1.90f}) {
+      const std::vector<constructar::OrientedPoint> band =
+          context->volume->sliceSurfacesAtHeight(bandCentre, bandMetres);
+      const constructar::WallMask walls = constructar::maskVerticalSurfaces(band);
+      const std::size_t stride =
+          walls.points.size() <= static_cast<std::size_t>(kPlaneCloudPerBand)
+              ? 1
+              : (walls.points.size() + kPlaneCloudPerBand - 1) / kPlaneCloudPerBand;
+      for (std::size_t index = 0; index < walls.points.size(); index += stride) {
+        const constructar::SlicePoint& point = walls.points[index];
+        wallCloud.push_back(constructar::Vec3{point.x, bandCentre, point.z});
+      }
+    }
+    constructar::PlaneFitOptions planeOptions;
+    // A room has six surfaces. A seventh plane is the fit finding a ghost, and every extra plane
+    // costs a sweep of the cloud inside the call's budget.
+    planeOptions.maxPlanes = 6;
+    planeOptions.ransacIterations = 700;
+    const std::vector<constructar::FittedPlane> planes =
+        constructar::fitPlanes(wallCloud, planeOptions);
+    const constructar::ManhattanFrame frame = constructar::solveManhattanFrame(
+        constructar::asPlaneObservations(planes));
+    int snappedPlanes = 0;
+    for (const constructar::ManhattanAxis& axis : frame.axes) snappedPlanes += axis.supportingPlanes;
+    context->lastFrame.frame = frame;
+    context->lastFrame.planes = static_cast<int>(planes.size());
+    context->lastFrame.snappedPlanes = snappedPlanes;
+
     constructar::FloorplanOptions options;
     options.cellMetres = cellMetres;
     options.rdpEpsilonMetres = rdpEpsilonMetres;
     options.minSegmentMetres = minSegmentMetres;
-    payload = constructar::packFloorplanPayload(constructar::vectoriseFloorplan(mask.points, options));
+    options.manhattanToleranceDegrees = manhattanToleranceDegrees;
+    const constructar::ManhattanHint hint =
+        constructar::hintFromAxes(frame.axes[0].direction, frame.axes[1].direction,
+                                  frame.axes[2].direction);
+    const constructar::Floorplan plan =
+        constructar::vectoriseFloorplan(mask.points, options, hint);
+    context->lastManhattan = plan.manhattan;
+    payload = constructar::packFloorplanPayload(plan);
   }
   if (payload.empty()) return nullptr;
 
@@ -565,6 +660,112 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeFloorplan(JNIEnv* env, 
   jfloatArray result = env->NewFloatArray(size);
   if (result == nullptr) return nullptr;
   env->SetFloatArrayRegion(result, 0, size, payload.data());
+  return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_constructar_nativebridge_NativeSlamEngine_nativeTagScaleDefaults(JNIEnv* env, jobject) {
+  // One definition, in the struct that already owns these numbers. The Kotlin side needs them
+  // because it now builds marker sweeps of its own, and a second `0.20`/`0.04` in `:app` would be a
+  // second definition of "a baseline worth measuring" (finding 235).
+  const constructar::TagScaleOptions defaults;
+  const jfloat values[2] = {defaults.minBaselineMetres, defaults.maxRelativeDeviation};
+  jfloatArray result = env->NewFloatArray(2);
+  if (result == nullptr) return nullptr;
+  env->SetFloatArrayRegion(result, 0, 2, values);
+  return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_constructar_nativebridge_NativeSlamEngine_nativeDetectAprilTagScale(
+    JNIEnv* env, jobject, jbyteArray gray, jint width, jint height, jint rowStride, jfloat fx, jfloat fy,
+    jfloat cx, jfloat cy, jfloat tagSizeMetres) {
+  if (gray == nullptr || width <= 0 || height <= 0 || rowStride < width) return nullptr;
+  const jsize length = env->GetArrayLength(gray);
+  if (length < height * rowStride) return nullptr;
+
+  jbyte* pixels = env->GetByteArrayElements(gray, nullptr);
+  if (pixels == nullptr) return nullptr;
+  constructar::GrayFrameView view{reinterpret_cast<const std::uint8_t*>(pixels), width, height,
+                                  rowStride, 0.0};
+  constructar::TagDetectorOptions options;
+  options.camera = constructar::TagCamera{fx, fy, cx, cy};
+  options.tagSizeMetres = tagSizeMetres;
+  const std::unique_ptr<constructar::TagDetector> detector = constructar::makeTagDetector(options);
+  const std::vector<constructar::TagDetection> tags = detector->detect(view);
+  env->ReleaseByteArrayElements(gray, pixels, JNI_ABORT);
+
+  constexpr int kFloatsPerTag = 6;
+  const jsize count = static_cast<jsize>(tags.size());
+  jfloatArray result = env->NewFloatArray(1 + count * kFloatsPerTag);
+  if (result == nullptr) return nullptr;
+  std::vector<jfloat> values(static_cast<std::size_t>(1 + count * kFloatsPerTag), 0.f);
+  values[0] = static_cast<jfloat>(count);
+  for (jsize index = 0; index < count; ++index) {
+    const constructar::TagDetection& tag = tags[static_cast<std::size_t>(index)];
+    const std::size_t base = 1 + static_cast<std::size_t>(index) * kFloatsPerTag;
+    values[base + 0] = static_cast<jfloat>(tag.id);
+    values[base + 1] = tag.centreInCamera.x;
+    values[base + 2] = tag.centreInCamera.y;
+    values[base + 3] = tag.centreInCamera.z;
+    values[base + 4] = tag.decisionMargin;
+    values[base + 5] = static_cast<jfloat>(tag.hamming);
+  }
+  env->SetFloatArrayRegion(result, 0, static_cast<jsize>(values.size()), values.data());
+  return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_constructar_nativebridge_NativeSlamEngine_nativeAlignManhattanFrame(JNIEnv* env, jobject,
+                                                                            jlong handle) {
+  EngineContext* context = contextFrom(handle);
+  if (context == nullptr) return nullptr;
+  constructar::ManhattanFrame frame;
+  int planes = 0;
+  int snappedPlanes = 0;
+  {
+    std::lock_guard<std::mutex> lock(context->volumeMutex);
+    frame = context->lastFrame.frame;
+    planes = context->lastFrame.planes;
+    snappedPlanes = context->lastFrame.snappedPlanes;
+  }
+  // [valid, residualDeg, planes, snappedPlanes, then three axes of (x, y, z)] - the axes are
+  // always written, so a caller that only wants the residual does not have to parse a shorter
+  // array, and a frame that is not valid is flagged rather than zeros that look like a room.
+  const jfloat values[4 + 9] = {
+      frame.valid ? 1.f : 0.f,
+      frame.residualDegrees,
+      static_cast<jfloat>(planes),
+      static_cast<jfloat>(snappedPlanes),
+      frame.axes[0].direction.x, frame.axes[0].direction.y, frame.axes[0].direction.z,
+      frame.axes[1].direction.x, frame.axes[1].direction.y, frame.axes[1].direction.z,
+      frame.axes[2].direction.x, frame.axes[2].direction.y, frame.axes[2].direction.z,
+  };
+  jfloatArray result = env->NewFloatArray(13);
+  if (result == nullptr) return nullptr;
+  env->SetFloatArrayRegion(result, 0, 13, values);
+  return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_constructar_nativebridge_NativeSlamEngine_nativeLastManhattan(JNIEnv* env, jobject,
+                                                                     jlong handle) {
+  EngineContext* context = contextFrom(handle);
+  if (context == nullptr) return nullptr;
+  constructar::ManhattanFit fit;
+  {
+    std::lock_guard<std::mutex> lock(context->volumeMutex);
+    fit = context->lastManhattan;
+  }
+  const jfloat values[4] = {
+      fit.applied ? 1.f : 0.f,
+      fit.residualDegrees,
+      static_cast<jfloat>(fit.snappedSegments),
+      static_cast<jfloat>(fit.movedVertices),
+  };
+  jfloatArray result = env->NewFloatArray(4);
+  if (result == nullptr) return nullptr;
+  env->SetFloatArrayRegion(result, 0, 4, values);
   return result;
 }
 

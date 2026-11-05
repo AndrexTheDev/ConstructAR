@@ -33,15 +33,31 @@
 // area and perimeter come only from loops that closed, and a scan with a door in it still reports
 // every wall run.
 //
-// What is **not** here yet, and is not claimed: Manhattan angle enforcement (snapping a segment to
-// exactly 0/45/90 degrees) and door/window classification (a gap of 0.7-1.2 m in a wall line).
-// Both are the next step and both need this output first - a segment list and a loop - which is
-// what this file produces.
+// **Manhattan enforcement is the fifth step, and it is here** (`snapFloorplanToManhattan`). A room
+// is built orthogonal; the RDP runs are not, because the slice they came from carries the depth
+// noise of every wall it crossed. The run directions *are* the evidence: a closed loop's four runs
+// are two directions, and the length-weighted mean of their doubled angles is the frame the room
+// is trying to be. Each run within a tolerance of that frame is moved onto it, and the corners are
+// then the intersections of the straightened runs - so the loop stays closed and the same corner
+// is still one corner. A run further off than the tolerance (a bay, a chamfer, a party wall at 35
+// degrees) is left exactly as measured: forcing it square would be a room the fitter did not see.
 //
-// **Exposed over JNI, not yet on a screen.** `nativeFloorplan` in `jni/slam_jni.cpp` slices the
-// volume, masks the horizontal surfaces and returns this plan as a packed `float[]`; the Kotlin
-// side parses it into `FloorplanPayload`. Nothing in `:app` asks for it yet, so no thumbnail and no
-// floorplan page exist - the engine and the bridge are ready, the screen is not.
+// The corners move, so the guard has to be geometric: if squaring changed the enclosed area by
+// more than a quarter, the fit was not a fit and the loop is returned untouched. And nothing is
+// snapped at all when the runs do not determine a frame (fewer than three usable runs, or a
+// tolerance of zero) - `ManhattanFit::applied` is what a caller reads instead of guessing.
+//
+// What is **not** here: door/window classification (a gap of 0.7-1.2 m in a wall line). That needs
+// the run list this file produces plus a rule about which gaps are openings and which are the end
+// of the scan; it is the next step and it is not claimed.
+//
+// **Exposed over JNI and on a screen.** `nativeFloorplan` in `jni/slam_jni.cpp` slices the volume,
+// masks the horizontal surfaces, vectorises and squares the loop, and returns the plan as a packed
+// `float[]`; the Kotlin side parses it into `FloorplanPayload`, `TsdfScanPipeline` asks for it on
+// the scan worker when a run is committed, and the result becomes the room's card picture *and* the
+// outline the wall screen measures its walls from. What the Manhattan step did is reported
+// separately by `nativeLastManhattan` (four floats), because the payload's layout is a pinned
+// contract and appending statistics to it is how a mismatched library reads walls as numbers.
 #pragma once
 
 #include <vector>
@@ -66,6 +82,54 @@ struct WallSegment {
   float length() const;
 };
 
+/**
+ * What Manhattan enforcement did to a loop.
+ *
+ * `applied` is false when nothing was aligned - too few runs, a tolerance of zero, or a squared
+ * loop whose area moved by more than `kMaxAreaDrift`. A caller that prints "squared to the room's
+ * own axes" reads this first; the alternative is a sentence that is true of a different scan.
+ */
+/**
+ * The frame the room's *planes* determined, offered to the floorplan.
+ *
+ * The runs of a waist-height slice are one kind of evidence and a thin one: a room with one long
+ * wall and three short returns weights the frame towards that wall, and a chamfer inside the
+ * tolerance pulls it further. The room's own planes are the other kind - thousands of points, the
+ * floor, the ceiling and every wall - and `manhattan_world.cpp` already recovers a frame from them.
+ * Passing that frame in means the plan is squared onto the room, not onto whichever run happened
+ * to be longest.
+ *
+ * `hasAngle == false` is the honest default: the caller has no planes, so the runs decide.
+ */
+struct ManhattanHint {
+  bool hasAngle = false;
+  /** The frame's dominant horizontal direction, radians in the x/z plane. */
+  float angleRadians = 0.f;
+};
+
+/**
+ * The floorplan hint from the three axes of a recovered Manhattan frame.
+ *
+ * A frame's axes are ordered by evidence, not by verticality, so the two *horizontal* ones are the
+ * pair whose `|y|` is smallest - the vertical axis is the one pointing up. A frame that does not
+ * have two horizontal axes is not a room frame and yields `hasAngle == false`, which makes the
+ * floorplan square itself from its own runs.
+ */
+ManhattanHint hintFromAxes(const Vec3& axisA, const Vec3& axisB, const Vec3& axisC);
+
+struct ManhattanFit {
+  bool applied = false;
+  /** True when the loop was squared onto planes rather than onto its own runs. */
+  bool usedPlaneFrame = false;
+  /** How far the room's dominant direction sat off the axes it was squared onto, in degrees. */
+  float residualDegrees = 0.f;
+  int snappedSegments = 0;
+  int movedVertices = 0;
+};
+
+/** A squared loop may not change the enclosed area by more than this share (25 %). */
+constexpr float kMaxAreaDrift = 0.25f;
+
 struct FloorplanOptions {
   /** Occupancy cell. 5 cm is one TSDF voxel plus slack: the slice is a 2 cm lattice. */
   float cellMetres = 0.05f;
@@ -83,6 +147,11 @@ struct FloorplanOptions {
   float minEnclosedFraction = 0.25f;
   /** Empty cells kept around the cloud so its boundary is always a real boundary. */
   int paddingCells = 2;
+  /**
+   * How far a wall run may sit off the room's own axes and still be squared onto them, in
+   * degrees. 0 disables enforcement; 10 is drift plus the slice's own noise.
+   */
+  float manhattanToleranceDegrees = 10.f;
 };
 
 struct Floorplan {
@@ -107,6 +176,8 @@ struct Floorplan {
   /** True when a loop closed and enclosed enough of the slice to be the room. */
   bool closed = false;
   int occupiedCells = 0;
+  /** What the Manhattan step did, so a caller can say it rather than assume it. */
+  ManhattanFit manhattan;
   bool valid = false;
 };
 
@@ -119,11 +190,37 @@ std::vector<SlicePoint> simplifyRdp(const std::vector<SlicePoint>& chain, float 
 /** Convenience: drops the height of a TSDF slice, keeping (x, z). */
 std::vector<SlicePoint> projectToFloor(const std::vector<Vec3>& slicePoints);
 
+/**
+ * Squares a closed loop onto the two axes its own runs determine.
+ *
+ * Runs within `toleranceDegrees` of the frame are moved onto it, the loop's vertices become the
+ * intersections of consecutive straightened runs, and a run that is not stamped keeps its own
+ * endpoints. A vertex between two un-snapped runs does not move at all; one between a snapped and
+ * an unsnapped run is the intersection of the snapped line with the run's *own* line, so the
+ * chamfer stays where it was and its neighbour meets it where they now cross.
+ *
+ * `kMaxAreaDrift` is the guard: a fit that changes the room's area by more than a quarter was not
+ * a fit, and the loop is returned exactly as it came in with `fit.applied == false`.
+ */
+void snapFloorplanToManhattan(std::vector<SlicePoint>& loop, float toleranceDegrees,
+                              ManhattanFit& fit, const ManhattanHint& hint = {});
+
 /** The vectorised floorplan of a waist-height slice. */
 Floorplan vectoriseFloorplan(const std::vector<Vec3>& slicePoints,
                              const FloorplanOptions& options = {});
 Floorplan vectoriseFloorplan(const std::vector<SlicePoint>& points,
                              const FloorplanOptions& options = {});
+
+/**
+ * The same, squared onto a frame somebody else determined (see [ManhattanHint]).
+ *
+ * A hint that disagrees with the runs by more than 30 degrees is not used: a frame fitted from the
+ * wrong cloud would otherwise rotate a room that is already right, and the guard costs one
+ * comparison. `ManhattanFit::usedPlaneFrame` says which evidence won.
+ */
+Floorplan vectoriseFloorplan(const std::vector<SlicePoint>& points,
+                             const FloorplanOptions& options,
+                             const ManhattanHint& hint);
 
 /**
  * Floats before the variable-length part of the JNI payload.

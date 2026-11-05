@@ -4,30 +4,40 @@
  * SPDX-License-Identifier: LicenseRef-Proprietary
  */
 
-// Passive marker calibration — the *contract*, not a detector (tier 2).
+// Passive marker calibration — the arithmetic, and (since finding 231) the decoder.
 //
 // A printed AprilTag of known size, seen in enough depth frames, gives the scan a length that
 // does not depend on the operator holding a bank card still at arm's length: the tag's corners
 // are reconstructed, their distance is compared with the tag's printed size, and the scan's metre
 // is corrected. That is the useful half, and it is arithmetic.
 //
-// The *other* half - finding the tag in the pixels - is a decoder: quad extraction, homography,
-// tag36h11 bit decoding with its error correction, and a denoiser in front of it. Vendoring one
-// is a licensing decision (it would need a NOTICE and docs/LICENSING.md entry), and it cannot be
-// built for the NDK or verified on a device in this repository's development sandbox. So what is
-// here is the part that can be *proved* here:
+// The other half - finding the tag in the pixels - used to be a licensing decision this
+// repository declined to make: quad extraction, homography, tag36h11 bit decoding and its error
+// correction, all of it somebody else's code. It is now vendored, unmodified and credited:
+// AprilTag 3.1.0's C core, BSD-2-Clause, in `native-slam/src/main/cpp/third_party/apriltag/`
+// (provenance, file list and the licence in `VENDORED.md` next to it, and the attribution in
+// `NOTICE`, `licenses/BSD-2-Clause.txt` and the Help screen's list). `AprilTagDetector` in
+// `apriltag_detector.hpp` is the one door between that tree and this code: nothing else in the
+// repository includes an apriltag header, which is what keeps a decoder we did not write from
+// leaking its types into a layer we did.
 //
-//   * `TagDetector`, the interface a decoder will implement, with an honest
-//     `available() == false` and a reason - so no caller can mistake "no backend" for "no tags
-//     in view", which is the same shape as `RtabMapBridge::isAvailable` (finding 98);
+//   * `TagDetector`, the interface a caller uses, with an honest `available()` - false when no
+//     camera intrinsics were supplied, so a caller cannot mistake "cannot convert pixels to
+//     metres" for "no tags in view" (the shape finding 98 had to establish for `RtabMapBridge`);
+//   * `AprilTagDetector`, the implementation, which needs a pinhole camera and the printed size
+//     before it can answer, because a tag's pixel size means nothing in metres without them;
 //   * `estimateScaleFromTagSightings`, the marker-to-scale update: nominal tag spacing over
 //     measured tag spacing, robust to a tag that was mis-detected or mis-placed.
 //
-// **Contract only.** Nothing in `:app` or `:ar-engine` constructs a detector, no JNI symbol
-// exposes one, and the app has no path that feeds `estimateScaleFromTagSightings`. Until a
-// decoder exists and a phone has run it, this header is what a wiring will call - it is not what
-// the app does. `docs/CALIBRATION.md` states the same and `scripts/verify_sources.py` holds both
-// documents to it.
+// **Vendored and wired.** Finding 235 closed the last metre: `MarkerFrameReader` in `:ar-engine`
+// packs an ARCore camera plane (`:core`'s `LuminancePlane`) into the grey frame
+// `nativeDetectAprilTagScale` takes, and hands it the session's intrinsics and the printed size -
+// so a frame can become a distance. Above it `MarkerProbe` composes reader and sweep and
+// `MarkerSweep` (`:core`) holds the sequence a screen has, so the AR screen's marker dialog now
+// produces a factor while the operator walks. What has *not* moved is the second half:
+// `estimateScaleFromTagSightings` is unreached - it needs a printed sheet of tags, no screen
+// offers one - and no device has held a real tag against any of this, which is the one thing no
+// test in this repository can supply.
 //
 // **It proposes, it never decides.** The acceptance window and the decision to store a factor
 // belong to `:core` (`ReferenceCalibration.accepted`), exactly as they do for the bank-card
@@ -38,6 +48,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "../core/types.hpp"
@@ -80,32 +91,74 @@ class TagDetector {
  public:
   virtual ~TagDetector() = default;
 
-  /** False when no decoder is compiled in. Never a synonym for "no tags in this frame". */
+  /** False when this detector cannot answer at all. Never a synonym for "no tags in this frame". */
   virtual bool available() const = 0;
 
   /** Why it is unavailable, or "" when it is. Static storage; never null. */
   virtual const char* unavailableReason() const = 0;
 
   /**
-   * Decodes the tags in one frame. Returns an empty vector when no decoder is compiled in, which
-   * is indistinguishable from "none visible" *by design* - callers must ask `available()` first,
-   * and `unavailableReason()` is what a diagnostic screen prints.
+   * Decodes the tags in one frame. Returns an empty vector when the decoder cannot answer at all,
+   * which is indistinguishable from "none visible" *by design* - callers must ask `available()`
+   * first, and `unavailableReason()` is what a diagnostic screen prints. With the vendored decoder
+   * in place the usual reason is a missing camera, not a missing decoder.
    */
   virtual std::vector<TagDetection> detect(const GrayFrameView& view) = 0;
 };
 
-/** The only detector that exists today: no decoder compiled in. */
+/**
+ * The detector that answers "cannot" - used when the caller has not supplied what a decoder needs.
+ *
+ * A decoder is compiled in (finding 231), so this class no longer means "none exists"; it means
+ * the *question* was incomplete. The reason it carries is what a diagnostic screen prints, and it
+ * is spelled once, here, so that a screen cannot paraphrase it into something more reassuring.
+ */
 class NoTagDetector final : public TagDetector {
  public:
+  explicit NoTagDetector(std::string reason);
+
   bool available() const override { return false; }
-  const char* unavailableReason() const override;
+  const char* unavailableReason() const override { return reason_.c_str(); }
   std::vector<TagDetection> detect(const GrayFrameView& view) override {
     (void)view;
     return {};
   }
+
+ private:
+  std::string reason_;
 };
 
-/** The detector this build offers. Returns a `NoTagDetector` until a decoder is vendored. */
+/**
+ * What a decoder needs before it can turn pixels into metres.
+ *
+ * `fx`/`fy`/`cx`/`cy` are the pinhole intrinsics in pixels, from the camera the frame came from -
+ * not ARCore's, not a nominal 60-degree lens. `tagSizeMetres` is the printed side of the tag's
+ * black square, quiet zone excluded: it *is* the scale, and a wrong number here produces a
+ * confidently wrong distance rather than a failure.
+ */
+struct TagCamera {
+  float fx = 0.f;
+  float fy = 0.f;
+  float cx = 0.f;
+  float cy = 0.f;
+
+  /** Positive focal lengths and a principal point inside the image: a camera, not four zeros. */
+  bool isPlausible(int width, int height) const;
+};
+
+struct TagDetectorOptions {
+  TagCamera camera;
+  /** Side of the tag's black square, in metres. */
+  float tagSizeMetres = 0.2f;
+  /** Upper bound on returned detections; the strongest are kept. */
+  int maxDetections = 8;
+};
+
+/**
+ * The detector this build offers *without* a camera: an object whose `available()` is false and
+ * whose reason names the missing intrinsics. Kept as an overload because the callers that only
+ * want to know "can this build read tags at all" should not have to invent a camera.
+ */
 std::unique_ptr<TagDetector> makeTagDetector();
 
 /** One tag seen by the scan: its id and where its centre ended up in the scan's own frame. */

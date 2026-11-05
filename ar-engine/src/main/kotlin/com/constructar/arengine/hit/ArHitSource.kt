@@ -140,7 +140,7 @@ class ArHitSource(
         // layer sees points, not planes. Carried on the resolution so the app can store it and
         // later say what a node's height means (finding 214).
         return snapped.copy(
-            floorHeightM = FloorReference.heightFrom(
+            floor = FloorReference.decide(
                 planes = request.planes,
                 viewerHeightM = request.viewerPosition.y,
             ),

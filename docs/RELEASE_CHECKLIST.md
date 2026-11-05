@@ -26,11 +26,16 @@ Everything here is a gate before an APK reaches a site, in the order it should b
 - [ ] `versionCode` bumped, `versionName` matches the protocol PDF footer
 - [ ] R8: verify `NativeSlamEngine` natives, `com.google.ar.core.**`, `io.github.sceneview.**`
       and the kotlinx.serialization serializers survive (`app/proguard-rules.pro`)
-- [ ] 16 KB page-size compatible (`ndk { debugSymbolLevel }`, NDK r27+)
+- [ ] 16 KB page-size compatible: checked, not assumed - CI's *16 KB page size* step reads every
+  `LOAD` segment of `libconstructar_slam.so` back with `readelf` (expects `0x4000`) and runs
+  `zipalign -c -P 16 -v 4` over the debug APK (finding 241)
 
 ## 2. Licensing
 
-- [ ] `LicencePublicKey.PUBLIC_KEY_BASE64` is the **production** key, not `DEMO_KEY_BASE64`.
+- [ ] `CONSTRUCTAR_PROD_PUBLIC_KEY` is exported for the release build and holds the **production**
+  key: `gradle :app:assembleRelease` now refuses to run without it (`verifyLicenceKey`), and the
+  build log's one line says `verifyLicenceKey: production licence key in build`. A build that
+  passes `-Pconstructar.sizeCheckOnly=true` is a size check, never a release.
       With the placeholder in place the app verifies licences no real signer ever produced, and
       the Help screen shows the developer note. `python3 scripts/verify_sources.py` prints the
       reminder on every run
@@ -40,7 +45,7 @@ Everything here is a gate before an APK reaches a site, in the order it should b
       for the published pages comes from `tools/build_site.py` (`NOTICE_HTML` and the manifest's
       `copyright` member), never from a comment pasted into `docs/` — the next build overwrites it
       (finding 215)
-- [ ] In-app "Licences" screen lists SceneView, Filament, ARCore, LiteRT, RTAB-Map, Depth Anything V2 Small
+- [ ] In-app "Licences" screen lists SceneView, Filament, ARCore, LiteRT, RTAB-Map, Depth Anything V2 Small, AprilTag
       (Help → *Third-party components*, rendered from `:core` `ThirdPartyNotices`, mirrored in
       `NOTICE` and reproduced in full under `licenses/`; `scripts/verify_sources.py` rule 20 checks
       this line against both artefacts, as Apache-2.0 §4 and BSD-3-Clause require)

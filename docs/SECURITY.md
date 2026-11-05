@@ -58,10 +58,11 @@ can honestly mean here.
 ## Operational rules for the developer
 
 1. **Mint your own key before the first sale.**
-   `python3 tools/mint_licence.py --init` prints a new public key; paste it over
-   `LicencePublicKey.PUBLIC_KEY_BASE64` and keep the private half offline (see
-   [BILLING.md](BILLING.md)). Until then the app carries a *demo* key whose private half was
-   discarded, and the help screen shows a developer note (`licence_demo_key`) saying so.
+   `python3 tools/mint_licence.py --init` prints a new public key; export it as
+   `CONSTRUCTAR_PROD_PUBLIC_KEY` for the release build (`assembleRelease` refuses the demo key
+   without it, finding 240) and keep the private half offline (see [BILLING.md](BILLING.md)).
+   Until then the app carries a *demo* key whose private half was discarded, and the help screen
+   shows a developer note (`licence_demo_key`) saying so.
 2. **Sign every release with the same keystore.** A new signing key looks like a repackaged
    build to `AppIntegrity`; existing installations will show "unconfirmed" until the licence is
    entered again.

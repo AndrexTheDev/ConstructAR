@@ -71,7 +71,6 @@ import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.licence.Entitlements
 import com.constructar.core.model.FloorplanSketch
-import com.constructar.core.units.LengthFormatter
 
 /**
  * The home screen: one job — get the operator back to work in one tap.
@@ -551,7 +550,7 @@ private fun ProjectRow(
             RoomSizeBadges(project.sketch, onCloseRoom)
         }
         Text(
-            LengthFormatter.format(project.totalLengthMeters),
+            shownLengthWithUnit(project.totalLengthMeters),
             style = MaterialTheme.typography.titleMedium,
             color = SiteColors.gold,
         )
@@ -619,7 +618,9 @@ private fun RoomSizeBadges(sketch: FloorplanSketch?, onCloseRoom: () -> Unit) {
         CloseRoomChip(onCloseRoom)
         return
     }
-    val size = RoomSizeText.of(sketch) ?: return
+    // A card on a phone is prose: the reader's mark. The PDF's copy of the same two numbers is a
+    // protocol and keeps the point (`ExportScreen` deliberately calls `RoomSizeText.of` without it).
+    val size = RoomSizeText.of(sketch, LocalDecimalMark.current) ?: return
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 3.dp)) {
         SizeBadge(stringResource(R.string.card_area, size.area))
         SizeBadge(stringResource(R.string.card_perimeter, size.perimeter))
@@ -705,11 +706,15 @@ private fun ProjectMetaLine(project: ProjectRepository.ProjectSummary) {
     // single ellipsized line - so on a normal phone the string was cut off after the date and the
     // site name, the defect count *and the running clock* were never shown at all. The one line on
     // the home screen that says money is burning was the first thing the ellipsis ate.
+    // Read outside the builder: `buildString`'s lambda is not a composable scope, and a
+    // `@Composable` formatter called from inside it would not compile - which is the honest
+    // version of the same mistake a `remember`-less call makes silently everywhere else.
+    val totalText = shownLengthWithUnit(project.totalLengthMeters)
     Text(
         text = buildString {
             append(runsText)
             append(" · ")
-            append(LengthFormatter.format(project.totalLengthMeters))
+            append(totalText)
             append(" · ")
             append(updatedLabel)
         },

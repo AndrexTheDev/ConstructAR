@@ -20,6 +20,7 @@ what is used, under which licence, and the obligations that follow.
 | kotlinx.coroutines / serialization | catalog | Apache-2.0 | Notice shown in the app (see below) |
 | LiteRT (former TensorFlow Lite) | 2.3.0 | Apache-2.0 | Notice shown in the app (see below) |
 | **Depth Anything V2 Small** | weights | **Apache-2.0** (Small only) | Notice shown in the app (see below). Base/Large are **CC-BY-NC-4.0** and must not be shipped — enforced by the checksum in `MonocularDepthEstimator` |
+| **AprilTag** (tag36h11 decoder) | source, vendored | **BSD-2-Clause** | `native-slam/src/main/cpp/third_party/apriltag/` holds AprilTag 3.1.0's C core verbatim, with its upstream copyright headers intact and a `VENDORED.md` beside it listing what was taken, what was left and how it was obtained. BSD-2 asks for the copyright notice, the two conditions and the disclaimer in binary distributions, which is why it is in the in-app list and in `NOTICE`; it has no "no endorsement" clause to reproduce, unlike RTAB-Map's BSD-3 |
 | **RTAB-Map** (optional) | source | **BSD-3-Clause** | The copyright notice is reproduced in the app's *Third-party components* section, with the "All rights reserved" reservation BSD-3 requires. Must be built with `OPENCV_ENABLE_NONFREE=OFF`; only SIFT/ORB/BRISK (free) detectors may be linked |
 | OpenCV (transitive, if RTAB-Map enabled) | 4.x | Apache-2.0 (without the `nonfree` module) | Do not enable `opencv_contrib`'s `nonfree` module. SIFT is free since OpenCV 4.4 and is what we use |
 
@@ -32,11 +33,11 @@ document, so the list is carried in three places that are checked against each o
    `com.constructar.core.licence.ThirdPartyNotices.ALL`. The strings are deliberately not
    localised: a copyright line is a legal identifier, and translating it would not reproduce the
    notice the licence asks for. `ThirdPartyNoticesTest` (`:core`, JVM) fails if a listed licence
-   is not one of Apache-2.0, BSD-3-Clause or the ARCore SDK licence, or if a BSD-3 entry lacks the
+   is not one of Apache-2.0, BSD-3-Clause, BSD-2-Clause or the ARCore SDK licence, or if a BSD-3 entry lacks the
    "All rights reserved" reservation.
 2. **In this repository** — `NOTICE` at the root lists the same components with the same copyright
    lines, and the full texts are reproduced verbatim under `licenses/` (`Apache-2.0.txt`,
-   `BSD-3-Clause.txt`), because §4(a) asks for a copy of the licence, not just its name.
+   `BSD-3-Clause.txt`, `BSD-2-Clause.txt`), because §4(a) asks for a copy of the licence, not just its name.
 3. **In the release checklist** — `docs/RELEASE_CHECKLIST.md` names the components a release
    engineer must confirm.
 

@@ -17,8 +17,14 @@
 //       native-slam/src/main/cpp/geometry/plane_fit.cpp
 //       native-slam/src/main/cpp/geometry/floorplan.cpp
 //       native-slam/src/main/cpp/geometry/surface_mask.cpp
+//       native-slam/src/main/cpp/calibration/apriltag_detector.cpp
 //       native-slam/src/main/cpp/slam/rtabmap_bridge.cpp
-//       native-slam/src/main/cpp/tests/host_tests.cpp -o /tmp/constructar_host_tests
+//       native-slam/src/main/cpp/tests/host_tests.cpp
+//       <the vendored AprilTag objects, see below> -o /tmp/constructar_host_tests
+//
+// The AprilTag core is C, so it is compiled to objects first and linked in; the exact list and the
+// `gcc -std=gnu11 -D_GNU_SOURCE -w` flags are in `tools/verify-native.sh` (`build_vendored`), which
+// is what CI runs and what the `APRILTAG_SOURCES` block in CMakeLists.txt mirrors.
 //   /tmp/constructar_host_tests
 // (tools/verify-native.sh runs exactly this, for every compiler and optimisation it finds)
 //
@@ -37,6 +43,7 @@
 #include <string>
 #include <vector>
 
+#include "../calibration/apriltag_detector.hpp"
 #include "../calibration/tag_scale.hpp"
 #include "../core/types.hpp"
 #include "../geometry/floorplan.hpp"
@@ -936,16 +943,140 @@ std::vector<constructar::TagSighting> stretchedSightings(float stretch) {
   return sightings;
 }
 
+/**
+ * The printed tag: tag36h11 id 7, module by module, 1 = white.
+ *
+ * Written out rather than generated from the vendored codebook on purpose. A test that asks the
+ * decoder's own family table what the tag looks like can only prove that the decoder agrees with
+ * itself; this is the pattern a printer puts on paper, so the assertion is about the tag in front
+ * of the camera. The border ring is not part of it: the tag is six data modules inside a one-module
+ * black border, and the black square those make is what `tagSizeMetres` measures.
+ */
+const int kTagId7Modules[8][8] = {
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 1, 0, 0, 0},
+    {0, 0, 0, 0, 1, 1, 0, 0},
+    {0, 0, 1, 0, 1, 0, 0, 0},
+    {0, 1, 0, 1, 1, 1, 0, 0},
+    {0, 0, 0, 0, 1, 1, 1, 0},
+    {0, 0, 1, 0, 1, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0},
+};
+
+/** Draws that tag, centred on white: `modulePixels` pixels per module, `quarters` of 90 degrees turned. */
+std::vector<uint8_t> renderTag(int modulePixels, int imageSide, int quarters) {
+  int modules[8][8];
+  std::memcpy(modules, kTagId7Modules, sizeof(modules));
+  for (int turn = 0; turn < quarters; ++turn) {
+    int turned[8][8];
+    for (int y = 0; y < 8; ++y) {
+      for (int x = 0; x < 8; ++x) turned[x][7 - y] = modules[y][x];
+    }
+    std::memcpy(modules, turned, sizeof(modules));
+  }
+  const int side = 8 * modulePixels;
+  const int origin = (imageSide - side) / 2;
+  std::vector<uint8_t> frame(static_cast<size_t>(imageSide) * imageSide, 255);
+  for (int y = 0; y < side; ++y) {
+    for (int x = 0; x < side; ++x) {
+      const bool white = modules[y / modulePixels][x / modulePixels] != 0;
+      frame[static_cast<size_t>(origin + y) * imageSide + origin + x] = white ? 250 : 12;
+    }
+  }
+  return frame;
+}
+
+void testAprilTagDetector() {
+  section("AprilTag decoder: a printed tag is a distance, not a shape");
+  const int side = 480;
+  constructar::TagDetectorOptions options;
+  options.camera = {800.f, 800.f, 240.f, 240.f};
+  options.tagSizeMetres = 0.20f;
+
+  const auto detector = constructar::makeTagDetector(options);
+  check(detector != nullptr && detector->available(),
+        "a build with a vendored decoder and a camera can read tags");
+  check(detector != nullptr && std::strlen(detector->unavailableReason()) == 0,
+        "an available detector has no reason to give");
+
+  // Eight modules of ten pixels at a focal length of 800 px is a 0.20 m square 2 m away:
+  // 800 * 0.20 / 80 = 2. The number is arithmetic, and the decoder has to agree with it.
+  const std::vector<uint8_t> frame = renderTag(10, side, 0);
+  constructar::GrayFrameView view{frame.data(), side, side, side, 0.0};
+  const std::vector<constructar::TagDetection> detections = detector->detect(view);
+  check(detections.size() == 1u, "one printed tag is one detection");
+  if (!detections.empty()) {
+    const constructar::TagDetection& tag = detections.front();
+    check(tag.id == 7, "the id the pattern carries is the id that comes back");
+    check(std::fabs(tag.centreInCamera.z - 2.f) < 0.06f,
+          "a 0.20 m tag 2 m away measures 2 m - the printed size is the scale, and the decoder "
+          "uses it rather than inventing one");
+    check(std::fabs(tag.centreInCamera.x) < 0.02f && std::fabs(tag.centreInCamera.y) < 0.02f,
+          "a centred tag is centred: x and y are under 2 cm");
+    check(tag.decisionMargin > 0.5f && tag.decisionMargin <= 1.f,
+          "a clean render reads with a high margin, and the contract's [0, 1] is honoured");
+    check(tag.hamming == 0, "no bit needed correcting, so none was corrected");
+  }
+
+  // The same tag turned a quarter: the family is rotation-symmetric by construction, and a decoder
+  // that only works for the orientation it was tested in would pass every other assertion here.
+  for (int quarters = 1; quarters < 4; ++quarters) {
+    const std::vector<uint8_t> turned = renderTag(10, side, quarters);
+    constructar::GrayFrameView turnedView{turned.data(), side, side, side, 0.0};
+    const std::vector<constructar::TagDetection> seen = detector->detect(turnedView);
+    check(seen.size() == 1u && seen.front().id == 7,
+          "a tag turned " + std::to_string(quarters * 90) + " degrees is the same tag");
+    check(!seen.empty() && std::fabs(seen.front().centreInCamera.z - 2.f) < 0.06f,
+          "and it is at the same distance, so the rotation index is not in the geometry");
+  }
+
+  // Half the pixels, twice the distance: the decoder follows the printed size rather than a fixed
+  // assumption about how big a tag looks on a phone.
+  const std::vector<uint8_t> far = renderTag(5, side, 0);
+  constructar::GrayFrameView farView{far.data(), side, side, side, 0.0};
+  const std::vector<constructar::TagDetection> farSeen = detector->detect(farView);
+  check(farSeen.size() == 1u && std::fabs(farSeen.front().centreInCamera.z - 4.f) < 0.2f,
+        "a tag rendered at half the size measures twice the distance - 4 m, not 2 m");
+
+  // An empty room is not a failure. It is the answer "no tags", which only means something because
+  // `available()` is true: the distinction finding 98 established for the RTAB-Map back-end.
+  const std::vector<uint8_t> blank(static_cast<size_t>(side) * side, 255);
+  constructar::GrayFrameView blankView{blank.data(), side, side, side, 0.0};
+  check(detector->detect(blankView).empty(), "a frame with no tag in it reports no tag");
+
+  // What is missing is named: the camera, not the decoder, because the decoder is right there.
+  const auto blind = constructar::makeTagDetector(constructar::TagDetectorOptions{});
+  check(!blind->available(), "a detector built without intrinsics says it cannot read tags");
+  check(std::strstr(blind->unavailableReason(), "intrinsics") != nullptr,
+        "and it says which thing is missing, so a diagnostic screen does not blame the room");
+  constructar::TagDetectorOptions sizeless = options;
+  sizeless.tagSizeMetres = 0.f;
+  const auto unscaled = constructar::makeTagDetector(sizeless);
+  check(!unscaled->available(),
+        "a detector without the printed size is refused: the size is the scale, and a decoder "
+        "without it would report a plausible shape as a distance");
+  constructar::TagDetectorOptions capped = options;
+  capped.maxDetections = 0;
+  check(constructar::makeTagDetector(capped)->detect(view).empty(),
+        "the detection cap is honoured, so a caller that asked for none gets none");
+
+  constructar::GrayFrameView broken{nullptr, side, side, side, 0.0};
+  check(detector->detect(broken).empty(), "a view with no buffer is not a crash");
+  constructar::GrayFrameView narrow{frame.data(), side, side, side - 1, 0.0};
+  check(detector->detect(narrow).empty(), "a row stride shorter than the row is refused");
+}
+
 void testTagScaleContract() {
   section("AprilTag contract: the absence is explicit");
   const auto detector = constructar::makeTagDetector();
-  check(detector != nullptr, "the build always offers a detector object, even with no decoder");
-  check(!detector->available(), "a build with no decoder says it is unavailable");
+  check(detector != nullptr, "the build always offers a detector object, even without a camera");
+  check(!detector->available(), "a build asked for no camera says it is unavailable");
   const char* reason = detector->unavailableReason();
   check(reason != nullptr && std::strlen(reason) > 0,
         "an unavailable detector says why, so a diagnostic screen can print it");
-  check(reason != nullptr && std::strstr(reason, "contract") != nullptr,
-        "the reason names the contract rather than blaming the frame");
+  check(reason != nullptr && std::strstr(reason, "intrinsics") != nullptr,
+        "the reason names what is missing - the camera - rather than blaming the frame, and it no "
+        "longer claims there is no decoder, because there is one");
 
   std::vector<uint8_t> pixels(static_cast<size_t>(8 * 8), 128);
   constructar::GrayFrameView view{pixels.data(), 8, 8, 8, 0.0};
@@ -1548,6 +1679,208 @@ void testFloorplanVectorise() {
         "a room whose walls are all below the minimum segment length is not a floorplan");
 }
 
+/** The interior angle at a corner of a loop, in degrees. */
+float interiorAngleDegrees(const SlicePoint& previous, const SlicePoint& corner,
+                           const SlicePoint& next, bool* ok = nullptr) {
+  const float ax = previous.x - corner.x;
+  const float az = previous.z - corner.z;
+  const float bx = next.x - corner.x;
+  const float bz = next.z - corner.z;
+  const float la = std::sqrt(ax * ax + az * az);
+  const float lb = std::sqrt(bx * bx + bz * bz);
+  if (ok != nullptr) *ok = la > 1e-5f && lb > 1e-5f;
+  if (!(la > 1e-5f) || !(lb > 1e-5f)) return 0.f;
+  const float cosine = (ax * bx + az * bz) / (la * lb);
+  return std::acos(std::max(-1.f, std::min(1.f, cosine))) * 180.f / 3.14159265358979323846f;
+}
+
+/** The heading of a run, in degrees. */
+float headingDegrees(const constructar::WallSegment& segment) {
+  return std::atan2(segment.end.z - segment.start.z, segment.end.x - segment.start.x) * 180.f /
+         3.14159265358979323846f;
+}
+
+/**
+ * Manhattan enforcement on the floorplan (finding 229).
+ *
+ * The slice's runs carry the depth noise of the walls they crossed, so a room that is square on
+ * site comes out as a parallelogram - 5 degrees of shear on every corner, systematically, which no
+ * amount of averaging removes. The runs are also the evidence: their length-weighted mean direction
+ * is the frame, and moving each run onto it makes the corners right angles again. Three things have
+ * to hold for that to be honest: only runs that are already close move, the loop stays closed, and
+ * a fit that would change the room is rejected rather than applied.
+ */
+void testFloorplanManhattan() {
+  section("Floorplan: Manhattan enforcement");
+
+  // A 4 x 3 m room measured with 5 degrees of shear on every corner: a = (4, 0.35), b = (0, 3).
+  const std::vector<SlicePoint> sheared = sampleWallLoop(
+      {{0.f, 0.f}, {4.f, 0.35f}, {4.f, 3.35f}, {0.f, 3.f}});
+  const constructar::Floorplan squared = constructar::vectoriseFloorplan(sheared);
+  check(squared.valid && squared.closed, "the sheared room still vectorises");
+  check(squared.manhattan.applied, "the sheared room is squared onto its own axes");
+  check(squared.manhattan.snappedSegments == 4,
+        "all four runs are within the tolerance (" +
+            std::to_string(squared.manhattan.snappedSegments) + ")");
+  check(squared.manhattan.movedVertices == 4,
+        "all four corners are rebuilt from the straightened runs (" +
+            std::to_string(squared.manhattan.movedVertices) + ")");
+  checkNear(squared.areaSquareMetres,
+            std::fabs(constructar::polygonArea(squared.outline)), 1e-2,
+            "the reported area is the squared loop's own area (m2)");
+
+  bool everyCornerIsRight = squared.outline.size() == 4;
+  float worstError = 0.f;
+  for (size_t i = 0; everyCornerIsRight && i < squared.outline.size(); ++i) {
+    bool ok = false;
+    const float angle = interiorAngleDegrees(
+        squared.outline[(i + squared.outline.size() - 1) % squared.outline.size()],
+        squared.outline[i], squared.outline[(i + 1) % squared.outline.size()], &ok);
+    const float error = std::fabs(angle - 90.f);
+    worstError = std::max(worstError, error);
+    everyCornerIsRight = ok && error <= 1.f;
+  }
+  check(everyCornerIsRight, "every corner is a right angle after the snap (worst " +
+                                std::to_string(worstError) + " degrees)");
+  check(squared.areaSquareMetres > 10.8f && squared.areaSquareMetres < 13.2f,
+        "squaring did not turn the room into a different room (" +
+            std::to_string(squared.areaSquareMetres) + " m2)");
+
+  // A chamfer 31 degrees off the frame is not a wall that moved: it is a room that has one.
+  const std::vector<SlicePoint> chamfered = sampleWallLoop(
+      {{0.f, 0.f}, {4.f, 0.f}, {4.f, 2.4f}, {3.f, 3.f}, {0.f, 3.f}});
+  const constructar::Floorplan bay = constructar::vectoriseFloorplan(chamfered);
+  check(bay.valid, "the chamfered room vectorises");
+  check(bay.manhattan.applied, "the square runs of the chamfered room are still squared");
+  check(bay.manhattan.snappedSegments == 4,
+        "the chamfer itself is left as measured (" +
+            std::to_string(bay.manhattan.snappedSegments) + " of 5 runs squared)");
+  float chamferHeading = 0.f;
+  float shortest = 1e9f;
+  for (const auto& segment : bay.segments) {
+    if (segment.length() < shortest) {
+      shortest = segment.length();
+      chamferHeading = headingDegrees(segment);
+    }
+  }
+  // Measured heading of the chamfer: atan2(0.6, -1.0) is 149.04 degrees; 180 is the same wall.
+  const float offBy = std::fabs(std::fabs(chamferHeading) - 149.04f);
+  check(offBy < 4.f, "the chamfer keeps its measured angle (" +
+                         std::to_string(chamferHeading) + " degrees)");
+
+  // A tolerance of zero is "do not touch the room": the setting the option documents.
+  constructar::FloorplanOptions measured;
+  measured.manhattanToleranceDegrees = 0.f;
+  const constructar::Floorplan asMeasured = constructar::vectoriseFloorplan(sheared, measured);
+  check(!asMeasured.manhattan.applied, "a tolerance of zero applies nothing");
+  check(asMeasured.manhattan.snappedSegments == 0, "and reports nothing squared");
+
+  // A concave room survives the step: the L's six runs are all on the frame, and the concave
+  // corner must not be cut off by it.
+  const std::vector<SlicePoint> ell = sampleWallLoop(
+      {{0.f, 0.f}, {4.f, 0.f}, {4.f, 2.f}, {2.f, 2.f}, {2.f, 4.f}, {0.f, 4.f}});
+  const constructar::Floorplan ellPlan = constructar::vectoriseFloorplan(ell);
+  check(ellPlan.valid && ellPlan.segments.size() == 6,
+        "the L keeps its six runs with Manhattan on (" +
+            std::to_string(ellPlan.segments.size()) + ")");
+  checkNear(ellPlan.areaSquareMetres, 12.0, 0.4, "the L's area survives the step (m2)");
+}
+
+/**
+ * The floorplan squared onto the frame the room's **planes** determined (finding 230).
+ *
+ * The runs of a waist-height slice are thin evidence: one long wall and three short returns weight
+ * the frame towards that wall. The room's planes are the other kind, and `manhattan_world.cpp` was
+ * written to recover exactly that frame - but nothing ever handed a cloud to `fitPlanes`, so the
+ * chain cloud -> planes -> frame -> squared plan existed only in this suite. Now it runs in one
+ * call, and the two things that can go wrong are both asserted here: a frame fitted from the wrong
+ * cloud must not rotate a room that is already right, and a frame that *is* right must actually be
+ * the one used.
+ */
+void testFloorplanManhattanFromPlanes() {
+  section("Floorplan: squared onto the plane frame");
+
+  // A 4 x 3 m room, square, rotated by 7 degrees: the walls are not on the world axes, and a
+  // floorplan that assumed they were would report a room 3 % larger than it is.
+  const float turn = 7.f * 3.14159265358979323846f / 180.f;
+  const auto rotate = [turn](float x, float z) {
+    return SlicePoint(x * std::cos(turn) - z * std::sin(turn),
+                      x * std::sin(turn) + z * std::cos(turn));
+  };
+  const std::vector<SlicePoint> corners = {
+      rotate(0.f, 0.f), rotate(4.f, 0.f), rotate(4.f, 3.f), rotate(0.f, 3.f)};
+
+  // The cloud the room's walls would give: points on each of the four vertical planes, from 0.2 m
+  // to 2.3 m up, so `fitPlanes` sees four planes and the solver has a frame.
+  std::vector<constructar::Vec3> cloud;
+  for (size_t i = 0; i < corners.size(); ++i) {
+    const SlicePoint a = corners[i];
+    const SlicePoint b = corners[(i + 1) % corners.size()];
+    const float runLength = std::sqrt((b.x - a.x) * (b.x - a.x) + (b.z - a.z) * (b.z - a.z));
+    const int along = std::max(2, static_cast<int>(runLength / 0.05f));
+    for (int step = 0; step < along; ++step) {
+      const float t = static_cast<float>(step) / static_cast<float>(along);
+      const float x = a.x + (b.x - a.x) * t;
+      const float z = a.z + (b.z - a.z) * t;
+      for (float y = 0.2f; y <= 2.3f; y += 0.1f) cloud.push_back(constructar::Vec3{x, y, z});
+    }
+  }
+
+  const auto planes = constructar::fitPlanes(cloud);
+  check(planes.size() == 4, "the four walls are four planes (got " +
+                                std::to_string(planes.size()) + ")");
+  const auto observations = constructar::asPlaneObservations(planes);
+  const constructar::ManhattanFrame frame = constructar::solveManhattanFrame(observations);
+  check(frame.valid, "four walls determine a frame");
+
+  const constructar::ManhattanHint hint =
+      constructar::hintFromAxes(frame.axes[0].direction, frame.axes[1].direction,
+                                frame.axes[2].direction);
+  check(hint.hasAngle, "the frame has two horizontal axes, so it can hint a floorplan");
+
+  const std::vector<SlicePoint> slice = sampleWallLoop(corners);
+  constructar::FloorplanOptions options;
+  options.manhattanToleranceDegrees = 10.f;
+  const constructar::Floorplan withPlanes =
+      constructar::vectoriseFloorplan(slice, options, hint);
+  check(withPlanes.valid && withPlanes.closed, "the rotated room still vectorises");
+  check(withPlanes.manhattan.applied, "the rotated room is squared");
+  check(withPlanes.manhattan.usedPlaneFrame, "the planes' frame is the one that squared it");
+  check(withPlanes.manhattan.snappedSegments == 4,
+        "all four runs are on the frame (" +
+            std::to_string(withPlanes.manhattan.snappedSegments) + ")");
+
+  bool everyCornerIsRight = withPlanes.outline.size() == 4;
+  for (size_t i = 0; everyCornerIsRight && i < withPlanes.outline.size(); ++i) {
+    bool ok = false;
+    const float angle = interiorAngleDegrees(
+        withPlanes.outline[(i + withPlanes.outline.size() - 1) % withPlanes.outline.size()],
+        withPlanes.outline[i], withPlanes.outline[(i + 1) % withPlanes.outline.size()], &ok);
+    everyCornerIsRight = ok && std::fabs(angle - 90.f) <= 1.f;
+  }
+  check(everyCornerIsRight, "a rotated square room comes out square");
+  // Rotating a 4 x 3 m room does not change its area; a plan that squared to the *world* axes
+  // would enclose its bounding box instead, which is 3 % larger.
+  checkNear(withPlanes.areaSquareMetres, 12.0, 0.6,
+            "the area is the room's, not its bounding box (m2)");
+
+  // A frame that disagrees with the runs is not used: the hint is evidence, not an instruction.
+  constructar::ManhattanHint wrong;
+  wrong.hasAngle = true;
+  wrong.angleRadians = hint.angleRadians + 40.f * 3.14159265358979323846f / 180.f;
+  const constructar::Floorplan refused = constructar::vectoriseFloorplan(slice, options, wrong);
+  check(!refused.manhattan.usedPlaneFrame,
+        "a frame 40 degrees off the runs is refused, and the runs decide");
+  check(refused.manhattan.applied, "and the room is still squared, by its own runs");
+
+  // A frame with no horizontal axis is not a hint at all.
+  const constructar::ManhattanHint nothing =
+      constructar::hintFromAxes(constructar::Vec3{0.f, 1.f, 0.f},
+                                constructar::Vec3{0.f, 0.9f, 0.4f},
+                                constructar::Vec3{0.f, -0.4f, 0.9f});
+  check(!nothing.hasAngle, "a frame without two horizontal axes hints nothing");
+}
+
 /**
  * The JNI payload is the one place where C++ and Kotlin have to agree without either compiler
  * seeing the other. Every failure here is silent in the product: a header that is one float short
@@ -1846,12 +2179,15 @@ int main() {
   testBlocksAllocatedPerFrame();
   testVoxelFusionUnderConcurrency();
   testManhattanFrame();
+  testAprilTagDetector();
   testTagScaleContract();
   testPlaneFit();
   testRtabMapBridgeWithoutTheBackEnd();
   testSurfaceSliceAtHeight();
   testFloorplanVectorise();
   testFloorplanPayload();
+  testFloorplanManhattan();
+  testFloorplanManhattanFromPlanes();
   testObservationWeight();
   testSurfaceMask();
   testInvalidInput();

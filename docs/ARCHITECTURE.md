@@ -199,7 +199,7 @@ their wall are clipped to it **and counted**, with the reason enumerated (`NEGAT
 `OUTSIDE_WALL`, `ABOVE_WALL`) rather than silently absorbed, because a window 20 cm past the end of
 its wall is a measurement the operator can check. `estimateDrywall` then applies the trade's
 numbers: boards of 2.50 x 1.25 m (one board is one wall height, which is why the default wall height
-is 2.50 m), CW studs at 62.5 cm centres so every board edge lands on metal (a run gets a stud at
+is 2.50 m - and why the room's own height is a separate, stated fact, finding 227), CW studs at 62.5 cm centres so every board edge lands on metal (a run gets a stud at
 both ends - a 4 m wall is 7, not 6), UW track top and bottom, 29 screws per square metre of
 *installed* board (it is the board that is screwed, not the net wall), and 10 % waste on everything
 that is cut. A spec that cannot be built - zero spacing, zero board - returns `valid = false` with
@@ -248,33 +248,100 @@ frame's vertical is *not* taken from the top eigenvector (finding 189): in a roo
 walls carry comparable weight the two horizontal families couple through one crooked wall and their
 rotated pair out-eigenvalues the vertical, so each eigenvector is tried as the primary and the frame
 that explains the most inliers wins; a frame also needs two of its three axes evidenced, which is
-what separates "a room" from "a floor and a ceiling". It is
-host-tested and **not yet wired** - no plane fit in the app feeds it, so the app does not square
-anything today; what exists is the engine a plane-fitting pass will call, not a behaviour a user
-can observe (the same distinction finding 98 had to make about the pose graph).
+what separates "a room" from "a floor and a ceiling". The *plane* half is wired as of finding 230:
+`nativeFloorplan` builds a cloud from three bands of the volume (capped at 800 points each, six planes,
+700 RANSAC iterations, so the fit stays inside the 400 ms call), fits the room's walls with `fitPlanes`, solves the frame and hands it to the floorplan as a `ManhattanHint` - so a rotated room
+is squared onto the room rather than onto the world axes, and a room with one long wall is not
+weighted by that wall alone. A hint that disagrees with the slice's own runs by more than 30 degrees
+is refused and the runs decide, because a frame fitted from the wrong cloud would rotate a room that
+is already right. `nativeAlignManhattanFrame` returns the frame that was used (thirteen floats: the
+residual, the plane counts and three axes); nothing else consumes these planes yet.
 
-**Passive marker contract** (`calibration/tag_scale.cpp`). Tier 2 of the calibration ladder — a
-printed AprilTag of known size, seen in enough frames, gives the scan a length that does not depend
-on an operator holding a bank card still. The pixel half of that is a decoder to vendor and licence,
-so what exists is the half that can be proved here: `TagDetector`, the interface a decoder will
-implement (whose only implementation in this build reports itself unavailable, and why — an empty
-detection list means "no tags in view" otherwise, which a build with no decoder would report for
-ever), and the marker-to-scale update: pair ratios of nominal over measured against the printed
-layout, a median to find the majority, a deviation filter for the tag that was mis-detected, and a
-baseline-weighted mean of what survives. It publishes a factor, the pairs that agreed, the pairs it
-rejected and the longest baseline behind it, and it decides nothing — the acceptance window lives
-in `:core` beside the bank-card reference, which is why the native directory does not contain its
-two numbers even in a comment. Nothing is wired: no JNI symbol, no app caller, no button.
+The *floorplan* half is wired and observable (finding 229): a room that is square on site comes out
+of a hand-held scan as a parallelogram - 5 degrees of shear on every corner, systematic, and
+averaging does not remove it - so `vectoriseFloorplan` squares its own loop before anything is
+drawn from it. The runs *are* the evidence: the length-weighted mean of their **quadrupled** angles
+is the frame (doubling is not enough - in an orthogonal room the two wall families are 90 degrees
+apart, so `2θ` differs by 180 degrees between them and the two cancel exactly), each run within the
+tolerance is moved onto that frame, and the corners become the intersections of the straightened
+runs, so the loop stays closed and a corner stays one corner. A run further off than the tolerance
+- a bay, a chamfer, a party wall at 35 degrees - keeps its measured angle. A fit that would change
+the enclosed area by more than a quarter is rejected and the measured loop is reported instead. The
+tolerance is a parameter of the JNI call (default 10 degrees, 0 disables), and `nativeLastManhattan`
+reports what the step did: the residual in degrees, the runs snapped and the corners moved.
+
+**Passive marker detection** (`calibration/apriltag_detector.cpp`, `calibration/tag_scale.cpp`).
+Tier 2 of the calibration ladder — a printed AprilTag of known size, seen in enough frames, gives
+the scan a length that does not depend on an operator holding a bank card still. Since finding 231
+both halves are in the tree. The pixel half is vendored: AprilTag 3.1.0's C core, BSD-2-Clause,
+unmodified, one family (tag36h11), in `third_party/apriltag/` with `VENDORED.md` recording what was
+taken, what was left and how it was obtained, and with the attribution in `NOTICE` and on the Help
+screen. `calibration/apriltag_detector.cpp` is the single translation unit that includes it — a
+decoder this repository did not write must not leak `image_u8_t` into a layer it did — and it turns
+detections into `constructar::TagDetection` in metres, which needs two things the caller must
+supply: the pinhole intrinsics and the printed size of the black square. Without them the detector
+is `NoTagDetector`, whose `available()` is false and whose reason names the camera; an empty
+detection list from a working detector means "no tags in view", and the two answers stay apart for
+the reason finding 98 established for the RTAB-Map back-end. The other half is the marker-to-scale
+update, in two shapes: `MarkerBaseline` (`:core`) for one printed marker seen from two places - the
+camera-to-tag vectors rotated into world axes give one baseline, ARCore's camera positions give
+another, and their ratio is the correction - and `estimateScaleFromTagSightings` for a printed
+sheet of tags: pair ratios of nominal over measured against the printed layout, a median to find the
+majority, a deviation filter for the tag that was mis-detected, and a baseline-weighted mean of what
+survives. It publishes a factor, the pairs that agreed, the pairs it rejected and the longest
+baseline behind it, and it decides nothing — the acceptance window lives in `:core` beside the
+bank-card reference, which is why the native directory does not contain its two numbers even in a
+comment. **The decoder is vendored and wired to one screen** (finding 235), and what is still unproven is
+said rather than implied: no device has ever pointed at a real tag.
+`nativeDetectAprilTagScale` is the door, `:ar-engine`'s `MarkerFrameReader` is the only thing that
+knocks on it - it packs one ARCore camera plane with `:core`'s `LuminancePlane` (rows are strided;
+the packed buffer is what the native layer is told is the width), supplies the session's intrinsics
+and the printed size, and keeps the three answers apart: nothing at all for a question it could not
+ask, an empty report for a frame without a tag, metres otherwise. `CameraPlanes` is the only adapter
+that touches `android.media.Image`, and it closes the image on every path: ARCore's CPU image queue
+is two deep, so a leak stalls the camera within a second. `MarkerProbe` composes reader and sweep
+(every tag the decoder read - a printed sheet is several markers, and taking only the nearest
+made `markerIds` a count that could never exceed 1 (finding 236) - then the camera pose, shared by
+all the sightings of one frame, so a pair inside a frame has a zero baseline and is refused), and
+`MarkerSweep` (`:core`)
+holds what a screen actually has: a *sequence*. Three things are refused there rather than in a
+composable: a sighting from another ARCore session (a new session is a new world origin - finding
+217 one layer up), a sighting older than the newest eight of its marker, and the temptation to
+publish a factor from two sightings at the same spot, which stays `Watching`. The two trust knobs
+come from `TagScaleOptions` over `nativeTagScaleDefaults()`, so the Kotlin side has no second
+definition of a baseline worth measuring. `TsdfScanPipeline.openMarkerProbe` builds the whole chain
+against the engine it already owns, and `ArMeasureController` samples one frame in fifteen - a
+sweep is answered by a walk, not by 30 pictures a second - and drops the sweep when a new session
+begins. The dialog's sentences come from `:core`'s `MarkerStatusLine.of(state)`, which decides the
+four cases - off, watching, measured, outside the window - and carries the evidence with the
+factor: the pairs that agreed, the pairs the deviation filter threw out, the baseline they span and
+the worst relative deviation among the accepted pairs - so a factor from one 20 cm pair cannot be
+printed to look like a factor from six pairs over three metres (finding 237), and six pairs that
+agree to within a tenth of a percent cannot look like six that only agree to within four
+(finding 238). It asks `ReferenceCalibration.accepted` again rather than trusting the
+proposal's own flag, so the two dialogs cannot disagree about the window. `estimateScaleFromTagSightings` - the printed *layout* path, which needs a sheet of tags -
+is still reached from nowhere, and no stored metre depends on a marker today.
 
 **Pose graph** (`slam/pose_graph.cpp`). Gauss–Newton on SE(3) with central-difference Jacobians,
 block-sparse Hessian solved by preconditioned conjugate gradient, backtracking line search (a
 full step overshoots on a room with one closure), snapshot/rollback so a diverging iteration can
 never corrupt the trajectory. Loop closures carry 100× the odometry weight because they are
-appearance-verified. The graph is *not yet driven by the scan pipeline* (finding 98): it is
-host-tested and reachable from `NativeSlamEngine`, but no keyframe reaches it today, so the app
-measures on ARCore's own tracking.
+appearance-verified. The graph is fed since finding 243: `KeyframeFeed` decides on each placed
+frame which pose is worth a node (`KeyframeSelector`, `:core`), the render thread enqueues, and
+the scan worker writes the node and the odometry edge to the previous one. Since finding 245 it
+can be corrected too, but only on a human's word: `ProximityLoopClosureDetector` proposes a
+revisit, `ClosurePolicy` decides whether and which one to ask about, and a confirmed closure adds
+the edge at 100x the odometry weight and optimises on the worker. The corrected poses are
+reported, not written back - a run's metres were measured with taps, and finding 217's rule
+applies to the graph too.
 
-**Monocular depth fusion.** Optional and strictly additive:
+**Monocular depth fusion.** Optional and strictly additive, and it names itself: the model's asset
+path comes from `BuildConfig.DEPTH_MODEL_ASSET` (one declaration, so a variant that ships a
+different export cannot look for the old file and switch the feature off without a compile error),
+`MonocularDepthSource` reports whether the load succeeded, and `DepthAvailability` turns that plus
+ARCore's `depthSupported` into one of three states — `AI_FUSED`, `ARCORE_ONLY`, `PLANES_ONLY` — which
+the HUD prints when the answer is the third one. The weights are not in this repository.
+
 `YuvFrame` copies the camera planes on the render thread (~0.2 ms), the inference worker runs
 Depth Anything V2 Small through LiteRT on XNNPACK, `MetricDepthCalibrator` fits
 `1/z = s·d + t` to ARCore's metric samples on the *same* frame, and `AiDepthFusion` writes a
@@ -409,12 +476,14 @@ the clearance check, had unit tests and no screen. The *Walls* button on the pro
 | Question | Answer, and why that answer |
 |---|---|
 | What is a wall? | An edge of the room's stored ring (`FloorplanSketch`), **including the closing one**: a 4 x 3 m room is 14 m of wall, not 11 m, and 3 m of missing wall is a board and a half on the order. An open ring is not a room yet and produces no walls at all - the card already offers to close it by hand. |
-| Which metres? | The project's `calibrationScale` is applied to the run and to the nodes, once, at the reporting layer - the same rule the bill of materials follows. It is **not** applied to the wall *height*: 2.50 m is the assumption the estimate is made under, not a length the session measured. |
+| Which metres? | The project's `calibrationScale` is applied to the run and to the nodes, once, at the reporting layer - the same rule the bill of materials follows. It is **not** applied to the wall *height*: the height is not a length the session measured. |
+| How high is the wall? | The height the operator stated on the wall screen (`ProjectRecord.wallHeightM`, 2.00–4.50 m through `statedRoomHeight`), or `DEFAULT_WALL_HEIGHT_M` = 2.50 m when nobody stated one. The 2.50 m is the *board's* height - the figure the estimator assumes so one board covers floor to ceiling - and it used to be the height of every room: a 2.80 m room printed 35.0 m² where it has 39.2 m², four boards short (finding 227). `WallPlan.wallHeightM` and `wallHeightAssumed` carry the number and whether it was stated, one of them reaches the drawing, the areas, the boards and the ceiling zone, and the screen prints an assumed height in red as an assumption. It is deliberately not derived from the measured points: a run is drawn at socket height, so the tallest point in a room is not its ceiling. |
 | Where is 30 cm? | On the finished floor - and the only honest source of that is a tracked horizontal plane. ARCore's world origin is wherever the session started, usually at chest height, so `y` alone is a height above nothing an electrician would recognise. `FloorReference` picks the highest upward-facing tracked plane at or below the viewer within 3.5 m (`null` when there is none), `HitResolution` carries it out of `ArHitSource` where the planes are alive, `ProjectRecord.floorHeightM` stores it, and without it `WallPlan.installations` is `null` and the screen says so instead of printing a socket at 1.40 m. |
-| What is not shown? | Openings: nothing in the app records a door or a window yet, so the screen prints `0.00 m²` deducted *and says why* - a silent zero beside a room with a door reads as a measurement. And the clearance check, because nothing constructs an `Obstacle` (§4). |
+| What is not shown? | The clearance check, because nothing constructs an `Obstacle` (§4). Openings are shown: since finding 220 the elevation records doors and windows, `wallSurface` subtracts them as a union, and a room with none says so rather than printing a silent `0.00 m²`. |
 
-The screen prints the assumptions under the purchase (board size, stud spacing, waste) for the same
-reason the protocol prints its expected error: a number without its conditions is an argument. Every
+The screen prints the assumptions under the purchase (board size, stud spacing, waste) and the room
+height it was made at, for the same reason the protocol prints its expected error: a number without
+its conditions is an argument. Every
 digit comes from `LengthFormatter`, every word from six locales, and the retrofit is backward
 compatible — `floorHeightM` is defaulted and `null` is omitted by the repository's JSON, so a room
 recorded by the previous release loads unchanged with no zones and no complaint.
@@ -557,11 +626,18 @@ BOM for Excel - see `docs/TESTING.md` findings 28 and 30.
 publishes a `Guidance` code, `RouteSession` a `RouteWarning` code, the hit cascade a
 `SurfaceKind`/`HitSource`, `ArSessionController` an `ArReadiness` branch. `:app` maps each to
 `stringResource` in `ui/Labels.kt`, and every length is formatted by `LengthFormatter` - where
-the resource carries the unit (`hud_length` is `%1$s m`), the digits arrive through
-`LengthFormatter.number()`, never through a `%f` format, because a `%f` resource takes its
-decimal mark from the device and put `12,50 m` beside `28.80 m` in one HUD column (finding 39).
-That is what makes six locales complete without the engines carrying a
-Context — and it keeps the engines unit-testable on the JVM.
+the resource carries the unit (`hud_length` is `%1$s m`), the digits arrive through the formatter,
+never through a `%f` format, because a `%f` resource takes its decimal mark from the device and put
+`12,50 m` beside `28.80 m` in one HUD column (finding 39).
+
+Since finding 222 the two surfaces are deliberately different, and the difference is the point.
+`LengthFormatter` stays `Locale.ROOT` - PDF, CSV, JSON, the PLY floats - because a document is a
+protocol: a German Excel reads a `,` as a column separator. A *screen* asks for the reader's mark:
+`CompositionLocalProvider(LocalDecimalMark provides rememberDecimalMark())` in `AppRoot`, and the
+screens call `shownLength`/`shownLengthWithUnit`/`shownPercent` from `ui/DecimalMark.kt`. The character itself is
+`NumberText.decimalMark(locale)` in `:core`, guarded so a locale whose separator came back as a
+digit cannot turn `1.40` into `1140`. That is what makes six locales complete without the engines
+carrying a Context — and it keeps the engines unit-testable on the JVM.
 
 ---
 

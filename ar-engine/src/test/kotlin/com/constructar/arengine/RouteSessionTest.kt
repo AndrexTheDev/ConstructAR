@@ -87,6 +87,22 @@ class RouteSessionTest {
     }
 
     @Test
+    fun `every node carries the session it was measured in`() {
+        // The stamp is the whole fix for finding 217: a node without it can only be resolved
+        // against whatever floor the project happens to hold, which is a different coordinate
+        // system as soon as the app has been restarted.
+        val session = RouteSession(FakeAnchorFactory(), sessionId = "session-7")
+        session.addNode(hit(0f, 1f, -2f))
+        session.addNode(hit(1f, 1f, -2f))
+
+        assertEquals("session-7", session.state.value.nodes[0].sessionId)
+        assertEquals("session-7", session.state.value.nodes[1].sessionId)
+        // The id is the session's own, exposed so the AR screen can hand the floor over under the
+        // same name instead of inventing one the nodes never saw.
+        assertEquals("session-7", session.sessionId)
+    }
+
+    @Test
     fun `every node is bound to an anchor`() {
         val factory = FakeAnchorFactory()
         val session = RouteSession(factory)

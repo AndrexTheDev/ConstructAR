@@ -230,6 +230,14 @@ class NativeSlamEngine internal constructor(
         cellMetres: Float = 0.05f,
         rdpEpsilonMetres: Float = 0.08f,
         minSegmentMetres: Float = 0.25f,
+        /**
+         * How far a wall run may sit off the room's own axes and still be squared onto them.
+         *
+         * 0 leaves the room exactly as measured, which is the setting for a report that has to
+         * show the scan and not the assumption; 10 degrees is drift plus the slice's own noise.
+         * The native side refuses anything outside [0, 45].
+         */
+        manhattanToleranceDegrees: Float = 10f,
     ): FloorplanPayload? {
         val active = handle
         if (active == 0L) return null
@@ -240,8 +248,83 @@ class NativeSlamEngine internal constructor(
             cellMetres,
             rdpEpsilonMetres,
             minSegmentMetres,
+            manhattanToleranceDegrees,
         )
         return FloorplanPayload.parse(payload)
+    }
+
+    /**
+     * What the last [floorplan] call's Manhattan step did, or `null` when the library cannot say.
+     *
+     * Read straight after [floorplan] and on the same worker: the context keeps only the newest
+     * fit, so a caller that asks later is asking about a different room.
+     */
+    /**
+     * Reads tag36h11 markers out of one 8-bit greyscale frame, in metres.
+     *
+     * The decoder is vendored (AprilTag 3.1.0, BSD-2-Clause) and the arithmetic is proved in the
+     * host suite against rendered tags, so a result here is a measurement and not a promise. What
+     * `:app` does not have yet is a path that captures a luminance frame and calls this: nothing in
+     * the app feeds the marker tier (docs/CALIBRATION.md, tier 2).
+     *
+     * `null` when the arguments are not a frame or not a camera, an empty report when the frame
+     * held no tag. `rowStride` is in bytes; `gray` must hold at least `height * rowStride` bytes.
+     */
+    fun detectAprilTagScale(
+        gray: ByteArray,
+        width: Int,
+        height: Int,
+        rowStride: Int,
+        fx: Float,
+        fy: Float,
+        cx: Float,
+        cy: Float,
+        tagSizeMetres: Float,
+    ): AprilTagReport? {
+        if (width <= 0 || height <= 0 || rowStride < width) return null
+        if (gray.size < height * rowStride) return null
+        if (fx <= 0f || fy <= 0f || tagSizeMetres <= 0f) return null
+        return AprilTagReport.from(
+            nativeDetectAprilTagScale(gray, width, height, rowStride, fx, fy, cx, cy, tagSizeMetres),
+        )
+    }
+
+    /**
+     * The frame the last [floorplan] call was squared onto, fitted from the room's own walls.
+     *
+     * `null` when the library is unavailable or cannot say. The fitting happens inside
+     * [floorplan] - that is where the volume is sliced and locked - so this is a read, not a second
+     * fit: two fits of one room would be two answers to one question, and the plan on the card is
+     * the one that matters.
+     */
+    fun alignManhattanFrame(): ManhattanFrameReport? {
+        val active = handle
+        if (active == 0L) return null
+        return ManhattanFrameReport.from(nativeAlignManhattanFrame(active))
+    }
+
+    /**
+     * The two knobs the marker path shares with the native layout path, straight out of
+     * `TagScaleOptions`: a baseline floor and a relative-deviation filter.
+     *
+     * `null` when the library is unavailable. There is deliberately no Kotlin fallback: a second
+     * pair of numbers here would be a second definition of what counts as evidence, and the two
+     * would drift the first time one of them is tuned.
+     */
+    fun tagScaleDefaults(): Pair<Float, Float>? {
+        val values = nativeTagScaleDefaults() ?: return null
+        if (values.size != 2) return null
+        val baseline = values[0]
+        val deviation = values[1]
+        if (!(baseline > 0f) || !(deviation > 0f)) return null
+        if (!baseline.isFinite() || !deviation.isFinite()) return null
+        return baseline to deviation
+    }
+
+    fun lastManhattan(): ManhattanReport? {
+        val active = handle
+        if (active == 0L) return null
+        return ManhattanReport.from(nativeLastManhattan(active))
     }
 
     fun reset() {
@@ -250,8 +333,11 @@ class NativeSlamEngine internal constructor(
     }
 
     // ── Pose graph (loop closure) ────────────────────────────────────────────────────────
-    // Not wired into the scan pipeline yet (finding 98): no keyframe reaches this graph, so the
-    // app measures on ARCore's own tracking. See docs/SETUP.md §5.2 before quoting a closure.
+    // Fed since finding 243: `KeyframeFeed` accepts a keyframe, `KeyframeQueue` carries it across
+    // to the pipeline worker, and `NativePoseGraphSink` makes the node and its odometry edge here.
+    // Since finding 245 the optimiser runs too - when, and only when, the operator confirms a
+    // closure the proximity detector proposed - and its corrected poses are reported, never
+    // written back into the measured runs. See docs/SETUP.md 5.2.
 
     fun resetPoseGraph() {
         val active = handle
@@ -436,6 +522,25 @@ class NativeSlamEngine internal constructor(
             cellMetres: Float,
             rdpEpsilonMetres: Float,
             minSegmentMetres: Float,
+            manhattanToleranceDegrees: Float,
+        ): FloatArray?
+
+        @JvmStatic private external fun nativeLastManhattan(handle: Long): FloatArray?
+
+        @JvmStatic private external fun nativeAlignManhattanFrame(handle: Long): FloatArray?
+
+        @JvmStatic private external fun nativeTagScaleDefaults(): FloatArray?
+
+        @JvmStatic private external fun nativeDetectAprilTagScale(
+            gray: ByteArray,
+            width: Int,
+            height: Int,
+            rowStride: Int,
+            fx: Float,
+            fy: Float,
+            cx: Float,
+            cy: Float,
+            tagSizeMetres: Float,
         ): FloatArray?
         @JvmStatic private external fun nativePoseGraphReset(handle: Long)
         @JvmStatic private external fun nativePoseGraphAddNode(handle: Long, pose: FloatArray, fixed: Boolean): Int

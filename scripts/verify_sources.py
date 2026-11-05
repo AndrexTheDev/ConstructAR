@@ -180,6 +180,12 @@ def tracked_sources() -> list[Path]:
 # the one place in the tree that legitimately has someone else's copyright line (finding 109).
 UNHEADERED_LICENCE_DIRS = {"licenses"}
 
+# Vendored source keeps its own copyright header: adding ours would misstate who wrote it, and
+# `check_the_tag_decoder_is_vendored_and_credited` holds the vendored tree to the *upstream* notice
+# instead. A file here claiming our copyright would be the worse failure, so the exemption is a
+# directory and not a pattern.
+UNHEADERED_VENDOR_DIRS = {"third_party", "vendored"}
+
 
 def check_headers(files: list[Path]) -> None:
     """Every authored file states who owns it, and the words have to be the notice (finding 215).
@@ -197,6 +203,8 @@ def check_headers(files: list[Path]) -> None:
         if path.name in {"LICENSE"}:
             continue
         if path.parent.name in UNHEADERED_LICENCE_DIRS:
+            continue
+        if UNHEADERED_VENDOR_DIRS & set(path.parts):
             continue
         try:
             text = path.read_text(encoding="utf-8")
@@ -1175,30 +1183,94 @@ def check_resource_xml() -> None:
 
 
 def check_licence_key() -> None:
-    """Not a failure, a reminder: the tree ships a demo key and only a human can swap it.
+    """The licence key is a build input now, and the build refuses the demo one (finding 240).
 
-    `LicencePublicKey.isDemoKey` is what shows the developer note on the Help screen, so the
-    placeholder is deliberate and visible. But a release cut with it in place would verify
-    licences that no real signer ever produced - so the release checklist asks for the swap, and
-    every verify run repeats it, because the CI log is where a release actually gets cut from.
+    This used to be a *reminder*: the tree carried a demo key as a Kotlin constant, and every
+    verify run printed "replace it before publishing a release" into the CI log. A reminder is not
+    a gate - the release checklist asked a human, the constant asked a human, and nothing else
+    asked anybody. What replaces it is a chain in four links, and every link is checked here
+    because a leak in any one of them silently restores the old behaviour:
+
+    1. `LicencePublicKey.kt` holds **no key material** and reads `BuildConfig.LICENCE_PUBLIC_KEY`;
+    2. `app/build.gradle.kts` derives that field from `CONSTRUCTAR_PROD_PUBLIC_KEY` (or the
+       `-Pconstructar.prodPublicKey` property) and derives the "is demo" flag from the same
+       expression, so the two cannot disagree;
+    3. a `verifyLicenceKey` task fails `assembleRelease` / `bundleRelease` while the demo key is in
+       play, with one documented escape hatch for a build that only measures APK size;
+    4. CI uses that escape hatch on the size job and nowhere else, so the flag cannot quietly
+       become the normal path.
+
+    The old notice survives in one form: while the Gradle fallback is still the demo key, the run
+    says so - the fallback is legitimate in a repository build, it is only a release that may not
+    ship it.
     """
     key_file = (
         ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "billing"
         / "LicencePublicKey.kt"
     )
+    gradle = ROOT / "app" / "build.gradle.kts"
+    workflow = ROOT / ".github" / "workflows" / "android-build.yml"
     if not key_file.exists():
+        add(key_file, "the licence key object is gone - the paywall has nothing to verify against")
         return
+
     text = key_file.read_text(encoding="utf-8")
+    if "BuildConfig.LICENCE_PUBLIC_KEY" not in text:
+        add(key_file, "the key is not read from `BuildConfig.LICENCE_PUBLIC_KEY`, so a release "
+                      "cannot refuse a demo key the source file was committed with")
+    if "BuildConfig.LICENCE_KEY_IS_DEMO" not in text:
+        add(key_file, "the demo flag is not the build's, so it can disagree with the key that "
+                      "actually shipped")
+    # Base64url of an SPKI is long and starts with the DER prefix; any such literal here is key
+    # material in the source, which is the state this rule exists to end.
+    if re.search(r"\"MF[a-zA-Z0-9_-]{20,}", text):
+        add(key_file, "the file still carries key material as a literal - the key belongs to the "
+                      "build (finding 240), not to a source file a human has to remember to edit")
 
-    def literal(name: str) -> str:
-        """The concatenated string literal assigned to `name`, or "" when there is none."""
-        match = re.search(rf"{name}\s*(?::\s*String\s*)?=\s*((?:\s*\"[^\"]*\"\s*\+?)+)", text)
-        return "".join(re.findall(r'"([^"]*)"', match.group(1))) if match else ""
+    if not gradle.exists():
+        return
+    build = gradle.read_text(encoding="utf-8")
+    for needed, why in (
+        ("CONSTRUCTAR_PROD_PUBLIC_KEY", "the environment variable a release machine sets"),
+        ('buildConfigField("String", "LICENCE_PUBLIC_KEY"', "the build field the app reads"),
+        ('buildConfigField("boolean", "LICENCE_KEY_IS_DEMO"', "the derived demo flag"),
+        ("verifyLicenceKey", "the task that refuses a release build"),
+        ("GradleException", "the failure itself"),
+        ("constructar.sizeCheckOnly", "the one documented escape hatch"),
+    ):
+        if needed not in build:
+            add(gradle, f"`{why}` is missing from the build script")
 
-    shipped = literal("PUBLIC_KEY_BASE64")
-    if shipped and shipped == literal("DEMO_KEY_BASE64"):
+    if not workflow.exists():
+        return
+    ci = workflow.read_text(encoding="utf-8")
+    # The flag has to be on the *invocation*, not merely somewhere in the file: a comment that
+    # mentions it kept this rule green after the command lost it, which is how a gate becomes
+    # decoration (found by mutating this rule, not by reading it).
+    # Shell continuations split one command over several lines, so join them first: looking for
+    # "gradle" and "assembleRelease" on the same physical line found nothing at all, and a rule
+    # that finds nothing is a rule that cannot fail (both mistakes were found by mutating it).
+    joined = re.sub(r"\\\s*\n\s*", " ", ci)
+    release_lines = [
+        line for line in joined.splitlines() if "gradle " in line and "assembleRelease" in line
+    ]
+    if not release_lines:
+        add(workflow, "no Gradle invocation builds a release APK, so this rule cannot check the "
+                      "one thing it exists for")
+    elif not any("constructar.sizeCheckOnly=true" in line for line in release_lines):
+        add(workflow, "the release-size invocation calls `assembleRelease` without "
+                      "`-Pconstructar.sizeCheckOnly=true`: either `verifyLicenceKey` is about to "
+                      "refuse it or the guard was removed to make it pass, and both mean the "
+                      "build and the promise have diverged")
+    elif "not a convenience" not in ci and "not shippable" not in ci:
+        add(workflow, "the size-check flag is passed with no explanation, which is how it "
+                      "becomes the normal path for every release build")
+
+    fallback = re.search(r"val demoLicenceKey\s*=\s*((?:\s*\"[^\"]*\"\s*\+?)+)", build)
+    if fallback:
         notices.append(
-            "the licence key is still DEMO_KEY_BASE64 - replace it before publishing a release"
+            "the fallback licence key is still the demo key - correct in a repository build, "
+            "refused by `assembleRelease` (set CONSTRUCTAR_PROD_PUBLIC_KEY before shipping)"
         )
 
 
@@ -2685,22 +2757,80 @@ def check_the_plane_fitter_is_reproducible() -> None:
                               f"by splitting a wall rather than by reporting nothing (finding 189)")
 
 
-def check_the_tag_contract_is_not_sold_as_a_detector() -> None:
-    """The marker tier is arithmetic and an interface, not a detector (finding 188).
+CMAKE_COMMANDS = {
+    "add_executable", "add_library", "cmake_minimum_required", "constructar_locate_rtabmap",
+    "else", "elseif", "endif", "find_library", "find_package", "foreach", "endforeach", "if",
+    "include", "install", "message", "option", "project", "return", "set", "target_compile_definitions",
+    "target_compile_options", "target_include_directories", "target_link_libraries",
+    # Since finding 241: the 16 KB page-size flags are link options, and `target_link_options`
+    # (CMake 3.13+, this project requires 3.22.1) is the command that carries them. Adding a
+    # command to this set is a decision, which is why it is one line with a reason on it.
+    "target_link_options", "unset",
+}
 
-    Tier 2 is the one tier this repository cannot prove: decoding an AprilTag means vendoring a
-    decoder, licensing it, and running it on a phone. What can be built here is the interface a
-    decoder would implement and the arithmetic its output feeds - and the difference between the
-    two is exactly the kind of gap that gets papered over later. So this rule holds four lines:
 
-    * the acceptance window may not appear in the native layer. `[0.85, 1.15]` is `:core`'s
-      decision (`ReferenceCalibration.accepted`), and a second copy in C++ would be a second
-      definition of when a factor is believable;
-    * nothing may expose a detector over JNI, and no app source may name one, because a caller
-      that can compile against `TagDetector` will believe tags are being read;
-    * both documents that describe the tier must say "detector contract", so the one-line summary
-      a reader sees is the truth rather than the aspiration;
-    * the header must carry its own "Contract only." marker - the marker a wiring deletes.
+def check_the_native_cmake_is_spelled_out() -> None:
+    """Every command in the NDK build file is a command CMake has (finding 232).
+
+    The native build cannot be configured in this repository's development sandbox - there is no
+    NDK and no CMake - so a typo in `CMakeLists.txt` is found by CI, twenty minutes after the
+    change, on a runner that reports it as `Unknown CMake command "et"` from deep inside a
+    `CXX1429` stack trace. That happened: inserting one line in front of `set(CMAKE_C_STANDARD 11)`
+    by a script whose newline landed inside the word left `et(CMAKE_C_STANDARD 11)` behind, the
+    host suite passed (it does not read this file), and the first thing to notice was the NDK job.
+
+    A command CMake does not have cannot mean anything, and the set of commands this file is
+    allowed to use is small and known: anything outside it is a typo, a truncated word or a
+    command that arrived with a CMake version this project does not require. The check is static
+    because the alternative is a twenty-minute round trip per character.
+    """
+    cmake = ROOT / "native-slam" / "src" / "main" / "cpp" / "CMakeLists.txt"
+    if not cmake.exists():
+        add(cmake, "the NDK build file is gone, so :native-slam would ship without its native "
+                   "library and every caller would fail at System.loadLibrary")
+        return
+    text = cmake.read_text(encoding="utf-8")
+    if text.count("(") != text.count(")"):
+        add(cmake, f"unbalanced parentheses ({text.count('(')} open, {text.count(')')} close) - the "
+                   f"file would fail at configure time, not at build time")
+    for number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = re.match(r"([A-Za-z_][A-Za-z0-9_]*)\s*\(", stripped)
+        if match is None:
+            # Multi-line arguments of a command that opened on an earlier line: `)`, a quoted
+            # string, a variable expansion, a compiler flag. None of them is a command.
+            continue
+        command = match.group(1)
+        if command not in CMAKE_COMMANDS:
+            add(cmake, f"line {number} calls `{command}`, which is not a CMake command this file "
+                       f"uses - a truncated word reads exactly like this, and the sandbox cannot "
+                       f"run CMake to find out (finding 232)")
+
+
+def check_the_tag_decoder_is_vendored_and_credited() -> None:
+    """The marker tier ships a decoder somebody else wrote, and says so (finding 231).
+
+    This rule used to hold the opposite line: no decoder was vendored, so no JNI symbol and no app
+    source was allowed to name one. That was the right rule for a contract with no implementation,
+    and it is exactly the rule that has to be *replaced* rather than deleted when the implementation
+    arrives - otherwise a vendored decoder becomes a claim with nothing checking it. What it holds
+    now:
+
+    * the acceptance window still may not appear in the native layer. `[0.85, 1.15]` is `:core`'s
+      decision (`ReferenceCalibration.accepted`), and it belongs to no other file;
+    * the vendored tree carries upstream's licence, and the repository carries a copy of it: a
+      BSD-2-Clause component without its notice is a licence violation, not a missing document;
+    * exactly one translation unit includes an apriltag header. A second one is how a decoder we
+      did not write starts leaking its types - `image_u8_t`, `zarray_t`, `matd_t` - into a layer we
+      did, and how the day the tree is updated becomes a day nobody can estimate;
+    * the vendored tree is pinned: `VENDORED.md` states the version, and the build compiles one
+      family, so the codebook is the one a printed marker uses rather than every table upstream
+      ships;
+    * the header still marks the half that is *not* wired, and both documents that describe the
+      tier say "vendored" and "not wired" - the two words a reader needs in order to know that the
+      decoder exists and the app does not call it.
     """
     native_root = ROOT / "native-slam" / "src" / "main" / "cpp"
     # The tests are not shipped code and are full of tolerances that happen to be 0.85; the rule is
@@ -2713,29 +2843,128 @@ def check_the_tag_contract_is_not_sold_as_a_detector() -> None:
                 add(path, f"the acceptance window ({literal}) has reached the native layer - the "
                           f"decision belongs to `ReferenceCalibration.accepted` in `:core`, and a "
                           f"second copy here would be a second definition of 'believable'")
+
+    vendored = native_root / "third_party" / "apriltag"
+    licence = vendored / "LICENSE.md"
+    if not licence.exists():
+        add(vendored, "the vendored AprilTag tree carries no upstream licence - BSD-2-Clause "
+                      "requires the notice to travel with the code, and a vendored tree without "
+                      "it is a redistribution violation rather than a missing file")
+    elif "BSD 2-Clause License" not in licence.read_text(encoding="utf-8"):
+        add(licence, "the licence beside the vendored tree is no longer BSD-2-Clause, so the entry "
+                     "in NOTICE, the copy in licenses/ and the Help screen's list all describe a "
+                     "different licence than the code ships under")
+    if not (ROOT / "licenses" / "BSD-2-Clause.txt").exists():
+        add(ROOT / "licenses" / "BSD-2-Clause.txt",
+            "the BSD-2-Clause text NOTICE points at does not exist, so a source distribution "
+            "attributes AprilTag to a file that is not there")
+    notice = (ROOT / "NOTICE").read_text(encoding="utf-8") if (ROOT / "NOTICE").exists() else ""
+    for needle in ("AprilTag", "BSD-2-Clause"):
+        if needle not in notice:
+            add(ROOT / "NOTICE", f"the vendored decoder is not attributed - `{needle}` does not "
+                                 f"appear in NOTICE, and BSD-2-Clause asks for exactly that")
+
+    provenance = vendored / "VENDORED.md"
+    if not provenance.exists():
+        add(vendored, "there is no VENDORED.md, so nothing states which version of somebody "
+                      "else's decoder this is, what was taken or how to re-fetch it")
+    else:
+        text = provenance.read_text(encoding="utf-8")
+        if "3.1.0" not in text:
+            add(provenance, "the vendored version is not stated - a fork of an unversioned tree is "
+                            "a fork nobody can update")
+        if "Modifications" not in text:
+            add(provenance, "nothing records whether the vendored files were edited; an "
+                            "unrecorded edit inside a vendored tree is how a fork becomes a guess")
+
+    door = native_root / "calibration" / "apriltag_detector.cpp"
+    includers = []
+    for path in list(native_root.rglob("*.cpp")) + list(native_root.rglob("*.hpp")):
+        if "third_party" in path.parts:
+            continue
+        # The vendored *C* headers, not our wrapper: `apriltag_detector.hpp` is ours, is meant to
+        # be included, and matching on the word alone would forbid the door from being used.
+        if re.search(r'#include\s+[\"<].*(?:third_party/apriltag/|apriltag\.h"|apriltag_pose\.h")',
+                     path.read_text(encoding="utf-8")):
+            includers.append(path)
+    if door not in includers:
+        add(door, "the one translation unit that is allowed to include the vendored decoder no "
+                  "longer does, so the tree is either unused or reached from somewhere else")
+    for path in includers:
+        if path != door:
+            add(path, "includes an apriltag header - the vendored decoder has exactly one door "
+                      "(`calibration/apriltag_detector.cpp`), because its C types must not reach a "
+                      "layer that did not agree to own them")
+
+    # One family, compiled from a list: a second codebook would be a second thing to license,
+    # measure and keep in step with the markers on site.
+    families = sorted(item.name for item in vendored.glob("tag*.c"))
+    if families != ["tag36h11.c"]:
+        add(vendored, f"the vendored tree builds {len(families)} tag families "
+                      f"({', '.join(families) or 'none'}); one family is what a printed marker "
+                      f"uses, and the others are codebooks nobody prints")
+
     jni = native_root / "jni" / "slam_jni.cpp"
     jni_text = jni.read_text(encoding="utf-8")
-    for symbol in ("TagDetector", "estimateScaleFromTagSightings", "tagScale"):
+    if "nativeDetectAprilTagScale" not in jni_text:
+        add(jni, "the decoder is vendored but not exposed over JNI, so no app can ever call it and "
+                 "the tree is paid for and unused")
+    for symbol in ("image_u8_t", "zarray_t", "matd_t", "apriltag_detector_t", "tag36h11_create"):
         if symbol in jni_text:
-            add(jni, f"`{symbol}` is exposed over JNI, but no decoder is compiled into this build "
-                     f"- the app could call a detector that cannot detect anything")
+            add(jni, f"`{symbol}` reaches the JNI layer, which is the one place that must not know "
+                     f"the decoder's types - the door is `calibration/apriltag_detector.cpp`")
     for path in kotlin_sources("app") + kotlin_sources("ar-engine"):
         text = path.read_text(encoding="utf-8")
-        for symbol in ("TagDetector", "estimateScaleFromTagSightings", "tagScale"):
+        for symbol in ("TagDetector", "estimateScaleFromTagSightings"):
             if symbol in text:
-                add(path, f"`{symbol}` is used from the app, but no decoder exists - `docs/"
-                         f"CALIBRATION.md` tier 2 is contract only (finding 188)")
+                add(path, f"`{symbol}` is a native type; the app talks to the decoder through "
+                         f"`NativeSlamEngine.detectAprilTagScale`, which returns metres or nothing")
+
     if not TAG_SCALE_HEADER.exists():
         return
     header = TAG_SCALE_HEADER.read_text(encoding="utf-8")
-    if "Contract only." not in header:
-        add(TAG_SCALE_HEADER, "the header no longer marks itself contract-only - that marker is "
-                              "what a wiring deletes, and deleting it by accident is how a "
-                              "contract becomes a claim")
+    # Finding 235 wired the marker path, so the marker moved rather than disappeared: the header
+    # must still say, in the same breath, that the decoder is wired *and* which half is unreached.
+    # A wiring is allowed to change this sentence; a paragraph that quietly loses it is not.
+    header_flat = re.sub(r"\s+", " ", header)
+    if "Vendored and wired." not in header_flat:
+        add(TAG_SCALE_HEADER, "the header no longer says the decoder is wired - the state of the "
+                              "wiring is the one sentence a maintainer reads instead of the code")
+    if "estimateScaleFromTagSightings" not in header or "unreached" not in header.lower():
+        add(TAG_SCALE_HEADER, "the header does not name the half that is still unreached "
+                              "(`estimateScaleFromTagSightings`, the printed-layout path) - "
+                              "'wired' without that caveat reads as 'the marker tier is finished'")
+    marker_reader = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
+                     "arengine" / "scan" / "MarkerFrameReader.kt")
+    if not marker_reader.exists():
+        add(marker_reader, "the only thing that hands the decoder a camera frame is gone, so the "
+                           "vendored tree is unreachable from the app again and the documents "
+                           "below would be describing a pipeline that does not exist")
     for path in (CALIBRATION_DOC, ROOT / "README.md"):
-        if "detector contract" not in path.read_text(encoding="utf-8"):
-            add(path, "this document no longer calls tier 2 a detector contract, so the summary a "
-                      "reader sees promises a detector that this build does not contain")
+        text = path.read_text(encoding="utf-8")
+        # Paragraphs wrap, so a claim like "no device has held a real tag" can straddle a newline.
+        # The sentences below are claims, not line layouts.
+        lowered = re.sub(r"\s+", " ", text.lower())
+        if "vendored" not in lowered:
+            add(path, "this document no longer says the decoder is vendored, so a reader would "
+                      "have to infer that the repository now redistributes somebody else's code")
+        # The sentence that keeps "the decoder exists" from being read as "it measures rooms" used
+        # to be "not wired to a screen". Finding 235 wired one screen, so the caveat had to move
+        # with the truth: the layout path is still unreached, and no device has held a real tag.
+        if "estimateScaleFromTagSightings" not in text:
+            add(path, "this document does not name `estimateScaleFromTagSightings`, the half of "
+                      "the marker path that is still unreached - 'wired' without it reads as 'the "
+                      "marker tier is finished'")
+        if "no device" not in lowered:
+            add(path, "this document no longer says that no device has held a real tag against "
+                      "the marker path, so 'the decoder measures' and 'the decoder compiles' are "
+                      "the same sentence again")
+        # The claim has to name the piece that exists, so "not wired" cannot quietly outlive the
+        # wiring and cannot outrun it either.
+        if "MarkerFrameReader" not in text:
+            add(path, "this document does not name `MarkerFrameReader`, the frame path that *does* "
+                      "exist - a sentence that only says what is missing goes stale the moment "
+                      "half of it arrives (finding 233)")
 
 
 def check_the_squared_wall_keeps_its_distance() -> None:
@@ -2991,7 +3220,7 @@ FLOORPLAN_PAYLOAD_KT = ROOT / "native-slam/src/main/kotlin/com/constructar/nativ
 
 THUMBNAIL_CHAIN = (
     ("ar-engine/src/main/kotlin/com/constructar/arengine/scan/TsdfScanPipeline.kt",
-     "dispatcher) { engine?.floorplan(",
+     "engine?.floorplan(",
      "the scan worker no longer slices the volume for a plan"),
     ("app/src/main/kotlin/com/constructar/app/ui/ar/ArMeasureController.kt",
      "pipeline.floorplan(",
@@ -3026,6 +3255,29 @@ def check_the_card_picture_has_a_writer() -> None:
     called from somewhere else is still a broken chain, and this round's whole point is that the
     chain runs.
     """
+    # The plan is sliced on the worker *and* squared before it becomes the card's outline: the
+    # tolerance is a parameter of that call, and a pipeline that forgot to pass it would hand the
+    # room's shear straight to the sketch the wall screen measures from (finding 229).
+    pipeline = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
+                "arengine" / "scan" / "TsdfScanPipeline.kt")
+    if pipeline.exists():
+        pipeline_text = pipeline.read_text(encoding="utf-8")
+        for marker, complaint in (
+            ("manhattanToleranceDegrees = manhattanToleranceDegrees",
+             "the pipeline asks for a plan without a Manhattan tolerance, so the outline keeps "
+             "the scan's shear and every wall length built from it (finding 229)"),
+            ("manhattanFrame()",
+             "the pipeline cannot report the frame the plan was squared onto, so a plan that "
+             "follows the room's axes and one that follows its longest run look the same"),
+            ("fun lastManhattan()",
+             "the pipeline cannot report what the Manhattan step did, so a squared card and a "
+             "measured card look the same"),
+            ("withContext(dispatcher)",
+             "the plan is no longer sliced on the scan worker - a slice from the UI thread blocks "
+             "integration and drops frames"),
+        ):
+            if marker not in pipeline_text:
+                add(pipeline, complaint)
     for relative, marker, complaint in THUMBNAIL_CHAIN:
         path = ROOT / relative
         if not path.exists():
@@ -3296,11 +3548,11 @@ CARD_SIZE_CHAIN = (
      "val perimeterMeters: Float",
      "the outline no longer knows how long its ring is"),
     ("app/src/main/kotlin/com/constructar/app/data/RoomSizeText.kt",
-     "fun of(sketch: FloorplanSketch?): RoomSizeText?",
+     "fun of(sketch: FloorplanSketch?, mark: Char = NumberText.DEFAULT_MARK): RoomSizeText?",
      "nothing turns the outline into the two numbers the card states"),
     ("app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt",
-     "RoomSizeText.of(sketch)",
-     "the badge row stops asking for a size"),
+     "RoomSizeText.of(sketch, LocalDecimalMark.current)",
+     "the badge row stops asking for a size, or asks for it without the reader's decimal mark"),
     ("app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt",
      "stringResource(R.string.card_area, size.area)",
      "the area badge stops printing the area"),
@@ -3808,6 +4060,159 @@ def check_a_contract_assertion_is_believed() -> None:
                           f"turns it into a build failure the sandbox cannot see - read `{name}.`")
 
 
+def check_the_screen_and_the_document_disagree_on_purpose() -> None:
+    """A screen writes the reader's decimal mark; a document writes the protocol's (finding 222).
+
+    `LengthFormatter` prints `Locale.ROOT` digits deliberately - a CSV opened in a spreadsheet whose
+    column separator is `,` must not also have `,` between a whole number and its fraction, and a
+    JSON written in Warsaw has to be the same file as one written in Madrid. The consequence nobody
+    looked at was the *screen*: a German fitter read `1.40 m` on a phone that writes `1,40 €` two
+    cards away, in the same font, about the same room.
+
+    Two rules, and they are the mirror of each other. The screens must go through the composition's
+    mark; the documents must not, or the file a wholesaler opens stops being parseable.
+
+    The failure this can produce is worse than an inconsistency: a locale whose separator came back
+    as a digit would render `1.40` as `1140`, which is why `NumberText.decimalMark` guards the
+    character before anything prints it.
+    """
+    number_text = (ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" /
+                   "units" / "NumberText.kt")
+    if not number_text.exists():
+        add(number_text, "there is no place a locale's decimal mark can live, so every screen would "
+                         "either invent one or print the protocol's")
+        return
+    text = number_text.read_text(encoding="utf-8")
+    for piece in ("fun decimalMark(", "fun digits(", "const val DEFAULT_MARK"):
+        if piece not in text:
+            add(number_text, f"`NumberText` lost `{piece}` - the mark has no single definition")
+    if "isDigit()" not in text or "isLetter()" not in text:
+        add(number_text, "the separator is trusted without a guard - a locale whose mark is a digit "
+                         "would turn `1.40` into `1140` on screen")
+
+    formatter = (ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" /
+                 "units" / "LengthFormatter.kt")
+    formatter_text = formatter.read_text(encoding="utf-8")
+    if "mark: Char = NumberText.DEFAULT_MARK" not in formatter_text:
+        add(formatter, "`LengthFormatter` has no decimal-mark parameter defaulting to the "
+                       "protocol's point, so a screen cannot ask for the reader's without changing "
+                       "every document too")
+
+    app = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app"
+    root_screen = app / "ui" / "AppRoot.kt"
+    root_text = root_screen.read_text(encoding="utf-8")
+    if "LocalDecimalMark provides rememberDecimalMark()" not in root_text:
+        add(root_screen, "nothing provides the decimal mark to the screens, so every screen would "
+                         "fall back to the protocol's point")
+
+    # The two screens that state a length most often, and the HUD is the one the operator reads
+    # while standing in the room.
+    for name in ("ui/WallScreen.kt", "ui/ar/ArMeasureScreen.kt", "ui/ProjectScreen.kt",
+                 "ui/MaterialsScreen.kt"):
+        path = app / name
+        if not path.exists():
+            continue
+        body = path.read_text(encoding="utf-8")
+        if "shownLength(" not in body and "shownLengthWithUnit(" not in body:
+            add(path, "the screen formats its own digits, so it prints the protocol's point in a "
+                      "language that writes a comma")
+
+    # And the other direction: a document that took the screen's mark would no longer parse.
+    export = ROOT / "export" / "src" / "main"
+    for path in sorted(export.rglob("*.kt")):
+        body = path.read_text(encoding="utf-8")
+        # Only the formatter's own parameter counts: `mark = ','` (or any other literal) in a
+        # document writer is the mistake - `watermark =` is not a decimal mark, and reading the
+        # word "mark" would refuse a hundred innocent lines.
+        if re.search(r"\bmark\s*=\s*'", body) or "decimalMark" in body:
+            add(path, "a document asks for a screen's decimal mark - the CSV and the PDF have to "
+                      "stay parseable in every country")
+
+
+def check_the_depth_fallback_is_named() -> None:
+    """Three ways to get a millimetre, and the app has to know which one it is using (finding 221).
+
+    ARCore's depth API, the optional monocular model and - failing both - the planes the camera has
+    recognised. The operator cannot tell them apart by looking at the viewfinder, and the third is
+    the one that produces a reticle which finds nothing on a chair's edge. Nothing here adds a
+    dependency or a decoder: the *contract* of the depth fallback is what has to stay true.
+
+    Five links, and not one of them fails to compile when it is cut:
+
+     1. the model's path comes from the build variant (`BuildConfig.DEPTH_MODEL_ASSET`), not from
+        a second literal that agrees with it by accident;
+     2. the app passes that config to the source instead of letting the default decide;
+     3. the source reports whether the model loaded, on the thread that learns it;
+     4. `DepthAvailability` turns the three booleans into one named state, in `:ar-engine`, where it
+        can be tested without a device;
+     5. the HUD says so when there is no depth field at all.
+
+    The last link is the reason the rule exists. A phone with no depth reports nothing today, and
+    the operator reads a reticle that cannot find a surface as the app being broken.
+    """
+    gradle = ROOT / "app" / "build.gradle.kts"
+    gradle_text = gradle.read_text(encoding="utf-8") if gradle.exists() else ""
+    if "DEPTH_MODEL_ASSET" not in gradle_text:
+        add(gradle, "the model's asset path is not a build field any more - every place that names "
+                    "the model file would have to agree by hand")
+
+    controller = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" /
+                  "ui" / "ar" / "ArMeasureController.kt")
+    if not controller.exists():
+        add(controller, "there is no AR controller - nothing decides which depth is in use")
+        return
+    controller_text = controller.read_text(encoding="utf-8")
+    if "BuildConfig.DEPTH_MODEL_ASSET" not in controller_text:
+        add(controller, "the app never reads `BuildConfig.DEPTH_MODEL_ASSET`, so the model path it "
+                        "looks for is a second literal and a variant that renames the file "
+                        "switches the fallback off without a compile error")
+    if "config = depthConfig" not in controller_text:
+        add(controller, "the monocular source is constructed without the build's config, so the "
+                        "estimator's default - not the APK's - decides where the model is")
+    if "onModelState" not in controller_text:
+        add(controller, "nothing observes whether the model loaded, so the HUD would report the "
+                        "build's intent instead of the measurement")
+
+    availability = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
+                    "arengine" / "ai" / "DepthAvailability.kt")
+    if not availability.exists():
+        add(availability, "no one decides which depth the session is measuring with - three "
+                          "screens would each invent an answer")
+    else:
+        text = availability.read_text(encoding="utf-8")
+        for state in ("AI_FUSED", "ARCORE_ONLY", "PLANES_ONLY"):
+            if state not in text:
+                add(availability, f"`{state}` is gone - a state the operator is in has no name")
+        if "fun of(" not in text:
+            add(availability, "the decision is not a function, so it cannot be tested without a "
+                              "device")
+
+    screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+              "ar" / "ArMeasureScreen.kt")
+    screen_text = screen.read_text(encoding="utf-8")
+    if "DepthAvailability.of(" not in screen_text:
+        add(screen, "the HUD never asks which depth is in use")
+    if "R.string.ar_depth_planes_only" not in screen_text:
+        add(screen, "a phone with no depth at all is not told: the reticle finds nothing on a "
+                    "chair's edge and the operator reads that as a fault")
+    # And the line may not flash on every cold start while the model is still loading (finding
+    # 224): a warning that comes and goes is a warning the operator learns to ignore.
+    if "isFinal" not in screen_text:
+        add(screen, "the depth line is shown before the model's load has answered, so it appears "
+                    "and vanishes during the first second of every session")
+    if "aiSettled = aiDepthSettled" not in screen_text:
+        add(screen, "the HUD decides on a depth state it never learns the loader's verdict from")
+
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if not path.exists():
+            continue
+        strings, _ = load_locale(folder)
+        if not strings.get("ar_depth_planes_only"):
+            add(path, "missing string 'ar_depth_planes_only' - the no-depth case would be silent "
+                      "in that language")
+
+
 def check_the_wall_screen_uses_the_core_numbers() -> None:
     """Three engines, one screen, and every link in the chain can be cut silently (finding 214).
 
@@ -3831,31 +4236,67 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
             "would have no numbers to show")
         return
 
-    plan = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "data" / "WallPlan.kt"
+    # The assembly lives in `:core`, not in `:app` (finding 217). `:app` may not decide a
+    # geometric question - and "which wall does this opening sit on", "how tall is this point above
+    # the floor of *its own* session" are exactly that. A screen that assembles its own plan is a
+    # screen whose numbers cannot be tested without Android.
+    plan = core / "wall" / "WallPlan.kt"
     if not plan.exists():
         add(plan, "there is no assembly of the room's walls, take-off and zones - the three "
                   "engines would stay unwired")
         return
     plan_text = plan.read_text(encoding="utf-8")
-    for call in ("wallSurface(", "estimateDrywall(", "classifyInstallations("):
+    for call in ("wallSurface(", "estimateDrywall(", "classifyInstallations(", "relativeNodes("):
         if call not in plan_text:
             add(plan, f"the plan never calls `{call}`, so that engine still reaches no screen")
     # The closing wall is a wall: a 4 x 3 m room is 14 m, not 11 m, and 3 m of missing wall is a
-    # board and a half on the purchase order.
-    if "% points.size" not in plan_text:
-        add(plan, "the ring is not closed - the edge from the last corner back to the first is a "
-                  "wall like every other one and it would be missing from the take-off")
+    # board and a half on the purchase order. It is built in `WallRing`, which is where the ring
+    # is, so that is where the closing edge is checked.
+    ring = core / "wall" / "WallRing.kt"
+    if not ring.exists():
+        add(ring, "there is no ring builder - the plan would have no walls to measure")
+    else:
+        ring_text = ring.read_text(encoding="utf-8")
+        if "% points.size" not in ring_text:
+            add(ring, "the ring is not closed - the edge from the last corner back to the first is "
+                      "a wall like every other one and it would be missing from the take-off")
+        # A wall height is an assumption, not a measurement: scaling it would price a room that
+        # does not exist, so the factor belongs to the run and to the nodes - and to nothing else.
+        if "heightM * metresScale" in ring_text or "heightM = heightM *" in ring_text:
+            add(ring, "the calibration factor is applied to the wall height, which was never "
+                      "measured by the session - only a measured length may be scaled")
     if "calibrationScale" not in plan_text:
         add(plan, "the plan ignores the project's calibration factor, so its metres would be the "
                   "uncorrected ones while the bill of materials bills the corrected ones")
-    # A wall height is an assumption, not a measurement: scaling it would price a room that does
-    # not exist, so the factor belongs to the run and to the nodes - and to nothing else.
     if "heightM * metresScale" in plan_text or "heightM = heightM *" in plan_text:
         add(plan, "the calibration factor is applied to the wall height, which was never measured "
                   "by the session - only a measured length may be scaled")
+    # A wall is its length times a height, and the height the plan used to be built with was the
+    # *board's*: 2.50 m, the figure the estimator assumes so a board covers a wall without a butt
+    # joint. A 2.80 m room therefore printed 35.0 m² where it has 39.2 m² (finding 227).
+    if "statedRoomHeight(project.wallHeightM)" not in plan_text:
+        add(plan, "the plan never reads the room height the operator stated, so every wall is "
+                  "built at the trade default whatever the room is (finding 227)")
+    if "heightM = wallHeightM" not in plan_text:
+        add(plan, "the walls are built at the default height even when the project carries a "
+                  "stated one - the area, the boards and the picture would all be for a room "
+                  "nobody is standing in")
+    if "wallHeightAssumed" not in plan_text:
+        add(plan, "the plan cannot tell a stated height from the default, so a screen has no way "
+                  "to print an assumption as an assumption (finding 227)")
+    if "sessionFloorHeights" not in plan_text:
+        add(plan, "the zones are resolved against a single floor, so a node measured in another AR "
+                  "session would be given a mounting height from this one (finding 217)")
     if "floorHeightM" not in plan_text:
         add(plan, "the zones are computed from a height that is not relative to the finished "
                   "floor, which is the one thing ARCore cannot supply on its own")
+    # And the screen may not rebuild it: the deleted `app/data/WallPlan.kt` is the regression this
+    # guards, because a plan assembled on the screen is one no test can import.
+    app_plan = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" /
+                "data" / "WallPlan.kt")
+    if app_plan.exists():
+        add(app_plan, "the plan is assembled in `:app` again - geometry belongs in `:core`, where "
+                      "it can be tested without a device")
 
     project = core / "model" / "Project.kt"
     project_text = project.read_text(encoding="utf-8")
@@ -3869,30 +4310,82 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
         add(floor_ref, "nothing decides which tracked plane is the floor - the reference every "
                        "mounting height is measured from would be the session origin again")
     hit_models = floor_ref.parent / "HitModels.kt"
-    if "val floorHeightM: Float? = null" not in hit_models.read_text(encoding="utf-8"):
-        add(hit_models, "a resolution cannot carry the floor out of the hit source, so no screen "
-                        "can ever see it")
+    if "FloorDecision" not in hit_models.read_text(encoding="utf-8"):
+        add(hit_models, "a resolution carries only a number for the floor - a screen cannot tell a "
+                        "tracked plane from a guess, and a mounting height built on a guess is "
+                        "what finding 218 forbids")
     hit_source = floor_ref.parent / "ArHitSource.kt"
-    if "FloorReference.heightFrom(" not in hit_source.read_text(encoding="utf-8"):
+    if "FloorReference.decide(" not in hit_source.read_text(encoding="utf-8"):
         add(hit_source, "the hit source holds the only live planes and does not look for a floor "
                         "among them - the reference would be lost at the one place it exists")
     measure = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
                "ar" / "ArMeasureScreen.kt")
-    if "onFloorHeight(" not in measure.read_text(encoding="utf-8"):
+    measure_text = measure.read_text(encoding="utf-8")
+    if "onFloorHeight(" not in measure_text:
         add(measure, "the AR screen never hands the floor it has seen to the caller, so the "
                      "project keeps none")
+    if "onFloorHeight(controller.sessionId" not in measure_text:
+        add(measure, "the floor is handed over without the session that measured it, so the "
+                     "project cannot tell two ARCore origins apart (finding 217)")
+    # The reticle looks at the floor all the time; a tap looks at it once. Only the tap path
+    # published the decision, and the screen's own sentence tells the operator to walk the room
+    # (finding 226).
+    interaction = hit_models.parent / "ArInteraction.kt"
+    interaction_text = interaction.read_text(encoding="utf-8")
+    if "var onFloorResolved" not in interaction_text:
+        add(interaction, "the floor never leaves the hit source on the reticle path, so a room "
+                         "where the operator pointed at the floor and waited recorded nothing")
+    if "resolution?.floor?.let { onFloorResolved?.invoke(it) }" not in interaction_text:
+        add(interaction, "the reticle's resolution is computed and its floor dropped - the "
+                         "decision exists for one line and is thrown away")
+    floor_controller = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" /
+                       "app" / "ui" / "ar" / "ArMeasureController.kt")
+    floor_controller_text = floor_controller.read_text(encoding="utf-8")
+    if "onFloorResolved = " not in floor_controller_text:
+        add(floor_controller, "nothing observes the reticle's floor, so the HUD and the project "
+                              "only learn about it when the operator happens to tap")
+    # The floor is now recorded by walking, so the HUD has to say it was recorded: before this,
+    # "no line at all" meant both "nothing decided yet" and "the floor is stored" (finding 228).
+    if "floorHudLine(" not in measure_text:
+        add(measure, "the HUD decides the floor line itself instead of using `:ar-engine`'s "
+                     "mapping, so the recorded and the not-yet states could collapse again")
+    if "R.string.ar_floor_recorded" not in measure_text:
+        add(measure, "a recorded floor is never confirmed on screen - the operator cannot tell "
+                     "whether walking the room worked (finding 228)")
+    if "if (!decision.usable)" not in measure_text:
+        add(measure, "an uncertain floor is handed to the project, so every mounting height in "
+                     "the room would be measured from a table top (finding 218)")
     root_screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
                    "AppRoot.kt")
     root_text = root_screen.read_text(encoding="utf-8")
     if "setFloorHeight(" not in root_text:
         add(root_screen, "the floor the session measured is not written to the project")
+    if "wallPlan(" not in root_text:
+        add(root_screen, "the wall route does not ask `:core` for the plan, so the screen would "
+                         "have to assemble the numbers it draws")
+    if "com.constructar.app.data.WallPlan" in root_text:
+        add(root_screen, "the wall route still imports the deleted app-side plan")
+    if "setWallHeight(" not in root_text:
+        add(root_screen, "the wall screen's height buttons are not wired, so stating the room's "
+                         "height would change nothing")
+    for call in ("addOpening(", "removeLastOpening("):
+        if call not in root_text:
+            add(root_screen, f"the wall route never calls `{call}`, so an opening placed on the "
+                             f"elevation would go nowhere")
     if "composable(Routes.WALLS)" not in root_text:
         add(root_screen, "the wall screen has no route, so nothing reaches it")
     if "onWalls = " not in root_text:
         add(root_screen, "no button leads to the wall screen - the screen would be unreachable")
     view_model = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" /
                   "ProjectViewModel.kt")
-    if "fun setFloorHeight(" not in view_model.read_text(encoding="utf-8"):
+    view_model_text = view_model.read_text(encoding="utf-8")
+    for call in ("fun addOpening(", "fun removeLastOpening("):
+        if call not in view_model_text:
+            add(view_model, f"there is no `{call}` - the elevation's buttons would be inert")
+    if "fun setWallHeight(" not in view_model_text:
+        add(view_model, "there is no write path for the room height - the screen's buttons would "
+                        "store nothing and every area would stay at the board's height")
+    if "fun setFloorHeight(" not in view_model_text:
         add(view_model, "there is no write path for the floor height, so the field would stay null "
                         "for ever and the zones would never be assigned")
 
@@ -3910,9 +4403,49 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
     if "R.string.wall_zones_no_floor" not in screen_text:
         add(screen, "the zone card has no state for a room whose floor was never tracked - it "
                     "would have to print a height it cannot vouch for, or nothing at all")
+    # The session-origin bug is only fixed if the screen says so: a room measured over two
+    # sessions has points that cannot be classified, and a zone count that quietly covers half of
+    # them is the same lie in a nicer font (finding 217).
+    if "plan.foreignSessionPoints" not in screen_text:
+        add(screen, "the zone card does not mention the points from another AR session - their "
+                    "absence from the counts would be invisible")
+    if "com.constructar.app.data.WallPlan" in screen_text:
+        add(screen, "the screen still imports the deleted app-side plan")
+    # A hole in the picture is a hole in the take-off, or the two claims disagree (finding 218's
+    # sibling): the elevation has to be drawn from the same rectangles `wallSurface` subtracts.
+    if "rectOn(" not in screen_text:
+        add(screen, "the wall elevation is not drawn from the rectangles the take-off subtracts, "
+                    "so the picture could show a hole the purchase order does not")
+    if "openingOffsetForTap(" not in screen_text:
+        add(screen, "the screen places openings without `:core`'s clamping, so a tap near the end "
+                    "of a wall would put a door through the corner")
+    if "R.string.wall_elevation_title" not in screen_text:
+        add(screen, "the screen shows no elevation, so the openings it deducts are invisible")
+    # The elevation is a tap target. A `Canvas` with a gesture modifier is a picture to a screen
+    # reader: no name, no state, no way to choose the spot (finding 223, the same shape as 211).
+    if "customActions = listOf(" not in screen_text or "contentDescription = spotLabel" not in screen_text:
+        add(screen, "the wall elevation is a tap target with no name and no accessibility actions - "
+                    "a screen reader cannot place an opening at all")
+    if "stepOpeningFraction(" not in screen_text:
+        add(screen, "the elevation's spot is not moved by `:core`'s stepping, so an action could "
+                    "walk off the end of the wall")
+    if "drawLine(" not in screen_text:
+        add(screen, "the spot the buttons will use is not drawn - a tap would leave no trace on "
+                    "screen until the opening appeared")
     if "R.string.wall_openings_none" not in screen_text:
         add(screen, "the screen deducts nothing without saying why - `0.00 m² openings` beside a "
                     "room with a door reads as a measured zero")
+    if "plan.wallHeightAssumed" not in screen_text or "plan.wallHeightM" not in screen_text:
+        add(screen, "the screen prints areas without saying which height they were made at - the "
+                    "assumption would read as a measurement of the room (finding 227)")
+    if "onSetWallHeight(" not in screen_text:
+        add(screen, "the room's height cannot be stated, so every room keeps the board's height")
+    if "STANDARD_ROOM_HEIGHTS_M" not in screen_text:
+        add(screen, "the height buttons are a list written on the screen - which heights a "
+                    "take-off may be made for is a trade fact and belongs in `:core`")
+    if "plan.openingsUnplaced" not in screen_text:
+        add(screen, "openings recorded on a wall the room no longer has are not counted - they are "
+                    "in the file, in the opening count, and not in the area (finding 225)")
     if "LengthFormatter" not in screen_text:
         add(screen, "the screen formats its own numbers - the app's one formatter owns the digits "
                     "and the decimal mark")
@@ -3937,8 +4470,26 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
         "wall_net": (),
         "wall_boards_value": ("%1$d", "%2$d"),
         "wall_assumptions": ("%1$s", "%2$s", "%3$s", "%4$d"),
+        "wall_height_title": (),
+        "wall_height_assumed": ("%1$s",),
+        "wall_height_stated": ("%1$s",),
+        "wall_height_hint": (),
+        "wall_height_option": ("%1$s",),
+        "wall_height_current": (),
         "wall_zones_no_floor": (),
         "wall_openings_none": (),
+        "wall_openings_unplaced": ("%1$d",),
+        "wall_elevation_title": (),
+        "wall_elevation_a11y": ("%1$d", "%2$d"),
+        "wall_elevation_spot_left": (),
+        "wall_elevation_spot_right": (),
+        "wall_elevation_hint": (),
+        "wall_opening_door": (),
+        "wall_opening_window": (),
+        "wall_opening_remove": (),
+        "wall_zones_foreign": ("%1$d",),
+        "wall_zones_no_floor_points": ("%1$d",),
+        "wall_zones_partial": ("%1$d", "%2$d"),
     }
     for folder in LOCALES:
         path = RES_DIR / folder / "strings.xml"
@@ -4065,12 +4616,110 @@ def check_the_docs_do_not_call_a_live_path_dead() -> None:
                              f"and both are findings")
 
 
+
+def check_the_readme_states_the_locale_counts() -> None:
+    """The README's language table states a count, and nothing counted it (finding 239).
+
+    The table said "81 strings + 2 plurals" for the default locale and "parity enforced" for the
+    other five. The real table holds 470 strings and 13 plurals in every locale, and has for many
+    rounds: parity *was* enforced (that is `check_locales`), but the number a reader uses to judge
+    the size of the translation job was not, because nothing compared it with anything. Three
+    hundred and eighty-nine strings of drift, in the section a translator reads first.
+
+    Two rules, because the table makes two claims. Every row carries the count - a row that says
+    "parity enforced" asks the reader to take the number on faith, and that is exactly the row that
+    drifted - and the six tables must actually agree, or the one number the README now prints for
+    all of them would be a lie in five of the six rows.
+    """
+    counts = {}
+    for folder in LOCALES:
+        strings, plurals = load_locale(folder)
+        counts[folder] = (len(strings), len(plurals))
+    reference = counts[LOCALES[0]]
+    for folder in LOCALES[1:]:
+        if counts[folder] != reference:
+            add(
+                RES_DIR / folder / "strings.xml",
+                f"this table holds {counts[folder][0]} strings and {counts[folder][1]} plurals, "
+                f"the default holds {reference[0]} and {reference[1]} - the README prints one "
+                f"count for all six, so a locale that falls behind makes that count a lie",
+            )
+    readme = ROOT / "README.md"
+    if not readme.exists():
+        return
+    text = readme.read_text(encoding="utf-8")
+    claim = f"{reference[0]} strings + {reference[1]} plurals"
+    stated = text.count(claim)
+    if stated != len(LOCALES):
+        add(
+            readme,
+            f"the language table states '{claim}' {stated} times for {len(LOCALES)} locales - "
+            f"every row states the count it ships, because the row that said 'parity enforced' "
+            f"was the row that drifted by 389 strings (finding 239)",
+        )
+
+
+
+PAGE_SIZE_QUERY = re.compile(r"sysconf\s*\(\s*_SC_(?:PAGESIZE|PAGE_SIZE)\s*\)")
+PAGE_MAPPING = re.compile(r"\b(?:mmap|madvise|aligned_alloc|posix_memalign)\s*\(")
+HARDCODED_PAGE = re.compile(r"\b(?:4096|0x1000)\b")
+NATIVE_CPP = ROOT / "native-slam" / "src" / "main" / "cpp"
+
+
+def check_the_native_knows_no_page_size_of_its_own() -> None:
+    """A page is 16 KB on some Android 15 devices, and every 4 KB figure is a device assumption.
+
+    `mmap`, `madvise` and the aligned allocators all take a page-size-derived argument, and the
+    classic bug is a `4096` written by someone who measured one phone. It still works on every
+    4 KB device - which is nearly all of them - and fails only on the ones that ship 16 KB pages,
+    where the address handed to `madvise` is no longer page-aligned and the call returns `EINVAL`
+    that nothing reads. The same argument applies to the shared library itself, so this rule has
+    two halves: no page-size literal or unaligned page operation in our C++, and the 16 KB linker
+    flags spelled out in the NDK build rather than trusted to the toolchain's default.
+
+    Nothing in the tree does any of this today - the TSDF allocates through `std::vector` and the
+    volume never asks the kernel for pages - and that is exactly why the rule is written now: it
+    costs nothing while the code is clean and it is the only thing that will notice the day
+    somebody adds an `mmap` to speed up a buffer.
+    """
+    offenders = []
+    for path in sorted(NATIVE_CPP.rglob("*")):
+        if not path.is_file() or path.suffix not in {".cpp", ".hpp", ".h", ".cc"}:
+            continue
+        if "third_party" in path.parts:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if HARDCODED_PAGE.search(text):
+            offenders.append(path)
+            add(path, "a page size is written as a literal (4096 / 0x1000): Android 15 devices "
+                      "have 16 KB pages, so every such figure is one device's answer - ask the "
+                      "kernel with `sysconf(_SC_PAGESIZE)`")
+        if PAGE_MAPPING.search(text) and not PAGE_SIZE_QUERY.search(text):
+            offenders.append(path)
+            add(path, "maps or advises memory (mmap/madvise/aligned_alloc) without asking the "
+                      "kernel for the page size - a 4 KB-aligned address is not page-aligned on a "
+                      "16 KB device, and the EINVAL is silent")
+
+    cmake = NATIVE_CPP / "CMakeLists.txt"
+    if not cmake.exists():
+        return
+    build = cmake.read_text(encoding="utf-8")
+    for flag in ("-Wl,-z,max-page-size=16384", "-Wl,-z,common-page-size=16384"):
+        if flag not in build:
+            add(cmake, f"the 16 KB page-size linker flag `{flag}` is missing, so "
+                       f"libconstructar_slam.so ships with whatever alignment the toolchain felt "
+                       f"like and nothing notices until a 16 KB device or a Play upload")
+    if offenders and "sysconf" not in build:
+        return
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
     check_reflection()
     check_app_hardcoded_text()
     strings, plurals = check_locales()
+    check_the_readme_states_the_locale_counts()
     check_references(strings, plurals)
     check_offline_guarantees()
     check_cached_clock()
@@ -4102,7 +4751,9 @@ def main() -> int:
     check_the_calibration_has_one_home()
     check_the_frame_solver_is_built_everywhere()
     check_the_squared_wall_keeps_its_distance()
-    check_the_tag_contract_is_not_sold_as_a_detector()
+    check_the_native_cmake_is_spelled_out()
+    check_the_native_knows_no_page_size_of_its_own()
+    check_the_tag_decoder_is_vendored_and_credited()
     check_the_plane_fitter_is_reproducible()
     check_totals_are_sums_of_printed_rows()
     check_csv_headers_name_their_cells()
@@ -4153,6 +4804,8 @@ def main() -> int:
     check_every_interactive_row_announces_itself()
     check_the_hud_says_when_the_reticle_moved()
     check_the_wall_screen_uses_the_core_numbers()
+    check_the_depth_fallback_is_named()
+    check_the_screen_and_the_document_disagree_on_purpose()
     check_the_generated_pages_keep_their_notice()
     check_the_docs_do_not_call_a_live_path_dead()
     check_the_reticle_snap_stays_wired()

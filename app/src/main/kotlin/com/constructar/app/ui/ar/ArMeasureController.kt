@@ -9,9 +9,12 @@ package com.constructar.app.ui.ar
 import android.content.Context
 import android.os.PowerManager
 import android.os.SystemClock
+import android.util.Log
 import com.constructar.arengine.hit.ArInteraction
 import com.constructar.arengine.hit.HitResolution
 import com.constructar.arengine.hit.HitStabilizer
+import com.constructar.arengine.keyframe.ClosureState
+import com.constructar.arengine.keyframe.PoseGraphStatus
 import com.constructar.arengine.render.RouteSceneController
 import com.constructar.arengine.render.SceneMeshRenderer
 import com.constructar.arengine.render.SceneViewMaterialProvider
@@ -19,12 +22,19 @@ import com.constructar.arengine.route.AnchorFactory
 import com.constructar.arengine.route.AnchorHandle
 import com.constructar.arengine.route.ArCoreAnchorFactory
 import com.constructar.arengine.route.RouteSession
+import com.constructar.arengine.scan.CameraPlanes
+import com.constructar.arengine.scan.CameraIntrinsics
+import com.constructar.arengine.scan.MarkerProbe
 import com.constructar.arengine.scan.TsdfScanPipeline
 import com.constructar.arengine.session.ArReadiness
 import com.constructar.arengine.session.ArSessionController
 import com.constructar.arengine.session.TorchController
 import com.constructar.arengine.tracking.TrackingMonitor
 import com.constructar.arengine.tracking.TrackingQuality
+import com.constructar.core.calib.MarkerScaleProposal
+import com.constructar.core.calib.MarkerSweepState
+import com.constructar.core.math.Pose
+import com.constructar.core.math.Quat
 import com.constructar.core.math.Vec3
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ConduitSpec
@@ -40,6 +50,7 @@ import com.google.ar.core.TrackingState
 import io.github.sceneview.loaders.MaterialLoader
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /** Anchor factory that can be created before the ARCore session exists. */
 class DelegatingAnchorFactory : AnchorFactory {
@@ -66,19 +77,124 @@ class ArMeasureController(private val context: Context) {
     val tracking = TrackingMonitor()
 
     /**
+     * The marker target probe: the operator aims at a printed tag and walks a metre, and the sweep
+     * it feeds answers whether this phone's metre agrees with the printed size
+     * (`docs/CALIBRATION.md`, tier 2).
+     *
+     * Until finding 235 the whole path existed and nothing drove it - a reader with no caller, a
+     * sweep nobody held. This is the caller, and the state it publishes is what a status line
+     * shows. It proposes a factor and never applies one: the write stays with the project, on the
+     * reporting layer, like the physical-reference sweep beside it.
+     */
+    private val markerState = MutableStateFlow<MarkerSweepState>(MarkerSweepState.Off)
+
+    /** `Off`, `Watching` or `Ready` - the three things a marker status line can say. */
+    val markerProbeState: StateFlow<MarkerSweepState> = markerState.asStateFlow()
+
+    /**
+     * What the pose graph has taken and what it lost (finding 244).
+     *
+     * Passed through rather than recomputed: the counters belong to the pipeline's worker, and the
+     * screen only has to say them.
+     */
+    val poseGraphStatus: StateFlow<PoseGraphStatus> get() = pipeline.poseGraphStatus
+
+    /** The loop-closure conversation, as the worker publishes it (finding 245). */
+    val closureState: StateFlow<ClosureState> get() = pipeline.closureState
+
+    /** Ask whether the walk has come back somewhere it has been. */
+    fun lookForClosure() = pipeline.lookForClosure()
+
+    /** The operator said "same place": close the loop and optimise. */
+    fun confirmClosure() = pipeline.confirmClosure()
+
+    /** The operator said no. */
+    fun dismissClosure() = pipeline.dismissClosure()
+
+    @Volatile
+    private var markerProbe: MarkerProbe? = null
+
+    /**
+     * Frames between marker reads.
+     *
+     * The depth path integrates every frame; a marker does not need that. A tag read costs a full
+     * luminance pack plus a decode, and a sweep is answered by a walk, not by 30 pictures a second -
+     * so one frame in fifteen (about 2 Hz) is enough and keeps the render thread's budget.
+     */
+    private val markerFrameInterval = 15
+
+    @Volatile
+    private var markerFrames = 0
+
+    /**
+     * One stamp per ARCore session this screen has seen.
+     *
+     * A new ARCore session is a new world origin, so a baseline across two of them is a subtraction
+     * of two different rooms (finding 217). The sweep refuses sightings that carry a different
+     * stamp; this counter is what gives each session its own.
+     */
+    @Volatile
+    private var sessionEpoch = 0L
+
+    /**
      * Runs finished in *this* AR session - the only ones whose world coordinates mean anything
      * here. See [SessionRuns] and finding 129.
      */
     private val sessionRouteIds = LinkedHashSet<String>()
     private val sessionController = ArSessionController(context)
     private val anchors = DelegatingAnchorFactory()
-    val routeSession = RouteSession(anchors)
+
+    /**
+     * The id of *this* AR session - the coordinate system its nodes live in.
+     *
+     * ARCore starts a new world origin every time a session begins, and the app keeps the floor it
+     * measured against that origin. A node is only comparable to a floor from the same id; a fresh
+     * uuid per controller is what makes that checkable instead of assumed (finding 217).
+     */
+    val sessionId: String = java.util.UUID.randomUUID().toString()
+    val routeSession = RouteSession(anchors, sessionId = sessionId)
 
     private var interaction: ArInteraction? = null
     private var renderer: SceneMeshRenderer? = null
     private var sceneController: RouteSceneController? = null
     private var torchController: TorchController? = null
     private var monocularDepth: com.constructar.arengine.ai.MonocularDepthSource? = null
+
+    /**
+     * The monocular model's asset path, from the build variant rather than from a second literal.
+     *
+     * `MonocularDepthEstimator.Config` carries a default for the tests and for a caller that has
+     * no BuildConfig; the app must not rely on that default, or a build that ships the model under
+     * another name (a smaller int8 export, a Pro variant) would look for the old file, find
+     * nothing, and switch itself off without a compile error anywhere (finding 221).
+     */
+    private val depthConfig = com.constructar.arengine.ai.MonocularDepthEstimator.Config(
+        assetPath = com.constructar.app.BuildConfig.DEPTH_MODEL_ASSET,
+    )
+
+    /** True when this APK carries the model file - i.e. the fallback could run at all. */
+    val depthModelBundled: Boolean by lazy {
+        com.constructar.arengine.ai.MonocularDepthEstimator.isModelPresent(context, depthConfig)
+    }
+
+    /**
+     * True once the model has loaded and produced a frame; flipped on the loader's thread.
+     *
+     * A flow rather than a plain boolean because the screen *is* the reader: a value that changes
+     * on a worker thread and is read once during composition would never show up.
+     */
+    private val aiDepthRunningState = MutableStateFlow(false)
+    val aiDepthRunning: StateFlow<Boolean> = aiDepthRunningState.asStateFlow()
+
+    /**
+     * True once the model's load attempt has answered - either way.
+     *
+     * A build without the model answers immediately; one with it answers after a file read and an
+     * interpreter build, which is a second of a cold start. Until then the HUD says nothing about
+     * depth, because "no depth" is not yet a fact (finding 224).
+     */
+    private val aiDepthSettledState = MutableStateFlow(false)
+    val aiDepthSettled: StateFlow<Boolean> = aiDepthSettledState.asStateFlow()
     private var powerManager: PowerManager? = null
 
     /**
@@ -100,12 +216,13 @@ class ArMeasureController(private val context: Context) {
     val lastHit: MutableStateFlow<HitResolution?> = MutableStateFlow(null)
 
     /**
-     * The floor the session has seen, in its own coordinates, or `null` while none has been.
+     * What the session has decided about the floor on the latest resolution.
      *
-     * A tap into a doorway is not evidence that the floor went away, so the last height that a
-     * tracked plane produced is kept; the screen stores it on the project (finding 214).
+     * A tap into a doorway is not evidence that the floor went away, so the last *decision* is
+     * kept; the status travels with the height because an uncertain floor may not be used to
+     * state a mounting height (findings 214 and 218).
      */
-    val floorHeight: MutableStateFlow<Float?> = MutableStateFlow(null)
+    val floor: MutableStateFlow<com.constructar.arengine.hit.FloorDecision?> = MutableStateFlow(null)
 
     /**
      * State of the reticle's sample window: whether the point under the crosshair has settled
@@ -164,10 +281,28 @@ class ArMeasureController(private val context: Context) {
     fun onSessionCreated(session: Session) {
         if (this.session === session && interaction != null) return
         this.session = session
+        // New origin: any sweep still open belongs to the world that just ended, and continuing it
+        // would pair a camera position from one room with a tag vector from another.
+        sessionEpoch += 1
+        markerProbe = null
+        markerFrames = 0
+        markerState.value = MarkerSweepState.Off
         anchors.delegate = ArCoreAnchorFactory(session)
         interaction = ArInteraction(session).also {
             it.previousNode = routeSession.state.value.nodes.lastOrNull()
             it.onTapResolved = { resolution -> mutableHitEvents.value = resolution }
+            // The floor travels on its own path, because the reticle sees it without a tap and the
+            // HUD has to warn about an uncertain one *before* the operator commits a point to it
+            // (findings 218 and 226).
+            it.onFloorResolved = { decision ->
+                // A wall, a chair or the ceiling is no evidence that the floor went away. Keeping
+                // the last real decision is finding 214's rule ("the last height a tracked plane
+                // produced"), now that the *status* travels with it - and it is what stops the
+                // HUD's warning from flickering on every frame the reticle leaves the floor.
+                if (decision.status != com.constructar.arengine.hit.FloorReferenceStatus.MISSING) {
+                    floor.value = decision
+                }
+            }
         }
         if (powerManager == null) {
             powerManager = context.getSystemService(PowerManager::class.java)
@@ -176,7 +311,12 @@ class ArMeasureController(private val context: Context) {
             // Optional: silently inactive when no model is bundled or calibration is refused.
             monocularDepth = com.constructar.arengine.ai.MonocularDepthSource(
                 context = context,
+                config = depthConfig,
                 onFused = { depth, width, height, _ -> pipeline.submitFusedDepth(depth, width, height) },
+                onModelState = { loaded ->
+                    aiDepthRunningState.value = loaded
+                    aiDepthSettledState.value = true
+                },
             ).also { it.warmUp() }
         }
         // The torch is applied by SceneView through the typed `flashMode` parameter; this
@@ -209,6 +349,151 @@ class ArMeasureController(private val context: Context) {
     }
 
     /**
+     * Opens a marker sweep for the session that is running now.
+     *
+     * `false` means the device cannot measure markers at all - the native library is missing or its
+     * `TagScaleOptions` are not usable - and a screen must say so rather than show a sweep that
+     * will never fill.
+     */
+    fun startMarkerProbe(): Boolean {
+        val opened = pipeline.openMarkerProbe(sessionEpoch) ?: return false
+        markerProbe = opened
+        markerFrames = 0
+        markerState.value = opened.state
+        return true
+    }
+
+    /** Ends the sweep. A factor already read stays with the caller; this forgets the evidence. */
+    fun stopMarkerProbe() {
+        markerProbe?.reset()
+        markerProbe = null
+        markerState.value = MarkerSweepState.Off
+    }
+
+    /**
+     * Whether this device can measure markers at all.
+     *
+     * Asked once by the screen so that a button which cannot work is greyed out instead of opening
+     * a dialog that will never fill - the same rule the torch button follows.
+     */
+    fun isMarkerProbeAvailable(): Boolean = pipeline.markerKnobs() != null
+
+    /** The factor the sweep has published, or `null` while it is still watching. */
+    fun markerProposal(): MarkerScaleProposal? =
+        (markerState.value as? MarkerSweepState.Ready)?.proposal
+
+    /**
+     * One marker frame, every [markerFrameInterval]th.
+     *
+     * The image is closed on every path, including the ones that return early: `acquireCameraImage`
+     * hands out a buffer from a buffer queue of depth 2, so a leaked image stalls the camera within
+     * a second (`YuvFrame.capture` closes its own for the same reason).
+     */
+    private fun probeMarker(frame: Frame) {
+        val probe = markerProbe ?: return
+        if (markerFrames++ % markerFrameInterval != 0) return
+        // "Not yet available" is normal in the first frames of a session, and the documented
+        // recovery is to ask again on the next one.
+        val image = try {
+            frame.acquireCameraImage()
+        } catch (error: Throwable) {
+            return
+        }
+        try {
+            val plane = CameraPlanes.luminance(image) ?: return
+            val intrinsics = imageIntrinsics(frame, plane.plane.width) ?: return
+            markerState.value = probe.onFrame(plane.source, plane.plane, intrinsics, cameraPose(frame))
+        } finally {
+            image.close()
+        }
+    }
+
+    /**
+     * The CPU image's intrinsics, scaled to the plane that was actually handed over.
+     *
+     * ARCore reports the intrinsics for its own image size; a device that crops or rescales the
+     * image would otherwise get a focal length in the wrong pixels, which is a distance that is
+     * wrong by exactly that ratio.
+     */
+    private fun imageIntrinsics(frame: Frame, width: Int): CameraIntrinsics? {
+        val base = try {
+            frame.camera.imageIntrinsics
+        } catch (error: Throwable) {
+            return null
+        }
+        val dimensions = base.imageDimensions
+        if (dimensions.size < 2 || dimensions[0] <= 0) return null
+        val scale = width.toFloat() / dimensions[0].toFloat()
+        val focal = base.focalLength
+        val principal = base.principalPoint
+        if (focal.size < 2 || principal.size < 2) return null
+        val intrinsics = CameraIntrinsics(
+            fx = focal[0] * scale,
+            fy = focal[1] * scale,
+            cx = principal[0] * scale,
+            cy = principal[1] * scale,
+        )
+        return if (intrinsics.isPlausible) intrinsics else null
+    }
+
+    /** ARCore's pose in this module's terms - quaternion order is x, y, z, w there. */
+    private fun cameraPose(frame: Frame): Pose {
+        val pose = frame.camera.pose
+        val quaternion = pose.rotationQuaternion
+        val translation = pose.translation
+        return Pose(
+            rotation = Quat(quaternion[3], quaternion[0], quaternion[1], quaternion[2]),
+            translation = Vec3(translation[0], translation[1], translation[2]),
+        )
+    }
+
+    /**
+     * Offers this frame to the keyframe policy; the pipeline queues and its worker writes.
+     *
+     * The `Frame` never leaves this call: the pose is copied into a value, the feature count into
+     * an `Int`, and nothing here touches the native graph - see `KeyframeFeed` and
+     * `TsdfScanPipeline.keyframeFeed`.
+     */
+    private fun feedKeyframe(frame: Frame) {
+        val feed = pipeline.keyframeFeed ?: return
+        feed.onFrame(
+            pose = cameraPose(frame),
+            timestampMillis = SystemClock.uptimeMillis(),
+            trackingValid = frame.camera.trackingState == TrackingState.TRACKING,
+            featurePoints = featurePoints(frame),
+        )
+    }
+
+    /**
+     * How many feature points ARCore sees, sampled at 2 Hz.
+     *
+     * The point cloud is the only ARCore source for this number, and acquiring it is a JNI round
+     * trip plus a buffer map on the render thread - so it is sampled on a timer rather than per
+     * frame. The count is evidence of the *scene*, which changes at the speed a person walks, not
+     * at 30 Hz; a stale count can only make the policy more conservative, because a scene that had
+     * features a second ago either still has them or has lost them (finding 243).
+     */
+    private fun featurePoints(frame: Frame): Int {
+        val now = SystemClock.uptimeMillis()
+        if (now - featureSampleAtMillis < FEATURE_SAMPLE_INTERVAL_MS) return featureCount
+        featureSampleAtMillis = now
+        featureCount = try {
+            val cloud = frame.acquirePointCloud()
+            try {
+                cloud.points.remaining() / FLOATS_PER_POINT
+            } finally {
+                cloud.release()
+            }
+        } catch (expected: IllegalStateException) {
+            // Point clouds are off in this session, or this frame is not tracking: no evidence,
+            // and the policy reads 0 as "too few features" instead of guessing a number.
+            Log.w(TAG, "point cloud unavailable - no keyframe evidence from this frame", expected)
+            0
+        }
+        return featureCount
+    }
+
+    /**
      * Render-thread entry point. Order matters:
      *  1. capture depth (cheap copy) and hand it to the TSDF worker;
      *  2. resolve any pending tap against the *current* frame;
@@ -236,6 +521,11 @@ class ArMeasureController(private val context: Context) {
         val poseUsable = tracking.canPlaceFrame(quality)
         if (poseUsable) {
             pipeline.onFrame(frame, thermalStatus)
+            probeMarker(frame)
+            // The pose graph is fed from the same placed frames, and only from them: a keyframe
+            // taken from a frame the tracker cannot place is a node at a position nobody measured
+            // (finding 243).
+            feedKeyframe(frame)
         } else {
             // A tap made now must not wait for the next live frame to be answered: the pixel it
             // names is meaningless by then, and `ArInteraction` would resolve it against whatever
@@ -314,7 +604,6 @@ class ArMeasureController(private val context: Context) {
         val resolution = mutableHitEvents.value ?: return null
         mutableHitEvents.value = null
         lastHit.value = resolution
-        resolution.floorHeightM?.let { height -> floorHeight.value = height }
         val hit = resolution.hit
         if (hit == null) {
             // Tap into nothing: the window is stale, and keeping it would let a later tap
@@ -488,6 +777,10 @@ class ArMeasureController(private val context: Context) {
         }.onFailure { hudScreenPixels.value = null }
     }
 
+    /** Last point count ARCore reported, and when it was asked (see [featurePoints]). */
+    private var featureCount = 0
+    private var featureSampleAtMillis = 0L
+
     private var lastHudUpdateMillis = 0L
     private val viewMatrix = FloatArray(16)
     private val projectionMatrix = FloatArray(16)
@@ -505,6 +798,12 @@ class ArMeasureController(private val context: Context) {
 
         /** HUD label refresh period (render thread → Compose state). */
         private const val HUD_INTERVAL_MS = 50L
+
+        /** How often the point cloud is asked for a feature count - see [featurePoints]. */
+        private const val FEATURE_SAMPLE_INTERVAL_MS = 500L
+
+        /** `PointCloud.points` is x, y, z, confidence per point. */
+        private const val FLOATS_PER_POINT = 4
     }
 }
 

@@ -71,7 +71,6 @@ import com.constructar.core.model.ProjectRecord
 import com.constructar.core.model.WorkTime
 import com.constructar.core.price.MoneyFormatter
 import com.constructar.core.price.Pricing
-import com.constructar.core.units.LengthFormatter
 
 /**
  * The project hub — the screen the operator returns to after every run.
@@ -380,12 +379,12 @@ fun ProjectScreen(
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    LengthFormatter.format(project.totalLengthMeters),
+                    shownLengthWithUnit(project.totalLengthMeters),
                     style = MaterialTheme.typography.displaySmall,
                     color = SiteColors.accent,
                 )
                 Text(
-                    stringResource(R.string.export_runs_total, project.routes.size, LengthFormatter.format(project.totalLengthMeters)),
+                    stringResource(R.string.export_runs_total, project.routes.size, shownLengthWithUnit(project.totalLengthMeters)),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -405,7 +404,7 @@ fun ProjectScreen(
                 }
                 materialList?.let { list ->
                     Text(
-                        stringResource(R.string.export_order_length, LengthFormatter.format(list.totalWithWasteMeters)),
+                        stringResource(R.string.export_order_length, shownLengthWithUnit(list.totalWithWasteMeters)),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
@@ -446,7 +445,7 @@ fun ProjectScreen(
                             route.spec.label,
                             route.spec.sizeLabel,
                         ),
-                        length = LengthFormatter.format(route.polylineLengthMeters),
+                        length = shownLengthWithUnit(route.polylineLengthMeters),
                         // A run recovered after an interruption counts in every length and every
                         // fitting, but its 3D geometry is not in the model. Saying so is the
                         // difference between a documented limitation and a surprise in a viewer.
@@ -729,7 +728,7 @@ fun ProjectScreen(
                     stringResource(
                         R.string.run_delete_body,
                         stringResource(R.string.run_detail, run.spec.label, run.spec.sizeLabel),
-                        LengthFormatter.format(run.polylineLengthMeters),
+                        shownLengthWithUnit(run.polylineLengthMeters),
                     ),
                 )
             },

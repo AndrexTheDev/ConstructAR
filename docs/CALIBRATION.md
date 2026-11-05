@@ -17,8 +17,8 @@ drifts.
 
 | Tier | Source of the scale | State |
 |---|---|---|
-| 1 | ARCore VIO + Raw Depth (+ AI depth fused into holes, when the model asset ships) | ARCore and Raw Depth path **built**; the AI fusion is coded and unit-tested but **not wired** — `MonocularDepthEstimator` is never constructed in `:app`/`:ar-engine` and `app/src/main/assets/models/*.tflite` is not in the repository |
-| 2 | Passive marker detection (AprilTag 3 / ArUco) in a native worker | **Detector contract built; detector not.** The interface a decoder implements, the marker-to-scale arithmetic and its outlier filter are in `calibration/tag_scale.hpp`, host-tested with 35 assertions, and nothing in the app constructs a detector. The pixel decoder is not vendored and not built; see "Not built" below |
+| 1 | ARCore VIO + Raw Depth (+ AI depth fused into holes, when the model asset ships) | ARCore and Raw Depth path **built**; the AI fusion **is wired** (`MonocularDepthSource` runs on its own worker from `ArMeasureController`, and the model path comes from `BuildConfig.DEPTH_MODEL_ASSET`), but `app/src/main/assets/models/*.tflite` is not in the repository — so on every build shipped from this tree the model is absent, the app says so (`DepthAvailability.PLANES_ONLY` or `ARCORE_ONLY`), and it measures on ARCore's depth or on the planes it has recognised |
+| 2 | Passive marker detection (AprilTag 3 / tag36h11) in a native worker | **Decoder vendored, frame path built, screen missing.** AprilTag 3.1.0's C core (BSD-2-Clause, unmodified, one family) sits in `native-slam/src/main/cpp/third_party/apriltag/` with its notice in `NOTICE`, `licenses/BSD-2-Clause.txt` and the Help screen; `calibration/apriltag_detector.cpp` is the one file that includes it, `nativeDetectAprilTagScale` exposes it over JNI, and the host suite proves it against rendered tags at 2 m and 4 m through four rotations. The marker-to-scale arithmetic and its outlier filter are in `calibration/tag_scale.hpp`. **No app source captures a frame and calls either** - the tier measures nothing until that frame path exists |
 | 3 | Active reference calibration: bank card or folding rule | **Complete in the app**: arithmetic, sweep, storage and application (`core/.../calib`, `ProjectRecord.calibrationScale`), a *Calibrate* button and dialog on the AR screen that takes the reticle point twice, six locales, and a correction notice on the room screen. The protocol header and both CSV files carry the factor as their own line, so a document showing corrected metres also shows what corrected them |
 
 ## Tier 3 — the arithmetic
@@ -111,23 +111,48 @@ project file, which is why it survives the phone being put in a pocket.
   contract this app requires in its manifest. Writing it would be code that claims a capability
   the target devices do not have — the opposite of what this repository does everywhere else. The
   metric source stays ARCore Raw Depth, with the AI fusion filling holes only.
-* **The AprilTag decoder.** The detector contract exists (see below); the *decoder* does not. A
-  background detector means vendoring one (denoising, quad extraction, tag36h11 decode) plus its
-  BSD licence entry in `NOTICE` and `docs/LICENSING.md`, and it cannot be built for the NDK or
-  verified on a device in this repository's development sandbox. It lands only when both are
-  possible.
+* **A dual-camera baseline as a second metric source.** Covered above: ARCore owns the camera
+  while a session runs.
 
-## Tier 2 — the detector contract
+## Tier 2 — the marker decoder
 
-`native-slam/.../calibration/tag_scale.hpp` holds the half of tier 2 that can be proved here:
+Tier 2 has two halves, and since finding 231 both of them exist: the decoder that finds the tag in
+the pixels, and the arithmetic that turns sightings into a factor.
 
-* **`TagDetector`**, the interface a decoder will implement, with `NoTagDetector` as the only
-  implementation in this build: `available()` is false and `unavailableReason()` is a sentence a
-  diagnostic screen can print. The two are separate on purpose — a detector that is not compiled
-  in and a frame with no tags in it both produce an empty detection list, and a caller that cannot
-  tell them apart reports "no tags in view" for a build that has no decoder at all. That is the
-  same shape as `RtabMapBridge::isAvailable` (finding 98).
-* **`estimateScaleFromTagSightings`**, the marker-to-scale update: the ratios between every pair
+**The decoder is vendored.** AprilTag 3.1.0's C core, BSD-2-Clause, unmodified, in
+`native-slam/src/main/cpp/third_party/apriltag/` — with its licence, its provenance and the list of
+what was taken and left in `VENDORED.md` beside it, an entry in `NOTICE`, a copy in
+`licenses/BSD-2-Clause.txt`, and an entry on the Help screen's third-party list. One family is
+compiled (tag36h11, the one a printed wall marker uses). Exactly one translation unit includes it,
+`calibration/apriltag_detector.cpp`, so a decoder this repository did not write cannot leak its
+types into a layer it did — `scripts/verify_sources.py` holds that door shut.
+
+`native-slam/.../calibration/tag_scale.hpp` holds the rest:
+
+* **`TagDetector`**, the interface callers use, with `AprilTagDetector` behind it when a camera and
+  a printed tag size are supplied, and `NoTagDetector` when they are not: `available()` is false and
+  `unavailableReason()` is a sentence a diagnostic screen can print, naming *what is missing* — the
+  camera, not the decoder. **It does not prove the answer.** The host suite renders tag36h11 id 7
+  from the pattern a printer would put on paper, at two known distances and four rotations, and
+  asserts the distance the decoder reports; that is arithmetic checked against geometry, which is
+  as much as a desktop can prove. A camera, a lens and a real marker are a device test this
+  repository cannot run, and nothing here claims otherwise.
+* **`available()` is still the distinction that matters.** A frame with no tag in it and a call
+  without intrinsics both produce no detections, and only the second is a broken question - the
+  detector that answers "cannot" carries the reason (`no camera intrinsics were supplied…`), so a
+  diagnostic screen prints what is missing instead of blaming the room. That is the shape
+  `RtabMapBridge::isAvailable` established in finding 98, and it survives the decoder arriving:
+  the absence moved, it did not disappear.
+* **`MarkerBaseline`** (`:core`), the case a single printed marker actually is. One tag stuck to a
+  wall has no layout, so the ratios above do not apply; what it has is geometry: seen from two
+  places, the triangle camera-camera-tag gives a baseline twice over - once between the two camera
+  positions in the app's metres, once between the two camera-to-tag vectors in the marker's metres,
+  each rotated into world axes first. Their ratio is the correction, and the rotation is not
+  optional: turn the phone between the sightings and an unrotated subtraction compares two
+  different frames and reports a phone that was right as one that needs recalibrating. It publishes
+  a factor, the agreeing and rejected pair counts, the longest baseline and the spread, and it asks
+  `ReferenceCalibration.accepted` rather than carrying a second window.
+* **`estimateScaleFromTagSightings`**, the layout case: the ratios between every pair
   of tags that the printed layout also knows (`nominal / measured`), a median to find the majority,
   a relative-deviation filter to drop the pairs that disagree with it, and a baseline-weighted mean
   of what survives. Long baselines dominate because a ratio's error falls with its baseline, and a
@@ -137,12 +162,41 @@ project file, which is why it survives the phone being put in a pocket.
   in `:core` with the bank-card reference, and the native directory does not contain the window's
   two numbers even in a comment.
 
-The contract is not wired: no JNI symbol exposes it, no app source names it, and no screen has a
-button for it. When a decoder lands, the wiring is what changes — not this arithmetic.
-* **Applying a factor to stored geometry.** Today a route's metres are what ARCore measured. Once
-  the dialog exists, the factor is stored on the project and applied at the reporting layer (bill
-  of materials, protocol tables, CSV) — never baked into the node positions, because a factor that
-  is baked in cannot be corrected by a better one tomorrow.
+The decoder is **vendored and wired to one screen**, and what is still missing is stated rather
+than implied: no device has held a real tag against it, and the *layout* path
+(`estimateScaleFromTagSightings`, which needs a printed sheet of tags) is still reached from
+nowhere. What exists is the frame path and the sequence on top of it:
+`MarkerFrameReader` (`:ar-engine`)
+packs an ARCore plane with `:core`'s `LuminancePlane` - the Y plane is *strided*, and a buffer that
+ignored the padding would shear every row and decode nothing - and calls the decoder with the
+session's intrinsics and the printed size; the composition is unit-tested with a decoder that
+records what it was handed. Above it, `MarkerProbe` (`:ar-engine`) turns a frame into one sighting
+per tag it holds - a printed sheet is several markers, and a probe that kept only the nearest one
+made the sweep's marker count a field that could never exceed 1 (finding 236) - and
+`MarkerSweep` (`:core`) holds the sequence: every sighting carries the ARCore session it came from
+and a sighting from another one is counted, never paired (a new session is a new world origin -
+finding 217 one layer up); older sightings of the same marker fall off after eight, so a tag in the
+room the operator left stops voting; and two sightings from the same spot leave the sweep
+`Watching` instead of publishing the 1.0 that would certify an unchecked phone. The two trust knobs
+(baseline floor, relative deviation) are read out of `TagScaleOptions` over
+`nativeTagScaleDefaults()` — this file does not restate them and neither does `:app`. The AR screen
+samples one frame in fifteen while the marker dialog is open, drops the sweep when ARCore starts a
+new session, and offers `Apply` only for a factor `ReferenceCalibration.accepted` would take. What
+the dialog prints is `:core`'s `MarkerStatusLine`: four cases (off, watching, measured, outside the
+window) with the evidence travelling alongside the factor - pairs that agreed, pairs the deviation
+filter rejected, the baseline they span, and the worst deviation among the accepted pairs - because
+a bare "factor 1.03" cannot tell the operator whether it rests on one 20 cm pair or six pairs over
+three metres (finding 237), nor whether those six agreed to a tenth of a percent or to four
+(finding 238). The spread is printed with one decimal in the reader's mark: whole percent would
+print a stable sweep and a sloppy one as the same shaped number. What is
+still unproven: a real printed tag on a real device, which is the one thing no JVM test can supply.
+`estimateScaleFromTagSightings` — the printed *layout* sheet — is still reached from nowhere, and no
+stored number depends on a marker today.
+* **Applying a factor to stored geometry.** Today a route's metres are what ARCore measured. Both
+  dialogs (two-tap and marker) hand their factor to the same `onCalibration` callback, which stores
+  it on the project; the reporting layer applies it (bill of materials, protocol tables, CSV) and
+  never the node positions, because a factor that is baked in cannot be corrected by a better one
+  tomorrow.
 
 ## Guard
 

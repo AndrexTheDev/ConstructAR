@@ -9,6 +9,7 @@ package com.constructar.app.ui.ar
 import com.constructar.arengine.hit.SnapInfo
 import com.constructar.core.units.LengthFormatter
 import com.constructar.core.units.LengthUnit
+import com.constructar.core.units.NumberText
 
 /**
  * How far the reticle was moved by the architectural snap, as digits a HUD line can print.
@@ -20,7 +21,8 @@ import com.constructar.core.units.LengthUnit
  *
  * Centimetres with one decimal, because the whole tolerance is ten of them: "4.2 cm" is a number
  * an operator can judge, "0.04 m" is one he has to convert while holding a laser. The digits come
- * from [LengthFormatter] so the HUD's decimal mark is the protocol's, in all six languages.
+ * from [LengthFormatter] so the digits are the ones the rest of the app prints; the decimal
+ * mark is the reader's (`NumberText`), which is why it arrives as an argument.
  *
  * `null` is the honest answer for anything this cannot print - no snap, a distance that is not a
  * number, a negative one. A sentence with a placeholder in it is worse than no sentence: the marker
@@ -31,10 +33,16 @@ internal object SnapReading {
     /** One decimal of a centimetre. The tolerance is 10 cm, so 1 mm of resolution is plenty. */
     const val DECIMALS: Int = 1
 
-    /** The digits for the moved distance, or `null` when there is nothing to state. */
-    fun moved(snap: SnapInfo?): String? {
+    /**
+     * The digits for the moved distance, or `null` when there is nothing to state.
+     *
+     * [mark] is the reader's decimal separator (`NumberText.decimalMark`): "4,2 cm" on a German
+     * phone, "4.2 cm" on an English one. The default is the protocol's point, so a caller that
+     * prints this into a document keeps the mark a spreadsheet can parse (finding 222).
+     */
+    fun moved(snap: SnapInfo?, mark: Char = NumberText.DEFAULT_MARK): String? {
         val metres = snap?.distanceM ?: return null
         if (!metres.isFinite() || metres < 0f) return null
-        return LengthFormatter.number(metres, LengthUnit.CENTIMETER, DECIMALS)
+        return LengthFormatter.number(metres, LengthUnit.CENTIMETER, DECIMALS, mark)
     }
 }

@@ -54,14 +54,20 @@ a 3D model for BIM — **without a single byte leaving the device**.
 | **F** | Reference calibration against a known object: an ISO/IEC 7810 ID-1 bank card (85.60 x 53.98 mm) or a folding rule at the 1 m / 2 m mark, `S = d_real / ||P2 - P1||`, refused outside `[0.85, 1.15]`, applied about the reference point rather than the world origin | `core/.../calib`, `app/.../ui` | Arithmetic and its unit tests are in place (docs/CALIBRATION.md); *Calibrate* on the AR screen takes the reticle point twice against a card or a folding rule, and the resulting factor is stored on the project (`calibrationScale`) and applied once to every printed length and to the bill of materials — never to the geometry; the protocol and the CSV say which factor was in force |
 
 Plus: auto-torch with hysteresis, monocular depth (Depth Anything V2 Small) fused into the
-metric depth field, a loop-closure pose graph (built and host-tested — *not yet driven by the
-scan pipeline*, see finding 98), thermal-aware degradation, and explicit handling for every way
-AR can fail on a site.
+metric depth field — wired from `ArMeasureController` with the model's path taken from
+`BuildConfig.DEPTH_MODEL_ASSET`; the weights are **not in the repository**, so a build without them
+says which depth it is measuring with (`DepthAvailability`: AI-fused, ARCore depth, or planes
+only) instead of quietly falling back — a loop-closure pose graph (built and host-tested — *not yet
+driven by the scan pipeline*, see finding 98), thermal-aware degradation, and explicit handling for
+every way AR can fail on a site.
 
 **Drywall take-off** (`core/.../wall`, **and it is wired**: the project card's *Walls* button
 renders `WallPlan`, which builds the room's ring from the stored outline, calls `wallSurface` and
 `estimateDrywall`, and prints the board size, stud spacing and waste the numbers were computed
-under — a purchase order without its assumptions is a number to argue with): net wall area with
+under — a purchase order without its assumptions is a number to argue with; each wall is drawn as
+an elevation, a tap on it chooses where a door or a window goes, and the picture is built from the
+same rectangles the take-off subtracts, so a hole in the drawing is a hole in the purchase
+order): net wall area with
 the openings subtracted as a *union* (two windows that overlap take
 board off a wall once, not twice — double-subtracting is how an estimate comes out short), then
 boards at the standard 2.50 × 1.25 m, CW studs at 62.5 cm centres (a stud under every board edge),
@@ -72,9 +78,12 @@ reason enumerated, rather than quietly absorbed.
 **DIN 18015 zones** (`core/.../wall`, **and it is wired**: the same *Walls* screen classifies every
 measured point and prints the sockets, switches and ceiling outlets, and it refuses to classify
 anything until the session has tracked a floor — ARCore's origin is wherever the phone started, so
-a height taken from it would print a socket at 1.40 m; `FloorReference` names the tracked
-horizontal plane under the operator, `HitResolution` carries it out of the hit source where the
-planes live, and the project stores it in `floorHeightM`): a measured height is snapped to the
+a height taken from it would print a socket at 1.40 m; `FloorEvaluator` scores the candidate planes
+on area, distance from the phone's chest height and depth and reports `TRACKED`, `UNCERTAIN` or
+`MISSING` with its evidence, `HitResolution` carries that decision out of the hit source where the
+planes live, and the project stores one floor **per AR session** — a height is a difference inside
+one coordinate system, and a node from another session is refused rather than measured from this
+one (finding 217)): a measured height is snapped to the
 socket line (30 cm), the switch line (105 cm) or the
 ceiling outlet (15 cm below the ceiling, so it follows the room), and refused outside a 10 cm
 tolerance with the nearest line still named — a point 25 cm off the socket line is not silently
@@ -179,9 +188,10 @@ the refusals are tested on the JVM — the same reason `PageFlow` exists.
 The same outline states the room's **size**. Under the card's name sit two badges — the area from
 `PolygonMath.area` and the perimeter of the ring, closing edge included (a 4 × 3 m room is 12.0 m²
 and 14.00 m, not 11 m: the walk back to the first corner is a wall, and it is what skirting and
-trunking are priced on). Both numbers are `LengthFormatter`'s `Locale.ROOT` digits, the same ones
-the length column of that row prints, and both units live in the resources (`card_area`,
-`card_perimeter`) so six locales stay in step. They appear only when the picture does: a row that
+trunking are priced on). Both numbers are `LengthFormatter`'s digits, in the reader's decimal mark —
+`10.5 m²` in English, `10,5 m²` in German — and both units live in the resources (`card_area`,
+`card_perimeter`) so six locales stay in step. The PDF's copy of the same two numbers keeps the
+point: a document is a protocol, a screen is prose (finding 222). They appear only when the picture does: a row that
 drew a shape but stated no size, or stated a size beside an icon, would be two answers to "was this
 room measured".
 
@@ -210,10 +220,11 @@ Four screens, in the order of the job, and no screen that exists only to show of
    clips, couplings and bends the runs actually need. The person who drives to the wholesaler is
    standing in the room with this phone, not reading the PDF at a desk. **Walls** opens the other
    half of the same job: the room's ring as wall area (openings subtracted, the closing wall
-   counted), the drywall purchase with the board size, stud spacing and waste it was computed
-   under, and the DIN 18015 zones — sockets at 30 cm, switches at 105 cm, ceiling outlets under
-   the ceiling — assigned from the floor the AR session actually tracked, or not assigned at all
-   when it tracked none.
+   counted), an elevation per wall where a tap places a door or a window, the drywall purchase with
+   the board size, stud spacing and waste it was computed under, and the DIN 18015 zones — sockets
+   at 30 cm, switches at 105 cm, ceiling outlets under the ceiling — assigned from the floor the AR
+   session actually tracked, or not assigned at all when it tracked none, with the count of points
+   from another session printed instead of quietly dropped.
 4. **Measure → Export** — the AR viewfinder with its HUD, then the export screen, where the
    operator picks a folder once and gets PDF, CSV (plus an optional one-line-per-article order
    list for the wholesaler) and, with Pro, GLB/PLY. The customer can sign
@@ -370,12 +381,12 @@ Six locales ship as resources, and **no user-facing text is hardcoded**: the eng
 
 | Directory | Locale | Keys |
 |-----------|--------|------|
-| `app/src/main/res/values/` | English (default) | 81 strings + 2 plurals |
-| `values-de/` | Deutsch | parity enforced |
-| `values-es/` | Español | parity enforced |
-| `values-fr/` | Français | parity enforced |
-| `values-it/` | Italiano | parity enforced |
-| `values-pl/` | Polski | includes `few`/`many` plural forms |
+| `app/src/main/res/values/` | English (default) | 482 strings + 13 plurals |
+| `app/src/main/res/values-de/` | Deutsch | 482 strings + 13 plurals |
+| `app/src/main/res/values-es/` | Español | 482 strings + 13 plurals |
+| `app/src/main/res/values-fr/` | Français | 482 strings + 13 plurals |
+| `app/src/main/res/values-it/` | Italiano | 482 strings + 13 plurals |
+| `app/src/main/res/values-pl/` | Polski | 482 strings + 13 plurals (`few`/`many` included) |
 
 `scripts/verify_sources.py` fails on a missing key, an untranslated extra key, or a mismatched
 format placeholder — so a half-translated release cannot ship. That includes the exported
@@ -436,7 +447,7 @@ and the sitemap are absolute.
 | Module | Language | Responsibility |
 |--------|----------|----------------|
 | `:core` | Kotlin/JVM, **no Android deps** | Maths (`Vec3`, `Quat`, `Mat4`, `Plane3`, polygon containment), routing model, fillet/RMF smoothing, tube & duct mesh generation, measurement, bill of materials, formatting. This is the trust boundary: everything that decides a *number* lives here and is unit-tested on the JVM. |
-| `:native-slam` | C++20 + JNI | TSDF volume (block-hashed, free-space carving optional), Surface Nets extraction, Manhattan-World frame solver, plane fitting, AprilTag detector contract and marker-to-scale arithmetic, pose graph with loop closures, RTAB-Map bridge. Host-testable: `native-slam/src/main/cpp/tests`; the optional RTAB-Map branch is compile-checked in CI against stub headers that mirror upstream's declarations (finding 183). |
+| `:native-slam` | C++20 + JNI | TSDF volume (block-hashed, free-space carving optional), Surface Nets extraction, Manhattan-World frame solver, plane fitting, AprilTag 3.1.0 decoder (vendored, BSD-2-Clause) and marker-to-scale arithmetic, pose graph with loop closures, RTAB-Map bridge. Host-testable: `native-slam/src/main/cpp/tests`; the optional RTAB-Map branch is compile-checked in CI against stub headers that mirror upstream's declarations (finding 183). |
 | `:ar-engine` | Kotlin/Android | ARCore session & config, torch policy, tracking monitor, depth capture, TSDF pipeline, hit cascade, AI depth, anchors, routing state, Filament mesh upload, Compose AR surface. |
 | `:export` | Kotlin/Android | PDF protocol, CSV bill of materials, GLB writer, PLY writer. Storage-agnostic (works on `OutputStream`). |
 | `:app` | Kotlin/Android | Single activity, Compose Material 3 UI with glove-sized controls, project storage (JSON files), navigation. |
@@ -456,6 +467,13 @@ gradle :app:assembleDebug                # APK in app/build/outputs/apk/debug/
 gradle :app:assembleRelease              # the shipping artifact: R8 + resource shrink
 python3 scripts/verify_sources.py        # copyright notice / reflection / i18n gates, no SDK needed
 ```
+
+**16 KB pages (Android 15+).** The NDK build spells the alignment flags out
+(`-Wl,-z,max-page-size=16384`, `-Wl,-z,common-page-size=16384`) instead of trusting the toolchain's
+default, no source file in `:native-slam` assumes a 4 KB page (a gate forbids the literal and any
+`mmap`/`madvise`/aligned allocation that does not ask `sysconf(_SC_PAGESIZE)` first), and CI reads
+the result back: every `LOAD` segment of `libconstructar_slam.so` must be `0x4000` and the packaged
+APK must pass `zipalign -c -P 16 -v 4`.
 
 **Size is a feature.** The release APK is **25 MB** — R8 with resource shrinking, six locales
 instead of the eighty a dependency tree carries, no preview/tooling artifacts, and native
@@ -491,11 +509,18 @@ Optional pieces (both are opt-in, the app works without them):
   Without it the app uses ARCore depth only.
 * **RTAB-Map** — set `constructar.rtabmap.dir=<path to RTAB-Map source>` in
   `gradle.properties`; the CMake build then compiles the BSD-only bridge. Note what is wired
-  today: the app measures on ARCore's own tracking. The pose graph, the proximity loop-closure
-  proposer and the bridge are built, host-tested and reachable through `NativeSlamEngine`, but
-  **nothing in `:app` or `:ar-engine` feeds them a keyframe yet**, so no closure is optimised -
-  the pose graph is *not yet driven by the scan pipeline* (finding 98), and
-  `verify_sources.py` refuses this file if it ever claims otherwise while that is still true.
+  today: the app measures on ARCore's own tracking. Since finding 243 the built-in pose graph is
+  fed - `KeyframeFeed` decides on each placed frame which pose is worth keeping (0.5 m of
+  translation, 15° of rotation, tracker valid, 30 features, 200 ms apart), and the scan worker
+  writes the node and the odometry edge between it and the previous one. Since finding 245 the
+  correction is driven too, but never by itself: the native proximity detector proposes a revisit,
+  the app asks the operator once ("the same place?"), and only a confirmation adds the closure
+  edge and runs the optimiser on the worker, which reports the residual before and after. What it
+  does **not** do is move your measurements: the corrected poses are reported, not written back
+  into the measured runs, because a run's metres were measured with taps and an inference may not
+  replace them (finding 217). Appearance verification (RTAB-Map) is still not wired, so the
+  closure rests on the operator's confirmation and says so. `verify_sources.py` reads the wiring
+  from the code and refuses this file if it claims the opposite.
 
 Full step-by-step setup — including how to convert the depth model and how to build RTAB-Map
 without non-free modules — is in **[docs/SETUP.md](docs/SETUP.md)**.
@@ -542,7 +567,8 @@ Known limitations, deliberately documented rather than hidden:
 
 ## Testing
 
-* **Native (C++) — 287 assertions, all green**, exercised with plain `g++` (no Android SDK):
+* **Native (C++) — 332 assertions, all green**, exercised with plain `g++` (no Android SDK; the
+  binary reports 336 passes because four of them sit inside the loop over the tag's rotations):
   SE(3) exp/log round trip, TSDF integration on synthetic depth, sphere/wall reconstruction
   areas and extents, a 30°-tilted plane (which pins the depth convention), free-space carving
   (a ghost disappears, the real wall does not), triangle budget, invalid input, pose-graph
@@ -605,12 +631,38 @@ Known limitations, deliberately documented rather than hidden:
   exactly that number, so a helper that never reaches the integrator fails. Fractional weights are
   why the block's 16-bit weight array became fixed point in 1/256ths (`kWeightScale`) instead of a
   count. Both are host-tested and **not yet wired**: no JNI symbol, no caller.
-* **AprilTag — detector contract, no detector.** `calibration/tag_scale.hpp` holds the interface a
-  decoder will implement (whose only implementation says it is unavailable, and why) and the
-  marker-to-scale arithmetic: pair ratios against the printed layout, a median, a deviation
-  filter, and a baseline-weighted mean. It publishes a factor and its evidence and decides
-  nothing - the window stays in `:core`. No decoder is vendored, nothing exposes it over JNI and
-  no screen has a button for it; `docs/CALIBRATION.md` says the same. `tools/verify-native.sh` builds and runs all of it the way CI does;
+* **AprilTag — the decoder is vendored, the wiring is not.** AprilTag 3.1.0's C core (BSD-2-Clause,
+  unmodified, one family: tag36h11) sits in `native-slam/src/main/cpp/third_party/apriltag/` with
+  its `VENDORED.md`, its entry in `NOTICE`, its licence text in `licenses/` and its row on the Help
+  screen. `calibration/apriltag_detector.cpp` is the one file that includes it; `nativeDetectAprilTagScale`
+  exposes it over JNI, and the host suite renders the printed pattern for id 7 and asserts the
+  distances it reports (2 m and 4 m, at four rotations). `calibration/tag_scale.hpp` holds the rest:
+  `TagDetector`, whose `available()` is false when no camera was supplied and whose reason says
+  camera rather than decoder, and the marker-to-scale arithmetic (pair ratios against the printed
+  layout, a median, a deviation filter, a baseline-weighted mean) which publishes a factor and its
+  evidence and decides nothing - the window stays in `:core`. The frame path exists too:
+  `:core`'s `MarkerBaseline` turns two sightings of one marker into a factor (camera-to-tag vectors
+  rotated into world axes against ARCore's camera positions, median-filtered, baseline-weighted,
+  and decided by `ReferenceCalibration.accepted`). `MarkerFrameReader` (`:ar-engine`) packs an ARCore Y plane with `:core`'s `LuminancePlane` (the
+  plane is strided; a buffer that ignored the padding shears every row and decodes nothing) and
+  calls the decoder with the session's intrinsics and the printed size - unit-tested with a decoder
+  that records what it was handed, three answers kept apart: `null` for a broken question, an empty
+  report for "no tag in view", metres otherwise. Since finding 235 the path reaches a screen:
+  `MarkerProbe` (`:ar-engine`) composes reader and sweep (one sighting per tag in the frame, so a
+  printed sheet of tags counts as several markers rather than one), `CameraPlanes` is the one adapter that
+  touches `android.media.Image` (and closes it on every path - ARCore's CPU image queue is two
+  deep, so a leaked image stalls the camera), and `MarkerSweep` (`:core`) holds the sequence a
+  screen has: sightings stamped with the ARCore session, so a re-localisation cannot pair two
+  world origins; capped per marker, so a tag seen in another room stops voting; and `Watching`
+  until a real baseline exists instead of the 1.0 that standing still would certify. The AR
+  screen's marker dialog shows that state in six locales through `:core`'s `MarkerStatusLine`,
+  which never prints a factor without the evidence behind it - the pairs that agreed, the baseline
+  they span and how tightly they agreed - announces the number as a live region while the operator
+  walks, and applies
+  an accepted factor through the same reporting-layer callback the two-tap sweep uses. The two trust knobs come from the native `TagScaleOptions`
+  over `nativeTagScaleDefaults()`; `:app` invents none of them. Unproven and stated as such: no
+  device has held a real tag against this path, and `estimateScaleFromTagSightings` - the printed
+  *layout* sheet - is still reached from nowhere. `tools/verify-native.sh` builds and runs all of it the way CI does;
   `--tsan` runs the same suite under ThreadSanitizer, which is a gate: the fusion of a voxel is a
   read-modify-write of two arrays done by several workers, and only the sanitizer can see it when
   that update escapes the shard lock (finding 181). It reports none.
@@ -766,10 +818,10 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 910 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1093 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
-| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 287 checks, 0 failures |
-| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 287 checks, 0 failures, no data race reported |
+| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 332 checks, 0 failures |
+| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 332 checks, 0 failures, no data race reported |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
 | APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |

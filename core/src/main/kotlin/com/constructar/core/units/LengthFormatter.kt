@@ -36,10 +36,15 @@ enum class LengthUnit(val symbol: String, val metersPerUnit: Float, val defaultD
  */
 object LengthFormatter {
 
-    fun format(meters: Float, unit: LengthUnit = LengthUnit.METER, decimals: Int = unit.defaultDecimals): String =
+    fun format(
+        meters: Float,
+        unit: LengthUnit = LengthUnit.METER,
+        decimals: Int = unit.defaultDecimals,
+        mark: Char = NumberText.DEFAULT_MARK,
+    ): String =
         // "—", not "— m": the unit is not the unknown part, and the protocol prints this where a
         // length was never measured, so a stray unit reads like a measurement of something.
-        if (!meters.isFinite()) "—" else number(meters, unit, decimals) + " " + unit.symbol
+        if (!meters.isFinite()) "—" else number(meters, unit, decimals, mark) + " " + unit.symbol
 
     /**
      * `number(14.8234f)` → `"14.82"` — the digits alone, `Locale.ROOT`, for a resource that
@@ -49,11 +54,21 @@ object LengthFormatter {
      * which takes its decimal mark from the device: a German phone wrote `12,50 m` for the run
      * and `28.80 m` for the room total three lines below it, on one screen, about one room.
      */
-    fun number(meters: Float, unit: LengthUnit = LengthUnit.METER, decimals: Int = unit.defaultDecimals): String {
+    fun number(
+        meters: Float,
+        unit: LengthUnit = LengthUnit.METER,
+        decimals: Int = unit.defaultDecimals,
+        /**
+         * The decimal mark, for a *screen* that wants the reader's own (`NumberText.decimalMark`).
+         *
+         * The default is the protocol's point, so every document - PDF, CSV, the JSON on disk -
+         * keeps the mark a spreadsheet can parse, and a caller that says nothing gets exactly what
+         * it got before this parameter existed (finding 222).
+         */
+        mark: Char = NumberText.DEFAULT_MARK,
+    ): String {
         if (!meters.isFinite()) return "—"
-        val value = meters / unit.metersPerUnit
-        val pattern = "%." + decimals.coerceIn(0, 3) + "f"
-        return String.format(Locale.ROOT, pattern, value)
+        return NumberText.digits(meters / unit.metersPerUnit, decimals, mark)
     }
 
     /** `"Length: 14.82 m"` — the exact string used on the floating 3D HUD label. */
@@ -64,7 +79,8 @@ object LengthFormatter {
     fun formatDual(meters: Float): String =
         format(meters, LengthUnit.METER) + " (" + format(meters, LengthUnit.CENTIMETER, 0) + ")"
 
-    fun formatArea(squareMeters: Float): String = String.format(Locale.ROOT, "%.2f m²", squareMeters)
+    fun formatArea(squareMeters: Float, mark: Char = NumberText.DEFAULT_MARK): String =
+        if (!squareMeters.isFinite()) "—" else NumberText.digits(squareMeters, 2, mark) + " m²"
 
     fun formatVolume(cubicMeters: Float): String = String.format(Locale.ROOT, "%.2f m³", cubicMeters)
 

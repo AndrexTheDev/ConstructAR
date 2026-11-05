@@ -14,6 +14,7 @@ added here as well - `scripts/verify_sources.py` rule 20 compares both direction
 Full licence texts are reproduced under `licenses/`:
   licenses/Apache-2.0.txt     Apache License, Version 2.0 (January 2004)
   licenses/BSD-3-Clause.txt   BSD 3-Clause License
+  licenses/BSD-2-Clause.txt   BSD 2-Clause License (AprilTag)
 
 
 SceneView
@@ -59,6 +60,18 @@ Copyright (c) 2024 Lihe Young and contributors
 
 Monocular depth model (Small checkpoint only), converted to LiteRT and pinned by SHA-256 in
 `MonocularDepthEstimator.Config`; used to fill in the surface where ARCore depth is unavailable.
+
+
+AprilTag (tag36h11 decoder)
+---------------------------
+Licence: BSD-2-Clause (licenses/BSD-2-Clause.txt)
+Copyright (c) 2013-2016, The Regents of The University of Michigan. All rights reserved.
+
+AprilTag 3.1.0's C core, vendored unmodified into `native-slam/src/main/cpp/third_party/apriltag/`
+(upstream file list, provenance and the licence text alongside it in `VENDORED.md`). One family is
+compiled - tag36h11 - because one family is what a printed wall marker uses, and a codebook nobody
+prints is a binary nobody measured. It reads markers out of a camera frame; `:app` does not feed it
+a frame yet (docs/CALIBRATION.md, tier 2).
 
 
 RTAB-Map (optional back-end)

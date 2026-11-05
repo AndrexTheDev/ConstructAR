@@ -110,6 +110,21 @@ data class RouteNodeRecord(
     val anchorId: String? = null,
     /** Surface confidence at capture time (depth confidence or plane quality), 0..1. */
     val confidence: Float = 1f,
+    /**
+     * The AR session this point was measured in - the frame its coordinates belong to.
+     *
+     * ARCore's world origin is wherever the session started, and it does **not** survive the
+     * process: two runs of the same room recorded a day apart live in two coordinate systems that
+     * differ by a rotation and a translation nobody recorded. Every length is therefore still
+     * exact (a distance is invariant under a rigid motion), but a *height above the floor* is not:
+     * subtracting a floor measured today from a node measured yesterday mixes two frames and
+     * produces a number that looks like a mounting height and is not one (finding 217).
+     *
+     * Empty for every node written before this field existed. A project with an empty id and
+     * exactly one measured floor can still be resolved - there is only one answer it can have -
+     * and the rule that does so lives in `:core` (`relativeNodes`), not in the screen.
+     */
+    val sessionId: String = "",
 ) {
     fun withPosition(newPosition: Vec3) = copy(position = newPosition)
 }

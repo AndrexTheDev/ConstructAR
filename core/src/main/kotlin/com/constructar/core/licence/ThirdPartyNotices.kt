@@ -40,7 +40,8 @@ data class ThirdPartyNotice(
 object ThirdPartyNotices {
 
     /** Licence identifiers this product may ship under. Anything else fails the unit test. */
-    val ALLOWED_LICENCES: Set<String> = setOf("Apache-2.0", "BSD-3-Clause", "Google ARCore SDK licence")
+    val ALLOWED_LICENCES: Set<String> =
+        setOf("Apache-2.0", "BSD-3-Clause", "BSD-2-Clause", "Google ARCore SDK licence")
 
     val ALL: List<ThirdPartyNotice> = listOf(
         ThirdPartyNotice(
@@ -67,6 +68,12 @@ object ThirdPartyNotices {
             name = "Depth Anything V2 Small",
             licence = "Apache-2.0",
             copyright = "Copyright (c) 2024 Lihe Young and contributors",
+        ),
+        ThirdPartyNotice(
+            name = "AprilTag (tag36h11 decoder)",
+            licence = "BSD-2-Clause",
+            copyright = "Copyright (c) 2013-2016, The Regents of The University of Michigan. " +
+                "All rights reserved.",
         ),
         ThirdPartyNotice(
             name = "RTAB-Map (optional back-end)",

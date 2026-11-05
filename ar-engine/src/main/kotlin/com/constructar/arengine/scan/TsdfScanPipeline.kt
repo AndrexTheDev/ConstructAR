@@ -10,6 +10,16 @@ import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import com.constructar.arengine.depth.DepthFrameSnapshot
+import com.constructar.arengine.keyframe.KeyframeApplier
+import com.constructar.arengine.keyframe.KeyframeFeed
+import com.constructar.arengine.keyframe.KeyframeQueue
+import com.constructar.arengine.keyframe.NativePoseGraphSink
+import com.constructar.arengine.keyframe.PoseGraphStatus
+import com.constructar.arengine.keyframe.ClosureState
+import com.constructar.arengine.keyframe.NativePoseGraphSource
+import com.constructar.arengine.keyframe.PoseGraphCloser
+import com.constructar.core.calib.MarkerSweep
+import com.constructar.core.calib.MarkerSweepOptions
 import com.constructar.nativebridge.FloorplanPayload
 import com.constructar.nativebridge.IntegrationResult
 import com.constructar.nativebridge.NativeSlamEngine
@@ -188,6 +198,61 @@ class TsdfScanPipeline(
     @Volatile
     private var engine: NativeSlamEngine? = null
 
+    /**
+     * Keyframes the render thread accepted, waiting for the thread that may touch the graph.
+     *
+     * `NativeSlamEngine`'s contract says integrate, extract and pose-graph calls are serialised by
+     * this pipeline's single worker; the decision to keep a keyframe is made on the frame that
+     * produced the pose. So the decision stays on the render thread and enqueues, and only an
+     * accepted keyframe crosses over (finding 243).
+     */
+    @Volatile
+    private var keyframeQueue = KeyframeQueue()
+
+    /** Applies [keyframeQueue] to the native graph. Worker thread only; null after [stop]. */
+    @Volatile
+    private var keyframeApplier: KeyframeApplier? = null
+
+    private val mutablePoseGraphStatus = MutableStateFlow(PoseGraphStatus())
+
+    /**
+     * How many keyframes the graph took and how many were lost on the way (finding 244).
+     *
+     * Published from the worker, which is the only place that knows both halves: the queue's own
+     * drops (produced on the render thread) and the applier's refusals (counted here). Until
+     * finding 244 every one of those counters was read by a unit test and by nothing else, so on a
+     * device "the graph is empty" could not be told apart from "the queue overflowed".
+     */
+    val poseGraphStatus: StateFlow<PoseGraphStatus> = mutablePoseGraphStatus.asStateFlow()
+
+    /**
+     * What the loop-closure conversation is saying (finding 245).
+     *
+     * Published from the worker, where the graph is safe to touch; the screen only displays it and
+     * the three buttons below enqueue.
+     */
+    private val mutableClosureState = MutableStateFlow<ClosureState>(ClosureState.Idle)
+    val closureState: StateFlow<ClosureState> = mutableClosureState.asStateFlow()
+
+    /** Asks arriving from the UI. Applied on the worker, never on the thread that tapped. */
+    private val closureActions = Channel<ClosureAction>(capacity = 4)
+
+    private enum class ClosureAction { LOOK, CONFIRM, DISMISS }
+
+    /** Runs the conversation on the worker. Null until the engine exists. */
+    @Volatile
+    private var poseGraphCloser: PoseGraphCloser? = null
+
+    /**
+     * What the render thread offers every placed frame to, or null until the engine exists.
+     *
+     * Public because the AR screen drives it: it is the one piece of the pose graph the frame loop
+     * may touch, and it can only enqueue.
+     */
+    @Volatile
+    var keyframeFeed: KeyframeFeed? = null
+        private set
+
     private var workerJob: kotlinx.coroutines.Job? = null
 
     private val fusedDepth = java.util.concurrent.atomic.AtomicReference<FusedDepth?>(null)
@@ -220,6 +285,16 @@ class TsdfScanPipeline(
             return
         }
         mutableState.value = mutableState.value.copy(ready = true)
+        // A queue per engine: a restart after `stop()` gets a fresh queue rather than a closed one,
+        // so the second session cannot silently lose every keyframe.
+        keyframeQueue = KeyframeQueue()
+        val applier = KeyframeApplier(NativePoseGraphSink(created))
+        keyframeApplier = applier
+        keyframeFeed = KeyframeFeed(keyframeQueue)
+        // The applier is also the node history: it is the only component that knows which pose
+        // each native node was created with, and a closure report without it would be a sentence
+        // about nothing (finding 246).
+        poseGraphCloser = PoseGraphCloser(NativePoseGraphSource(created), applier)
         workerJob = scope.launch(dispatcher) {
             try {
                 // Ends when the channel is closed and drained — see `stop()`.
@@ -314,6 +389,11 @@ class TsdfScanPipeline(
     }
 
     private fun integrateLocked(active: NativeSlamEngine, snapshot: DepthFrameSnapshot) {
+        // Every keyframe the render thread accepted goes in here: this is the only thread that may
+        // touch the pose graph, and a keyframe is worth less than a frame - so the drain is
+        // bounded and the rest waits for the next one.
+        drainKeyframes()
+        applyClosureActions()
         val startedNanos = System.nanoTime()
         // Read the stride once: the render thread may update `pendingPixelStep` concurrently.
         val pixelStep = pendingPixelStep
@@ -408,14 +488,78 @@ class TsdfScanPipeline(
     fun floorplan(
         heightMetres: Float = FLOORPLAN_HEIGHT_METRES,
         bandMetres: Float = FLOORPLAN_BAND_METRES,
+        /**
+         * How far a wall run may sit off the room's own axes and still be squared onto them, in
+         * degrees; 0 turns the step off.
+         *
+         * The default is on because the outline this returns is not a diagnostic: it is stored as
+         * the room's sketch, drawn as the card's picture, and measured again by the wall screen
+         * (wall lengths, areas, board order). A 5-degree shear in that outline is a wall 20 cm
+         * longer on a 4 m run, on every wall, in the purchase order.
+         */
+        manhattanToleranceDegrees: Float = FLOORPLAN_MANHATTAN_TOLERANCE_DEGREES,
     ): FloorplanPayload? {
         if (engine == null) return null
         return kotlinx.coroutines.runBlocking {
             kotlinx.coroutines.withTimeoutOrNull(FLOORPLAN_TIMEOUT_MS) {
-                kotlinx.coroutines.withContext(dispatcher) { engine?.floorplan(heightMetres, bandMetres) }
+                kotlinx.coroutines.withContext(dispatcher) {
+                    engine?.floorplan(heightMetres, bandMetres, manhattanToleranceDegrees = manhattanToleranceDegrees)
+                }
             }
         }
     }
+
+    /**
+     * What the last floorplan's Manhattan step did - the residual and how much of the outline it
+     * moved.
+     *
+     * A diagnostic for the same caller that took the plan, and the reason it exists: "the card
+     * shows a rectangle" and "the card shows a rectangle because the app squared it" are two
+     * different claims, and only one of them is a measurement. Must be asked straight after
+     * [floorplan] - the native context keeps only the newest fit.
+     */
+    fun lastManhattan(): com.constructar.nativebridge.ManhattanReport? = engine?.lastManhattan()
+
+    /**
+     * The two knobs the marker sweep shares with the native layout path, straight out of
+     * `TagScaleOptions`, or `null` when the native layer is unavailable.
+     *
+     * The screen must not restate them: a baseline floor invented in `:app` would be a second
+     * definition of "a distance worth measuring" that disagrees with the one already in C++ the
+     * first time either is tuned (finding 235).
+     */
+    fun markerKnobs(): Pair<Float, Float>? = engine?.tagScaleDefaults()
+
+    /**
+     * Opens a marker sweep wired to the vendored decoder, or `null` when the marker path is not
+     * available on this device.
+     *
+     * The composition is here rather than in `:app` on purpose: the knobs come from the native
+     * `TagScaleOptions`, the decoder is the engine's, and the session id is the caller's. A screen
+     * that built its own would have to name `EngineTagDecoder`, and would then own the lifetime of
+     * an engine it does not own.
+     */
+    fun openMarkerProbe(sessionId: Long): MarkerProbe? {
+        val active = engine ?: return null
+        val knobs = active.tagScaleDefaults() ?: return null
+        val sweep = MarkerSweep.start(
+            MarkerSweepOptions(
+                sessionId = sessionId,
+                minBaselineMetres = knobs.first,
+                maxRelativeDeviation = knobs.second,
+            ),
+        ) ?: return null
+        return MarkerProbe(MarkerFrameReader(EngineTagDecoder(active)), sweep)
+    }
+
+    /**
+     * The frame the last [floorplan] was squared onto, fitted from the room's walls.
+     *
+     * Read on the same worker and straight after the plan: the native context keeps the newest
+     * frame only, and a frame from the previous room would be a true statement about another job.
+     */
+    fun manhattanFrame(): com.constructar.nativebridge.ManhattanFrameReport? =
+        engine?.alignManhattanFrame()
 
     /** Clears the volume and pose graph (new room). */
     fun reset() {
@@ -451,6 +595,14 @@ class TsdfScanPipeline(
         latestSnapshot?.release()
         latestSnapshot = null
         frames.close()
+        // Order matters: no new keyframes, then no applier (the worker reads it per command), and
+        // the engine is closed by the worker itself - so nothing is applied to a freed context.
+        keyframeFeed = null
+        keyframeApplier = null
+        keyframeQueue.close()
+        mutablePoseGraphStatus.value = PoseGraphStatus()
+        poseGraphCloser = null
+        mutableClosureState.value = ClosureState.Idle
         val job = workerJob
         workerJob = null
         val active = engine
@@ -470,8 +622,67 @@ class TsdfScanPipeline(
         }
     }
 
+    // ── Loop closure ────────────────────────────────────────────────────────────────────
+
+    /** Ask the detector whether the walk has come back somewhere it has been. */
+    fun lookForClosure() {
+        closureActions.trySend(ClosureAction.LOOK)
+    }
+
+    /** The operator confirmed: apply the closure and optimise, on the worker. */
+    fun confirmClosure() {
+        closureActions.trySend(ClosureAction.CONFIRM)
+    }
+
+    /** The operator refused: remembered, and the next question waits for the cooldown. */
+    fun dismissClosure() {
+        closureActions.trySend(ClosureAction.DISMISS)
+    }
+
+    /**
+     * Runs the queued ask/confirm/refuse on the worker.
+     *
+     * The node count is the applier's, not the graph's: it is the number of keyframes this session
+     * actually fed in, which is the number the policy's floor is written against.
+     */
+    private fun applyClosureActions() {
+        val closer = poseGraphCloser ?: return
+        while (true) {
+            val action = closureActions.tryReceive().getOrNull() ?: return
+            val now = android.os.SystemClock.uptimeMillis()
+            mutableClosureState.value = when (action) {
+                ClosureAction.LOOK -> closer.look(keyframeApplier?.appliedNodes ?: 0, now)
+                ClosureAction.CONFIRM -> closer.confirm(now)
+                ClosureAction.DISMISS -> closer.dismiss(now)
+            }
+        }
+    }
+
+    /**
+     * Applies what the render thread queued. Caller must be the worker: see [keyframeApplier].
+     */
+    private fun drainKeyframes() {
+        val applier = keyframeApplier ?: return
+        var drained = 0
+        while (drained < MAX_KEYFRAMES_PER_INTEGRATION) {
+            val command = keyframeQueue.poll() ?: break
+            applier.apply(command)
+            drained += 1
+        }
+        // Published on every integrated frame, not only when something was drained: "0 nodes and
+        // 0 lost" is itself the answer a support call needs, and StateFlow drops the repeats.
+        mutablePoseGraphStatus.value = PoseGraphStatus.of(applier, keyframeQueue.dropped)
+    }
+
     companion object {
         private const val TAG = "TsdfScanPipeline"
+
+        /**
+         * At 30 integrated frames a second this is eight times the fastest rate the keyframe
+         * policy allows, so the queue drains in practice; the bound only exists so that a keyframe
+         * cannot delay the frame that pays for the walls.
+         */
+        private const val MAX_KEYFRAMES_PER_INTEGRATION = 8
 
         /** A fused frame older than this is stale: the camera has moved on. */
         private const val FUSION_TTL_MS = 800L
@@ -490,6 +701,14 @@ class TsdfScanPipeline(
 
         /** A 10 cm band: one TSDF voxel plus slack around the cut. */
         private const val FLOORPLAN_BAND_METRES = 0.10f
+
+/**
+ * Default Manhattan tolerance for the floorplan: drift plus the slice's own noise, in degrees.
+ *
+ * Ten degrees is wide enough for the shear a hand-held scan produces and narrow enough that a
+ * chamfer or a bay window - the runs that are deliberately not square - stays where it is.
+ */
+const val FLOORPLAN_MANHATTAN_TOLERANCE_DEGREES = 10f
 
         /**
          * How long a card picture may cost the caller.

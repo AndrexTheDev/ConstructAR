@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -85,6 +86,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.constructar.app.R
 import com.constructar.app.ui.ActionTone
 import com.constructar.app.ui.GloveButton
+import com.constructar.app.ui.LocalDecimalMark
+import com.constructar.app.ui.shownLength
+import com.constructar.app.ui.shownLengthWithUnit
 import com.constructar.app.ui.GloveButtonRow
 import com.constructar.app.ui.formatTimeLabel
 import com.constructar.app.ui.rememberTimePattern
@@ -95,6 +99,9 @@ import com.constructar.app.ui.snapMovedRes
 import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.app.ui.tierLabel
+import com.constructar.arengine.hit.FloorHudLine
+import com.constructar.arengine.hit.floorHudLine
+import com.constructar.arengine.keyframe.PoseGraphStanding
 import com.constructar.arengine.render.ArScene
 import com.constructar.arengine.session.ArReadiness
 import com.constructar.arengine.tracking.TrackingQuality
@@ -106,7 +113,6 @@ import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.model.ConduitPresets
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.ProjectRecord
-import com.constructar.core.units.LengthFormatter
 import com.constructar.core.units.LengthUnit
 import com.constructar.core.units.PercentText
 import com.constructar.core.model.RouteDraft
@@ -123,7 +129,7 @@ import com.constructar.core.model.RouteLabels
  * ## Language
  *
  * Not one user-visible character is hardcoded here. Lengths come from
- * [com.constructar.core.units.LengthFormatter] or from the `hud_length` format resource, and
+ * [com.constructar.core.units.NumberText] or from the `hud_length` format resource, and
  * every state the engines can report arrives as a *code* ([com.constructar.arengine.tracking.Guidance],
  * [com.constructar.arengine.route.RouteWarning], `SurfaceKind`, `HitSource`) that
  * [com.constructar.app.ui.labels] maps to `stringResource`. That is what makes the six shipped
@@ -160,14 +166,19 @@ fun ArMeasureScreen(
      */
     onCalibration: (Double) -> Unit = {},
     /**
-     * Stores the floor's height in the session's coordinates, once a tracked plane is one.
+     * Stores the floor's height, **with the session that measured it**, once a tracked plane is one.
      *
      * The reference every mounting height in the trade is measured from cannot be assumed: ARCore's
      * origin is wherever the session started, so DIN 18015's 30 cm socket would be printed at
      * whatever height the phone happened to be held. The planes only exist inside the hit source,
      * so this screen is the last place that can see one; the project keeps it (finding 214).
+     *
+     * The session id travels with the height because a floor is only a reference for nodes in
+     * *its own* coordinate system. A room measured over two sessions has two origins and two
+     * floors, and a project that stored only the last one would print yesterday's socket as if it
+     * had been measured from today's floor (finding 217).
      */
-    onFloorHeight: (Float) -> Unit = {},
+    onFloorHeight: (String, Float) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -179,6 +190,13 @@ fun ArMeasureScreen(
     // a rotation ends the sweep, which costs two taps and never a stored number.
     var calibrationSweep by remember { mutableStateOf<CalibrationSweep>(CalibrationSweep.Idle) }
     var calibrationOpen by rememberSaveable { mutableStateOf(false) }
+    // The marker sweep: unlike the two-tap calibration this one runs while the operator walks, so
+    // whether it is open has to survive a recomposition - but not a rotation, because a rotation is
+    // a new ARCore session and the sweep would be pairing two world origins (finding 235).
+    var markerOpen by remember { mutableStateOf(false) }
+    var closureOpen by remember { mutableStateOf(false) }
+    val markerState by controller.markerProbeState.collectAsStateWithLifecycle()
+    val markerAvailable = remember(controller) { controller.isMarkerProbeAvailable() }
 
     fun cameraGranted(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
@@ -262,11 +280,42 @@ fun ArMeasureScreen(
     val hudPosition by controller.hudScreenPixels.collectAsStateWithLifecycle()
     val lastHit by controller.lastHit.collectAsStateWithLifecycle()
     val stability by controller.stability.collectAsStateWithLifecycle()
-    val floorHeight by controller.floorHeight.collectAsStateWithLifecycle()
-    // Handed to the caller as soon as a floor is seen, and not again for the same plane: the
-    // project's write path ignores a repeat within a centimetre (finding 214).
-    LaunchedEffect(floorHeight) {
-        floorHeight?.let { if (it.isFinite()) onFloorHeight(it) }
+    val floorDecision by controller.floor.collectAsStateWithLifecycle()
+    // A table top is upward-facing, below the phone and higher than the floor: the one case
+    // "highest plane wins" got wrong (finding 218). When the evaluator is not sure, the HUD says
+    // so instead of the app quietly recording a floor it will later print mounting heights from -
+    // and when it *is* sure it says that too, because "no line at all" used to mean both "nothing
+    // decided yet" and "recorded" (finding 228).
+    val floorLine = floorHudLine(floorDecision?.status)
+    val graphStatus by controller.poseGraphStatus.collectAsStateWithLifecycle()
+    val closureState by controller.closureState.collectAsStateWithLifecycle()
+    val aiDepthRunning by controller.aiDepthRunning.collectAsStateWithLifecycle()
+    val aiDepthSettled by controller.aiDepthSettled.collectAsStateWithLifecycle()
+    // Which depth is actually in use. A phone with neither ARCore's depth API nor the bundled
+    // model still measures - on the planes it has detected - and the operator has to know that,
+    // because it changes where a tap can land (finding 221).
+    val depthStatus = remember(
+        aiDepthRunning,
+        aiDepthSettled,
+        tracking.depthSupported,
+        controller.depthModelBundled,
+    ) {
+        com.constructar.arengine.ai.DepthAvailability.of(
+            modelBundled = controller.depthModelBundled,
+            arcoreDepthSupported = tracking.depthSupported,
+            aiRunning = aiDepthRunning,
+            aiSettled = aiDepthSettled,
+        )
+    }
+    // Handed to the caller as soon as a floor is *decided* - by the reticle, not only by a tap -
+    // and only when the decision is usable: an uncertain floor (a table top under the phone) may
+    // be shown as a warning but may not become the reference every mounting height is measured
+    // from (findings 218 and 226). The project's write path ignores a repeat within a centimetre
+    // and coalesces the burst (findings 214 and 219).
+    LaunchedEffect(floorDecision) {
+        val decision = floorDecision ?: return@LaunchedEffect
+        if (!decision.usable) return@LaunchedEffect
+        decision.heightM?.let { if (it.isFinite()) onFloorHeight(controller.sessionId, it) }
     }
 
     var spec by remember { mutableStateOf(ConduitPresets.all.first()) }
@@ -368,7 +417,7 @@ fun ArMeasureScreen(
         controller.syncCommittedRoutes(project.routes)
     }
 
-    val lengthText = stringResource(R.string.hud_length, LengthFormatter.number(routeState.lengthMeters))
+    val lengthText = stringResource(R.string.hud_length, shownLength(routeState.lengthMeters))
     // The segment under the crosshair, while walking: the number that tells the operator when
     // to stop and tap, rather than tapping and then reading the result.
     val liveSegmentText = if (routeState.nodeCount > 0 && routeState.liveSegmentMeters >= 0.05f) {
@@ -404,7 +453,7 @@ fun ArMeasureScreen(
         stringResource(
             R.string.export_runs_total,
             roomTotals.runs,
-            LengthFormatter.format(roomTotals.meters),
+            shownLengthWithUnit(roomTotals.meters),
         )
     } else {
         null
@@ -564,7 +613,7 @@ fun ArMeasureScreen(
                     // The ring appears where the reticle samples, for as long as the last point
                     // really was moved onto a corner or an edge (finding 213).
                     SnapMarker(
-                        active = SnapReading.moved(lastHit?.hit?.snap) != null,
+                        active = SnapReading.moved(lastHit?.hit?.snap, LocalDecimalMark.current) != null,
                         modifier = Modifier.align(Alignment.Center),
                     )
                 }
@@ -691,6 +740,29 @@ fun ArMeasureScreen(
                         },
                     )
                 }
+                // `isFinal`, not just the state: during the model's load the answer is
+                // "planes only" and it may stop being true in a second. A line that appears and
+                // vanishes on every cold start is a line the operator learns to ignore.
+                if (!depthStatus.hasDepthField && depthStatus.isFinal) {
+                    Text(
+                        text = stringResource(R.string.ar_depth_planes_only),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SiteColors.warning,
+                    )
+                }
+                when (floorLine) {
+                    FloorHudLine.RECORDED -> Text(
+                        text = stringResource(R.string.ar_floor_recorded),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SiteColors.accent,
+                    )
+                    FloorHudLine.UNCERTAIN -> Text(
+                        text = stringResource(R.string.ar_floor_uncertain),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SiteColors.warning,
+                    )
+                    FloorHudLine.NONE -> Unit
+                }
                 warningText?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
                 }
@@ -721,6 +793,25 @@ fun ArMeasureScreen(
                 }
                 // Hit diagnostics, in the operator's language: which surface and which cascade
                 // tier produced the last node.
+                // What the pose graph took and what it lost (finding 244). Hidden until there is
+                // something to say: a line reading "nodes: 0" over a wall that is being measured
+                // fine would read as a fault.
+                if (graphStatus.standing != PoseGraphStanding.EMPTY) {
+                    Text(
+                        text = stringResource(R.string.ar_pose_graph, graphStatus.nodes, graphStatus.edges),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = HudStyle.text,
+                    )
+                    if (graphStatus.standing == PoseGraphStanding.LOSSY) {
+                        // A hole in the graph is not a cosmetic detail: the optimiser will spread
+                        // the missing node's error over the trajectory that connects it.
+                        Text(
+                            text = stringResource(R.string.ar_pose_graph_lost, graphStatus.lost),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = SiteColors.warning,
+                        )
+                    }
+                }
                 lastHit?.let { resolution ->
                     val hit = resolution.hit
                     Text(
@@ -737,7 +828,7 @@ fun ArMeasureScreen(
                     // taps again to "fix" a point that was already better than his aim
                     // (finding 213).
                     val snap = hit?.snap
-                    val moved = SnapReading.moved(snap)
+                    val moved = SnapReading.moved(snap, LocalDecimalMark.current)
                     if (snap != null && moved != null) {
                         Text(
                             text = stringResource(snap.kind.snapMovedRes(), moved),
@@ -854,6 +945,72 @@ fun ArMeasureScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            // ── Loop closure ────────────────────────────────────────────────────────
+            // The one write in the SLAM path that needs a person: two visits half a metre apart
+            // can be the same doorway or two different corners, and a wrong closure folds the
+            // room without anything looking wrong. Enabled once the graph holds nodes at all;
+            // the policy's own floor decides whether there is anything to ask about.
+            GloveButton(
+                label = stringResource(R.string.loop_check),
+                icon = Icons.Default.Loop,
+                tone = ActionTone.SECONDARY,
+                enabled = graphStatus.nodes > 0,
+                onClick = {
+                    closureOpen = true
+                    controller.lookForClosure()
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            if (closureOpen) {
+                LoopClosureDialog(
+                    state = closureState,
+                    onConfirm = {
+                        controller.confirmClosure()
+                        closureOpen = false
+                    },
+                    onRefuse = {
+                        controller.dismissClosure()
+                        closureOpen = false
+                    },
+                    onClose = { closureOpen = false },
+                )
+            }
+
+            // ── Marker check ────────────────────────────────────────────────────────
+            // A printed tag of known size, measured through the camera: the second tier of
+            // `docs/CALIBRATION.md`, and the only one that needs no tap - the operator aims and
+            // walks, and the sweep counts the sightings. It publishes a factor, never a scale
+            // stored behind the operator's back; `Apply` is the same reporting-layer write the
+            // two-tap sweep uses.
+            GloveButton(
+                label = stringResource(R.string.marker_title),
+                icon = Icons.Default.QrCodeScanner,
+                tone = ActionTone.SECONDARY,
+                enabled = markerAvailable,
+                onClick = {
+                    if (controller.startMarkerProbe()) markerOpen = true
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            if (markerOpen) {
+                // The dialog is its own file since finding 242: it is a small state machine
+                // (aim, walk, sideways, measured) and it owns the sentences for each phase.
+                MarkerCalibrationDialog(
+                    state = markerState,
+                    onApply = { factor ->
+                        onCalibration(factor)
+                        controller.stopMarkerProbe()
+                        markerOpen = false
+                    },
+                    onDismiss = {
+                        controller.stopMarkerProbe()
+                        markerOpen = false
+                    },
+                )
+            }
 
             if (calibrationOpen) {
                 val sweep = calibrationSweep
@@ -1018,7 +1175,7 @@ fun ArMeasureScreen(
                                 R.plurals.ar_points,
                                 pending.nodes.size,
                                 pending.nodes.size,
-                            ) + " · " + stringResource(R.string.hud_length, LengthFormatter.number(pending.lengthMeters)),
+                            ) + " · " + stringResource(R.string.hud_length, shownLength(pending.lengthMeters)),
                             formatTimeLabel(pending.savedAtEpochMs, rememberTimePattern()),
                         ),
                         style = MaterialTheme.typography.bodyMedium,
@@ -1141,8 +1298,8 @@ private fun Context.findActivity(): Activity? {
 private fun calibrationLabel(reference: CalibrationReference): String = if (reference.isCard) {
     stringResource(
         R.string.calib_credit_card,
-        LengthFormatter.format(reference.realMetres.toFloat(), LengthUnit.CENTIMETER, 1),
+        shownLengthWithUnit(reference.realMetres.toFloat(), LengthUnit.CENTIMETER, 1),
     )
 } else {
-    stringResource(R.string.calib_zollstock, LengthFormatter.format(reference.realMetres.toFloat()))
+    stringResource(R.string.calib_zollstock, shownLengthWithUnit(reference.realMetres.toFloat()))
 }

@@ -15,6 +15,7 @@ import com.constructar.app.billing.EntitlementStore
 import com.constructar.app.billing.LicencePublicKey
 import com.constructar.app.data.DraftGate
 import com.constructar.app.data.ProjectRepository
+import com.constructar.app.data.SaveCoalescer
 import com.constructar.app.data.RoomThumbnail
 import com.constructar.app.data.SiteSettings
 import com.constructar.app.data.UiPreferences
@@ -37,6 +38,9 @@ import com.constructar.core.model.RouteDraft
 import com.constructar.core.model.RouteLabels
 import com.constructar.core.model.WorkSession
 import com.constructar.core.price.Pricing
+import com.constructar.core.wall.OpeningKind
+import com.constructar.core.wall.PlacedOpening
+import com.constructar.core.wall.statedRoomHeight
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -176,6 +180,18 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     )
 
     private val mutableState = MutableStateFlow(UiState())
+
+    /** Coalesces the floor writes: the last floor of a burst is the one worth storing. */
+    private val floorWrites = SaveCoalescer<FloorSample>(windowMillis = SaveCoalescer.DEFAULT_WINDOW_MS) {
+        persistFloor(it)
+    }
+
+    init {
+        viewModelScope.launch { floorWrites.run() }
+    }
+
+    /** One "this session measured this floor" request, on its way to disk. */
+    private data class FloorSample(val sessionId: String, val heightM: Float)
     val state: StateFlow<UiState> = mutableState.asStateFlow()
 
     /** Exposed for the export screen, which builds its own request. */
@@ -585,19 +601,135 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /**
-     * Records the floor plane's height in the session's coordinates.
+     * Records the floor plane's height, for the AR session that measured it.
      *
-     * Written by the AR screen as soon as the hit source sees a floor (see `FloorReference`), and
+     * Written by the AR screen as soon as the hit source sees a floor (see `FloorEvaluator`), and
      * only when it actually changes: the session re-reports the same plane on every frame, and a
-     * JSON write per frame would be a file written thirty times a second. A centimetre of jitter
-     * around the same plane is the same floor.
+     * centimetre of jitter around the same plane is the same floor. The *state* changes at once so
+     * the HUD and the zones see the new floor on the next frame; the *file* is written once per
+     * quiet window (`SaveCoalescer`), because a JSON write per ARCore frame is a disk benchmark
+     * with a measurement attached (finding 219).
+     *
+     * The floor is stored per session (`sessionFloorHeights`) and mirrored into `floorHeightM` for
+     * the readers that predate the map: ARCore's origin does not survive a session, so a floor is
+     * only a reference for the nodes measured against the same one (finding 217).
      */
-    fun setFloorHeight(heightM: Float, onSaved: (ProjectRecord?) -> Unit = {}): ProjectRecord? {
+    fun setFloorHeight(
+        sessionId: String,
+        heightM: Float,
+        onSaved: (ProjectRecord?) -> Unit = {},
+    ): ProjectRecord? {
         val project = mutableState.value.openProject ?: return null
-        if (!heightM.isFinite()) return null
-        val current = project.floorHeightM
-        if (current != null && kotlin.math.abs(current - heightM) < FLOOR_TOLERANCE_M) return project
-        val updated = project.copy(floorHeightM = heightM)
+        if (!heightM.isFinite() || sessionId.isEmpty()) return null
+
+        // The floor is recorded *per session*, and only for the session that measured it: a node
+        // placed in this session has no meaning in the next one (finding 217), so the id travels
+        // with the height instead of the app assuming the last floor applies.
+        val known = project.sessionFloorHeights[sessionId]
+        // Read into a local: `ProjectRecord` lives in another module, so the compiler will not
+        // smart-cast its property after a null check and the comparison below would not compile.
+        val stored = project.floorHeightM
+        val unchanged = known != null &&
+            kotlin.math.abs(known - heightM) < FLOOR_TOLERANCE_M &&
+            stored != null &&
+            kotlin.math.abs(stored - heightM) < FLOOR_TOLERANCE_M
+        if (unchanged) return project
+
+        val updated = withFloor(project, sessionId, heightM)
+        // The state is updated *now* - the HUD and every zone read it on the next frame. Only the
+        // file write waits for the burst to end: ARCore re-reports the same plane every frame, and
+        // one JSON write per frame is a disk benchmark, not a measurement (finding 219).
+        mutableState.value = mutableState.value.copy(
+            openProject = updated,
+            materialList = buildMaterialList(updated),
+        )
+        floorWrites.offer(FloorSample(sessionId, heightM))
+        return updated
+    }
+
+    /**
+     * States the room's floor-to-ceiling height - the number every wall area is made of.
+     *
+     * The wall screen used to build every wall at `DEFAULT_WALL_HEIGHT_M`, which is the height of
+     * a *board*, chosen so a 2.50 m board covers a wall without a butt joint. That made a 2.80 m
+     * room report 35.0 m² of wall where it has 39.2 m², four boards short, on every job with a
+     * ceiling that is not the trade default (finding 227).
+     *
+     * `statedRoomHeight` owns what counts as a room height; a number it refuses is not stored, so a
+     * typo cannot become a wall.
+     */
+    fun setWallHeight(heightM: Float, onSaved: (ProjectRecord?) -> Unit = {}): ProjectRecord? {
+        val project = mutableState.value.openProject ?: return null
+        val stated = statedRoomHeight(heightM) ?: return null
+        if (stated == project.wallHeightM) return project
+        val updated = project.copy(wallHeightM = stated)
+        mutate(updated, onSaved)
+        return updated
+    }
+
+    /** The project with one session's floor recorded, leaving the other sessions' floors alone. */
+    private fun withFloor(project: ProjectRecord, sessionId: String, heightM: Float) = project.copy(
+        floorHeightM = heightM,
+        sessionFloorHeights = project.sessionFloorHeights + (sessionId to heightM),
+    )
+
+    /**
+     * Writes the newest floor of a burst.
+     *
+     * Re-reads the open project instead of writing the copy the offer captured: the operator may
+     * have walked into another room, added a route, or undone something while the window was
+     * running, and this write must not resurrect the older document.
+     */
+    private suspend fun persistFloor(sample: FloorSample) {
+        val project = mutableState.value.openProject ?: return
+        val updated = withFloor(project, sample.sessionId, sample.heightM)
+        val saved = repository.save(updated)
+        if (!saved) {
+            mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_SAVE_FAILED)
+        }
+    }
+
+    /**
+     * Records a door or a window on a wall of the room's ring.
+     *
+     * The offset is in metres along the wall, computed by `:core` from the tap
+     * (`openingOffsetForTap`) - the screen knows where the finger landed, not how long the wall is
+     * or how wide a door is. Everything here does is append the rectangle the plan will subtract
+     * and redraw; the union subtraction itself stays in `wallSurface`, so two windows that overlap
+     * take board off the wall once rather than twice.
+     */
+    fun addOpening(
+        wallIndex: Int,
+        kind: OpeningKind,
+        offsetM: Float,
+        onSaved: (ProjectRecord?) -> Unit = {},
+    ): ProjectRecord? {
+        val project = mutableState.value.openProject ?: return null
+        if (wallIndex < 0 || !offsetM.isFinite() || offsetM < 0f) return null
+        val opening = when (kind) {
+            OpeningKind.WINDOW -> PlacedOpening.window(wallIndex, offsetM)
+            // A passage is a door with no leaf; the trade dimensions of the reveal are the same.
+            OpeningKind.DOOR, OpeningKind.PASSAGE -> PlacedOpening.door(wallIndex, offsetM)
+        }
+        val updated = project.copy(openings = project.openings + opening)
+        mutate(updated, onSaved)
+        return updated
+    }
+
+    /**
+     * Removes the last opening placed on [wallIndex] - the only removal a tap-placed list needs.
+     *
+     * A room has four walls and a handful of openings; an operator who mis-tapped wants the last
+     * one gone, not a numbered list to manage. Nothing is removed from another wall by mistake:
+     * the index is part of the question.
+     */
+    fun removeLastOpening(wallIndex: Int, onSaved: (ProjectRecord?) -> Unit = {}): ProjectRecord? {
+        val project = mutableState.value.openProject ?: return null
+        val last = project.openings.indexOfLast { it.wallIndex == wallIndex }
+        if (last < 0) return project
+        val updated = project.copy(
+            openings = project.openings.filterIndexed { index, _ -> index != last },
+        )
         mutate(updated, onSaved)
         return updated
     }
