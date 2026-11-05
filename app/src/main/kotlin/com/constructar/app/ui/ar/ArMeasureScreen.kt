@@ -85,6 +85,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.constructar.app.R
 import com.constructar.app.ui.ActionTone
 import com.constructar.app.ui.GloveButton
+import com.constructar.app.ui.LocalDecimalMark
+import com.constructar.app.ui.shownLength
+import com.constructar.app.ui.shownLengthWithUnit
 import com.constructar.app.ui.GloveButtonRow
 import com.constructar.app.ui.formatTimeLabel
 import com.constructar.app.ui.rememberTimePattern
@@ -107,7 +110,6 @@ import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.model.ConduitPresets
 import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.ProjectRecord
-import com.constructar.core.units.LengthFormatter
 import com.constructar.core.units.LengthUnit
 import com.constructar.core.units.PercentText
 import com.constructar.core.model.RouteDraft
@@ -124,7 +126,7 @@ import com.constructar.core.model.RouteLabels
  * ## Language
  *
  * Not one user-visible character is hardcoded here. Lengths come from
- * [com.constructar.core.units.LengthFormatter] or from the `hud_length` format resource, and
+ * [com.constructar.core.units.NumberText] or from the `hud_length` format resource, and
  * every state the engines can report arrives as a *code* ([com.constructar.arengine.tracking.Guidance],
  * [com.constructar.arengine.route.RouteWarning], `SurfaceKind`, `HitSource`) that
  * [com.constructar.app.ui.labels] maps to `stringResource`. That is what makes the six shipped
@@ -391,7 +393,7 @@ fun ArMeasureScreen(
         controller.syncCommittedRoutes(project.routes)
     }
 
-    val lengthText = stringResource(R.string.hud_length, LengthFormatter.number(routeState.lengthMeters))
+    val lengthText = stringResource(R.string.hud_length, shownLength(routeState.lengthMeters))
     // The segment under the crosshair, while walking: the number that tells the operator when
     // to stop and tap, rather than tapping and then reading the result.
     val liveSegmentText = if (routeState.nodeCount > 0 && routeState.liveSegmentMeters >= 0.05f) {
@@ -427,7 +429,7 @@ fun ArMeasureScreen(
         stringResource(
             R.string.export_runs_total,
             roomTotals.runs,
-            LengthFormatter.format(roomTotals.meters),
+            shownLengthWithUnit(roomTotals.meters),
         )
     } else {
         null
@@ -587,7 +589,7 @@ fun ArMeasureScreen(
                     // The ring appears where the reticle samples, for as long as the last point
                     // really was moved onto a corner or an edge (finding 213).
                     SnapMarker(
-                        active = SnapReading.moved(lastHit?.hit?.snap) != null,
+                        active = SnapReading.moved(lastHit?.hit?.snap, LocalDecimalMark.current) != null,
                         modifier = Modifier.align(Alignment.Center),
                     )
                 }
@@ -774,7 +776,7 @@ fun ArMeasureScreen(
                     // taps again to "fix" a point that was already better than his aim
                     // (finding 213).
                     val snap = hit?.snap
-                    val moved = SnapReading.moved(snap)
+                    val moved = SnapReading.moved(snap, LocalDecimalMark.current)
                     if (snap != null && moved != null) {
                         Text(
                             text = stringResource(snap.kind.snapMovedRes(), moved),
@@ -1055,7 +1057,7 @@ fun ArMeasureScreen(
                                 R.plurals.ar_points,
                                 pending.nodes.size,
                                 pending.nodes.size,
-                            ) + " · " + stringResource(R.string.hud_length, LengthFormatter.number(pending.lengthMeters)),
+                            ) + " · " + stringResource(R.string.hud_length, shownLength(pending.lengthMeters)),
                             formatTimeLabel(pending.savedAtEpochMs, rememberTimePattern()),
                         ),
                         style = MaterialTheme.typography.bodyMedium,
@@ -1178,8 +1180,8 @@ private fun Context.findActivity(): Activity? {
 private fun calibrationLabel(reference: CalibrationReference): String = if (reference.isCard) {
     stringResource(
         R.string.calib_credit_card,
-        LengthFormatter.format(reference.realMetres.toFloat(), LengthUnit.CENTIMETER, 1),
+        shownLengthWithUnit(reference.realMetres.toFloat(), LengthUnit.CENTIMETER, 1),
     )
 } else {
-    stringResource(R.string.calib_zollstock, LengthFormatter.format(reference.realMetres.toFloat()))
+    stringResource(R.string.calib_zollstock, shownLengthWithUnit(reference.realMetres.toFloat()))
 }

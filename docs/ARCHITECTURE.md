@@ -563,11 +563,18 @@ BOM for Excel - see `docs/TESTING.md` findings 28 and 30.
 publishes a `Guidance` code, `RouteSession` a `RouteWarning` code, the hit cascade a
 `SurfaceKind`/`HitSource`, `ArSessionController` an `ArReadiness` branch. `:app` maps each to
 `stringResource` in `ui/Labels.kt`, and every length is formatted by `LengthFormatter` - where
-the resource carries the unit (`hud_length` is `%1$s m`), the digits arrive through
-`LengthFormatter.number()`, never through a `%f` format, because a `%f` resource takes its
-decimal mark from the device and put `12,50 m` beside `28.80 m` in one HUD column (finding 39).
-That is what makes six locales complete without the engines carrying a
-Context — and it keeps the engines unit-testable on the JVM.
+the resource carries the unit (`hud_length` is `%1$s m`), the digits arrive through the formatter,
+never through a `%f` format, because a `%f` resource takes its decimal mark from the device and put
+`12,50 m` beside `28.80 m` in one HUD column (finding 39).
+
+Since finding 222 the two surfaces are deliberately different, and the difference is the point.
+`LengthFormatter` stays `Locale.ROOT` - PDF, CSV, JSON, the PLY floats - because a document is a
+protocol: a German Excel reads a `,` as a column separator. A *screen* asks for the reader's mark:
+`CompositionLocalProvider(LocalDecimalMark provides rememberDecimalMark())` in `AppRoot`, and the
+screens call `shownLength`/`shownLengthWithUnit` from `ui/DecimalMark.kt`. The character itself is
+`NumberText.decimalMark(locale)` in `:core`, guarded so a locale whose separator came back as a
+digit cannot turn `1.40` into `1140`. That is what makes six locales complete without the engines
+carrying a Context — and it keeps the engines unit-testable on the JVM.
 
 ---
 

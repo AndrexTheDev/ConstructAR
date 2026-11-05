@@ -3296,11 +3296,11 @@ CARD_SIZE_CHAIN = (
      "val perimeterMeters: Float",
      "the outline no longer knows how long its ring is"),
     ("app/src/main/kotlin/com/constructar/app/data/RoomSizeText.kt",
-     "fun of(sketch: FloorplanSketch?): RoomSizeText?",
+     "fun of(sketch: FloorplanSketch?, mark: Char = NumberText.DEFAULT_MARK): RoomSizeText?",
      "nothing turns the outline into the two numbers the card states"),
     ("app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt",
-     "RoomSizeText.of(sketch)",
-     "the badge row stops asking for a size"),
+     "RoomSizeText.of(sketch, LocalDecimalMark.current)",
+     "the badge row stops asking for a size, or asks for it without the reader's decimal mark"),
     ("app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt",
      "stringResource(R.string.card_area, size.area)",
      "the area badge stops printing the area"),
@@ -3808,6 +3808,75 @@ def check_a_contract_assertion_is_believed() -> None:
                           f"turns it into a build failure the sandbox cannot see - read `{name}.`")
 
 
+def check_the_screen_and_the_document_disagree_on_purpose() -> None:
+    """A screen writes the reader's decimal mark; a document writes the protocol's (finding 222).
+
+    `LengthFormatter` prints `Locale.ROOT` digits deliberately - a CSV opened in a spreadsheet whose
+    column separator is `,` must not also have `,` between a whole number and its fraction, and a
+    JSON written in Warsaw has to be the same file as one written in Madrid. The consequence nobody
+    looked at was the *screen*: a German fitter read `1.40 m` on a phone that writes `1,40 €` two
+    cards away, in the same font, about the same room.
+
+    Two rules, and they are the mirror of each other. The screens must go through the composition's
+    mark; the documents must not, or the file a wholesaler opens stops being parseable.
+
+    The failure this can produce is worse than an inconsistency: a locale whose separator came back
+    as a digit would render `1.40` as `1140`, which is why `NumberText.decimalMark` guards the
+    character before anything prints it.
+    """
+    number_text = (ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" /
+                   "units" / "NumberText.kt")
+    if not number_text.exists():
+        add(number_text, "there is no place a locale's decimal mark can live, so every screen would "
+                         "either invent one or print the protocol's")
+        return
+    text = number_text.read_text(encoding="utf-8")
+    for piece in ("fun decimalMark(", "fun digits(", "const val DEFAULT_MARK"):
+        if piece not in text:
+            add(number_text, f"`NumberText` lost `{piece}` - the mark has no single definition")
+    if "isDigit()" not in text or "isLetter()" not in text:
+        add(number_text, "the separator is trusted without a guard - a locale whose mark is a digit "
+                         "would turn `1.40` into `1140` on screen")
+
+    formatter = (ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" /
+                 "units" / "LengthFormatter.kt")
+    formatter_text = formatter.read_text(encoding="utf-8")
+    if "mark: Char = NumberText.DEFAULT_MARK" not in formatter_text:
+        add(formatter, "`LengthFormatter` has no decimal-mark parameter defaulting to the "
+                       "protocol's point, so a screen cannot ask for the reader's without changing "
+                       "every document too")
+
+    app = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app"
+    root_screen = app / "ui" / "AppRoot.kt"
+    root_text = root_screen.read_text(encoding="utf-8")
+    if "LocalDecimalMark provides rememberDecimalMark()" not in root_text:
+        add(root_screen, "nothing provides the decimal mark to the screens, so every screen would "
+                         "fall back to the protocol's point")
+
+    # The two screens that state a length most often, and the HUD is the one the operator reads
+    # while standing in the room.
+    for name in ("ui/WallScreen.kt", "ui/ar/ArMeasureScreen.kt", "ui/ProjectScreen.kt",
+                 "ui/MaterialsScreen.kt"):
+        path = app / name
+        if not path.exists():
+            continue
+        body = path.read_text(encoding="utf-8")
+        if "shownLength(" not in body and "shownLengthWithUnit(" not in body:
+            add(path, "the screen formats its own digits, so it prints the protocol's point in a "
+                      "language that writes a comma")
+
+    # And the other direction: a document that took the screen's mark would no longer parse.
+    export = ROOT / "export" / "src" / "main"
+    for path in sorted(export.rglob("*.kt")):
+        body = path.read_text(encoding="utf-8")
+        # Only the formatter's own parameter counts: `mark = ','` (or any other literal) in a
+        # document writer is the mistake - `watermark =` is not a decimal mark, and reading the
+        # word "mark" would refuse a hundred innocent lines.
+        if re.search(r"\bmark\s*=\s*'", body) or "decimalMark" in body:
+            add(path, "a document asks for a screen's decimal mark - the CSV and the PDF have to "
+                      "stay parseable in every country")
+
+
 def check_the_depth_fallback_is_named() -> None:
     """Three ways to get a millimetre, and the app has to know which one it is using (finding 221).
 
@@ -4298,6 +4367,7 @@ def main() -> int:
     check_the_hud_says_when_the_reticle_moved()
     check_the_wall_screen_uses_the_core_numbers()
     check_the_depth_fallback_is_named()
+    check_the_screen_and_the_document_disagree_on_purpose()
     check_the_generated_pages_keep_their_notice()
     check_the_docs_do_not_call_a_live_path_dead()
     check_the_reticle_snap_stays_wired()

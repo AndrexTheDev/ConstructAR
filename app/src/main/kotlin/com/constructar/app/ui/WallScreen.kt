@@ -43,7 +43,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.constructar.app.R
 import com.constructar.app.ui.theme.SiteColors
-import com.constructar.core.units.LengthFormatter
 import com.constructar.core.units.LengthUnit
 import com.constructar.core.units.PercentText
 import com.constructar.core.wall.DOOR_WIDTH_M
@@ -150,7 +149,7 @@ fun WallScreen(
                     stringResource(
                         R.string.wall_row,
                         index + 1,
-                        stringResource(R.string.wall_length_m, LengthFormatter.number(line.lengthM)),
+                        stringResource(R.string.wall_length_m, shownLength(line.lengthM)),
                         stringResource(R.string.wall_area_m2, area(line.netAreaM2)),
                     ),
                     style = MaterialTheme.typography.bodySmall,
@@ -200,7 +199,7 @@ fun WallScreen(
                     label = stringResource(
                         R.string.wall_row,
                         index + 1,
-                        stringResource(R.string.wall_length_m, LengthFormatter.number(line.lengthM)),
+                        stringResource(R.string.wall_length_m, shownLength(line.lengthM)),
                         stringResource(R.string.wall_area_m2, area(line.netAreaM2)),
                     ),
                     value = "",
@@ -248,23 +247,23 @@ fun WallScreen(
                     stringResource(R.string.wall_stud_profile),
                     stringResource(
                         R.string.wall_length_m,
-                        LengthFormatter.number(drywall.studProfileMeters),
+                        shownLength(drywall.studProfileMeters),
                     ),
                 )
                 WallRow(
                     stringResource(R.string.wall_track_profile),
                     stringResource(
                         R.string.wall_length_m,
-                        LengthFormatter.number(drywall.trackProfileMeters),
+                        shownLength(drywall.trackProfileMeters),
                     ),
                 )
                 WallRow(stringResource(R.string.wall_screws), drywall.screws.toString())
                 Text(
                     stringResource(
                         R.string.wall_assumptions,
-                        LengthFormatter.number(spec.boardWidthM),
-                        LengthFormatter.number(spec.boardHeightM),
-                        LengthFormatter.number(spec.studSpacingM),
+                        shownLength(spec.boardWidthM),
+                        shownLength(spec.boardHeightM),
+                        shownLength(spec.studSpacingM),
                         PercentText.of(spec.wasteFraction),
                     ),
                     style = MaterialTheme.typography.bodySmall,
@@ -478,9 +477,15 @@ private fun WallRow(label: String, value: String, emphasis: Boolean = false) {
     }
 }
 
-/** Square metres to a tenth: a scan is good to a centimetre, a hundredth of a square metre is not. */
+/**
+ * Square metres to a tenth: a scan is good to a centimetre, a hundredth of a square metre is not.
+ *
+ * A composable because the decimal mark is the reader's: the same wall reads `10.5 m²` in English
+ * and `10,5 m²` in German, and the mark comes from the composition, not from a global.
+ */
+@Composable
 private fun area(squareMeters: Float): String =
-    LengthFormatter.number(squareMeters, LengthUnit.METER, AREA_DECIMALS)
+    shownLength(squareMeters, LengthUnit.METER, AREA_DECIMALS)
 
 private const val AREA_DECIMALS = 1
 

@@ -188,9 +188,10 @@ the refusals are tested on the JVM — the same reason `PageFlow` exists.
 The same outline states the room's **size**. Under the card's name sit two badges — the area from
 `PolygonMath.area` and the perimeter of the ring, closing edge included (a 4 × 3 m room is 12.0 m²
 and 14.00 m, not 11 m: the walk back to the first corner is a wall, and it is what skirting and
-trunking are priced on). Both numbers are `LengthFormatter`'s `Locale.ROOT` digits, the same ones
-the length column of that row prints, and both units live in the resources (`card_area`,
-`card_perimeter`) so six locales stay in step. They appear only when the picture does: a row that
+trunking are priced on). Both numbers are `LengthFormatter`'s digits, in the reader's decimal mark —
+`10.5 m²` in English, `10,5 m²` in German — and both units live in the resources (`card_area`,
+`card_perimeter`) so six locales stay in step. The PDF's copy of the same two numbers keeps the
+point: a document is a protocol, a screen is prose (finding 222). They appear only when the picture does: a row that
 drew a shape but stated no size, or stated a size beside an icon, would be two answers to "was this
 room measured".
 
@@ -776,7 +777,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 943 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 950 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 287 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 287 checks, 0 failures, no data race reported |

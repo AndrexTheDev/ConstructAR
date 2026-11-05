@@ -34,6 +34,7 @@ import com.constructar.app.ProjectViewModel
 import com.constructar.app.R
 import com.constructar.app.UiMessage
 import com.constructar.app.ui.ar.ArMeasureScreen
+import androidx.compose.runtime.CompositionLocalProvider
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.wall.wallPlan
 
@@ -113,269 +114,275 @@ fun AppRoot(viewModel: ProjectViewModel) {
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            NavHost(
-                navController = navController,
-                startDestination = if (state.onboardingDone) Routes.HOME else Routes.ONBOARDING,
-            ) {
-                composable(Routes.ONBOARDING) {
-                    OnboardingScreen(
-                        onDone = {
-                            viewModel.completeOnboarding()
-                            navController.navigate(Routes.HOME) {
-                                popUpTo(Routes.ONBOARDING) { inclusive = true }
-                            }
-                        },
-                    )
-                }
-
-                composable(Routes.HOME) {
-                    // The list is the destination that means "no room is open" (finding 134). The
-                    // arrow on the project screen closes the room, the system back gesture did
-                    // not - and neither did coming back from an export started here - so a room
-                    // the operator had left stayed "open" and the next cold start walked back
-                    // into it. A quick resume that has not been shown yet is left alone.
-                    LaunchedEffect(Unit) {
-                        if (OpenRoom.closesOnHome(
-                                hasOpenProject = state.openProject != null,
-                                resumePending = state.resumeReady,
-                            )
-                        ) {
-                            viewModel.closeProject()
-                        }
-                    }
-                    HomeScreen(
-                        projects = state.projects,
-                        unreadableProjects = state.unreadableProjects,
-                        unreadableFiles = state.unreadableFiles,
-                        onDeleteUnreadable = viewModel::deleteUnreadableFile,
-                        loading = state.loading,
-                        entitlements = state.entitlements,
-                        trialDaysLeft = state.trialDaysLeft,
-                        onOpen = { id ->
-                            viewModel.openProject(id) { project ->
-                                if (project != null) navController.navigate(Routes.PROJECT)
-                            }
-                        },
-                        onExport = { id ->
-                            viewModel.openProject(id) { project ->
-                                if (project != null) navController.navigate(Routes.EXPORT)
-                            }
-                        },
-                        onCreate = { name ->
-                            // Blank names fall back to a localised room name rather than the
-                            // repository's English default.
-                            val safeName = name.ifBlank { defaultRoomName }
-                            viewModel.createProject(safeName) { navController.navigate(Routes.PROJECT) }
-                        },
-                        onUpgrade = { navController.navigate(Routes.PAYWALL) },
-                        onHelp = { navController.navigate(Routes.HELP) },
-                        // A room whose scan never closed its ring: the operator says the gap is a
-                        // wall, and the card gets a picture and a size (finding 203).
-                        onCloseRoom = viewModel::closeRoomByHand,
-                    )
-                }
-
-                composable(Routes.PROJECT) {
-                    val project = state.openProject
-                    if (project == null) {
-                        Text(
-                            stringResource(R.string.project_none),
-                            modifier = Modifier.fillMaxSize(),
-                            color = SiteColors.danger,
-                        )
-                        LaunchedEffect(Unit) { navController.popBackStack() }
-                    } else {
-                        ProjectScreen(
-                            project = project,
-                            materialList = state.materialList,
-                            onBack = {
-                                viewModel.closeProject()
-                                navController.popBackStack(Routes.HOME, inclusive = false)
-                            },
-                            onMeasure = { navController.navigate(Routes.MEASURE) },
-                            onExport = { navController.navigate(Routes.EXPORT) },
-                            onRename = { viewModel.renameProject(it) },
-                            onSaveNotes = { viewModel.updateNotes(it) },
-                            onSaveTechnician = { viewModel.updateTechnician(it) },
-                            onRemoveRoute = { routeId -> viewModel.removeRoute(routeId) },
-                            onMaterials = { navController.navigate(Routes.MATERIALS) },
-                            onWalls = { navController.navigate(Routes.WALLS) },
-                            onFieldBook = { navController.navigate(Routes.FIELD_BOOK) },
-                            onSaveCustomer = { name, address, phone ->
-                                viewModel.updateCustomer(name, address, phone)
-                            },
-                            firmHourlyRateCents = state.firmHourlyRateCents,
-                            onSavePricing = { rate, material ->
-                                viewModel.updatePricing(rate, material)
-                            },
-                            photo = state.photo,
-                            onPhoto = { uri, onDone -> viewModel.attachPhoto(uri, onDone) },
-                            onDelete = {
-                                viewModel.deleteProject(project.id) {
-                                    navController.popBackStack(Routes.HOME, inclusive = false)
+            // One place decides the decimal mark every screen writes. A screen that reached for
+            // `Locale.getDefault()` itself would stay on the device's language while Android 13's
+            // per-app language setting moved the rest of the app. The documents never read this -
+            // they keep `Locale.ROOT` (finding 222).
+            CompositionLocalProvider(LocalDecimalMark provides rememberDecimalMark()) {
+                NavHost(
+                    navController = navController,
+                    startDestination = if (state.onboardingDone) Routes.HOME else Routes.ONBOARDING,
+                ) {
+                    composable(Routes.ONBOARDING) {
+                        OnboardingScreen(
+                            onDone = {
+                                viewModel.completeOnboarding()
+                                navController.navigate(Routes.HOME) {
+                                    popUpTo(Routes.ONBOARDING) { inclusive = true }
                                 }
                             },
                         )
                     }
-                }
 
-                composable(Routes.MEASURE) {
-                    val project = state.openProject
-                    if (project == null) {
-                        Text(
-                            stringResource(R.string.project_none),
-                            modifier = Modifier.fillMaxSize(),
-                            color = SiteColors.danger,
+                    composable(Routes.HOME) {
+                        // The list is the destination that means "no room is open" (finding 134). The
+                        // arrow on the project screen closes the room, the system back gesture did
+                        // not - and neither did coming back from an export started here - so a room
+                        // the operator had left stayed "open" and the next cold start walked back
+                        // into it. A quick resume that has not been shown yet is left alone.
+                        LaunchedEffect(Unit) {
+                            if (OpenRoom.closesOnHome(
+                                    hasOpenProject = state.openProject != null,
+                                    resumePending = state.resumeReady,
+                                )
+                            ) {
+                                viewModel.closeProject()
+                            }
+                        }
+                        HomeScreen(
+                            projects = state.projects,
+                            unreadableProjects = state.unreadableProjects,
+                            unreadableFiles = state.unreadableFiles,
+                            onDeleteUnreadable = viewModel::deleteUnreadableFile,
+                            loading = state.loading,
+                            entitlements = state.entitlements,
+                            trialDaysLeft = state.trialDaysLeft,
+                            onOpen = { id ->
+                                viewModel.openProject(id) { project ->
+                                    if (project != null) navController.navigate(Routes.PROJECT)
+                                }
+                            },
+                            onExport = { id ->
+                                viewModel.openProject(id) { project ->
+                                    if (project != null) navController.navigate(Routes.EXPORT)
+                                }
+                            },
+                            onCreate = { name ->
+                                // Blank names fall back to a localised room name rather than the
+                                // repository's English default.
+                                val safeName = name.ifBlank { defaultRoomName }
+                                viewModel.createProject(safeName) { navController.navigate(Routes.PROJECT) }
+                            },
+                            onUpgrade = { navController.navigate(Routes.PAYWALL) },
+                            onHelp = { navController.navigate(Routes.HELP) },
+                            // A room whose scan never closed its ring: the operator says the gap is a
+                            // wall, and the card gets a picture and a size (finding 203).
+                            onCloseRoom = viewModel::closeRoomByHand,
                         )
-                        LaunchedEffect(Unit) { navController.popBackStack() }
-                    } else {
-                        // Read once per visit to the viewfinder: a draft only matters to the
-                        // screen that can offer it back.
-                        LaunchedEffect(project.id) { viewModel.loadDraft() }
-                        ArMeasureScreen(
-                            project = project,
+                    }
+
+                    composable(Routes.PROJECT) {
+                        val project = state.openProject
+                        if (project == null) {
+                            Text(
+                                stringResource(R.string.project_none),
+                                modifier = Modifier.fillMaxSize(),
+                                color = SiteColors.danger,
+                            )
+                            LaunchedEffect(Unit) { navController.popBackStack() }
+                        } else {
+                            ProjectScreen(
+                                project = project,
+                                materialList = state.materialList,
+                                onBack = {
+                                    viewModel.closeProject()
+                                    navController.popBackStack(Routes.HOME, inclusive = false)
+                                },
+                                onMeasure = { navController.navigate(Routes.MEASURE) },
+                                onExport = { navController.navigate(Routes.EXPORT) },
+                                onRename = { viewModel.renameProject(it) },
+                                onSaveNotes = { viewModel.updateNotes(it) },
+                                onSaveTechnician = { viewModel.updateTechnician(it) },
+                                onRemoveRoute = { routeId -> viewModel.removeRoute(routeId) },
+                                onMaterials = { navController.navigate(Routes.MATERIALS) },
+                                onWalls = { navController.navigate(Routes.WALLS) },
+                                onFieldBook = { navController.navigate(Routes.FIELD_BOOK) },
+                                onSaveCustomer = { name, address, phone ->
+                                    viewModel.updateCustomer(name, address, phone)
+                                },
+                                firmHourlyRateCents = state.firmHourlyRateCents,
+                                onSavePricing = { rate, material ->
+                                    viewModel.updatePricing(rate, material)
+                                },
+                                photo = state.photo,
+                                onPhoto = { uri, onDone -> viewModel.attachPhoto(uri, onDone) },
+                                onDelete = {
+                                    viewModel.deleteProject(project.id) {
+                                        navController.popBackStack(Routes.HOME, inclusive = false)
+                                    }
+                                },
+                            )
+                        }
+                    }
+
+                    composable(Routes.MEASURE) {
+                        val project = state.openProject
+                        if (project == null) {
+                            Text(
+                                stringResource(R.string.project_none),
+                                modifier = Modifier.fillMaxSize(),
+                                color = SiteColors.danger,
+                            )
+                            LaunchedEffect(Unit) { navController.popBackStack() }
+                        } else {
+                            // Read once per visit to the viewfinder: a draft only matters to the
+                            // screen that can offer it back.
+                            LaunchedEffect(project.id) { viewModel.loadDraft() }
+                            ArMeasureScreen(
+                                project = project,
+                                onBack = { navController.popBackStack() },
+                                onRouteFinished = { route -> viewModel.upsertRoute(route) },
+                                onScanSummary = { summary -> viewModel.updateScanSummary(summary) },
+                                onFloorplan = { plan -> viewModel.saveFloorplanThumbnail(plan) },
+                                onOpenExport = { navController.navigate(Routes.EXPORT) },
+                                draft = state.pendingDraft,
+                                onDraftChanged = { draft -> viewModel.saveDraft(draft) },
+                                onDraftRecovered = { draft -> viewModel.recoverDraft(draft) },
+                                onDraftDiscarded = { viewModel.discardDraft() },
+                                // The factor lands on the project, which is what the protocol, the
+                                // bill of materials and the room screen read (calibration, tier 3).
+                                onCalibration = { scale -> viewModel.setCalibration(scale) },
+                                onFloorHeight = { sessionId, height ->
+                                    viewModel.setFloorHeight(sessionId, height)
+                                },
+                            )
+                        }
+                    }
+
+                    composable(Routes.EXPORT) {
+                        val project = state.openProject
+                        if (project != null) {
+                            ExportScreen(
+                                project = project,
+                                materialList = state.materialList,
+                                appVersion = BuildConfig.VERSION_NAME,
+                                operatorName = project.technician,
+                                entitlements = state.entitlements,
+                                watermark = stringResource(R.string.pdf_watermark),
+                                photo = state.photo,
+                                fieldPhotos = state.fieldPhotos,
+                                hourlyRateCents = viewModel.hourlyRateCents(project),
+                                wasteOverride = state.wasteOverride,
+                                clipSpacingOverride = state.clipSpacingOverride,
+                                onBack = { navController.popBackStack() },
+                                onUpgrade = { navController.navigate(Routes.PAYWALL) },
+                            )
+                        } else {
+                            Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())
+                        }
+                    }
+
+                    composable(Routes.MATERIALS) {
+                        val project = state.openProject
+                        if (project != null) {
+                            MaterialsScreen(
+                                projectName = project.name,
+                                materialList = state.materialList,
+                                wasteOverride = state.wasteOverride,
+                                onWasteChange = { viewModel.setWasteOverride(it) },
+                                clipSpacingOverride = state.clipSpacingOverride,
+                                onClipSpacingChange = { viewModel.setClipSpacingOverride(it) },
+                                firmHourlyRateCents = state.firmHourlyRateCents,
+                                onHourlyRateChange = { viewModel.setFirmHourlyRate(it) },
+                                onBack = { navController.popBackStack() },
+                            )
+                        } else {
+                            Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())
+                        }
+                    }
+
+                    composable(Routes.WALLS) {
+                        val project = state.openProject
+                        if (project != null) {
+                            // The plan is rebuilt on the project's own fields, so a calibration or a
+                            // hand-closed ring changes these numbers in the same recomposition they
+                            // change the card, the export and the bill of materials.
+                            val plan = remember(project) { wallPlan(project) }
+                            WallScreen(
+                                projectName = project.name,
+                                plan = plan,
+                                onBack = { navController.popBackStack() },
+                                onAddOpening = { wallIndex, kind, offsetM ->
+                                    viewModel.addOpening(wallIndex, kind, offsetM)
+                                },
+                                onRemoveOpening = { wallIndex ->
+                                    viewModel.removeLastOpening(wallIndex)
+                                },
+                            )
+                        } else {
+                            Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())
+                        }
+                    }
+
+                    composable(Routes.FIELD_BOOK) {
+                        val project = state.openProject
+                        if (project != null) {
+                            FieldBookScreen(
+                                project = project,
+                                onBack = { navController.popBackStack() },
+                                onStartWork = { viewModel.startWorkSession() },
+                                onStopWork = { viewModel.stopWorkSession() },
+                                onDeleteSession = { id -> viewModel.deleteWorkSession(id) },
+                                onAddDiary = { text -> viewModel.addDiaryEntry(text) },
+                                onDeleteDiary = { id -> viewModel.deleteDiaryEntry(id) },
+                                onAddDefect = { title, location, severity ->
+                                    viewModel.addDefect(title, location, severity)
+                                },
+                                onToggleDefect = { id -> viewModel.toggleDefect(id) },
+                                onDeleteDefect = { id -> viewModel.deleteDefect(id) },
+                                photoFor = { token -> state.fieldPhotos[token] },
+                                onAttachPhoto = { token, uri, onDone -> viewModel.attachFieldPhoto(token, uri, onDone) },
+                            )
+                        } else {
+                            Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())
+                        }
+                    }
+
+                    composable(Routes.PAYWALL) {
+                        PaywallScreen(
+                            entitlements = state.entitlements,
+                            deviceTag = state.deviceTag,
+                            trialUsed = state.trialUsed,
+                            trialDaysLeft = state.trialDaysLeft,
+                            localStateTampered = state.localStateTampered,
+                            trialAvailable = state.trialAvailable,
                             onBack = { navController.popBackStack() },
-                            onRouteFinished = { route -> viewModel.upsertRoute(route) },
-                            onScanSummary = { summary -> viewModel.updateScanSummary(summary) },
-                            onFloorplan = { plan -> viewModel.saveFloorplanThumbnail(plan) },
-                            onOpenExport = { navController.navigate(Routes.EXPORT) },
-                            draft = state.pendingDraft,
-                            onDraftChanged = { draft -> viewModel.saveDraft(draft) },
-                            onDraftRecovered = { draft -> viewModel.recoverDraft(draft) },
-                            onDraftDiscarded = { viewModel.discardDraft() },
-                            // The factor lands on the project, which is what the protocol, the
-                            // bill of materials and the room screen read (calibration, tier 3).
-                            onCalibration = { scale -> viewModel.setCalibration(scale) },
-                            onFloorHeight = { sessionId, height ->
-                                viewModel.setFloorHeight(sessionId, height)
+                            onActivate = { key -> viewModel.activateLicence(key) },
+                            onStartTrial = {
+                                // Only leave the paywall when the trial really started: the screen has
+                                // to stay if it did not, or it would announce a trial it never got.
+                                val started = viewModel.startTrial()
+                                if (started) navController.popBackStack()
+                                started
                             },
                         )
                     }
-                }
 
-                composable(Routes.EXPORT) {
-                    val project = state.openProject
-                    if (project != null) {
-                        ExportScreen(
-                            project = project,
-                            materialList = state.materialList,
-                            appVersion = BuildConfig.VERSION_NAME,
-                            operatorName = project.technician,
+                    composable(Routes.HELP) {
+                        HelpScreen(
                             entitlements = state.entitlements,
-                            watermark = stringResource(R.string.pdf_watermark),
-                            photo = state.photo,
-                            fieldPhotos = state.fieldPhotos,
-                            hourlyRateCents = viewModel.hourlyRateCents(project),
-                            wasteOverride = state.wasteOverride,
-                            clipSpacingOverride = state.clipSpacingOverride,
+                            trialDaysLeft = state.trialDaysLeft,
+                            deviceTag = state.deviceTag,
+                            clockRolledBack = state.clockRolledBack,
+                            integrityFailed = state.integrityFailed,
+                            localStateTampered = state.localStateTampered,
+                            demoSigningKey = state.demoSigningKey,
+                            repository = viewModel.repository(),
                             onBack = { navController.popBackStack() },
                             onUpgrade = { navController.navigate(Routes.PAYWALL) },
+                            onRestore = { texts, photos, done -> viewModel.importBackup(texts, photos, done) },
                         )
-                    } else {
-                        Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())
                     }
-                }
-
-                composable(Routes.MATERIALS) {
-                    val project = state.openProject
-                    if (project != null) {
-                        MaterialsScreen(
-                            projectName = project.name,
-                            materialList = state.materialList,
-                            wasteOverride = state.wasteOverride,
-                            onWasteChange = { viewModel.setWasteOverride(it) },
-                            clipSpacingOverride = state.clipSpacingOverride,
-                            onClipSpacingChange = { viewModel.setClipSpacingOverride(it) },
-                            firmHourlyRateCents = state.firmHourlyRateCents,
-                            onHourlyRateChange = { viewModel.setFirmHourlyRate(it) },
-                            onBack = { navController.popBackStack() },
-                        )
-                    } else {
-                        Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())
-                    }
-                }
-
-                composable(Routes.WALLS) {
-                    val project = state.openProject
-                    if (project != null) {
-                        // The plan is rebuilt on the project's own fields, so a calibration or a
-                        // hand-closed ring changes these numbers in the same recomposition they
-                        // change the card, the export and the bill of materials.
-                        val plan = remember(project) { wallPlan(project) }
-                        WallScreen(
-                            projectName = project.name,
-                            plan = plan,
-                            onBack = { navController.popBackStack() },
-                            onAddOpening = { wallIndex, kind, offsetM ->
-                                viewModel.addOpening(wallIndex, kind, offsetM)
-                            },
-                            onRemoveOpening = { wallIndex ->
-                                viewModel.removeLastOpening(wallIndex)
-                            },
-                        )
-                    } else {
-                        Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())
-                    }
-                }
-
-                composable(Routes.FIELD_BOOK) {
-                    val project = state.openProject
-                    if (project != null) {
-                        FieldBookScreen(
-                            project = project,
-                            onBack = { navController.popBackStack() },
-                            onStartWork = { viewModel.startWorkSession() },
-                            onStopWork = { viewModel.stopWorkSession() },
-                            onDeleteSession = { id -> viewModel.deleteWorkSession(id) },
-                            onAddDiary = { text -> viewModel.addDiaryEntry(text) },
-                            onDeleteDiary = { id -> viewModel.deleteDiaryEntry(id) },
-                            onAddDefect = { title, location, severity ->
-                                viewModel.addDefect(title, location, severity)
-                            },
-                            onToggleDefect = { id -> viewModel.toggleDefect(id) },
-                            onDeleteDefect = { id -> viewModel.deleteDefect(id) },
-                            photoFor = { token -> state.fieldPhotos[token] },
-                            onAttachPhoto = { token, uri, onDone -> viewModel.attachFieldPhoto(token, uri, onDone) },
-                        )
-                    } else {
-                        Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())
-                    }
-                }
-
-                composable(Routes.PAYWALL) {
-                    PaywallScreen(
-                        entitlements = state.entitlements,
-                        deviceTag = state.deviceTag,
-                        trialUsed = state.trialUsed,
-                        trialDaysLeft = state.trialDaysLeft,
-                        localStateTampered = state.localStateTampered,
-                        trialAvailable = state.trialAvailable,
-                        onBack = { navController.popBackStack() },
-                        onActivate = { key -> viewModel.activateLicence(key) },
-                        onStartTrial = {
-                            // Only leave the paywall when the trial really started: the screen has
-                            // to stay if it did not, or it would announce a trial it never got.
-                            val started = viewModel.startTrial()
-                            if (started) navController.popBackStack()
-                            started
-                        },
-                    )
-                }
-
-                composable(Routes.HELP) {
-                    HelpScreen(
-                        entitlements = state.entitlements,
-                        trialDaysLeft = state.trialDaysLeft,
-                        deviceTag = state.deviceTag,
-                        clockRolledBack = state.clockRolledBack,
-                        integrityFailed = state.integrityFailed,
-                        localStateTampered = state.localStateTampered,
-                        demoSigningKey = state.demoSigningKey,
-                        repository = viewModel.repository(),
-                        onBack = { navController.popBackStack() },
-                        onUpgrade = { navController.navigate(Routes.PAYWALL) },
-                        onRestore = { texts, photos, done -> viewModel.importBackup(texts, photos, done) },
-                    )
                 }
             }
         }

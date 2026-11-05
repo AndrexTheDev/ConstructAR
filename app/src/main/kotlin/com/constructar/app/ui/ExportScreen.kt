@@ -60,7 +60,6 @@ import com.constructar.core.bom.MaterialListBuilder
 import com.constructar.core.bom.MaterialListOptions
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.price.Pricing
-import com.constructar.core.units.LengthFormatter
 import com.constructar.export.ExportService
 import com.constructar.export.pdf.PdfSection
 import com.constructar.export.csv.MaterialCsvWriter
@@ -366,7 +365,7 @@ fun ExportScreen(
                     stringResource(
                         R.string.export_runs_total,
                         project.routes.size,
-                        LengthFormatter.format(project.totalLengthMeters),
+                        shownLengthWithUnit(project.totalLengthMeters),
                     ),
                     style = MaterialTheme.typography.bodyLarge,
                 )
@@ -374,7 +373,7 @@ fun ExportScreen(
                     Text(
                         stringResource(
                             R.string.export_order_length,
-                            LengthFormatter.format(list.totalWithWasteMeters),
+                            shownLengthWithUnit(list.totalWithWasteMeters),
                         ),
                         style = MaterialTheme.typography.bodyMedium,
                     )

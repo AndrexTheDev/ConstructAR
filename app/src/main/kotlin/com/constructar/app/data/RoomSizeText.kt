@@ -9,6 +9,7 @@ package com.constructar.app.data
 import com.constructar.core.model.FloorplanSketch
 import com.constructar.core.units.LengthFormatter
 import com.constructar.core.units.LengthUnit
+import com.constructar.core.units.NumberText
 
 /**
  * The two numbers the home card states about a room: its area and its perimeter, as digits.
@@ -45,15 +46,15 @@ data class RoomSizeText(val area: String, val perimeter: String) {
          * (every corner on one line) is a plan that did not close around anything, and "0.0 m²"
          * would be a claim about the room rather than about the scan.
          */
-        fun of(sketch: FloorplanSketch?): RoomSizeText? {
+        fun of(sketch: FloorplanSketch?, mark: Char = NumberText.DEFAULT_MARK): RoomSizeText? {
             if (sketch == null || !sketch.isDrawable) return null
             val area = sketch.areaSquareMeters
             val perimeter = sketch.perimeterMeters
             if (!area.isFinite() || !perimeter.isFinite()) return null
             if (area <= 0f || perimeter <= 0f) return null
             return RoomSizeText(
-                area = LengthFormatter.number(area, LengthUnit.METER, AREA_DECIMALS),
-                perimeter = LengthFormatter.number(perimeter, LengthUnit.METER),
+                area = LengthFormatter.number(area, LengthUnit.METER, AREA_DECIMALS, mark),
+                perimeter = LengthFormatter.number(perimeter, LengthUnit.METER, mark = mark),
             )
         }
     }

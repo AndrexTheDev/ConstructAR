@@ -213,9 +213,9 @@ fun MaterialsScreen(
         // selected value appeared nowhere at all (finding 180).
         val clipDefaultsText = stringResource(
             R.string.clips_hint,
-            LengthFormatter.format(PolylineMetrics.defaultClipSpacing(ConduitKind.CABLE)),
-            LengthFormatter.format(PolylineMetrics.defaultClipSpacing(ConduitKind.PIPE)),
-            LengthFormatter.format(PolylineMetrics.defaultClipSpacing(ConduitKind.DUCT)),
+            shownLengthWithUnit(PolylineMetrics.defaultClipSpacing(ConduitKind.CABLE)),
+            shownLengthWithUnit(PolylineMetrics.defaultClipSpacing(ConduitKind.PIPE)),
+            shownLengthWithUnit(PolylineMetrics.defaultClipSpacing(ConduitKind.DUCT)),
         )
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
@@ -234,7 +234,7 @@ fun MaterialsScreen(
                 // the cable and pipe defaults the app already assumes, 100 cm is a ceiling grid.
                 listOf(0.30f, 0.60f, 0.90f, 1.00f).forEach { spacing ->
                     WasteChip(
-                        label = stringResource(R.string.clips_value, LengthFormatter.format(spacing)),
+                        label = stringResource(R.string.clips_value, shownLengthWithUnit(spacing)),
                         selected = clipSpacingOverride == spacing,
                         onClick = { onClipSpacingChange(spacing) },
                     )
@@ -271,7 +271,7 @@ fun MaterialsScreen(
                 stringResource(
                     R.string.materials_excluded_low_confidence,
                     materialList.excludedLowConfidenceRuns,
-                    LengthFormatter.format(materialList.excludedLowConfidenceMeters),
+                    shownLengthWithUnit(materialList.excludedLowConfidenceMeters),
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = SiteColors.warning,
@@ -295,7 +295,7 @@ fun MaterialsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    LengthFormatter.format(materialList.totalWithWasteMeters),
+                    shownLengthWithUnit(materialList.totalWithWasteMeters),
                     style = MaterialTheme.typography.displaySmall,
                     color = SiteColors.accent,
                 )
@@ -354,7 +354,7 @@ private fun MaterialCard(line: MaterialLine) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        stringResource(R.string.materials_net, LengthFormatter.format(line.totalMeters)),
+                        stringResource(R.string.materials_net, shownLengthWithUnit(line.totalMeters)),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
@@ -364,7 +364,7 @@ private fun MaterialCard(line: MaterialLine) {
                     )
                 }
                 Text(
-                    stringResource(R.string.materials_order, LengthFormatter.format(line.withWasteMeters)),
+                    stringResource(R.string.materials_order, shownLengthWithUnit(line.withWasteMeters)),
                     style = MaterialTheme.typography.titleMedium,
                     color = SiteColors.gold,
                 )
@@ -379,7 +379,7 @@ private fun MaterialCard(line: MaterialLine) {
                 Text(
                     stringResource(
                         R.string.materials_bend_deduction,
-                        LengthFormatter.format(line.bendDeductionMeters),
+                        shownLengthWithUnit(line.bendDeductionMeters),
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
