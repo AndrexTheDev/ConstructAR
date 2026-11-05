@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -68,7 +69,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -107,6 +110,7 @@ import com.google.ar.core.Config
 import com.constructar.core.calib.CalibrationOutcome
 import com.constructar.core.calib.CalibrationReference
 import com.constructar.core.calib.CalibrationSweep
+import com.constructar.core.calib.MarkerSweepState
 import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.model.ConduitPresets
 import com.constructar.core.model.ConduitSpec
@@ -188,6 +192,12 @@ fun ArMeasureScreen(
     // a rotation ends the sweep, which costs two taps and never a stored number.
     var calibrationSweep by remember { mutableStateOf<CalibrationSweep>(CalibrationSweep.Idle) }
     var calibrationOpen by rememberSaveable { mutableStateOf(false) }
+    // The marker sweep: unlike the two-tap calibration this one runs while the operator walks, so
+    // whether it is open has to survive a recomposition - but not a rotation, because a rotation is
+    // a new ARCore session and the sweep would be pairing two world origins (finding 235).
+    var markerOpen by remember { mutableStateOf(false) }
+    val markerState by controller.markerProbeState.collectAsStateWithLifecycle()
+    val markerAvailable = remember(controller) { controller.isMarkerProbeAvailable() }
 
     fun cameraGranted(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
@@ -915,6 +925,97 @@ fun ArMeasureScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            // ── Marker check ────────────────────────────────────────────────────────
+            // A printed tag of known size, measured through the camera: the second tier of
+            // `docs/CALIBRATION.md`, and the only one that needs no tap - the operator aims and
+            // walks, and the sweep counts the sightings. It publishes a factor, never a scale
+            // stored behind the operator's back; `Apply` is the same reporting-layer write the
+            // two-tap sweep uses.
+            GloveButton(
+                label = stringResource(R.string.marker_title),
+                icon = Icons.Default.QrCodeScanner,
+                tone = ActionTone.SECONDARY,
+                enabled = markerAvailable,
+                onClick = {
+                    if (controller.startMarkerProbe()) markerOpen = true
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            if (markerOpen) {
+                val state = markerState
+                val proposal = (state as? MarkerSweepState.Ready)?.proposal
+                AlertDialog(
+                    onDismissRequest = {
+                        controller.stopMarkerProbe()
+                        markerOpen = false
+                    },
+                    title = { Text(stringResource(R.string.marker_title)) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                text = stringResource(R.string.marker_hint),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            when {
+                                proposal != null && proposal.accepted -> Text(
+                                    text = stringResource(
+                                        R.string.marker_ready,
+                                        ReferenceCalibration.formatScale(proposal.factor),
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Jamaica.Lime,
+                                    // The number changes while the operator walks; without a live
+                                    // region a screen reader would read the hint once and never
+                                    // the answer.
+                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                                )
+                                proposal != null -> Text(
+                                    text = stringResource(
+                                        R.string.calib_rejected_toast,
+                                        ReferenceCalibration.formatScale(proposal.factor),
+                                        ReferenceCalibration.formatScale(ReferenceCalibration.MIN_SCALE),
+                                        ReferenceCalibration.formatScale(ReferenceCalibration.MAX_SCALE),
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = SiteColors.danger,
+                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                                )
+                                // Watching: "not enough evidence" is an answer, and it must not
+                                // borrow the words of a measurement.
+                                else -> Text(
+                                    text = stringResource(
+                                        R.string.marker_watching,
+                                        (state as? MarkerSweepState.Watching)?.sightings ?: 0,
+                                        (state as? MarkerSweepState.Watching)?.markerIds ?: 0,
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            enabled = proposal?.accepted == true,
+                            onClick = {
+                                proposal?.let { onCalibration(it.factor) }
+                                controller.stopMarkerProbe()
+                                markerOpen = false
+                            },
+                        ) { Text(stringResource(R.string.calib_apply)) }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                controller.stopMarkerProbe()
+                                markerOpen = false
+                            },
+                        ) { Text(stringResource(R.string.home_cancel)) }
+                    },
+                )
+            }
 
             if (calibrationOpen) {
                 val sweep = calibrationSweep

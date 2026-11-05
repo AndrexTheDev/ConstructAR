@@ -291,13 +291,26 @@ majority, a deviation filter for the tag that was mis-detected, and a baseline-w
 survives. It publishes a factor, the pairs that agreed, the pairs it rejected and the longest
 baseline behind it, and it decides nothing — the acceptance window lives in `:core` beside the
 bank-card reference, which is why the native directory does not contain its two numbers even in a
-comment. **The decoder is vendored and not wired to a screen**: `nativeDetectAprilTagScale` is the door,
-`:ar-engine`'s `MarkerFrameReader` is the only thing that knocks on it - it packs one ARCore camera
-plane with `:core`'s `LuminancePlane` (rows are strided; the packed buffer is what the native layer
-is told is the width), supplies the session's intrinsics and the printed size, and keeps the
-three answers apart: nothing at all for a question it could not ask, an empty report for a frame
-without a tag, metres otherwise. No `:app` screen requests a frame, `estimateScaleFromTagSightings` has no
-caller, and no stored metre depends on a marker today.
+comment. **The decoder is vendored and wired to one screen** (finding 235), and what is still unproven is
+said rather than implied: no device has ever pointed at a real tag.
+`nativeDetectAprilTagScale` is the door, `:ar-engine`'s `MarkerFrameReader` is the only thing that
+knocks on it - it packs one ARCore camera plane with `:core`'s `LuminancePlane` (rows are strided;
+the packed buffer is what the native layer is told is the width), supplies the session's intrinsics
+and the printed size, and keeps the three answers apart: nothing at all for a question it could not
+ask, an empty report for a frame without a tag, metres otherwise. `CameraPlanes` is the only adapter
+that touches `android.media.Image`, and it closes the image on every path: ARCore's CPU image queue
+is two deep, so a leak stalls the camera within a second. `MarkerProbe` composes reader and sweep
+(nearest tag - its corners are the sharpest - then the camera pose), and `MarkerSweep` (`:core`)
+holds what a screen actually has: a *sequence*. Three things are refused there rather than in a
+composable: a sighting from another ARCore session (a new session is a new world origin - finding
+217 one layer up), a sighting older than the newest eight of its marker, and the temptation to
+publish a factor from two sightings at the same spot, which stays `Watching`. The two trust knobs
+come from `TagScaleOptions` over `nativeTagScaleDefaults()`, so the Kotlin side has no second
+definition of a baseline worth measuring. `TsdfScanPipeline.openMarkerProbe` builds the whole chain
+against the engine it already owns, and `ArMeasureController` samples one frame in fifteen - a
+sweep is answered by a walk, not by 30 pictures a second - and drops the sweep when a new session
+begins. `estimateScaleFromTagSightings` - the printed *layout* path, which needs a sheet of tags -
+is still reached from nowhere, and no stored metre depends on a marker today.
 
 **Pose graph** (`slam/pose_graph.cpp`). Gauss–Newton on SE(3) with central-difference Jacobians,
 block-sparse Hessian solved by preconditioned conjugate gradient, backtracking line search (a

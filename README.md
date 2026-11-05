@@ -633,9 +633,19 @@ Known limitations, deliberately documented rather than hidden:
   plane is strided; a buffer that ignored the padding shears every row and decodes nothing) and
   calls the decoder with the session's intrinsics and the printed size - unit-tested with a decoder
   that records what it was handed, three answers kept apart: `null` for a broken question, an empty
-  report for "no tag in view", metres otherwise. It is **not wired to a screen**: no
-  `:app` screen requests a frame, so nothing the operator does produces a marker reading, and
-  `docs/CALIBRATION.md` tier 2 says the same. `tools/verify-native.sh` builds and runs all of it the way CI does;
+  report for "no tag in view", metres otherwise. Since finding 235 the path reaches a screen:
+  `MarkerProbe` (`:ar-engine`) composes reader and sweep, `CameraPlanes` is the one adapter that
+  touches `android.media.Image` (and closes it on every path - ARCore's CPU image queue is two
+  deep, so a leaked image stalls the camera), and `MarkerSweep` (`:core`) holds the sequence a
+  screen has: sightings stamped with the ARCore session, so a re-localisation cannot pair two
+  world origins; capped per marker, so a tag seen in another room stops voting; and `Watching`
+  until a real baseline exists instead of the 1.0 that standing still would certify. The AR
+  screen's marker dialog shows that state in six locales, announces the number as a live region
+  while the operator walks, and applies an accepted factor through the same reporting-layer
+  callback the two-tap sweep uses. The two trust knobs come from the native `TagScaleOptions`
+  over `nativeTagScaleDefaults()`; `:app` invents none of them. Unproven and stated as such: no
+  device has held a real tag against this path, and `estimateScaleFromTagSightings` - the printed
+  *layout* sheet - is still reached from nowhere. `tools/verify-native.sh` builds and runs all of it the way CI does;
   `--tsan` runs the same suite under ThreadSanitizer, which is a gate: the fusion of a voxel is a
   read-modify-write of two arrays done by several workers, and only the sanitizer can see it when
   that update escapes the shard lock (finding 181). It reports none.
@@ -791,7 +801,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 995 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1009 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 332 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 332 checks, 0 failures, no data race reported |

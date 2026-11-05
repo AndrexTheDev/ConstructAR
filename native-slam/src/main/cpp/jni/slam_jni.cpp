@@ -26,6 +26,9 @@
 //   nativeLoopCandidates(handle) -> FloatArray (triples: from, to, distance)
 //   nativeFloorplan(handle, heightMetres, bandMetres, cellMetres, rdpEpsilonMetres,
 //                   minSegmentMetres, manhattanToleranceDegrees) -> FloatArray   (see below)
+//   nativeTagScaleDefaults() -> FloatArray  [minBaselineMetres, maxRelativeDeviation] - the two
+//               knobs the marker path shares with the native layout path, read out of
+//               `TagScaleOptions` so that no other layer has to invent its own numbers.
 //   nativeDetectAprilTagScale(gray, w, h, stride, fx, fy, cx, cy, tagSizeMetres) -> FloatArray
 //               [count, (id, x, y, z, margin, hamming) x count] - tags in the camera frame, in
 //               metres, from the vendored tag36h11 decoder. `null` means the arguments were not a
@@ -657,6 +660,19 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeFloorplan(JNIEnv* env, 
   jfloatArray result = env->NewFloatArray(size);
   if (result == nullptr) return nullptr;
   env->SetFloatArrayRegion(result, 0, size, payload.data());
+  return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_constructar_nativebridge_NativeSlamEngine_nativeTagScaleDefaults(JNIEnv* env, jobject) {
+  // One definition, in the struct that already owns these numbers. The Kotlin side needs them
+  // because it now builds marker sweeps of its own, and a second `0.20`/`0.04` in `:app` would be a
+  // second definition of "a baseline worth measuring" (finding 235).
+  const constructar::TagScaleOptions defaults;
+  const jfloat values[2] = {defaults.minBaselineMetres, defaults.maxRelativeDeviation};
+  jfloatArray result = env->NewFloatArray(2);
+  if (result == nullptr) return nullptr;
+  env->SetFloatArrayRegion(result, 0, 2, values);
   return result;
 }
 

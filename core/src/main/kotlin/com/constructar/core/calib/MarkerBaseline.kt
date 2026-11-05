@@ -21,6 +21,15 @@ data class MarkerObservation(
     val id: Int,
     val tagInCamera: Vec3,
     val cameraPose: Pose,
+    /**
+     * Which ARCore session produced this. Default `0` for a single-session estimate.
+     *
+     * Two sessions have two world origins: the phone re-localised, or the operator closed the
+     * screen and came back. A baseline between a camera position from one and a position from the
+     * other is a subtraction of two different rooms - the same failure finding 217 found in the
+     * route nodes, where it produced a floor height and a wall length that were pure geometry.
+     */
+    val sessionId: Long = 0L,
     /** The decoder's confidence in `[0, 1]`; carried, not judged here. */
     val decisionMargin: Float = 1f,
     /** Bits the decoder had to correct; carried, not judged here. */
@@ -123,7 +132,16 @@ object MarkerBaseline {
             for (second in first + 1 until observations.size) {
                 val a = observations[first]
                 val b = observations[second]
-                if (a.id != b.id) continue
+                if (a.id != b.id) {
+                    // Different markers are not a pair in this shape: their geometry is in the
+                    // layout path (`estimateScaleFromTagSightings`), not here.
+                    continue
+                }
+                if (a.sessionId != b.sessionId) {
+                    // Two sessions, two world origins. Not an outlier - a different room.
+                    rejected++
+                    continue
+                }
                 if (!a.isFinite || !b.isFinite) {
                     rejected++
                     continue

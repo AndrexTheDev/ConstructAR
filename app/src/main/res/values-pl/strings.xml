@@ -71,6 +71,10 @@
     <string name="calib_hint">Dotknij kolejno obu końców.</string>
     <string name="calib_take_point">Przyjmij punkt</string>
     <string name="calib_apply">Zastosuj</string>
+    <string name="marker_title">Sprawdzenie znacznika</string>
+    <string name="marker_hint">Wyceluj w wydrukowany znacznik i przejdź metr, nie tracąc go z kadru.</string>
+    <string name="marker_watching">Za mało dowodów: %1$d obserwacji %2$d znaczników.</string>
+    <string name="marker_ready">Zmierzone: współczynnik %1$s.</string>
     <string name="ar_add_point">Dodaj punkt na środku</string>
     <string name="ar_undo">Cofnij</string>
     <string name="ar_close_loop">Zamknij</string>

@@ -71,6 +71,10 @@
     <string name="calib_hint">Touche les deux extrémités l’une après l’autre.</string>
     <string name="calib_take_point">Prendre le point</string>
     <string name="calib_apply">Appliquer</string>
+    <string name="marker_title">Contrôle du marqueur</string>
+    <string name="marker_hint">Vise une étiquette imprimée et marche un mètre en la gardant à l’écran.</string>
+    <string name="marker_watching">Pas encore assez de preuves : %1$d observations de %2$d étiquettes.</string>
+    <string name="marker_ready">Mesuré : facteur %1$s.</string>
     <string name="ar_add_point">Ajouter un point au centre</string>
     <string name="ar_undo">Annuler</string>
     <string name="ar_close_loop">Fermer</string>

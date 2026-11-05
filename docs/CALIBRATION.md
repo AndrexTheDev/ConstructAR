@@ -162,22 +162,32 @@ types into a layer it did — `scripts/verify_sources.py` holds that door shut.
   in `:core` with the bank-card reference, and the native directory does not contain the window's
   two numbers even in a comment.
 
-The decoder is **vendored and not wired to a screen**, and the last metre is stated rather than
-implied: `:app` has no screen
-that requests a frame, and `MarkerBaseline` has no caller either. What does exist is the frame path
-itself: `MarkerFrameReader` (`:ar-engine`)
+The decoder is **vendored and wired to one screen**, and what is still missing is stated rather
+than implied: no device has held a real tag against it, and the *layout* path
+(`estimateScaleFromTagSightings`, which needs a printed sheet of tags) is still reached from
+nowhere. What exists is the frame path and the sequence on top of it:
+`MarkerFrameReader` (`:ar-engine`)
 packs an ARCore plane with `:core`'s `LuminancePlane` - the Y plane is *strided*, and a buffer that
 ignored the padding would shear every row and decode nothing - and calls the decoder with the
 session's intrinsics and the printed size; the composition is unit-tested with a decoder that
-records what it was handed. No screen opens it, `estimateScaleFromTagSightings` has no caller, and
-no stored number depends on a marker. The JNI door exists and is host-tested; no screen opens it, and no
-stored number depends on a marker today. What that costs is the tier's whole point — a length that
-does not rest on the operator holding a card still — and what it saves is a scale correction nobody
-could reproduce on a device.
-* **Applying a factor to stored geometry.** Today a route's metres are what ARCore measured. Once
-  the dialog exists, the factor is stored on the project and applied at the reporting layer (bill
-  of materials, protocol tables, CSV) — never baked into the node positions, because a factor that
-  is baked in cannot be corrected by a better one tomorrow.
+records what it was handed. Above it, `MarkerProbe` (`:ar-engine`) turns a frame into a sighting and
+`MarkerSweep` (`:core`) holds the sequence: every sighting carries the ARCore session it came from
+and a sighting from another one is counted, never paired (a new session is a new world origin -
+finding 217 one layer up); older sightings of the same marker fall off after eight, so a tag in the
+room the operator left stops voting; and two sightings from the same spot leave the sweep
+`Watching` instead of publishing the 1.0 that would certify an unchecked phone. The two trust knobs
+(baseline floor, relative deviation) are read out of `TagScaleOptions` over
+`nativeTagScaleDefaults()` — this file does not restate them and neither does `:app`. The AR screen
+samples one frame in fifteen while the marker dialog is open, drops the sweep when ARCore starts a
+new session, and offers `Apply` only for a factor `ReferenceCalibration.accepted` would take. What is
+still unproven: a real printed tag on a real device, which is the one thing no JVM test can supply.
+`estimateScaleFromTagSightings` — the printed *layout* sheet — is still reached from nowhere, and no
+stored number depends on a marker today.
+* **Applying a factor to stored geometry.** Today a route's metres are what ARCore measured. Both
+  dialogs (two-tap and marker) hand their factor to the same `onCalibration` callback, which stores
+  it on the project; the reporting layer applies it (bill of materials, protocol tables, CSV) and
+  never the node positions, because a factor that is baked in cannot be corrected by a better one
+  tomorrow.
 
 ## Guard
 

@@ -71,6 +71,10 @@
     <string name="calib_hint">Tocca i due estremi, uno dopo l’altro.</string>
     <string name="calib_take_point">Prendi punto</string>
     <string name="calib_apply">Applica</string>
+    <string name="marker_title">Controllo del marker</string>
+    <string name="marker_hint">Inquadra un marker stampato e cammina per un metro tenendolo in vista.</string>
+    <string name="marker_watching">Non ci sono ancora prove sufficienti: %1$d avvistamenti di %2$d marker.</string>
+    <string name="marker_ready">Misurato: fattore %1$s.</string>
     <string name="ar_add_point">Aggiungi punto al centro</string>
     <string name="ar_undo">Annulla</string>
     <string name="ar_close_loop">Chiudi</string>

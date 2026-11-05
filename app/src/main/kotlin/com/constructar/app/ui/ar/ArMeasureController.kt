@@ -19,12 +19,19 @@ import com.constructar.arengine.route.AnchorFactory
 import com.constructar.arengine.route.AnchorHandle
 import com.constructar.arengine.route.ArCoreAnchorFactory
 import com.constructar.arengine.route.RouteSession
+import com.constructar.arengine.scan.CameraPlanes
+import com.constructar.arengine.scan.CameraIntrinsics
+import com.constructar.arengine.scan.MarkerProbe
 import com.constructar.arengine.scan.TsdfScanPipeline
 import com.constructar.arengine.session.ArReadiness
 import com.constructar.arengine.session.ArSessionController
 import com.constructar.arengine.session.TorchController
 import com.constructar.arengine.tracking.TrackingMonitor
 import com.constructar.arengine.tracking.TrackingQuality
+import com.constructar.core.calib.MarkerScaleProposal
+import com.constructar.core.calib.MarkerSweepState
+import com.constructar.core.math.Pose
+import com.constructar.core.math.Quat
 import com.constructar.core.math.Vec3
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ConduitSpec
@@ -65,6 +72,46 @@ class ArMeasureController(private val context: Context) {
     private val tsdfConfig = com.constructar.nativebridge.TsdfConfig()
     val pipeline = TsdfScanPipeline(config = tsdfConfig)
     val tracking = TrackingMonitor()
+
+    /**
+     * The marker target probe: the operator aims at a printed tag and walks a metre, and the sweep
+     * it feeds answers whether this phone's metre agrees with the printed size
+     * (`docs/CALIBRATION.md`, tier 2).
+     *
+     * Until finding 235 the whole path existed and nothing drove it - a reader with no caller, a
+     * sweep nobody held. This is the caller, and the state it publishes is what a status line
+     * shows. It proposes a factor and never applies one: the write stays with the project, on the
+     * reporting layer, like the physical-reference sweep beside it.
+     */
+    private val markerState = MutableStateFlow<MarkerSweepState>(MarkerSweepState.Off)
+
+    /** `Off`, `Watching` or `Ready` - the three things a marker status line can say. */
+    val markerProbeState: StateFlow<MarkerSweepState> = markerState.asStateFlow()
+
+    @Volatile
+    private var markerProbe: MarkerProbe? = null
+
+    /**
+     * Frames between marker reads.
+     *
+     * The depth path integrates every frame; a marker does not need that. A tag read costs a full
+     * luminance pack plus a decode, and a sweep is answered by a walk, not by 30 pictures a second -
+     * so one frame in fifteen (about 2 Hz) is enough and keeps the render thread's budget.
+     */
+    private val markerFrameInterval = 15
+
+    @Volatile
+    private var markerFrames = 0
+
+    /**
+     * One stamp per ARCore session this screen has seen.
+     *
+     * A new ARCore session is a new world origin, so a baseline across two of them is a subtraction
+     * of two different rooms (finding 217). The sweep refuses sightings that carry a different
+     * stamp; this counter is what gives each session its own.
+     */
+    @Volatile
+    private var sessionEpoch = 0L
 
     /**
      * Runs finished in *this* AR session - the only ones whose world coordinates mean anything
@@ -211,6 +258,12 @@ class ArMeasureController(private val context: Context) {
     fun onSessionCreated(session: Session) {
         if (this.session === session && interaction != null) return
         this.session = session
+        // New origin: any sweep still open belongs to the world that just ended, and continuing it
+        // would pair a camera position from one room with a tag vector from another.
+        sessionEpoch += 1
+        markerProbe = null
+        markerFrames = 0
+        markerState.value = MarkerSweepState.Off
         anchors.delegate = ArCoreAnchorFactory(session)
         interaction = ArInteraction(session).also {
             it.previousNode = routeSession.state.value.nodes.lastOrNull()
@@ -273,6 +326,105 @@ class ArMeasureController(private val context: Context) {
     }
 
     /**
+     * Opens a marker sweep for the session that is running now.
+     *
+     * `false` means the device cannot measure markers at all - the native library is missing or its
+     * `TagScaleOptions` are not usable - and a screen must say so rather than show a sweep that
+     * will never fill.
+     */
+    fun startMarkerProbe(): Boolean {
+        val opened = pipeline.openMarkerProbe(sessionEpoch) ?: return false
+        markerProbe = opened
+        markerFrames = 0
+        markerState.value = opened.state
+        return true
+    }
+
+    /** Ends the sweep. A factor already read stays with the caller; this forgets the evidence. */
+    fun stopMarkerProbe() {
+        markerProbe?.reset()
+        markerProbe = null
+        markerState.value = MarkerSweepState.Off
+    }
+
+    /**
+     * Whether this device can measure markers at all.
+     *
+     * Asked once by the screen so that a button which cannot work is greyed out instead of opening
+     * a dialog that will never fill - the same rule the torch button follows.
+     */
+    fun isMarkerProbeAvailable(): Boolean = pipeline.markerKnobs() != null
+
+    /** The factor the sweep has published, or `null` while it is still watching. */
+    fun markerProposal(): MarkerScaleProposal? =
+        (markerState.value as? MarkerSweepState.Ready)?.proposal
+
+    /**
+     * One marker frame, every [markerFrameInterval]th.
+     *
+     * The image is closed on every path, including the ones that return early: `acquireCameraImage`
+     * hands out a buffer from a buffer queue of depth 2, so a leaked image stalls the camera within
+     * a second (`YuvFrame.capture` closes its own for the same reason).
+     */
+    private fun probeMarker(frame: Frame) {
+        val probe = markerProbe ?: return
+        if (markerFrames++ % markerFrameInterval != 0) return
+        // "Not yet available" is normal in the first frames of a session, and the documented
+        // recovery is to ask again on the next one.
+        val image = try {
+            frame.acquireCameraImage()
+        } catch (error: Throwable) {
+            return
+        }
+        try {
+            val plane = CameraPlanes.luminance(image) ?: return
+            val intrinsics = imageIntrinsics(frame, plane.plane.width) ?: return
+            markerState.value = probe.onFrame(plane.source, plane.plane, intrinsics, cameraPose(frame))
+        } finally {
+            image.close()
+        }
+    }
+
+    /**
+     * The CPU image's intrinsics, scaled to the plane that was actually handed over.
+     *
+     * ARCore reports the intrinsics for its own image size; a device that crops or rescales the
+     * image would otherwise get a focal length in the wrong pixels, which is a distance that is
+     * wrong by exactly that ratio.
+     */
+    private fun imageIntrinsics(frame: Frame, width: Int): CameraIntrinsics? {
+        val base = try {
+            frame.camera.imageIntrinsics
+        } catch (error: Throwable) {
+            return null
+        }
+        val dimensions = base.imageDimensions
+        if (dimensions.size < 2 || dimensions[0] <= 0) return null
+        val scale = width.toFloat() / dimensions[0].toFloat()
+        val focal = base.focalLength
+        val principal = base.principalPoint
+        if (focal.size < 2 || principal.size < 2) return null
+        val intrinsics = CameraIntrinsics(
+            fx = focal[0] * scale,
+            fy = focal[1] * scale,
+            cx = principal[0] * scale,
+            cy = principal[1] * scale,
+        )
+        return if (intrinsics.isPlausible) intrinsics else null
+    }
+
+    /** ARCore's pose in this module's terms - quaternion order is x, y, z, w there. */
+    private fun cameraPose(frame: Frame): Pose {
+        val pose = frame.camera.pose
+        val quaternion = pose.rotationQuaternion
+        val translation = pose.translation
+        return Pose(
+            rotation = Quat(quaternion[3], quaternion[0], quaternion[1], quaternion[2]),
+            translation = Vec3(translation[0], translation[1], translation[2]),
+        )
+    }
+
+    /**
      * Render-thread entry point. Order matters:
      *  1. capture depth (cheap copy) and hand it to the TSDF worker;
      *  2. resolve any pending tap against the *current* frame;
@@ -300,6 +452,7 @@ class ArMeasureController(private val context: Context) {
         val poseUsable = tracking.canPlaceFrame(quality)
         if (poseUsable) {
             pipeline.onFrame(frame, thermalStatus)
+            probeMarker(frame)
         } else {
             // A tap made now must not wait for the next live frame to be answered: the pixel it
             // names is meaningless by then, and `ArInteraction` would resolve it against whatever

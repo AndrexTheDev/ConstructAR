@@ -303,6 +303,24 @@ class NativeSlamEngine internal constructor(
         return ManhattanFrameReport.from(nativeAlignManhattanFrame(active))
     }
 
+    /**
+     * The two knobs the marker path shares with the native layout path, straight out of
+     * `TagScaleOptions`: a baseline floor and a relative-deviation filter.
+     *
+     * `null` when the library is unavailable. There is deliberately no Kotlin fallback: a second
+     * pair of numbers here would be a second definition of what counts as evidence, and the two
+     * would drift the first time one of them is tuned.
+     */
+    fun tagScaleDefaults(): Pair<Float, Float>? {
+        val values = nativeTagScaleDefaults() ?: return null
+        if (values.size != 2) return null
+        val baseline = values[0]
+        val deviation = values[1]
+        if (!(baseline > 0f) || !(deviation > 0f)) return null
+        if (!baseline.isFinite() || !deviation.isFinite()) return null
+        return baseline to deviation
+    }
+
     fun lastManhattan(): ManhattanReport? {
         val active = handle
         if (active == 0L) return null
@@ -507,6 +525,8 @@ class NativeSlamEngine internal constructor(
         @JvmStatic private external fun nativeLastManhattan(handle: Long): FloatArray?
 
         @JvmStatic private external fun nativeAlignManhattanFrame(handle: Long): FloatArray?
+
+        @JvmStatic private external fun nativeTagScaleDefaults(): FloatArray?
 
         @JvmStatic private external fun nativeDetectAprilTagScale(
             gray: ByteArray,

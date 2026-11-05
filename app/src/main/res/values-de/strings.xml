@@ -71,6 +71,10 @@
     <string name="calib_hint">Tippe nacheinander auf beide Enden.</string>
     <string name="calib_take_point">Punkt übernehmen</string>
     <string name="calib_apply">Übernehmen</string>
+    <string name="marker_title">Markerprüfung</string>
+    <string name="marker_hint">Ziele auf einen gedruckten Marker und gehe einen Meter, während er im Bild bleibt.</string>
+    <string name="marker_watching">Noch nicht genug Belege: %1$d Sichtungen von %2$d Markern.</string>
+    <string name="marker_ready">Gemessen: Faktor %1$s.</string>
     <string name="ar_add_point">Punkt in der Mitte</string>
     <string name="ar_undo">Zurück</string>
     <string name="ar_close_loop">Schließen</string>

@@ -10,6 +10,8 @@ import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import com.constructar.arengine.depth.DepthFrameSnapshot
+import com.constructar.core.calib.MarkerSweep
+import com.constructar.core.calib.MarkerSweepOptions
 import com.constructar.nativebridge.FloorplanPayload
 import com.constructar.nativebridge.IntegrationResult
 import com.constructar.nativebridge.NativeSlamEngine
@@ -439,6 +441,38 @@ class TsdfScanPipeline(
      * [floorplan] - the native context keeps only the newest fit.
      */
     fun lastManhattan(): com.constructar.nativebridge.ManhattanReport? = engine?.lastManhattan()
+
+    /**
+     * The two knobs the marker sweep shares with the native layout path, straight out of
+     * `TagScaleOptions`, or `null` when the native layer is unavailable.
+     *
+     * The screen must not restate them: a baseline floor invented in `:app` would be a second
+     * definition of "a distance worth measuring" that disagrees with the one already in C++ the
+     * first time either is tuned (finding 235).
+     */
+    fun markerKnobs(): Pair<Float, Float>? = engine?.tagScaleDefaults()
+
+    /**
+     * Opens a marker sweep wired to the vendored decoder, or `null` when the marker path is not
+     * available on this device.
+     *
+     * The composition is here rather than in `:app` on purpose: the knobs come from the native
+     * `TagScaleOptions`, the decoder is the engine's, and the session id is the caller's. A screen
+     * that built its own would have to name `EngineTagDecoder`, and would then own the lifetime of
+     * an engine it does not own.
+     */
+    fun openMarkerProbe(sessionId: Long): MarkerProbe? {
+        val active = engine ?: return null
+        val knobs = active.tagScaleDefaults() ?: return null
+        val sweep = MarkerSweep.start(
+            MarkerSweepOptions(
+                sessionId = sessionId,
+                minBaselineMetres = knobs.first,
+                maxRelativeDeviation = knobs.second,
+            ),
+        ) ?: return null
+        return MarkerProbe(MarkerFrameReader(EngineTagDecoder(active)), sweep)
+    }
 
     /**
      * The frame the last [floorplan] was squared onto, fitted from the room's walls.

@@ -2855,10 +2855,17 @@ def check_the_tag_decoder_is_vendored_and_credited() -> None:
     if not TAG_SCALE_HEADER.exists():
         return
     header = TAG_SCALE_HEADER.read_text(encoding="utf-8")
-    if "Vendored, not wired." not in header:
-        add(TAG_SCALE_HEADER, "the header no longer marks the half that is not wired - that marker "
-                              "is what a wiring deletes, and deleting it by accident is how a "
-                              "decoder in a box becomes a feature on a screen")
+    # Finding 235 wired the marker path, so the marker moved rather than disappeared: the header
+    # must still say, in the same breath, that the decoder is wired *and* which half is unreached.
+    # A wiring is allowed to change this sentence; a paragraph that quietly loses it is not.
+    header_flat = re.sub(r"\s+", " ", header)
+    if "Vendored and wired." not in header_flat:
+        add(TAG_SCALE_HEADER, "the header no longer says the decoder is wired - the state of the "
+                              "wiring is the one sentence a maintainer reads instead of the code")
+    if "estimateScaleFromTagSightings" not in header or "unreached" not in header.lower():
+        add(TAG_SCALE_HEADER, "the header does not name the half that is still unreached "
+                              "(`estimateScaleFromTagSightings`, the printed-layout path) - "
+                              "'wired' without that caveat reads as 'the marker tier is finished'")
     marker_reader = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
                      "arengine" / "scan" / "MarkerFrameReader.kt")
     if not marker_reader.exists():
@@ -2867,14 +2874,23 @@ def check_the_tag_decoder_is_vendored_and_credited() -> None:
                            "below would be describing a pipeline that does not exist")
     for path in (CALIBRATION_DOC, ROOT / "README.md"):
         text = path.read_text(encoding="utf-8")
-        lowered = text.lower()
+        # Paragraphs wrap, so a claim like "no device has held a real tag" can straddle a newline.
+        # The sentences below are claims, not line layouts.
+        lowered = re.sub(r"\s+", " ", text.lower())
         if "vendored" not in lowered:
             add(path, "this document no longer says the decoder is vendored, so a reader would "
                       "have to infer that the repository now redistributes somebody else's code")
-        if "not wired" not in lowered:
-            add(path, "this document does not say that the decoder is not wired to a screen - the "
-                      "one sentence that keeps 'the decoder exists' from being read as 'it "
-                      "measures rooms'")
+        # The sentence that keeps "the decoder exists" from being read as "it measures rooms" used
+        # to be "not wired to a screen". Finding 235 wired one screen, so the caveat had to move
+        # with the truth: the layout path is still unreached, and no device has held a real tag.
+        if "estimateScaleFromTagSightings" not in text:
+            add(path, "this document does not name `estimateScaleFromTagSightings`, the half of "
+                      "the marker path that is still unreached - 'wired' without it reads as 'the "
+                      "marker tier is finished'")
+        if "no device" not in lowered:
+            add(path, "this document no longer says that no device has held a real tag against "
+                      "the marker path, so 'the decoder measures' and 'the decoder compiles' are "
+                      "the same sentence again")
         # The claim has to name the piece that exists, so "not wired" cannot quietly outlive the
         # wiring and cannot outrun it either.
         if "MarkerFrameReader" not in text:
