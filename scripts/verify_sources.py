@@ -2693,6 +2693,54 @@ def check_the_plane_fitter_is_reproducible() -> None:
                               f"by splitting a wall rather than by reporting nothing (finding 189)")
 
 
+CMAKE_COMMANDS = {
+    "add_executable", "add_library", "cmake_minimum_required", "constructar_locate_rtabmap",
+    "else", "elseif", "endif", "find_library", "find_package", "foreach", "endforeach", "if",
+    "include", "install", "message", "option", "project", "return", "set", "target_compile_definitions",
+    "target_compile_options", "target_include_directories", "target_link_libraries", "unset",
+}
+
+
+def check_the_native_cmake_is_spelled_out() -> None:
+    """Every command in the NDK build file is a command CMake has (finding 232).
+
+    The native build cannot be configured in this repository's development sandbox - there is no
+    NDK and no CMake - so a typo in `CMakeLists.txt` is found by CI, twenty minutes after the
+    change, on a runner that reports it as `Unknown CMake command "et"` from deep inside a
+    `CXX1429` stack trace. That happened: inserting one line in front of `set(CMAKE_C_STANDARD 11)`
+    by a script whose newline landed inside the word left `et(CMAKE_C_STANDARD 11)` behind, the
+    host suite passed (it does not read this file), and the first thing to notice was the NDK job.
+
+    A command CMake does not have cannot mean anything, and the set of commands this file is
+    allowed to use is small and known: anything outside it is a typo, a truncated word or a
+    command that arrived with a CMake version this project does not require. The check is static
+    because the alternative is a twenty-minute round trip per character.
+    """
+    cmake = ROOT / "native-slam" / "src" / "main" / "cpp" / "CMakeLists.txt"
+    if not cmake.exists():
+        add(cmake, "the NDK build file is gone, so :native-slam would ship without its native "
+                   "library and every caller would fail at System.loadLibrary")
+        return
+    text = cmake.read_text(encoding="utf-8")
+    if text.count("(") != text.count(")"):
+        add(cmake, f"unbalanced parentheses ({text.count('(')} open, {text.count(')')} close) - the "
+                   f"file would fail at configure time, not at build time")
+    for number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = re.match(r"([A-Za-z_][A-Za-z0-9_]*)\s*\(", stripped)
+        if match is None:
+            # Multi-line arguments of a command that opened on an earlier line: `)`, a quoted
+            # string, a variable expansion, a compiler flag. None of them is a command.
+            continue
+        command = match.group(1)
+        if command not in CMAKE_COMMANDS:
+            add(cmake, f"line {number} calls `{command}`, which is not a CMake command this file "
+                       f"uses - a truncated word reads exactly like this, and the sandbox cannot "
+                       f"run CMake to find out (finding 232)")
+
+
 def check_the_tag_decoder_is_vendored_and_credited() -> None:
     """The marker tier ships a decoder somebody else wrote, and says so (finding 231).
 
@@ -4508,6 +4556,7 @@ def main() -> int:
     check_the_calibration_has_one_home()
     check_the_frame_solver_is_built_everywhere()
     check_the_squared_wall_keeps_its_distance()
+    check_the_native_cmake_is_spelled_out()
     check_the_tag_decoder_is_vendored_and_credited()
     check_the_plane_fitter_is_reproducible()
     check_totals_are_sums_of_printed_rows()
