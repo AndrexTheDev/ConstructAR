@@ -270,7 +270,6 @@ fun ArMeasureScreen(
     val hudPosition by controller.hudScreenPixels.collectAsStateWithLifecycle()
     val lastHit by controller.lastHit.collectAsStateWithLifecycle()
     val stability by controller.stability.collectAsStateWithLifecycle()
-    val floorHeight by controller.floorHeight.collectAsStateWithLifecycle()
     val floorDecision by controller.floor.collectAsStateWithLifecycle()
     // A table top is upward-facing, below the phone and higher than the floor: the one case
     // "highest plane wins" got wrong (finding 218). When the evaluator is not sure, the HUD says
@@ -294,11 +293,15 @@ fun ArMeasureScreen(
             aiSettled = aiDepthSettled,
         )
     }
-    // Handed to the caller as soon as a floor is seen, and not again for the same plane: the
-    // project's write path ignores a repeat within a centimetre and coalesces the burst
-    // (findings 214 and 219).
-    LaunchedEffect(floorHeight) {
-        floorHeight?.let { if (it.isFinite()) onFloorHeight(controller.sessionId, it) }
+    // Handed to the caller as soon as a floor is *decided* - by the reticle, not only by a tap -
+    // and only when the decision is usable: an uncertain floor (a table top under the phone) may
+    // be shown as a warning but may not become the reference every mounting height is measured
+    // from (findings 218 and 226). The project's write path ignores a repeat within a centimetre
+    // and coalesces the burst (findings 214 and 219).
+    LaunchedEffect(floorDecision) {
+        val decision = floorDecision ?: return@LaunchedEffect
+        if (!decision.usable) return@LaunchedEffect
+        decision.heightM?.let { if (it.isFinite()) onFloorHeight(controller.sessionId, it) }
     }
 
     var spec by remember { mutableStateOf(ConduitPresets.all.first()) }

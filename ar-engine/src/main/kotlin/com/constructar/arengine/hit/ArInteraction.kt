@@ -84,6 +84,22 @@ class ArInteraction(
     @Volatile
     var onTapResolved: ((HitResolution) -> Unit)? = null
 
+    /**
+     * Invoked on the render thread with every resolved **floor**, tap or reticle.
+     *
+     * A tap and the reticle run the same cascade, and the floor decision is computed on both paths
+     * and was thrown away on one: the app learned which plane is the floor only when the operator
+     * tapped, so walking into a room, pointing at the floor and waiting recorded nothing - and the
+     * wall screen's sentence ("walk the room once and the zones appear") was an instruction that
+     * did not work. It is the reticle that looks at the floor all the time; this is where its
+     * answer leaves the hit source (finding 226).
+     *
+     * `@Volatile` for the same reason as [onTapResolved]: assigned once on the main thread,
+     * called from the render thread.
+     */
+    @Volatile
+    var onFloorResolved: ((FloorDecision) -> Unit)? = null
+
     private var lastReticleMillis = 0L
 
     private data class ScreenTap(val x: Float, val y: Float, val width: Int, val height: Int)
@@ -116,6 +132,7 @@ class ArInteraction(
                 HitResolution.miss(emptyList())
             }
             mutableResults.value = resolution
+            resolution.floor?.let { onFloorResolved?.invoke(it) }
             onTapResolved?.invoke(resolution)
             return
         }
@@ -136,6 +153,9 @@ class ArInteraction(
         } catch (error: Throwable) {
             null
         }
+        // The reticle is the path that looks at the floor continuously: a room where the operator
+        // points at the floor and waits, without tapping, still records a floor (finding 226).
+        resolution?.floor?.let { onFloorResolved?.invoke(it) }
         mutableReticle.value = resolution?.hit
     }
 

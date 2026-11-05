@@ -154,9 +154,6 @@ class ArMeasureController(private val context: Context) {
      */
     val floor: MutableStateFlow<com.constructar.arengine.hit.FloorDecision?> = MutableStateFlow(null)
 
-    /** The floor's height, for callers that only need a number. */
-    val floorHeight: MutableStateFlow<Float?> = MutableStateFlow(null)
-
     /**
      * State of the reticle's sample window: whether the point under the crosshair has settled
      * to a centimetre yet. The HUD says "hold steady" until it has, and the committed node is
@@ -218,6 +215,18 @@ class ArMeasureController(private val context: Context) {
         interaction = ArInteraction(session).also {
             it.previousNode = routeSession.state.value.nodes.lastOrNull()
             it.onTapResolved = { resolution -> mutableHitEvents.value = resolution }
+            // The floor travels on its own path, because the reticle sees it without a tap and the
+            // HUD has to warn about an uncertain one *before* the operator commits a point to it
+            // (findings 218 and 226).
+            it.onFloorResolved = { decision ->
+                // A wall, a chair or the ceiling is no evidence that the floor went away. Keeping
+                // the last real decision is finding 214's rule ("the last height a tracked plane
+                // produced"), now that the *status* travels with it - and it is what stops the
+                // HUD's warning from flickering on every frame the reticle leaves the floor.
+                if (decision.status != com.constructar.arengine.hit.FloorReferenceStatus.MISSING) {
+                    floor.value = decision
+                }
+            }
         }
         if (powerManager == null) {
             powerManager = context.getSystemService(PowerManager::class.java)
@@ -369,10 +378,6 @@ class ArMeasureController(private val context: Context) {
         val resolution = mutableHitEvents.value ?: return null
         mutableHitEvents.value = null
         lastHit.value = resolution
-        resolution.floor?.let { decision ->
-            floor.value = decision
-            decision.heightM?.let { height -> floorHeight.value = height }
-        }
         val hit = resolution.hit
         if (hit == null) {
             // Tap into nothing: the window is stale, and keeping it would let a later tap

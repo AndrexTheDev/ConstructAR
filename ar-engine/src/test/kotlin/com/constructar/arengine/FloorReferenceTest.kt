@@ -6,6 +6,7 @@
 
 package com.constructar.arengine
 
+import com.constructar.arengine.hit.FloorDecision
 import com.constructar.arengine.hit.FloorReference
 import com.constructar.arengine.hit.FloorReferenceStatus
 import com.constructar.arengine.hit.PlaneCandidate
@@ -164,6 +165,25 @@ class FloorReferenceTest {
         val worktop = plane(Vec3(0f, 1f, 0f), -0.2f)
 
         assertNull(FloorReference.heightFrom(listOf(worktop), viewerHeightM = 0f))
+    }
+
+    @Test
+    fun `only a tracked floor may be stored`() {
+        // The screen hands a decision to the project only when `usable`, so this property is the
+        // boundary between "the HUD may show it as a warning" and "every mounting height in the
+        // room is measured from it".
+        fun decision(status: FloorReferenceStatus, heightM: Float?) = FloorDecision(
+            heightM = heightM,
+            status = status,
+            confidence = 0.9f,
+            gap = 0.5f,
+            candidateCount = 1,
+        )
+
+        assertTrue(decision(FloorReferenceStatus.TRACKED, -1.4f).usable)
+        assertFalse(decision(FloorReferenceStatus.UNCERTAIN, -0.75f).usable)
+        assertFalse(decision(FloorReferenceStatus.MISSING, null).usable)
+        assertFalse(FloorDecision.MISSING.usable)
     }
 
     @Test

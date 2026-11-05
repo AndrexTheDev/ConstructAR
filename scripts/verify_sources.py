@@ -4062,6 +4062,26 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
     if "onFloorHeight(controller.sessionId" not in measure_text:
         add(measure, "the floor is handed over without the session that measured it, so the "
                      "project cannot tell two ARCore origins apart (finding 217)")
+    # The reticle looks at the floor all the time; a tap looks at it once. Only the tap path
+    # published the decision, and the screen's own sentence tells the operator to walk the room
+    # (finding 226).
+    interaction = hit_models.parent / "ArInteraction.kt"
+    interaction_text = interaction.read_text(encoding="utf-8")
+    if "var onFloorResolved" not in interaction_text:
+        add(interaction, "the floor never leaves the hit source on the reticle path, so a room "
+                         "where the operator pointed at the floor and waited recorded nothing")
+    if "resolution?.floor?.let { onFloorResolved?.invoke(it) }" not in interaction_text:
+        add(interaction, "the reticle's resolution is computed and its floor dropped - the "
+                         "decision exists for one line and is thrown away")
+    floor_controller = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" /
+                       "app" / "ui" / "ar" / "ArMeasureController.kt")
+    floor_controller_text = floor_controller.read_text(encoding="utf-8")
+    if "onFloorResolved = " not in floor_controller_text:
+        add(floor_controller, "nothing observes the reticle's floor, so the HUD and the project "
+                              "only learn about it when the operator happens to tap")
+    if "if (!decision.usable)" not in measure_text:
+        add(measure, "an uncertain floor is handed to the project, so every mounting height in "
+                     "the room would be measured from a table top (finding 218)")
     root_screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
                    "AppRoot.kt")
     root_text = root_screen.read_text(encoding="utf-8")
