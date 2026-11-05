@@ -46,6 +46,7 @@ class NativePoseGraphSource(private val engine: NativeSlamEngine) : PoseGraphSou
                 initialCost = it.initialCost,
                 finalCost = it.finalCost,
                 converged = it.converged,
+                poses = it.poses,
             )
         }
 

@@ -68,15 +68,33 @@ fun LoopClosureDialog(
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                     )
-                    is ClosureState.Closed -> Text(
-                        text = stringResource(
-                            R.string.loop_closed,
-                            NumberText.digits(state.optimisation.initialCost, 2, LocalDecimalMark.current),
-                            NumberText.digits(state.optimisation.finalCost, 2, LocalDecimalMark.current),
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                    )
+                    is ClosureState.Closed -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = stringResource(
+                                R.string.loop_closed,
+                                NumberText.digits(state.optimisation.initialCost, 2, LocalDecimalMark.current),
+                                NumberText.digits(state.optimisation.finalCost, 2, LocalDecimalMark.current),
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        )
+                        // How far the graph actually moved, because a residual that fell proves the
+                        // optimiser ran and says nothing about what it did to the room (finding
+                        // 246). Silence when nothing moved: a "0,000 m" line teaches the operator
+                        // that closures are theatre.
+                        if (state.correction.moved) {
+                            Text(
+                                text = stringResource(
+                                    R.string.loop_shift,
+                                    state.correction.nodes,
+                                    shownLengthWithUnit(state.correction.maxShiftMetres),
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = SiteColors.accent,
+                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                            )
+                        }
+                    }
                     ClosureState.Failed -> Text(
                         text = stringResource(R.string.loop_failed),
                         style = MaterialTheme.typography.bodyMedium,

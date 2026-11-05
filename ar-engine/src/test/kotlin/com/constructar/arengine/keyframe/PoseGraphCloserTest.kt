@@ -6,6 +6,8 @@
 
 package com.constructar.arengine.keyframe
 
+import com.constructar.core.math.Mat4
+import com.constructar.core.math.Vec3
 import com.constructar.core.slam.ClosureCandidate
 import com.constructar.core.slam.ClosurePolicyConfig
 import org.junit.Assert.assertEquals
@@ -22,6 +24,10 @@ import org.junit.Test
  * operator said yes.
  */
 class PoseGraphCloserTest {
+
+    private class FakeHistory(private val poses: Map<Int, FloatArray> = emptyMap()) : NodeHistory {
+        override fun originalPose(index: Int): FloatArray? = poses[index]
+    }
 
     private class FakeSource(
         private var found: List<ClosureCandidate> = emptyList(),
@@ -47,12 +53,21 @@ class PoseGraphCloserTest {
         }
     }
 
-    private fun closer(source: FakeSource, minNodes: Int = 10) = PoseGraphCloser(
+    private fun closer(
+        source: FakeSource,
+        minNodes: Int = 10,
+        history: NodeHistory = FakeHistory(),
+    ) = PoseGraphCloser(
         source = source,
+        history = history,
         policy = com.constructar.core.slam.ClosurePolicy(
             ClosurePolicyConfig(minNodes = minNodes, cooldownMillis = 60_000L),
         ),
     )
+
+    private fun poseAt(x: Float): FloatArray =
+        Mat4.fromRotationTranslation(com.constructar.core.math.Quat.IDENTITY, Vec3(x, 0f, 0f))
+            .elements.copyOf()
 
     @Test
     fun `asking with an empty detector says so, and touches nothing`() {
@@ -154,5 +169,45 @@ class PoseGraphCloserTest {
 
         assertEquals(ClosureState.Idle, closer.state)
         assertFalse(closer.look(nodeCount = 200, nowMillis = 2_000L) is ClosureState.NothingFound)
+    }
+
+    @Test
+    fun `a confirmation reports how far the optimiser moved the graph`() {
+        val source = FakeSource(
+            found = listOf(ClosureCandidate(0, 1, 0.2f)),
+            result = ClosureOptimisation(
+                initialCost = 9f,
+                finalCost = 0.1f,
+                converged = true,
+                poses = listOf(poseAt(0f), poseAt(0.25f)),
+            ),
+        )
+        val closer = closer(source, history = FakeHistory(mapOf(0 to poseAt(0f), 1 to poseAt(0f))))
+        closer.look(nodeCount = 200, nowMillis = 0L)
+
+        val closed = closer.confirm(nowMillis = 1_000L) as ClosureState.Closed
+        assertEquals(2, closed.correction.nodes)
+        assertEquals(0.25f, closed.correction.maxShiftMetres, 1e-4f)
+        assertTrue("the report has to say that something moved", closed.correction.moved)
+    }
+
+    @Test
+    fun `a node the app never fed in is not part of the report`() {
+        val source = FakeSource(
+            found = listOf(ClosureCandidate(0, 1, 0.2f)),
+            result = ClosureOptimisation(
+                initialCost = 9f,
+                finalCost = 0.1f,
+                converged = true,
+                poses = listOf(poseAt(0f), poseAt(5f)),
+            ),
+        )
+        // Node 1 came from somewhere else: no original, so no shift to report.
+        val closer = closer(source, history = FakeHistory(mapOf(0 to poseAt(0f))))
+        closer.look(nodeCount = 200, nowMillis = 0L)
+
+        val closed = closer.confirm(nowMillis = 1_000L) as ClosureState.Closed
+        assertEquals(1, closed.correction.nodes)
+        assertEquals(0f, closed.correction.maxShiftMetres, 1e-6f)
     }
 }

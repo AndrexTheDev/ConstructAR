@@ -288,9 +288,13 @@ class TsdfScanPipeline(
         // A queue per engine: a restart after `stop()` gets a fresh queue rather than a closed one,
         // so the second session cannot silently lose every keyframe.
         keyframeQueue = KeyframeQueue()
-        keyframeApplier = KeyframeApplier(NativePoseGraphSink(created))
+        val applier = KeyframeApplier(NativePoseGraphSink(created))
+        keyframeApplier = applier
         keyframeFeed = KeyframeFeed(keyframeQueue)
-        poseGraphCloser = PoseGraphCloser(NativePoseGraphSource(created))
+        // The applier is also the node history: it is the only component that knows which pose
+        // each native node was created with, and a closure report without it would be a sentence
+        // about nothing (finding 246).
+        poseGraphCloser = PoseGraphCloser(NativePoseGraphSource(created), applier)
         workerJob = scope.launch(dispatcher) {
             try {
                 // Ends when the channel is closed and drained — see `stop()`.

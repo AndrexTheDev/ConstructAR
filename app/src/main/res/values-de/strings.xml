@@ -86,6 +86,7 @@
     <string name="loop_none">Keine Schleife gefunden.</string>
     <string name="loop_closed">Schleife geschlossen: Restfehler %1$s → %2$s.</string>
     <string name="loop_failed">Der Graph konnte nicht optimiert werden.</string>
+    <string name="loop_shift">Pose-Graph bewegt: %1$d Knoten, bis zu %2$s.</string>
     <string name="ar_add_point">Punkt in der Mitte</string>
     <string name="ar_undo">Zurück</string>
     <string name="ar_close_loop">Schließen</string>

@@ -107,9 +107,16 @@ class KeyframeQueue(capacity: Int = DEFAULT_CAPACITY) : PoseGraphSink {
  *    measurement between two places that were never adjacent, which the optimiser would then
  *    spread over the trajectory.
  */
-class KeyframeApplier(private val sink: PoseGraphSink) {
+class KeyframeApplier(private val sink: PoseGraphSink) : NodeHistory {
 
     private val nativeIndex = HashMap<Int, Int>()
+
+    /**
+     * The pose each *native* node was created with, so a later optimisation can be compared
+     * against it (finding 246). 16 floats per node: a thousand keyframes is 64 kB, and the
+     * alternative is a closure report that cannot say whether anything moved.
+     */
+    private val originals = HashMap<Int, FloatArray>()
 
     var appliedNodes: Int = 0
         private set
@@ -128,6 +135,7 @@ class KeyframeApplier(private val sink: PoseGraphSink) {
                     refusedNodes += 1
                 } else {
                     nativeIndex[command.index] = index
+                    originals[index] = command.poseColumnMajor.copyOf()
                     appliedNodes += 1
                 }
             }
@@ -144,8 +152,12 @@ class KeyframeApplier(private val sink: PoseGraphSink) {
         }
     }
 
+    /** The pose this node was created with, or null for a node this app never added. */
+    override fun originalPose(index: Int): FloatArray? = originals[index]
+
     /** Forgets the translation table - the native graph was reset, so the indices are gone. */
     fun clear() {
         nativeIndex.clear()
+        originals.clear()
     }
 }

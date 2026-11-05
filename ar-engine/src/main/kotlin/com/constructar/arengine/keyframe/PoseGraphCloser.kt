@@ -9,6 +9,7 @@ package com.constructar.arengine.keyframe
 import com.constructar.core.slam.ClosureCandidate
 import com.constructar.core.slam.ClosureOffer
 import com.constructar.core.slam.ClosurePolicy
+import com.constructar.core.slam.CorrectionReport
 
 /**
  * The three things the pose graph can be asked, as a seam a test can fake.
@@ -35,11 +36,24 @@ interface PoseGraphSource {
     fun optimise(): ClosureOptimisation?
 }
 
-/** What the optimiser reported, in the two numbers that matter to an operator. */
+/**
+ * The pose the app itself fed in for a node, or `null` for a node it never added.
+ *
+ * The optimiser returns corrected poses by node index; to say *how far things moved* the app has
+ * to remember where they were. A missing original is skipped rather than counted as zero - a node
+ * that came from somewhere else has no "before" to compare with (finding 246).
+ */
+interface NodeHistory {
+    fun originalPose(index: Int): FloatArray?
+}
+
+/** What the optimiser reported, in the numbers that matter to an operator. */
 data class ClosureOptimisation(
     val initialCost: Float,
     val finalCost: Float,
     val converged: Boolean,
+    /** Column-major camera-to-world, one per node, as the optimiser left them. */
+    val poses: List<FloatArray> = emptyList(),
 )
 
 /** What the loop-closure conversation is currently saying. */
@@ -54,8 +68,11 @@ sealed interface ClosureState {
     /** One question on screen, waiting for the operator. */
     data class Offered(val offer: ClosureOffer) : ClosureState
 
-    /** The closure was applied and the graph optimised. */
-    data class Closed(val optimisation: ClosureOptimisation) : ClosureState
+    /** The closure was applied and the graph optimised - with what it did to the trajectory. */
+    data class Closed(
+        val optimisation: ClosureOptimisation,
+        val correction: CorrectionReport,
+    ) : ClosureState
 
     /** The closure was applied but there is no graph to optimise - counted, not hidden. */
     data object Failed : ClosureState
@@ -84,6 +101,7 @@ sealed interface ClosureState {
  */
 class PoseGraphCloser(
     private val source: PoseGraphSource,
+    private val history: NodeHistory,
     private val policy: ClosurePolicy = ClosurePolicy(),
 ) {
 
@@ -104,8 +122,14 @@ class PoseGraphCloser(
         // Same bookkeeping as a refusal: the pair is done for this run. Without it the detector
         // would re-propose the two nodes that now coincide, on every lookup, forever.
         policy.dismiss(offer, nowMillis)
-        val result = source.optimise()
-        state = if (result == null) ClosureState.Failed else ClosureState.Closed(result)
+        val result = source.optimise() ?: run {
+            state = ClosureState.Failed
+            return state
+        }
+        // What the closure did, in metres. The corrected poses are *not* stored anywhere: this is
+        // the report the operator gets instead of a silently moved room (finding 246).
+        val correction = CorrectionReport.of(result.poses) { index -> history.originalPose(index) }
+        state = ClosureState.Closed(result, correction)
         return state
     }
 
