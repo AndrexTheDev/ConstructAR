@@ -77,6 +77,8 @@
     <string name="marker_measured">Medido: factor %1$s de %2$d pares en %3$s, dispersión ±%4$s %%.</string>
     <string name="marker_state_aiming">Apunta la cámara a la etiqueta impresa, a 0,5–2,0 m.</string>
     <string name="marker_state_walking">Ahora desplaza el teléfono un metro hacia un lado sin perder la etiqueta.</string>
+    <string name="ar_pose_graph">Grafo de poses: %1$d nodos · %2$d aristas</string>
+    <string name="ar_pose_graph_lost">Fotogramas clave perdidos: %1$d</string>
     <string name="ar_add_point">Añadir punto en el centro</string>
     <string name="ar_undo">Deshacer</string>
     <string name="ar_close_loop">Cerrar</string>

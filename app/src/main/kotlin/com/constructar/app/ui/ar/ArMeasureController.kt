@@ -13,6 +13,7 @@ import android.util.Log
 import com.constructar.arengine.hit.ArInteraction
 import com.constructar.arengine.hit.HitResolution
 import com.constructar.arengine.hit.HitStabilizer
+import com.constructar.arengine.keyframe.PoseGraphStatus
 import com.constructar.arengine.render.RouteSceneController
 import com.constructar.arengine.render.SceneMeshRenderer
 import com.constructar.arengine.render.SceneViewMaterialProvider
@@ -88,6 +89,14 @@ class ArMeasureController(private val context: Context) {
 
     /** `Off`, `Watching` or `Ready` - the three things a marker status line can say. */
     val markerProbeState: StateFlow<MarkerSweepState> = markerState.asStateFlow()
+
+    /**
+     * What the pose graph has taken and what it lost (finding 244).
+     *
+     * Passed through rather than recomputed: the counters belong to the pipeline's worker, and the
+     * screen only has to say them.
+     */
+    val poseGraphStatus: StateFlow<PoseGraphStatus> get() = pipeline.poseGraphStatus
 
     @Volatile
     private var markerProbe: MarkerProbe? = null

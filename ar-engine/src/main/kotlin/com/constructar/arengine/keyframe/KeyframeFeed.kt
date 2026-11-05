@@ -93,6 +93,12 @@ class KeyframeFeed(
     private var previousPose: Pose? = null
     private var previousNode: Int = PoseGraphSink.NO_NODE
 
+    /**
+     * Running totals. Volatile because the pipeline reads them from its worker to publish
+     * `PoseGraphStatus` while this thread keeps feeding: the value is replaced wholesale, so a
+     * reader sees a consistent snapshot rather than a half-written one (finding 244).
+     */
+    @Volatile
     var report: KeyframeFeedReport = KeyframeFeedReport()
         private set
 

@@ -14,6 +14,7 @@ import com.constructar.arengine.keyframe.KeyframeApplier
 import com.constructar.arengine.keyframe.KeyframeFeed
 import com.constructar.arengine.keyframe.KeyframeQueue
 import com.constructar.arengine.keyframe.NativePoseGraphSink
+import com.constructar.arengine.keyframe.PoseGraphStatus
 import com.constructar.core.calib.MarkerSweep
 import com.constructar.core.calib.MarkerSweepOptions
 import com.constructar.nativebridge.FloorplanPayload
@@ -208,6 +209,18 @@ class TsdfScanPipeline(
     /** Applies [keyframeQueue] to the native graph. Worker thread only; null after [stop]. */
     @Volatile
     private var keyframeApplier: KeyframeApplier? = null
+
+    private val mutablePoseGraphStatus = MutableStateFlow(PoseGraphStatus())
+
+    /**
+     * How many keyframes the graph took and how many were lost on the way (finding 244).
+     *
+     * Published from the worker, which is the only place that knows both halves: the queue's own
+     * drops (produced on the render thread) and the applier's refusals (counted here). Until
+     * finding 244 every one of those counters was read by a unit test and by nothing else, so on a
+     * device "the graph is empty" could not be told apart from "the queue overflowed".
+     */
+    val poseGraphStatus: StateFlow<PoseGraphStatus> = mutablePoseGraphStatus.asStateFlow()
 
     /**
      * What the render thread offers every placed frame to, or null until the engine exists.
@@ -560,6 +573,7 @@ class TsdfScanPipeline(
         keyframeFeed = null
         keyframeApplier = null
         keyframeQueue.close()
+        mutablePoseGraphStatus.value = PoseGraphStatus()
         val job = workerJob
         workerJob = null
         val active = engine
@@ -586,10 +600,13 @@ class TsdfScanPipeline(
         val applier = keyframeApplier ?: return
         var drained = 0
         while (drained < MAX_KEYFRAMES_PER_INTEGRATION) {
-            val command = keyframeQueue.poll() ?: return
+            val command = keyframeQueue.poll() ?: break
             applier.apply(command)
             drained += 1
         }
+        // Published on every integrated frame, not only when something was drained: "0 nodes and
+        // 0 lost" is itself the answer a support call needs, and StateFlow drops the repeats.
+        mutablePoseGraphStatus.value = PoseGraphStatus.of(applier, keyframeQueue.dropped)
     }
 
     companion object {

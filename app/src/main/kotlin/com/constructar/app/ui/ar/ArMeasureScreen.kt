@@ -101,6 +101,7 @@ import com.constructar.app.ui.theme.SiteColors
 import com.constructar.app.ui.tierLabel
 import com.constructar.arengine.hit.FloorHudLine
 import com.constructar.arengine.hit.floorHudLine
+import com.constructar.arengine.keyframe.PoseGraphStanding
 import com.constructar.arengine.render.ArScene
 import com.constructar.arengine.session.ArReadiness
 import com.constructar.arengine.tracking.TrackingQuality
@@ -285,6 +286,7 @@ fun ArMeasureScreen(
     // and when it *is* sure it says that too, because "no line at all" used to mean both "nothing
     // decided yet" and "recorded" (finding 228).
     val floorLine = floorHudLine(floorDecision?.status)
+    val graphStatus by controller.poseGraphStatus.collectAsStateWithLifecycle()
     val aiDepthRunning by controller.aiDepthRunning.collectAsStateWithLifecycle()
     val aiDepthSettled by controller.aiDepthSettled.collectAsStateWithLifecycle()
     // Which depth is actually in use. A phone with neither ARCore's depth API nor the bundled
@@ -789,6 +791,25 @@ fun ArMeasureScreen(
                 }
                 // Hit diagnostics, in the operator's language: which surface and which cascade
                 // tier produced the last node.
+                // What the pose graph took and what it lost (finding 244). Hidden until there is
+                // something to say: a line reading "nodes: 0" over a wall that is being measured
+                // fine would read as a fault.
+                if (graphStatus.standing != PoseGraphStanding.EMPTY) {
+                    Text(
+                        text = stringResource(R.string.ar_pose_graph, graphStatus.nodes, graphStatus.edges),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = HudStyle.text,
+                    )
+                    if (graphStatus.standing == PoseGraphStanding.LOSSY) {
+                        // A hole in the graph is not a cosmetic detail: the optimiser will spread
+                        // the missing node's error over the trajectory that connects it.
+                        Text(
+                            text = stringResource(R.string.ar_pose_graph_lost, graphStatus.lost),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = SiteColors.warning,
+                        )
+                    }
+                }
                 lastHit?.let { resolution ->
                     val hit = resolution.hit
                     Text(

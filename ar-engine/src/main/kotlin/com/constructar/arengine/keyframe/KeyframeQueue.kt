@@ -42,9 +42,18 @@ sealed interface KeyframeCommand {
 class KeyframeQueue(capacity: Int = DEFAULT_CAPACITY) : PoseGraphSink {
 
     private val channel = Channel<KeyframeCommand>(capacity = capacity)
+
+    /** Volatile for the same reason as [dropped]: the worker reads it for the status line. */
+    @Volatile
     private var nextIndex: Int = 0
 
-    /** Commands refused because the queue was full. Evidence, not a warning to be ignored. */
+    /**
+     * Commands refused because the queue was full. Evidence, not a warning to be ignored.
+     *
+     * Volatile: the worker publishes it in the pose-graph status while this thread keeps
+     * producing (finding 244).
+     */
+    @Volatile
     var dropped: Int = 0
         private set
 

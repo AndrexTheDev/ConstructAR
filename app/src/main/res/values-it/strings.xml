@@ -77,6 +77,8 @@
     <string name="marker_measured">Misurato: fattore %1$s da %2$d coppie su %3$s, dispersione ±%4$s %%.</string>
     <string name="marker_state_aiming">Inquadra il marker stampato, a 0,5–2,0 m di distanza.</string>
     <string name="marker_state_walking">Ora sposta il telefono di circa un metro di lato, tenendo il marker in vista.</string>
+    <string name="ar_pose_graph">Grafo delle pose: %1$d nodi · %2$d archi</string>
+    <string name="ar_pose_graph_lost">Fotogrammi chiave persi: %1$d</string>
     <string name="ar_add_point">Aggiungi punto al centro</string>
     <string name="ar_undo">Annulla</string>
     <string name="ar_close_loop">Chiudi</string>

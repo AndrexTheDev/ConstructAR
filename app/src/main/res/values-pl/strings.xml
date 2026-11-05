@@ -77,6 +77,8 @@
     <string name="marker_measured">Zmierzone: współczynnik %1$s z %2$d par na %3$s, rozrzut ±%4$s %%.</string>
     <string name="marker_state_aiming">Wyceluj kamerę w wydrukowany znacznik z odległości 0,5–2,0 m.</string>
     <string name="marker_state_walking">Przesuń teraz telefon o około metr w bok, nie tracąc znacznika z kadru.</string>
+    <string name="ar_pose_graph">Graf pozy: %1$d węzły · %2$d krawędzie</string>
+    <string name="ar_pose_graph_lost">Utracone klatki kluczowe: %1$d</string>
     <string name="ar_add_point">Dodaj punkt na środku</string>
     <string name="ar_undo">Cofnij</string>
     <string name="ar_close_loop">Zamknij</string>
