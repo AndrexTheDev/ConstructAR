@@ -230,6 +230,14 @@ class NativeSlamEngine internal constructor(
         cellMetres: Float = 0.05f,
         rdpEpsilonMetres: Float = 0.08f,
         minSegmentMetres: Float = 0.25f,
+        /**
+         * How far a wall run may sit off the room's own axes and still be squared onto them.
+         *
+         * 0 leaves the room exactly as measured, which is the setting for a report that has to
+         * show the scan and not the assumption; 10 degrees is drift plus the slice's own noise.
+         * The native side refuses anything outside [0, 45].
+         */
+        manhattanToleranceDegrees: Float = 10f,
     ): FloorplanPayload? {
         val active = handle
         if (active == 0L) return null
@@ -240,8 +248,21 @@ class NativeSlamEngine internal constructor(
             cellMetres,
             rdpEpsilonMetres,
             minSegmentMetres,
+            manhattanToleranceDegrees,
         )
         return FloorplanPayload.parse(payload)
+    }
+
+    /**
+     * What the last [floorplan] call's Manhattan step did, or `null` when the library cannot say.
+     *
+     * Read straight after [floorplan] and on the same worker: the context keeps only the newest
+     * fit, so a caller that asks later is asking about a different room.
+     */
+    fun lastManhattan(): ManhattanReport? {
+        val active = handle
+        if (active == 0L) return null
+        return ManhattanReport.from(nativeLastManhattan(active))
     }
 
     fun reset() {
@@ -436,7 +457,10 @@ class NativeSlamEngine internal constructor(
             cellMetres: Float,
             rdpEpsilonMetres: Float,
             minSegmentMetres: Float,
+            manhattanToleranceDegrees: Float,
         ): FloatArray?
+
+        @JvmStatic private external fun nativeLastManhattan(handle: Long): FloatArray?
         @JvmStatic private external fun nativePoseGraphReset(handle: Long)
         @JvmStatic private external fun nativePoseGraphAddNode(handle: Long, pose: FloatArray, fixed: Boolean): Int
 

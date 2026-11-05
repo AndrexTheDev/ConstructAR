@@ -25,7 +25,11 @@
 //   nativePoseGraphOptimize(handle, iterations) -> FloatArray (report + flattened poses)
 //   nativeLoopCandidates(handle) -> FloatArray (triples: from, to, distance)
 //   nativeFloorplan(handle, heightMetres, bandMetres, cellMetres, rdpEpsilonMetres,
-//                   minSegmentMetres) -> FloatArray                      (see below)
+//                   minSegmentMetres, manhattanToleranceDegrees) -> FloatArray   (see below)
+//   nativeLastManhattan(handle) -> FloatArray  [applied, residualDeg, snappedRuns, movedCorners]
+//               What the floorplan's Manhattan step did. Separate from the payload on purpose: the
+//               payload layout is a pinned contract and appending statistics to it is how a Kotlin
+//               parser reads a different room on a mismatched library.
 //
 // Mesh payload: FloatArray = [vertexCount, triangleCount, positions(3n), normals(3n)],
 //               IntArray   = indices(3t). Both arrays come from the same snapshot, so they
@@ -89,6 +93,15 @@ struct EngineContext {
   PoseGraph poseGraph;
   RtabMapBridge rtabMap;
   Bounds lastBounds;
+  /**
+   * What the last floorplan's Manhattan step did.
+   *
+   * Kept on the context because the payload is a fixed contract with Kotlin (a header of eight
+   * floats pinned by both sides): appending statistics to it would mean a Kotlin parser that reads
+   * a different room on a build with an older library. A separate getter cannot be misread - it is
+   * four floats or it is null.
+   */
+  constructar::ManhattanFit lastManhattan;
   int lastTriangleCount = 0;
   /**
    * Serialises every access to the volume: integrate, extract and reset.
@@ -527,7 +540,8 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeFloorplan(JNIEnv* env, 
                                                                  jlong handle, jfloat heightMetres,
                                                                  jfloat bandMetres, jfloat cellMetres,
                                                                  jfloat rdpEpsilonMetres,
-                                                                 jfloat minSegmentMetres) {
+                                                                 jfloat minSegmentMetres,
+                                                                 jfloat manhattanToleranceDegrees) {
   EngineContext* context = contextFrom(handle);
   if (context == nullptr) return nullptr;
   if (!(bandMetres > 0.f) || !(bandMetres <= 1.f)) {
@@ -541,6 +555,13 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeFloorplan(JNIEnv* env, 
   if (!(rdpEpsilonMetres >= 0.f) || !(minSegmentMetres >= 0.f)) {
     LOGE("floorplan refused: negative tolerance (eps %f, min length %f)",
          static_cast<double>(rdpEpsilonMetres), static_cast<double>(minSegmentMetres));
+    return nullptr;
+  }
+  // Zero is the documented "leave the room as measured"; anything else has to be a tolerance a
+  // wall can actually be off by, or the snap would square a bay window.
+  if (!(manhattanToleranceDegrees >= 0.f) || !(manhattanToleranceDegrees <= 45.f)) {
+    LOGE("floorplan refused: Manhattan tolerance %f deg outside [0, 45]",
+         static_cast<double>(manhattanToleranceDegrees));
     return nullptr;
   }
 
@@ -557,7 +578,10 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeFloorplan(JNIEnv* env, 
     options.cellMetres = cellMetres;
     options.rdpEpsilonMetres = rdpEpsilonMetres;
     options.minSegmentMetres = minSegmentMetres;
-    payload = constructar::packFloorplanPayload(constructar::vectoriseFloorplan(mask.points, options));
+    options.manhattanToleranceDegrees = manhattanToleranceDegrees;
+    const constructar::Floorplan plan = constructar::vectoriseFloorplan(mask.points, options);
+    context->lastManhattan = plan.manhattan;
+    payload = constructar::packFloorplanPayload(plan);
   }
   if (payload.empty()) return nullptr;
 
@@ -565,6 +589,28 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeFloorplan(JNIEnv* env, 
   jfloatArray result = env->NewFloatArray(size);
   if (result == nullptr) return nullptr;
   env->SetFloatArrayRegion(result, 0, size, payload.data());
+  return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_constructar_nativebridge_NativeSlamEngine_nativeLastManhattan(JNIEnv* env, jobject,
+                                                                     jlong handle) {
+  EngineContext* context = contextFrom(handle);
+  if (context == nullptr) return nullptr;
+  constructar::ManhattanFit fit;
+  {
+    std::lock_guard<std::mutex> lock(context->volumeMutex);
+    fit = context->lastManhattan;
+  }
+  const jfloat values[4] = {
+      fit.applied ? 1.f : 0.f,
+      fit.residualDegrees,
+      static_cast<jfloat>(fit.snappedSegments),
+      static_cast<jfloat>(fit.movedVertices),
+  };
+  jfloatArray result = env->NewFloatArray(4);
+  if (result == nullptr) return nullptr;
+  env->SetFloatArrayRegion(result, 0, 4, values);
   return result;
 }
 

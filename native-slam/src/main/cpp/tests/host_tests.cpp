@@ -1548,6 +1548,113 @@ void testFloorplanVectorise() {
         "a room whose walls are all below the minimum segment length is not a floorplan");
 }
 
+/** The interior angle at a corner of a loop, in degrees. */
+float interiorAngleDegrees(const SlicePoint& previous, const SlicePoint& corner,
+                           const SlicePoint& next, bool* ok = nullptr) {
+  const float ax = previous.x - corner.x;
+  const float az = previous.z - corner.z;
+  const float bx = next.x - corner.x;
+  const float bz = next.z - corner.z;
+  const float la = std::sqrt(ax * ax + az * az);
+  const float lb = std::sqrt(bx * bx + bz * bz);
+  if (ok != nullptr) *ok = la > 1e-5f && lb > 1e-5f;
+  if (!(la > 1e-5f) || !(lb > 1e-5f)) return 0.f;
+  const float cosine = (ax * bx + az * bz) / (la * lb);
+  return std::acos(std::max(-1.f, std::min(1.f, cosine))) * 180.f / 3.14159265358979323846f;
+}
+
+/** The heading of a run, in degrees. */
+float headingDegrees(const constructar::WallSegment& segment) {
+  return std::atan2(segment.end.z - segment.start.z, segment.end.x - segment.start.x) * 180.f /
+         3.14159265358979323846f;
+}
+
+/**
+ * Manhattan enforcement on the floorplan (finding 229).
+ *
+ * The slice's runs carry the depth noise of the walls they crossed, so a room that is square on
+ * site comes out as a parallelogram - 5 degrees of shear on every corner, systematically, which no
+ * amount of averaging removes. The runs are also the evidence: their length-weighted mean direction
+ * is the frame, and moving each run onto it makes the corners right angles again. Three things have
+ * to hold for that to be honest: only runs that are already close move, the loop stays closed, and
+ * a fit that would change the room is rejected rather than applied.
+ */
+void testFloorplanManhattan() {
+  section("Floorplan: Manhattan enforcement");
+
+  // A 4 x 3 m room measured with 5 degrees of shear on every corner: a = (4, 0.35), b = (0, 3).
+  const std::vector<SlicePoint> sheared = sampleWallLoop(
+      {{0.f, 0.f}, {4.f, 0.35f}, {4.f, 3.35f}, {0.f, 3.f}});
+  const constructar::Floorplan squared = constructar::vectoriseFloorplan(sheared);
+  check(squared.valid && squared.closed, "the sheared room still vectorises");
+  check(squared.manhattan.applied, "the sheared room is squared onto its own axes");
+  check(squared.manhattan.snappedSegments == 4,
+        "all four runs are within the tolerance (" +
+            std::to_string(squared.manhattan.snappedSegments) + ")");
+  check(squared.manhattan.movedVertices == 4,
+        "all four corners are rebuilt from the straightened runs (" +
+            std::to_string(squared.manhattan.movedVertices) + ")");
+  checkNear(squared.areaSquareMetres,
+            std::fabs(constructar::polygonArea(squared.outline)), 1e-2,
+            "the reported area is the squared loop's own area (m2)");
+
+  bool everyCornerIsRight = squared.outline.size() == 4;
+  float worstError = 0.f;
+  for (size_t i = 0; everyCornerIsRight && i < squared.outline.size(); ++i) {
+    bool ok = false;
+    const float angle = interiorAngleDegrees(
+        squared.outline[(i + squared.outline.size() - 1) % squared.outline.size()],
+        squared.outline[i], squared.outline[(i + 1) % squared.outline.size()], &ok);
+    const float error = std::fabs(angle - 90.f);
+    worstError = std::max(worstError, error);
+    everyCornerIsRight = ok && error <= 1.f;
+  }
+  check(everyCornerIsRight, "every corner is a right angle after the snap (worst " +
+                                std::to_string(worstError) + " degrees)");
+  check(squared.areaSquareMetres > 10.8f && squared.areaSquareMetres < 13.2f,
+        "squaring did not turn the room into a different room (" +
+            std::to_string(squared.areaSquareMetres) + " m2)");
+
+  // A chamfer 31 degrees off the frame is not a wall that moved: it is a room that has one.
+  const std::vector<SlicePoint> chamfered = sampleWallLoop(
+      {{0.f, 0.f}, {4.f, 0.f}, {4.f, 2.4f}, {3.f, 3.f}, {0.f, 3.f}});
+  const constructar::Floorplan bay = constructar::vectoriseFloorplan(chamfered);
+  check(bay.valid, "the chamfered room vectorises");
+  check(bay.manhattan.applied, "the square runs of the chamfered room are still squared");
+  check(bay.manhattan.snappedSegments == 4,
+        "the chamfer itself is left as measured (" +
+            std::to_string(bay.manhattan.snappedSegments) + " of 5 runs squared)");
+  float chamferHeading = 0.f;
+  float shortest = 1e9f;
+  for (const auto& segment : bay.segments) {
+    if (segment.length() < shortest) {
+      shortest = segment.length();
+      chamferHeading = headingDegrees(segment);
+    }
+  }
+  // Measured heading of the chamfer: atan2(0.6, -1.0) is 149.04 degrees; 180 is the same wall.
+  const float offBy = std::fabs(std::fabs(chamferHeading) - 149.04f);
+  check(offBy < 4.f, "the chamfer keeps its measured angle (" +
+                         std::to_string(chamferHeading) + " degrees)");
+
+  // A tolerance of zero is "do not touch the room": the setting the option documents.
+  constructar::FloorplanOptions measured;
+  measured.manhattanToleranceDegrees = 0.f;
+  const constructar::Floorplan asMeasured = constructar::vectoriseFloorplan(sheared, measured);
+  check(!asMeasured.manhattan.applied, "a tolerance of zero applies nothing");
+  check(asMeasured.manhattan.snappedSegments == 0, "and reports nothing squared");
+
+  // A concave room survives the step: the L's six runs are all on the frame, and the concave
+  // corner must not be cut off by it.
+  const std::vector<SlicePoint> ell = sampleWallLoop(
+      {{0.f, 0.f}, {4.f, 0.f}, {4.f, 2.f}, {2.f, 2.f}, {2.f, 4.f}, {0.f, 4.f}});
+  const constructar::Floorplan ellPlan = constructar::vectoriseFloorplan(ell);
+  check(ellPlan.valid && ellPlan.segments.size() == 6,
+        "the L keeps its six runs with Manhattan on (" +
+            std::to_string(ellPlan.segments.size()) + ")");
+  checkNear(ellPlan.areaSquareMetres, 12.0, 0.4, "the L's area survives the step (m2)");
+}
+
 /**
  * The JNI payload is the one place where C++ and Kotlin have to agree without either compiler
  * seeing the other. Every failure here is silent in the product: a header that is one float short
@@ -1852,6 +1959,7 @@ int main() {
   testSurfaceSliceAtHeight();
   testFloorplanVectorise();
   testFloorplanPayload();
+  testFloorplanManhattan();
   testObservationWeight();
   testSurfaceMask();
   testInvalidInput();

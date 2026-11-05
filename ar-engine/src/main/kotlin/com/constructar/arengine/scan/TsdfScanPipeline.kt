@@ -408,14 +408,37 @@ class TsdfScanPipeline(
     fun floorplan(
         heightMetres: Float = FLOORPLAN_HEIGHT_METRES,
         bandMetres: Float = FLOORPLAN_BAND_METRES,
+        /**
+         * How far a wall run may sit off the room's own axes and still be squared onto them, in
+         * degrees; 0 turns the step off.
+         *
+         * The default is on because the outline this returns is not a diagnostic: it is stored as
+         * the room's sketch, drawn as the card's picture, and measured again by the wall screen
+         * (wall lengths, areas, board order). A 5-degree shear in that outline is a wall 20 cm
+         * longer on a 4 m run, on every wall, in the purchase order.
+         */
+        manhattanToleranceDegrees: Float = FLOORPLAN_MANHATTAN_TOLERANCE_DEGREES,
     ): FloorplanPayload? {
         if (engine == null) return null
         return kotlinx.coroutines.runBlocking {
             kotlinx.coroutines.withTimeoutOrNull(FLOORPLAN_TIMEOUT_MS) {
-                kotlinx.coroutines.withContext(dispatcher) { engine?.floorplan(heightMetres, bandMetres) }
+                kotlinx.coroutines.withContext(dispatcher) {
+                    engine?.floorplan(heightMetres, bandMetres, manhattanToleranceDegrees = manhattanToleranceDegrees)
+                }
             }
         }
     }
+
+    /**
+     * What the last floorplan's Manhattan step did - the residual and how much of the outline it
+     * moved.
+     *
+     * A diagnostic for the same caller that took the plan, and the reason it exists: "the card
+     * shows a rectangle" and "the card shows a rectangle because the app squared it" are two
+     * different claims, and only one of them is a measurement. Must be asked straight after
+     * [floorplan] - the native context keeps only the newest fit.
+     */
+    fun lastManhattan(): com.constructar.nativebridge.ManhattanReport? = engine?.lastManhattan()
 
     /** Clears the volume and pose graph (new room). */
     fun reset() {
@@ -490,6 +513,14 @@ class TsdfScanPipeline(
 
         /** A 10 cm band: one TSDF voxel plus slack around the cut. */
         private const val FLOORPLAN_BAND_METRES = 0.10f
+
+/**
+ * Default Manhattan tolerance for the floorplan: drift plus the slice's own noise, in degrees.
+ *
+ * Ten degrees is wide enough for the shear a hand-held scan produces and narrow enough that a
+ * chamfer or a bay window - the runs that are deliberately not square - stays where it is.
+ */
+const val FLOORPLAN_MANHATTAN_TOLERANCE_DEGREES = 10f
 
         /**
          * How long a card picture may cost the caller.

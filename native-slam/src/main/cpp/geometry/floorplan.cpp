@@ -284,6 +284,142 @@ std::vector<SlicePoint> projectToFloor(const std::vector<Vec3>& slicePoints) {
   return points;
 }
 
+void snapFloorplanToManhattan(std::vector<SlicePoint>& loop, float toleranceDegrees,
+                              ManhattanFit& fit) {
+  fit.applied = false;
+  fit.residualDegrees = 0.f;
+  fit.snappedSegments = 0;
+  fit.movedVertices = 0;
+
+  const size_t count = loop.size();
+  if (count < 3) return;
+  if (!(toleranceDegrees > 0.f) || !std::isfinite(toleranceDegrees)) return;
+
+  const double kEpsilon = 1e-7;
+  // kPi is not standard C++ and is missing under -std=c++20 on some libcs; one constant is
+  // cheaper than a platform guard.
+  constexpr double kPi = 3.14159265358979323846;
+
+  // 1. The frame the room is trying to be: the length-weighted mean of the runs' **quadrupled**
+  //    angles. Doubling is not enough and the failure is not subtle - an orthogonal room has two
+  //    families 90 degrees apart, so 2*theta differs by 180 degrees between them and the two cancel
+  //    exactly. Quadrupling maps both families onto the same direction (a frame is only defined
+  //    modulo 90 degrees), which is what a squared room is. Two runs of one wall family still count
+  //    twice what one short return does.
+  double cosine = 0.0;
+  double sine = 0.0;
+  int usableRuns = 0;
+  std::vector<float> length(count, 0.f);
+  std::vector<float> heading(count, 0.f);
+  for (size_t i = 0; i < count; ++i) {
+    const SlicePoint& from = loop[i];
+    const SlicePoint& to = loop[(i + 1) % count];
+    const float dx = to.x - from.x;
+    const float dz = to.z - from.z;
+    const float runLength = std::sqrt(dx * dx + dz * dz);
+    length[i] = runLength;
+    if (!(runLength > 0.f)) continue;
+    const double phi = std::atan2(static_cast<double>(dz), static_cast<double>(dx));
+    heading[i] = static_cast<float>(phi);
+    cosine += static_cast<double>(runLength) * std::cos(4.0 * phi);
+    sine += static_cast<double>(runLength) * std::sin(4.0 * phi);
+    ++usableRuns;
+  }
+  if (usableRuns < 3) return;
+  if (!(cosine * cosine + sine * sine > kEpsilon)) return;
+  const double theta0 = 0.25 * std::atan2(sine, cosine);
+
+  // 2. Each run either snaps to theta0 + k * 90 degrees or keeps its measured line. The snapped
+  //    line keeps the run's midpoint, so a wall stays where the room put it and only its angle
+  //    changes.
+  const double toleranceRadians = static_cast<double>(toleranceDegrees) * kPi / 180.0;
+  struct Line {
+    SlicePoint point;
+    SlicePoint direction;
+    bool snapped = false;
+  };
+  std::vector<Line> lines(count);
+  for (size_t i = 0; i < count; ++i) {
+    if (!(length[i] > 0.f)) {
+      lines[i].point = loop[i];
+      lines[i].direction = SlicePoint(1.f, 0.f);
+      continue;
+    }
+    const double target = theta0 + std::round((static_cast<double>(heading[i]) - theta0) /
+                                              (kPi / 2.0)) * (kPi / 2.0);
+    const double offBy = static_cast<double>(heading[i]) - target;
+    lines[i].point = SlicePoint((loop[i].x + loop[(i + 1) % count].x) * 0.5f,
+                                (loop[i].z + loop[(i + 1) % count].z) * 0.5f);
+    if (std::fabs(offBy) <= toleranceRadians) {
+      lines[i].snapped = true;
+      lines[i].direction = SlicePoint(static_cast<float>(std::cos(target)),
+                                      static_cast<float>(std::sin(target)));
+      fit.snappedSegments += 1;
+    } else {
+      lines[i].direction = SlicePoint(static_cast<float>(std::cos(heading[i])),
+                                      static_cast<float>(std::sin(heading[i])));
+    }
+  }
+  if (fit.snappedSegments < 2) {
+    fit.snappedSegments = 0;
+    return;
+  }
+
+  // 3. Vertex i sits between run i-1 and run i, so it becomes the crossing of the two (possibly
+  //    straightened) lines. Two runs that are nearly parallel have no usable crossing; that vertex
+  //    stays where the scan put it.
+  std::vector<SlicePoint> squared = loop;
+  int moved = 0;
+  for (size_t i = 0; i < count; ++i) {
+    const Line& previous = lines[(i + count - 1) % count];
+    const Line& next = lines[i];
+    const float cross = previous.direction.x * next.direction.z -
+                        previous.direction.z * next.direction.x;
+    if (std::fabs(cross) < 0.5f) continue;  // closer than 30 degrees: no honest corner
+    const float dx = next.point.x - previous.point.x;
+    const float dz = next.point.z - previous.point.z;
+    const float t = (dx * next.direction.z - dz * next.direction.x) / cross;
+    const SlicePoint corner(previous.point.x + t * previous.direction.x,
+                            previous.point.z + t * previous.direction.z);
+    if (!std::isfinite(corner.x) || !std::isfinite(corner.z)) continue;
+    squared[i] = corner;
+    ++moved;
+  }
+  if (moved == 0) {
+    fit.snappedSegments = 0;
+    return;
+  }
+
+  // 4. The guard. Corners that move change the area; a fit that changes it by more than
+  //    kMaxAreaDrift was not a fit, and the measured loop is what gets reported.
+  const float before = std::fabs(polygonArea(loop));
+  const float after = std::fabs(polygonArea(squared));
+  if (!(before > 0.f) || std::fabs(after - before) > kMaxAreaDrift * before) {
+    fit.snappedSegments = 0;
+    fit.movedVertices = 0;
+    return;
+  }
+
+  // 5. How far the room actually sat off square, length-weighted: the number a report quotes, and
+  //    zero only when the scan was already orthogonal.
+  double weightedOffBy = 0.0;
+  double weight = 0.0;
+  for (size_t i = 0; i < count; ++i) {
+    if (!lines[i].snapped || !(length[i] > 0.f)) continue;
+    const double target = theta0 + std::round((static_cast<double>(heading[i]) - theta0) /
+                                              (kPi / 2.0)) * (kPi / 2.0);
+    weightedOffBy += std::fabs(static_cast<double>(heading[i]) - target) *
+                     static_cast<double>(length[i]);
+    weight += static_cast<double>(length[i]);
+  }
+
+  loop = squared;
+  fit.applied = true;
+  fit.movedVertices = moved;
+  fit.residualDegrees =
+      weight > 0.0 ? static_cast<float>(weightedOffBy / weight * 180.0 / kPi) : 0.f;
+}
+
 Floorplan vectoriseFloorplan(const std::vector<Vec3>& slicePoints,
                              const FloorplanOptions& options) {
   return vectoriseFloorplan(projectToFloor(slicePoints), options);
@@ -335,6 +471,12 @@ Floorplan vectoriseFloorplan(const std::vector<SlicePoint>& points,
   }
   if (bestLoop.size() < 3) return plan;
 
+  // The last simplification is the room's own axes: the runs decide the frame, the frame moves the
+  // runs, and the corners follow. `plan.manhattan` says what it did, including "nothing".
+  ManhattanFit fit;
+  snapFloorplanToManhattan(bestLoop, options.manhattanToleranceDegrees, fit);
+  plan.manhattan = fit;
+
   plan.outline = bestLoop;
   plan.loopLengths.push_back(static_cast<int>(bestLoop.size()));
   plan.loopClosed.push_back(1);
@@ -343,7 +485,10 @@ Floorplan vectoriseFloorplan(const std::vector<SlicePoint>& points,
     if (segment.length() >= options.minSegmentMetres) plan.segments.push_back(segment);
   }
   plan.closed = true;
-  plan.areaSquareMetres = bestArea;
+  // The area is the loop's own, *after* the Manhattan step: the pre-snap figure is what chose this
+  // loop among the candidates, and reporting it here printed a room 1.7 % larger than the one the
+  // segments and the perimeter describe (the snap had already moved every corner).
+  plan.areaSquareMetres = std::fabs(polygonArea(bestLoop));
   float perimeter = 0.f;
   for (size_t i = 0; i < bestLoop.size(); ++i) {
     perimeter += WallSegment{bestLoop[i], bestLoop[(i + 1) % bestLoop.size()]}.length();

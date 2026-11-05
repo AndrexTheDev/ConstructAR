@@ -2991,7 +2991,7 @@ FLOORPLAN_PAYLOAD_KT = ROOT / "native-slam/src/main/kotlin/com/constructar/nativ
 
 THUMBNAIL_CHAIN = (
     ("ar-engine/src/main/kotlin/com/constructar/arengine/scan/TsdfScanPipeline.kt",
-     "dispatcher) { engine?.floorplan(",
+     "engine?.floorplan(",
      "the scan worker no longer slices the volume for a plan"),
     ("app/src/main/kotlin/com/constructar/app/ui/ar/ArMeasureController.kt",
      "pipeline.floorplan(",
@@ -3026,6 +3026,26 @@ def check_the_card_picture_has_a_writer() -> None:
     called from somewhere else is still a broken chain, and this round's whole point is that the
     chain runs.
     """
+    # The plan is sliced on the worker *and* squared before it becomes the card's outline: the
+    # tolerance is a parameter of that call, and a pipeline that forgot to pass it would hand the
+    # room's shear straight to the sketch the wall screen measures from (finding 229).
+    pipeline = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
+                "arengine" / "scan" / "TsdfScanPipeline.kt")
+    if pipeline.exists():
+        pipeline_text = pipeline.read_text(encoding="utf-8")
+        for marker, complaint in (
+            ("manhattanToleranceDegrees = manhattanToleranceDegrees",
+             "the pipeline asks for a plan without a Manhattan tolerance, so the outline keeps "
+             "the scan's shear and every wall length built from it (finding 229)"),
+            ("fun lastManhattan()",
+             "the pipeline cannot report what the Manhattan step did, so a squared card and a "
+             "measured card look the same"),
+            ("withContext(dispatcher)",
+             "the plan is no longer sliced on the scan worker - a slice from the UI thread blocks "
+             "integration and drops frames"),
+        ):
+            if marker not in pipeline_text:
+                add(pipeline, complaint)
     for relative, marker, complaint in THUMBNAIL_CHAIN:
         path = ROOT / relative
         if not path.exists():

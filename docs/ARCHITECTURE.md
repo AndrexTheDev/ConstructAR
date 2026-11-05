@@ -248,10 +248,23 @@ frame's vertical is *not* taken from the top eigenvector (finding 189): in a roo
 walls carry comparable weight the two horizontal families couple through one crooked wall and their
 rotated pair out-eigenvalues the vertical, so each eigenvector is tried as the primary and the frame
 that explains the most inliers wins; a frame also needs two of its three axes evidenced, which is
-what separates "a room" from "a floor and a ceiling". It is
-host-tested and **not yet wired** - no plane fit in the app feeds it, so the app does not square
-anything today; what exists is the engine a plane-fitting pass will call, not a behaviour a user
-can observe (the same distinction finding 98 had to make about the pose graph).
+what separates "a room" from "a floor and a ceiling". The *plane* half is
+host-tested and still waiting for a plane-fitting pass to feed it - no `PlaneObservation` reaches it
+from the app, so the 3-D solver is the engine such a pass will call, not a behaviour a user can
+observe (the same distinction finding 98 had to make about the pose graph).
+
+The *floorplan* half is wired and observable (finding 229): a room that is square on site comes out
+of a hand-held scan as a parallelogram - 5 degrees of shear on every corner, systematic, and
+averaging does not remove it - so `vectoriseFloorplan` squares its own loop before anything is
+drawn from it. The runs *are* the evidence: the length-weighted mean of their **quadrupled** angles
+is the frame (doubling is not enough - in an orthogonal room the two wall families are 90 degrees
+apart, so `2θ` differs by 180 degrees between them and the two cancel exactly), each run within the
+tolerance is moved onto that frame, and the corners become the intersections of the straightened
+runs, so the loop stays closed and a corner stays one corner. A run further off than the tolerance
+- a bay, a chamfer, a party wall at 35 degrees - keeps its measured angle. A fit that would change
+the enclosed area by more than a quarter is rejected and the measured loop is reported instead. The
+tolerance is a parameter of the JNI call (default 10 degrees, 0 disables), and `nativeLastManhattan`
+reports what the step did: the residual in degrees, the runs snapped and the corners moved.
 
 **Passive marker contract** (`calibration/tag_scale.cpp`). Tier 2 of the calibration ladder — a
 printed AprilTag of known size, seen in enough frames, gives the scan a length that does not depend
