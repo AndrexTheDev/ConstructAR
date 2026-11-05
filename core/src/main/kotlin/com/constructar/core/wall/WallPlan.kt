@@ -112,10 +112,14 @@ const val SPOT_STEP: Float = 0.10f
  * nobody on the screen could see.
  */
 fun stepOpeningFraction(fraction: Float, steps: Int, stepFraction: Float = SPOT_STEP): Float {
-    val start = if (fraction.isFinite()) fraction else 0.5f
-    val step = if (stepFraction.isFinite() && stepFraction > 0f) stepFraction else SPOT_STEP
-    // `steps` is an Int by design: a caller that wants "a bit" of a step has `stepFraction`.
-    return (start + steps * step).coerceIn(0f, 1f)
+    // A fraction that is not a number has no position; the middle of the wall is the one answer
+    // that cannot be off it, and the caller's step still applies from there.
+    val start = (if (fraction.isFinite()) fraction else 0.5f).coerceIn(0f, 1f)
+    // A step that is not a positive number is not a step: the spot stays where it is. Substituting
+    // the default would move an opening the operator did not ask to move, and this is the code
+    // path an accessibility action runs.
+    if (!stepFraction.isFinite() || stepFraction <= 0f) return start
+    return (start + steps * stepFraction).coerceIn(0f, 1f)
 }
 
 /**

@@ -280,9 +280,13 @@ class WallPlanTest {
         // 1.05, and an opening anchored past the end is one `wallSurface` has to clip.
         assertEquals(1f, stepOpeningFraction(0.95f, 1), 1e-4f)
         assertEquals(0f, stepOpeningFraction(0.05f, -3), 1e-4f)
-        // Nonsense in, the middle of the wall out - the one answer that is never off the wall.
-        assertEquals(0.5f, stepOpeningFraction(Float.NaN, 1), 1e-4f)
+        // A fraction that is not a number has no position: it is repaired to the middle of the
+        // wall, and the step applies from there.
+        assertEquals(0.6f, stepOpeningFraction(Float.NaN, 1), 1e-4f)
+        // A step that is not a positive number is not a step - the spot does not move, which is
+        // the answer an accessibility action has to give when it is asked for nonsense.
         assertEquals(0.5f, stepOpeningFraction(0.5f, 1, Float.NaN), 1e-4f)
+        assertEquals(0.5f, stepOpeningFraction(0.5f, 1, 0f), 1e-4f)
     }
 
     @Test
