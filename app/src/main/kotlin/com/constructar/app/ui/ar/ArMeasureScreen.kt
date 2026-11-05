@@ -602,14 +602,14 @@ fun ArMeasureScreen(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         )
                     }
-                    IconButton(onClick = onOpenExport, modifier = Modifier.size(56.dp)) {
+                    IconButton(onClick = onOpenExport, modifier = Modifier.size(72.dp)) {
                         Icon(
                             Icons.Default.Share,
                             contentDescription = stringResource(R.string.home_export),
                             tint = Color.White,
                         )
                     }
-                    IconButton(onClick = leave, modifier = Modifier.size(56.dp)) {
+                    IconButton(onClick = leave, modifier = Modifier.size(72.dp)) {
                         Icon(
                             Icons.Default.Close,
                             contentDescription = stringResource(R.string.ar_close),

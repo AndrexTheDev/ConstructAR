@@ -12,6 +12,7 @@ import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.Icon
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import com.constructar.app.R
 import com.constructar.app.ui.theme.Jamaica
+import com.constructar.app.ui.theme.SiteColors
 
 /**
  * The installation tag the operator has to send with his payment - and a way to copy it.
@@ -82,7 +84,7 @@ fun DeviceCodeLine(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(code, style = style, color = color)
-        IconButton(onClick = { copyToClipboard(context, code) }) {
+        IconButton(onClick = { copyToClipboard(context, code) }, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.Default.ContentCopy,
                 contentDescription = stringResource(R.string.paywall_copy),

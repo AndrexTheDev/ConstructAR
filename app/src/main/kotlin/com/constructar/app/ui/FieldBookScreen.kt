@@ -190,7 +190,7 @@ fun FieldBookScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { if (unsavedDraft) confirmLeave = true else onBack() }) {
+            IconButton(onClick = { if (unsavedDraft) confirmLeave = true else onBack() }, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.paywall_back),
@@ -550,7 +550,7 @@ private fun SessionRow(session: WorkSession, nowMs: Long, onDelete: () -> Unit) 
         )
         // The only correction there is: a stopped clock could not be edited before finding 44,
         // so a forgotten stop cost the operator the whole night's hours.
-        IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+        IconButton(onClick = onDelete, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.Default.Delete,
                 contentDescription = stringResource(R.string.field_time_delete),
@@ -599,7 +599,7 @@ private fun DiaryRow(
                 )
             }
         }
-        IconButton(onClick = onPhoto, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onPhoto, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.Default.PhotoCamera,
                 contentDescription = stringResource(
@@ -612,7 +612,7 @@ private fun DiaryRow(
                 },
             )
         }
-        IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onDelete, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.Default.Delete,
                 contentDescription = stringResource(R.string.field_delete),
@@ -650,7 +650,7 @@ private fun DefectRow(
     // (finding 136) - so the symbol and the sentence follow the direction of the tap.
     val toggle = DefectToggle.action(defect.resolved)
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        IconButton(onClick = onToggle, modifier = Modifier.size(52.dp)) {
+        IconButton(onClick = onToggle, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 if (toggle == DefectToggle.Action.REOPEN) Icons.AutoMirrored.Filled.Undo else Icons.Default.Check,
                 contentDescription = stringResource(DefectToggle.labelRes(toggle)),
@@ -688,7 +688,7 @@ private fun DefectRow(
                 )
             }
         }
-        IconButton(onClick = onPhoto, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onPhoto, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.Default.PhotoCamera,
                 contentDescription = stringResource(
@@ -701,7 +701,7 @@ private fun DefectRow(
                 },
             )
         }
-        IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onDelete, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.Default.Delete,
                 contentDescription = stringResource(R.string.field_delete),

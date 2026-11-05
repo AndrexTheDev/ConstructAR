@@ -172,6 +172,17 @@ This replaced a two-screen design (list → AR) that was technically sufficient 
 wrong: a foreman standing in a basement could not tell whether the scan had worked, whether the
 runs were saved, or what was left to do.
 
+**Every control is glove-sized.** The theme's `gloveTouchTarget` is 64 dp and the primary buttons
+are 72 dp, because the phone is used with work gloves on, one-handed, next to a laser. That was a
+comment for eleven rounds while the buttons that are actually pressed on site were 40, 48, 52 and
+56 dp — the delete on a diary row, the defect toggle, and the two buttons the AR screen shows while
+the other hand is busy. They are all at the target now, and `scripts/verify_sources.py` reads every
+`IconButton` in `:app` and refuses one smaller: the design constant and the composable are two
+numbers in two files, and no compiler compares them (finding 205). The card that opens a room also
+announces itself as a button to a screen reader, and the room's picture carries no description of
+its own — the row already prints the name, the runs, the metres, the area and the perimeter as
+text.
+
 ---
 
 ## Site file — the paperwork around the measurement

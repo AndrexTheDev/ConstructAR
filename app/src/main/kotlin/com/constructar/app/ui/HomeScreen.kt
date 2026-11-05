@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -377,7 +378,7 @@ private fun DamagedFilesCard(names: List<String>, onDelete: (String) -> Unit) {
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    IconButton(onClick = { onDelete(name) }) {
+                    IconButton(onClick = { onDelete(name) }, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
                         Icon(
                             Icons.Default.Delete,
                             contentDescription = stringResource(R.string.home_damaged_delete),
@@ -425,7 +426,7 @@ private fun Header(
                 )
             }
         }
-        IconButton(onClick = onHelp, modifier = Modifier.size(56.dp)) {
+        IconButton(onClick = onHelp, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.AutoMirrored.Filled.HelpOutline,
                 contentDescription = stringResource(R.string.home_help),
@@ -526,7 +527,9 @@ private fun ProjectRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
+            // A card opens a room: saying so to the screen reader turns "double tap to activate"
+            // into "button", which is what the row is.
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

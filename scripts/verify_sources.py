@@ -3377,6 +3377,80 @@ def check_the_card_states_the_room_size() -> None:
                                 f"ships in one language only and the i18n audit cannot see it")
 
 
+GLOVE_TARGET_DP = 64
+
+
+def _kotlin_call(text: str, start: int) -> str:
+    """The text of the call whose `(` is at or after [start], parentheses balanced and quoted."""
+    open_paren = text.find("(", start)
+    if open_paren < 0:
+        return ""
+    depth = 0
+    index = open_paren
+    while index < len(text):
+        character = text[index]
+        if character == '"':
+            index += 1
+            while index < len(text):
+                if text[index] == "\\":
+                    index += 2
+                    continue
+                if text[index] == '"':
+                    break
+                index += 1
+        elif character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+            if depth == 0:
+                return text[start:index + 1]
+        index += 1
+    return ""
+
+
+def check_glove_buttons_are_big_enough() -> None:
+    """Every icon button in the app is at least one gloved finger (finding 205).
+
+    The theme has said `gloveTouchTarget = 64.dp` since the first screen, `GloveButton` is 72 dp
+    because a glove cannot hit a 24 dp glyph - and the buttons that were actually *used* on site
+    were 40, 48, 52 and 56 dp: the delete on a diary row, the toggle on a defect, the two buttons
+    the AR screen shows while the operator holds the phone in one hand and a laser in the other.
+    Nothing catches that. A size is a number in a composable, the theme constant is a different
+    number in a different file, and no compiler, no test and no screenshot in this repository
+    compares them - the design intent lived in one comment and the code did something else.
+
+    So the convention is stated once here: an `IconButton` in `:app` carries
+    `Modifier.size(SiteColors.gloveTouchTarget)` or an explicit size of at least 64 dp (the two AR
+    buttons are 72 dp, the size of `GloveButton`, because they are the primary actions of the
+    screen that is used with gloves on). A bare `IconButton` - Material's 48 dp default - is a
+    finding, and so is any explicit size below the target.
+    """
+    for path in kotlin_sources("app"):
+        if "/src/main/" not in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        index = 0
+        while True:
+            start = text.find("IconButton(", index)
+            if start < 0:
+                break
+            call = _kotlin_call(text, start)
+            index = start + len("IconButton")
+            if not call:
+                continue
+            # `.size(...)` may sit behind a padding in the same chain: what matters is the size.
+            if ".size(SiteColors.gloveTouchTarget)" in call:
+                continue
+            explicit = re.search(r"Modifier\.size\((\d+)\.dp\)", call)
+            if explicit and int(explicit.group(1)) >= GLOVE_TARGET_DP:
+                continue
+            line = text[:start].count("\n") + 1
+            size = f"{explicit.group(1)} dp" if explicit else "Material's 48 dp default"
+            add(path, f"line {line}: an IconButton sized {size} - the glove target is "
+                      f"{GLOVE_TARGET_DP} dp (`SiteColors.gloveTouchTarget`), and a gloved finger "
+                      f"cannot hit a smaller one; nothing else in the tree compares the two numbers")
+
+
 def check_a_contract_assertion_is_believed() -> None:
     """An asserted value read with `?.` is a warning, and CI is `-Werror` (finding 199).
 
@@ -3506,6 +3580,7 @@ def main() -> int:
     check_manifest_hardening()
     check_a_stable_value_is_asserted_once()
     check_a_contract_assertion_is_believed()
+    check_glove_buttons_are_big_enough()
     check_the_reticle_snap_stays_wired()
     check_exported_numbers_use_the_c_locale()
     check_project_imports_are_used()

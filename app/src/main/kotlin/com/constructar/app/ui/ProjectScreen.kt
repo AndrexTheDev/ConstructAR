@@ -236,7 +236,7 @@ fun ProjectScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { if (unsavedEdits) confirmLeave = true else onBack() }) {
+            IconButton(onClick = { if (unsavedEdits) confirmLeave = true else onBack() }, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.paywall_back),
@@ -264,7 +264,7 @@ fun ProjectScreen(
                     nameDraft = project.name
                     renameOpen = true
                 },
-                modifier = Modifier.size(52.dp),
+                modifier = Modifier.size(SiteColors.gloveTouchTarget),
             ) {
                 Icon(
                     Icons.Default.Edit,
@@ -272,7 +272,7 @@ fun ProjectScreen(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            IconButton(onClick = { deleteOpen = true }, modifier = Modifier.size(52.dp)) {
+            IconButton(onClick = { deleteOpen = true }, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
                 Icon(
                     Icons.Default.Delete,
                     contentDescription = stringResource(R.string.action_delete),
@@ -812,7 +812,7 @@ private fun RouteRow(
             }
         }
         Text(length, style = MaterialTheme.typography.titleSmall, color = SiteColors.gold)
-        IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onDelete, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.Default.Delete,
                 contentDescription = stringResource(R.string.run_delete),

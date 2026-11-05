@@ -299,6 +299,19 @@ small, traversed distance large) which the UI asks the operator to confirm.
 
 ---
 
+## 5a. Controls and the gloved hand
+
+`SiteColors.gloveTouchTarget` is 64 dp and `GloveButton` is 72 dp; every `IconButton` in `:app`
+carries one or the other. The convention is enforced, not remembered:
+`check_glove_buttons_are_big_enough` walks every `IconButton` call in `:app` and refuses a bare one
+(Material's 48 dp default) or an explicit size below the target, naming the size it found
+(finding 205). The two AR buttons — export and leave, the primary actions of the screen used with
+gloves on — are 72 dp. A card that opens a room passes `role = Role.Button` to `clickable`, and the
+room picture is decorative by design: the row prints name, runs, metres, area and perimeter as text,
+which is what a screen reader reads.
+
+---
+
 ## 6. Persistence
 
 A project is one JSON file (`filesDir/projects/<uuid>.json`) written atomically (temp file +
