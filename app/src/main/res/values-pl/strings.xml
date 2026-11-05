@@ -34,6 +34,10 @@
     <string name="a11y_signature_clear">Wyczyść podpis</string>
     <string name="a11y_ar_view">Obraz z kamery</string>
     <string name="a11y_ar_place_point">Ustaw punkt pomiarowy na środku ekranu</string>
+    <string name="snap_corner">Wyrównano do narożnika · przesunięto o %1$s cm</string>
+    <string name="snap_floor_edge">Wyrównano do krawędzi podłogi · przesunięto o %1$s cm</string>
+    <string name="snap_ceiling_edge">Wyrównano do krawędzi sufitu · przesunięto o %1$s cm</string>
+    <string name="snap_edge">Wyrównano do krawędzi płaszczyzny · przesunięto o %1$s cm</string>
     <string name="card_area">%1$s m²</string>
     <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Eksport</string>

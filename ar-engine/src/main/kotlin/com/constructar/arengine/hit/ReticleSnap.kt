@@ -53,7 +53,14 @@ object ReticleSnap {
         if (features.isEmpty()) return resolution
 
         val snap = ArchitecturalSnap.snapToFeatures(hit.point, features, options) ?: return resolution
-        if (!snap.snapped) return resolution
-        return resolution.copy(hit = hit.copy(point = snap.point))
+        // `feature` is non-null exactly when the point moved; the distance is then always known
+        // (`bestDistance` decided the move), so the `?: 0f` is a formality the compiler asks for.
+        val feature = snap.feature ?: return resolution
+        return resolution.copy(
+            hit = hit.copy(
+                point = snap.point,
+                snap = SnapInfo(kind = feature.kind, distanceM = snap.distanceM ?: 0f),
+            ),
+        )
     }
 }

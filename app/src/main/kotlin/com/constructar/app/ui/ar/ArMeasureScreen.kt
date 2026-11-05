@@ -91,6 +91,7 @@ import com.constructar.app.ui.rememberTimePattern
 import com.constructar.app.ui.label
 import com.constructar.app.ui.message
 import com.constructar.app.ui.routingLabel
+import com.constructar.app.ui.snapMovedRes
 import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.app.ui.tierLabel
@@ -544,7 +545,14 @@ fun ArMeasureScreen(
                                 controller.requestTap(offset.x, offset.y, size.width, size.height)
                             }
                         },
-                )
+                ) {
+                    // The ring appears where the reticle samples, for as long as the last point
+                    // really was moved onto a corner or an edge (finding 213).
+                    SnapMarker(
+                        active = SnapReading.moved(lastHit?.hit?.snap) != null,
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                }
             }
         }
 
@@ -709,6 +717,19 @@ fun ArMeasureScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (hit != null) HudStyle.hint else SiteColors.danger,
                     )
+                    // The reticle was pulled onto a corner or an edge: say which one, and by how
+                    // far, in the accent colour - otherwise the jump is a mystery and the operator
+                    // taps again to "fix" a point that was already better than his aim
+                    // (finding 213).
+                    val snap = hit?.snap
+                    val moved = SnapReading.moved(snap)
+                    if (snap != null && moved != null) {
+                        Text(
+                            text = stringResource(snap.kind.snapMovedRes(), moved),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = SiteColors.accent,
+                        )
+                    }
                 }
             }
         }

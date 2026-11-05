@@ -363,6 +363,35 @@ two sentences that must not be confused in the ear being the same string.
 
 ---
 
+## 5d. A point that was moved, and the screen that says so
+
+`ReticleSnap` pulls an accepted plane hit onto the nearest derived corner or edge within 10 cm, in
+the engine, before the hit can become a route node. That is the right default and it is silent by
+nature: the operator's aim was not the measurement, the architecture is. Silence is the problem —
+a reticle that jumps two centimetres and a length that changes between two taps read as an unstable
+tool, so the operator taps again and keeps whichever number he likes.
+
+The move therefore travels with the hit:
+
+| Step | Where | What it carries |
+|---|---|---|
+| record | `:ar-engine` `SnapInfo` on `SurfaceHit` | the kind of feature and the distance moved |
+| survive the window | `HitStabilizer.stabilize` | the record stays while the point becomes the median of a settled window — every sample was snapped to the same feature |
+| say it | `:app` `SnapReading` + `SnapFeatureKind.snapMovedRes` | centimetres from `LengthFormatter`, one whole sentence per kind per language |
+| show it | `:app` `SnapMarker` | a ring at the centre of the AR view, where the reticle samples |
+
+Two deliberate omissions. The record is **not** part of `SurfaceHit.toRouteNode`: a stored node
+records where the point *is*, and the protocol prints that position, not the reticle's opinion of
+it. And the sentence is **not** one resource with the feature as an argument: German needs *an der
+Ecke* against *an der Bodenkante*, Polish needs a different case again, and a placeholder would
+force every translator to bend a sentence around a noun they cannot decline. Four sentences per
+language is smaller than the grammar it avoids.
+
+`check_the_hud_says_when_the_reticle_moved` names the five links — record, snap, sentences, digits
+with their guard, screen — and the four resources in six locales (finding 213).
+
+---
+
 ## 6. Persistence
 
 A project is one JSON file (`filesDir/projects/<uuid>.json`) written atomically (temp file +

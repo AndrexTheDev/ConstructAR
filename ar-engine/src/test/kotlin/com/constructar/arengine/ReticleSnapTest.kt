@@ -9,6 +9,7 @@ package com.constructar.arengine
 import com.constructar.arengine.hit.HitResolution
 import com.constructar.arengine.hit.PlaneCandidate
 import com.constructar.arengine.hit.ReticleSnap
+import com.constructar.arengine.hit.SnapFeatureKind
 import com.constructar.arengine.hit.SurfaceHit
 import com.constructar.arengine.hit.TierOutcome
 import com.constructar.core.math.PolygonMath
@@ -112,6 +113,37 @@ class ReticleSnapTest {
         assertEquals(original.attempts, snapped.attempts)
         assertEquals(0.5f, snapped.distanceFromPreviousMeters!!, 1e-6f)
         assertTrue(snapped.accepted)
+    }
+
+    @Test
+    fun `a move records the feature it moved onto and the distance`() {
+        // 5 cm off the corner in x and 3 cm in z: the point lands on the corner, and the record
+        // has to carry both facts, because a reticle that jumps silently is a reticle the operator
+        // cannot learn to trust (finding 213).
+        val snapped = requireNotNull(ReticleSnap.snap(resolution(hit(Vec3(0.05f, 1.2f, 0.03f))), planes).hit)
+        val record = requireNotNull(snapped.snap)
+
+        assertEquals(SnapFeatureKind.CORNER, record.kind)
+        assertEquals(kotlin.math.sqrt(0.05f * 0.05f + 0.03f * 0.03f), record.distanceM, 1e-4f)
+    }
+
+    @Test
+    fun `a point that did not move records nothing`() {
+        // Beyond the tolerance: no record, because nothing happened.
+        val far = requireNotNull(ReticleSnap.snap(resolution(hit(Vec3(0.2f, 1.2f, 0f))), planes).hit)
+        assertNull(far.snap)
+
+        // A depth hit is never snapped, so it carries no record either.
+        val depth = requireNotNull(
+            ReticleSnap.snap(resolution(hit(Vec3(0.05f, 1.2f, 0.03f), source = HitSource.DIRECT_DEPTH_RAYCAST)), planes).hit,
+        )
+        assertNull(depth.snap)
+
+        // Disabled: the raw point, and no claim about a move that did not happen.
+        val raw = requireNotNull(
+            ReticleSnap.snap(resolution(hit(Vec3(0.05f, 1.2f, 0.03f))), planes, enabled = false).hit,
+        )
+        assertNull(raw.snap)
     }
 
     @Test

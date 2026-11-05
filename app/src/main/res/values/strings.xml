@@ -34,6 +34,10 @@
     <string name="a11y_signature_clear">Clear the signature</string>
     <string name="a11y_ar_view">Camera view</string>
     <string name="a11y_ar_place_point">Set the measuring point in the middle of the screen</string>
+    <string name="snap_corner">Aligned to the corner · moved %1$s cm</string>
+    <string name="snap_floor_edge">Aligned to the floor edge · moved %1$s cm</string>
+    <string name="snap_ceiling_edge">Aligned to the ceiling edge · moved %1$s cm</string>
+    <string name="snap_edge">Aligned to the plane edge · moved %1$s cm</string>
     <string name="card_area">%1$s m²</string>
     <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Export</string>

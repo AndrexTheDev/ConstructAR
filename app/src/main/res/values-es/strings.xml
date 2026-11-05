@@ -34,6 +34,10 @@
     <string name="a11y_signature_clear">Borrar la firma</string>
     <string name="a11y_ar_view">Vista de la cámara</string>
     <string name="a11y_ar_place_point">Fijar el punto de medición en el centro de la pantalla</string>
+    <string name="snap_corner">Alineado con la esquina · %1$s cm de desplazamiento</string>
+    <string name="snap_floor_edge">Alineado con el borde del suelo · %1$s cm de desplazamiento</string>
+    <string name="snap_ceiling_edge">Alineado con el borde del techo · %1$s cm de desplazamiento</string>
+    <string name="snap_edge">Alineado con el borde del plano · %1$s cm de desplazamiento</string>
     <string name="card_area">%1$s m²</string>
     <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Exportar</string>

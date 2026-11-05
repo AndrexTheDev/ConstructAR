@@ -56,6 +56,23 @@ data class PlaneCandidate(
     }
 }
 
+/**
+ * Where a hit was pulled to, and by how far - the record of a snap that moved the reticle.
+ *
+ * The snap is silent by design ([ReticleSnap] only moves a point within its tolerance), and a
+ * silent move is exactly what an operator cannot diagnose: the reticle jumps two centimetres, the
+ * number changes, and nothing on the screen says whether that was the corner or the sensor. This
+ * carries the *fact* of the move - which architectural feature, how many metres - so a screen can
+ * say it. It is deliberately not part of [SurfaceHit.toRouteNode]: a stored node records where the
+ * point is, and the protocol prints that position, not the reticle's opinion of it.
+ */
+data class SnapInfo(
+    /** The kind of feature the point was pulled onto. */
+    val kind: SnapFeatureKind,
+    /** Metres between the raw hit and the feature it was moved onto. */
+    val distanceM: Float,
+)
+
 /** A resolved 3D surface point, ready to become a route node. */
 data class SurfaceHit(
     val point: Vec3,
@@ -69,6 +86,8 @@ data class SurfaceHit(
     val planeId: String? = null,
     val surfaceKind: SurfaceKind = SurfaceKind.UNKNOWN,
     val label: String = "",
+    /** Set when [ReticleSnap] moved this point onto an architectural corner or edge. */
+    val snap: SnapInfo? = null,
 ) {
     fun toRouteNode(id: String, anchorId: String? = null): RouteNodeRecord = RouteNodeRecord(
         id = id,

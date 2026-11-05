@@ -87,6 +87,19 @@ the tolerance could never be reached from a hit near its end, and would disappea
 room's geometry; the 4 cm crosshair snap above is a different rule, and still snaps to corners the
 *run* already has.
 
+**When the snap moves the reticle, the screen says so.** A pulled point is a *different* point from
+the one the operator aimed at - up to ten centimetres away - and until now the only trace of it was
+the number under the crosshair changing between two taps, which trains a fitter to tap again and
+distrust the one step that makes his measurement exact. The move is now recorded on the hit
+(`SnapInfo`: which kind of feature, how many metres), stated on the HUD in the accent colour -
+*aligned to the corner · moved 4.2 cm* - and drawn as a ring where the reticle samples, so the
+jump has an explanation at the place it happens. Four whole sentences per language instead of one
+sentence with the noun as an argument: *an der Ecke* and *an der Bodenkante* are different cases,
+and a placeholder would make every translator bend the grammar around a word they cannot decline.
+The digits come from the same formatter as every other length in the app, and a distance that is
+not a length (a NaN, a negative) prints nothing rather than a sentence with a hole in it
+(finding 213).
+
 **Room thumbnails** (`export/.../svg` + `app/.../data/RoomThumbnail.kt`): the home screen's card
 wants a picture of *that* room, and a JPEG of the camera frame is the wrong answer twice over — it
 carries the customer's kitchen into a file list, and it is 40 kB of pixels to say "4 x 3 m".
@@ -717,7 +730,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 887 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 895 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 287 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 287 checks, 0 failures, no data race reported |

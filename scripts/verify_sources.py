@@ -3656,6 +3656,88 @@ def check_every_interactive_row_announces_itself() -> None:
                           f"an unnamed element")
 
 
+def check_the_hud_says_when_the_reticle_moved() -> None:
+    """A point the architectural snap moved is a point the screen has to account for (finding 213).
+
+    `ReticleSnap` pulls a plane hit onto a corner or an edge when it is within ten centimetres of
+    one, and it did so silently: the reticle jumped, the number under the crosshair changed, and
+    the operator had no way to tell an exact corner from a noisy frame. His remedy was to tap
+    again - training him to distrust the one step that makes the measurement exact.
+
+    The move is recorded on the hit (`SnapInfo`), turned into four whole sentences per language
+    (`SnapFeatureKind.snapMovedRes`, because a placeholder cannot be declined), printed with the
+    distance in centimetres from the app's one formatter, and drawn as a ring at the point the
+    reticle samples. Every link can be dropped without a compile error - a record nobody sets, a
+    record nobody prints, a sentence nobody reaches - so each one is named here.
+    """
+    models = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" / "arengine" /
+              "hit" / "HitModels.kt")
+    models_text = models.read_text(encoding="utf-8")
+    if "data class SnapInfo(" not in models_text:
+        models_text = ""
+        add(models, "there is no record of where a snap moved a point and by how much - the move "
+                    "would be invisible to every screen for ever")
+    if models_text:
+        if "val kind: SnapFeatureKind" not in models_text:
+            add(models, "the snap record does not say which kind of feature the point was moved "
+                        "onto, so the screen cannot name it")
+        if "val distanceM: Float" not in models_text:
+            add(models, "the snap record carries no distance, so nothing can say how far the "
+                        "reticle jumped")
+        if "val snap: SnapInfo? = null" not in models_text:
+            add(models, "a `SurfaceHit` cannot carry the record, so no hit can report a move")
+    snap = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" / "arengine" /
+            "hit" / "ReticleSnap.kt")
+    if "snap = SnapInfo(" not in snap.read_text(encoding="utf-8"):
+        add(snap, "the snap moves the point and records nothing - the silent jump this round is "
+                  "about")
+    labels = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+              "Labels.kt")
+    labels_text = labels.read_text(encoding="utf-8")
+    for kind, resource in (
+        ("CORNER", "snap_corner"),
+        ("FLOOR_EDGE", "snap_floor_edge"),
+        ("CEILING_EDGE", "snap_ceiling_edge"),
+        ("EDGE", "snap_edge"),
+    ):
+        if f"SnapFeatureKind.{kind} -> R.string.{resource}" not in labels_text:
+            add(labels, f"`{kind}` has no sentence of its own - a snap onto it would be printed "
+                        f"as some other feature, or as nothing")
+    reading = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+               "ar" / "SnapReading.kt")
+    reading_text = reading.read_text(encoding="utf-8")
+    if "LengthUnit.CENTIMETER" not in reading_text:
+        add(reading, "the moved distance is not stated in centimetres - the whole tolerance is ten "
+                     "of them, and metres would print a number the operator has to convert")
+    if "isFinite()" not in reading_text or "< 0f" not in reading_text:
+        add(reading, "the distance is printed without a guard: a NaN or a negative would reach the "
+                     "HUD as a sentence")
+    screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+              "ar" / "ArMeasureScreen.kt")
+    screen_text = screen.read_text(encoding="utf-8")
+    if "snap.kind.snapMovedRes()" not in screen_text:
+        add(screen, "the screen never prints the snap sentence, so the record reaches nobody")
+    if "SnapMarker(" not in screen_text:
+        add(screen, "the screen draws no marker where the reticle was moved, so the jump stays "
+                    "invisible at the place it happens")
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if not path.exists():
+            continue
+        strings, _ = load_locale(folder)
+        for key in ("snap_corner", "snap_floor_edge", "snap_ceiling_edge", "snap_edge"):
+            value = strings.get(key)
+            if value is None:
+                add(path, f"missing string '{key}' - that kind of snap would print as nothing")
+                continue
+            if "%1$s" not in value:
+                add(path, f"'{key}' has no distance placeholder - the line would state the feature "
+                          f"and not how far the point moved")
+            if "cm" not in value:
+                add(path, f"'{key}' names no centimetre - the unit lives in the resource, so a "
+                          f"translator dropping it would leave a bare number")
+
+
 def check_a_contract_assertion_is_believed() -> None:
     """An asserted value read with `?.` is a warning, and CI is `-Werror` (finding 199).
 
@@ -3788,6 +3870,7 @@ def main() -> int:
     check_glove_buttons_are_big_enough()
     check_the_protocol_prints_the_room_plan()
     check_every_interactive_row_announces_itself()
+    check_the_hud_says_when_the_reticle_moved()
     check_the_reticle_snap_stays_wired()
     check_exported_numbers_use_the_c_locale()
     check_project_imports_are_used()

@@ -9,6 +9,7 @@ package com.constructar.app.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import com.constructar.app.R
+import com.constructar.arengine.hit.SnapFeatureKind
 import com.constructar.arengine.route.RouteWarning
 import com.constructar.arengine.session.ArReadiness
 import com.constructar.arengine.tracking.Guidance
@@ -49,6 +50,24 @@ fun HitSource.tierLabel(): String = stringResource(
         HitSource.MANUAL -> R.string.tier_manual
     },
 )
+
+/**
+ * The sentence for a point the architectural snap moved, by the kind of feature it moved onto.
+ *
+ * One resource per kind rather than one resource with the noun as an argument: "An der Ecke
+ * ausgerichtet" needs a different case from "An der Bodenkante ausgerichtet", and a placeholder
+ * would force every translator to bend the sentence around a word they cannot decline for it. Four
+ * whole sentences per language, chosen here, is smaller than the grammar it avoids (finding 213).
+ *
+ * Deliberately not `@Composable`: a `when` over an enum is a unit test, and `SnapPlanTest` reads
+ * this mapping without an Android context.
+ */
+fun SnapFeatureKind.snapMovedRes(): Int = when (this) {
+    SnapFeatureKind.CORNER -> R.string.snap_corner
+    SnapFeatureKind.FLOOR_EDGE -> R.string.snap_floor_edge
+    SnapFeatureKind.CEILING_EDGE -> R.string.snap_ceiling_edge
+    SnapFeatureKind.EDGE -> R.string.snap_edge
+}
 
 /** "Cable" / "Pipe" / "Duct" — the service being routed. */
 @Composable
