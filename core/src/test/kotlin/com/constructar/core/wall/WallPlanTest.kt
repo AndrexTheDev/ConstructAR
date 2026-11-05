@@ -133,9 +133,11 @@ class WallPlanTest {
 
         assertEquals(1, plan.openingsRecorded)
         assertEquals(35f - 1.77885f, plan.surface.netAreaM2, 1e-2f)
-        assertEquals(10f, plan.surface.lines[0].netAreaM2, 1e-2f)
+        // Wall 0 is the 4 m run: 10 m² gross, 1.77885 m² of door, 8.22115 m² of board. Wall 1 is
+        // the 3 m run and loses nothing.
+        assertEquals(10f - 1.77885f, plan.surface.lines[0].netAreaM2, 1e-2f)
         assertEquals(1.77885f, plan.surface.lines[0].openingAreaM2, 1e-2f)
-        assertEquals(10f, plan.surface.lines[1].netAreaM2, 1e-2f)
+        assertEquals(7.5f, plan.surface.lines[1].netAreaM2, 1e-2f)
         assertEquals(1, plan.surface.lines[0].openingsSubtracted)
         assertEquals(0, plan.surface.lines[1].openingsSubtracted)
     }
