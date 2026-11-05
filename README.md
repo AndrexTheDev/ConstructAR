@@ -447,7 +447,7 @@ and the sitemap are absolute.
 | Module | Language | Responsibility |
 |--------|----------|----------------|
 | `:core` | Kotlin/JVM, **no Android deps** | Maths (`Vec3`, `Quat`, `Mat4`, `Plane3`, polygon containment), routing model, fillet/RMF smoothing, tube & duct mesh generation, measurement, bill of materials, formatting. This is the trust boundary: everything that decides a *number* lives here and is unit-tested on the JVM. |
-| `:native-slam` | C++20 + JNI | TSDF volume (block-hashed, free-space carving optional), Surface Nets extraction, Manhattan-World frame solver, plane fitting, AprilTag detector contract and marker-to-scale arithmetic, pose graph with loop closures, RTAB-Map bridge. Host-testable: `native-slam/src/main/cpp/tests`; the optional RTAB-Map branch is compile-checked in CI against stub headers that mirror upstream's declarations (finding 183). |
+| `:native-slam` | C++20 + JNI | TSDF volume (block-hashed, free-space carving optional), Surface Nets extraction, Manhattan-World frame solver, plane fitting, AprilTag 3.1.0 decoder (vendored, BSD-2-Clause) and marker-to-scale arithmetic, pose graph with loop closures, RTAB-Map bridge. Host-testable: `native-slam/src/main/cpp/tests`; the optional RTAB-Map branch is compile-checked in CI against stub headers that mirror upstream's declarations (finding 183). |
 | `:ar-engine` | Kotlin/Android | ARCore session & config, torch policy, tracking monitor, depth capture, TSDF pipeline, hit cascade, AI depth, anchors, routing state, Filament mesh upload, Compose AR surface. |
 | `:export` | Kotlin/Android | PDF protocol, CSV bill of materials, GLB writer, PLY writer. Storage-agnostic (works on `OutputStream`). |
 | `:app` | Kotlin/Android | Single activity, Compose Material 3 UI with glove-sized controls, project storage (JSON files), navigation. |
@@ -553,7 +553,8 @@ Known limitations, deliberately documented rather than hidden:
 
 ## Testing
 
-* **Native (C++) — 314 assertions, all green**, exercised with plain `g++` (no Android SDK):
+* **Native (C++) — 332 assertions, all green**, exercised with plain `g++` (no Android SDK; the
+  binary reports 336 passes because four of them sit inside the loop over the tag's rotations):
   SE(3) exp/log round trip, TSDF integration on synthetic depth, sphere/wall reconstruction
   areas and extents, a 30°-tilted plane (which pins the depth convention), free-space carving
   (a ghost disappears, the real wall does not), triangle budget, invalid input, pose-graph
@@ -616,12 +617,17 @@ Known limitations, deliberately documented rather than hidden:
   exactly that number, so a helper that never reaches the integrator fails. Fractional weights are
   why the block's 16-bit weight array became fixed point in 1/256ths (`kWeightScale`) instead of a
   count. Both are host-tested and **not yet wired**: no JNI symbol, no caller.
-* **AprilTag — detector contract, no detector.** `calibration/tag_scale.hpp` holds the interface a
-  decoder will implement (whose only implementation says it is unavailable, and why) and the
-  marker-to-scale arithmetic: pair ratios against the printed layout, a median, a deviation
-  filter, and a baseline-weighted mean. It publishes a factor and its evidence and decides
-  nothing - the window stays in `:core`. No decoder is vendored, nothing exposes it over JNI and
-  no screen has a button for it; `docs/CALIBRATION.md` says the same. `tools/verify-native.sh` builds and runs all of it the way CI does;
+* **AprilTag — the decoder is vendored, the wiring is not.** AprilTag 3.1.0's C core (BSD-2-Clause,
+  unmodified, one family: tag36h11) sits in `native-slam/src/main/cpp/third_party/apriltag/` with
+  its `VENDORED.md`, its entry in `NOTICE`, its licence text in `licenses/` and its row on the Help
+  screen. `calibration/apriltag_detector.cpp` is the one file that includes it; `nativeDetectAprilTagScale`
+  exposes it over JNI, and the host suite renders the printed pattern for id 7 and asserts the
+  distances it reports (2 m and 4 m, at four rotations). `calibration/tag_scale.hpp` holds the rest:
+  `TagDetector`, whose `available()` is false when no camera was supplied and whose reason says
+  camera rather than decoder, and the marker-to-scale arithmetic (pair ratios against the printed
+  layout, a median, a deviation filter, a baseline-weighted mean) which publishes a factor and its
+  evidence and decides nothing - the window stays in `:core`. **No app source captures a luminance
+  frame and calls the decoder**; `docs/CALIBRATION.md` tier 2 states that in the same words. `tools/verify-native.sh` builds and runs all of it the way CI does;
   `--tsan` runs the same suite under ThreadSanitizer, which is a gate: the fusion of a voxel is a
   read-modify-write of two arrays done by several workers, and only the sanitizer can see it when
   that update escapes the shard lock (finding 181). It reports none.
@@ -777,10 +783,10 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 969 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 973 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
-| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 314 checks, 0 failures |
-| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 314 checks, 0 failures, no data race reported |
+| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 332 checks, 0 failures |
+| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 332 checks, 0 failures, no data race reported |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
 | APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |

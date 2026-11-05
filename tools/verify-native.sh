@@ -27,6 +27,7 @@ sources=(
   "$cpp/slam/pose_graph.cpp"
   "$cpp/geometry/manhattan_world.cpp"
   "$cpp/calibration/tag_scale.cpp"
+  "$cpp/calibration/apriltag_detector.cpp"
   "$cpp/geometry/plane_fit.cpp"
   "$cpp/geometry/floorplan.cpp"
   "$cpp/geometry/surface_mask.cpp"
@@ -34,6 +35,46 @@ sources=(
   "$cpp/tests/host_tests.cpp"
 )
 flags=(-std=c++20 -pthread -Wall -Wextra -Werror -I "$cpp")
+
+# The vendored AprilTag core is C99 and not ours, so it is compiled by the C compiler, without
+# `-Werror` (a warning in somebody else's source is not a build failure of ours) and with only the
+# files the decoder needs. `-D_GNU_SOURCE` is what upstream assumes: `strdup`, `random` and `usleep`
+# are POSIX, and a strict C11 translation unit does not declare them.
+vendored=(
+  "$cpp/third_party/apriltag/apriltag.c"
+  "$cpp/third_party/apriltag/apriltag_quad_thresh.c"
+  "$cpp/third_party/apriltag/apriltag_pose.c"
+  "$cpp/third_party/apriltag/tag36h11.c"
+  "$cpp/third_party/apriltag/common/g2d.c"
+  "$cpp/third_party/apriltag/common/homography.c"
+  "$cpp/third_party/apriltag/common/image_u8.c"
+  "$cpp/third_party/apriltag/common/image_u8x3.c"
+  "$cpp/third_party/apriltag/common/matd.c"
+  "$cpp/third_party/apriltag/common/pnm.c"
+  "$cpp/third_party/apriltag/common/svd22.c"
+  "$cpp/third_party/apriltag/common/time_util.c"
+  "$cpp/third_party/apriltag/common/unionfind.c"
+  "$cpp/third_party/apriltag/common/workerpool.c"
+  "$cpp/third_party/apriltag/common/zarray.c"
+  "$cpp/third_party/apriltag/common/zhash.c"
+  "$cpp/third_party/apriltag/common/zmaxheap.c"
+)
+
+# Compiles the vendored C into objects for one compiler and one optimisation, and fills
+# `c_objects` with the paths - the linker call takes them alongside the C++ sources.
+build_vendored() {
+  local cc="$1" tag="$2"
+  shift 2
+  local out="$build_dir/c-$tag"
+  mkdir -p "$out"
+  c_objects=()
+  local source
+  for source in "${vendored[@]}"; do
+    local object="$out/$(basename "${source%.c}").o"
+    "$cc" -std=gnu11 -D_GNU_SOURCE -w -I "$cpp/third_party/apriltag" "$@" -c "$source" -o "$object"
+    c_objects+=("$object")
+  done
+}
 
 build_dir="${TMPDIR:-/tmp}/constructar-native"
 mkdir -p "$build_dir"
@@ -64,7 +105,8 @@ if [[ "${1:-}" == "--tsan" ]]; then
   fi
   binary="$build_dir/host_tests_tsan"
   echo "== build (g++ -O1 -g -fsanitize=thread)"
-  g++ "${flags[@]}" -O1 -g -fsanitize=thread "${sources[@]}" -o "$binary"
+  build_vendored gcc "gpp-O1-tsan" -O1 -g -fsanitize=thread
+  g++ "${flags[@]}" -O1 -g -fsanitize=thread "${sources[@]}" "${c_objects[@]}" -o "$binary"
   # halt_on_error=0 so every race is reported, not just the first: the point is to see how many
   # lines of the integrator are unsynchronised.
   export TSAN_OPTIONS="halt_on_error=0"
@@ -79,7 +121,13 @@ for compiler in "${compilers[@]}"; do
   for optimisation in -O1 -O2; do
     binary="$build_dir/host_tests_${compiler//+/p}_$optimisation"
     echo "== build ($compiler $optimisation)"
-    "$compiler" "${flags[@]}" "$optimisation" "${sources[@]}" -o "$binary"
+    case "$compiler" in
+      g++) cc=gcc ;;
+      clang++) cc=clang ;;
+      *) cc="$compiler" ;;
+    esac
+    build_vendored "$cc" "${compiler//+/p}-$optimisation" "$optimisation"
+    "$compiler" "${flags[@]}" "$optimisation" "${sources[@]}" "${c_objects[@]}" -o "$binary"
     run_suite "$binary" "${compiler//+/p}$optimisation"
   done
 done

@@ -40,7 +40,7 @@ Everything here is a gate before an APK reaches a site, in the order it should b
       for the published pages comes from `tools/build_site.py` (`NOTICE_HTML` and the manifest's
       `copyright` member), never from a comment pasted into `docs/` — the next build overwrites it
       (finding 215)
-- [ ] In-app "Licences" screen lists SceneView, Filament, ARCore, LiteRT, RTAB-Map, Depth Anything V2 Small
+- [ ] In-app "Licences" screen lists SceneView, Filament, ARCore, LiteRT, RTAB-Map, Depth Anything V2 Small, AprilTag
       (Help → *Third-party components*, rendered from `:core` `ThirdPartyNotices`, mirrored in
       `NOTICE` and reproduced in full under `licenses/`; `scripts/verify_sources.py` rule 20 checks
       this line against both artefacts, as Apache-2.0 §4 and BSD-3-Clause require)

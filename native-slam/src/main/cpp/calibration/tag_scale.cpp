@@ -19,14 +19,26 @@
 
 namespace constructar {
 
-const char* NoTagDetector::unavailableReason() const {
-  // One string, spelled once: a diagnostic screen prints it, and a second copy in the app would
-  // drift from this one.
-  return "no AprilTag decoder is compiled into this build - the detector contract is host-tested, "
-         "the pixel decoder is not vendored (docs/CALIBRATION.md, tier 2)";
+NoTagDetector::NoTagDetector(std::string reason) : reason_(std::move(reason)) {}
+
+bool TagCamera::isPlausible(int width, int height) const {
+    if (!(fx > 0.f) || !(fy > 0.f)) return false;  // NaN-safe: a zero focal length is not a camera
+    if (!std::isfinite(fx) || !std::isfinite(fy) || !std::isfinite(cx) || !std::isfinite(cy)) {
+        return false;
+    }
+    return width > 0 && height > 0 && cx >= 0.f && cy >= 0.f && cx <= static_cast<float>(width) &&
+           cy <= static_cast<float>(height);
 }
 
-std::unique_ptr<TagDetector> makeTagDetector() { return std::make_unique<NoTagDetector>(); }
+std::unique_ptr<TagDetector> makeTagDetector() {
+  // One string, spelled once: a diagnostic screen prints it, and a second copy in the app would
+  // drift from this one. It names what is actually missing - the camera, not the decoder - because
+  // a build that says "no decoder" while carrying one sends a reader to the wrong file.
+  return std::make_unique<NoTagDetector>(
+      "no camera intrinsics were supplied, so a tag's pixels cannot become metres - the AprilTag "
+      "36h11 decoder is vendored (BSD-2-Clause, third_party/apriltag), and docs/CALIBRATION.md tier "
+      "2 says what it still does not reach");
+}
 
 namespace {
 

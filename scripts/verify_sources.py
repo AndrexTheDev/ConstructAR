@@ -180,6 +180,12 @@ def tracked_sources() -> list[Path]:
 # the one place in the tree that legitimately has someone else's copyright line (finding 109).
 UNHEADERED_LICENCE_DIRS = {"licenses"}
 
+# Vendored source keeps its own copyright header: adding ours would misstate who wrote it, and
+# `check_the_tag_decoder_is_vendored_and_credited` holds the vendored tree to the *upstream* notice
+# instead. A file here claiming our copyright would be the worse failure, so the exemption is a
+# directory and not a pattern.
+UNHEADERED_VENDOR_DIRS = {"third_party", "vendored"}
+
 
 def check_headers(files: list[Path]) -> None:
     """Every authored file states who owns it, and the words have to be the notice (finding 215).
@@ -197,6 +203,8 @@ def check_headers(files: list[Path]) -> None:
         if path.name in {"LICENSE"}:
             continue
         if path.parent.name in UNHEADERED_LICENCE_DIRS:
+            continue
+        if UNHEADERED_VENDOR_DIRS & set(path.parts):
             continue
         try:
             text = path.read_text(encoding="utf-8")
@@ -2685,22 +2693,28 @@ def check_the_plane_fitter_is_reproducible() -> None:
                               f"by splitting a wall rather than by reporting nothing (finding 189)")
 
 
-def check_the_tag_contract_is_not_sold_as_a_detector() -> None:
-    """The marker tier is arithmetic and an interface, not a detector (finding 188).
+def check_the_tag_decoder_is_vendored_and_credited() -> None:
+    """The marker tier ships a decoder somebody else wrote, and says so (finding 231).
 
-    Tier 2 is the one tier this repository cannot prove: decoding an AprilTag means vendoring a
-    decoder, licensing it, and running it on a phone. What can be built here is the interface a
-    decoder would implement and the arithmetic its output feeds - and the difference between the
-    two is exactly the kind of gap that gets papered over later. So this rule holds four lines:
+    This rule used to hold the opposite line: no decoder was vendored, so no JNI symbol and no app
+    source was allowed to name one. That was the right rule for a contract with no implementation,
+    and it is exactly the rule that has to be *replaced* rather than deleted when the implementation
+    arrives - otherwise a vendored decoder becomes a claim with nothing checking it. What it holds
+    now:
 
-    * the acceptance window may not appear in the native layer. `[0.85, 1.15]` is `:core`'s
-      decision (`ReferenceCalibration.accepted`), and a second copy in C++ would be a second
-      definition of when a factor is believable;
-    * nothing may expose a detector over JNI, and no app source may name one, because a caller
-      that can compile against `TagDetector` will believe tags are being read;
-    * both documents that describe the tier must say "detector contract", so the one-line summary
-      a reader sees is the truth rather than the aspiration;
-    * the header must carry its own "Contract only." marker - the marker a wiring deletes.
+    * the acceptance window still may not appear in the native layer. `[0.85, 1.15]` is `:core`'s
+      decision (`ReferenceCalibration.accepted`), and it belongs to no other file;
+    * the vendored tree carries upstream's licence, and the repository carries a copy of it: a
+      BSD-2-Clause component without its notice is a licence violation, not a missing document;
+    * exactly one translation unit includes an apriltag header. A second one is how a decoder we
+      did not write starts leaking its types - `image_u8_t`, `zarray_t`, `matd_t` - into a layer we
+      did, and how the day the tree is updated becomes a day nobody can estimate;
+    * the vendored tree is pinned: `VENDORED.md` states the version, and the build compiles one
+      family, so the codebook is the one a printed marker uses rather than every table upstream
+      ships;
+    * the header still marks the half that is *not* wired, and both documents that describe the
+      tier say "vendored" and "not wired" - the two words a reader needs in order to know that the
+      decoder exists and the app does not call it.
     """
     native_root = ROOT / "native-slam" / "src" / "main" / "cpp"
     # The tests are not shipped code and are full of tolerances that happen to be 0.85; the rule is
@@ -2713,29 +2727,99 @@ def check_the_tag_contract_is_not_sold_as_a_detector() -> None:
                 add(path, f"the acceptance window ({literal}) has reached the native layer - the "
                           f"decision belongs to `ReferenceCalibration.accepted` in `:core`, and a "
                           f"second copy here would be a second definition of 'believable'")
+
+    vendored = native_root / "third_party" / "apriltag"
+    licence = vendored / "LICENSE.md"
+    if not licence.exists():
+        add(vendored, "the vendored AprilTag tree carries no upstream licence - BSD-2-Clause "
+                      "requires the notice to travel with the code, and a vendored tree without "
+                      "it is a redistribution violation rather than a missing file")
+    elif "BSD 2-Clause License" not in licence.read_text(encoding="utf-8"):
+        add(licence, "the licence beside the vendored tree is no longer BSD-2-Clause, so the entry "
+                     "in NOTICE, the copy in licenses/ and the Help screen's list all describe a "
+                     "different licence than the code ships under")
+    if not (ROOT / "licenses" / "BSD-2-Clause.txt").exists():
+        add(ROOT / "licenses" / "BSD-2-Clause.txt",
+            "the BSD-2-Clause text NOTICE points at does not exist, so a source distribution "
+            "attributes AprilTag to a file that is not there")
+    notice = (ROOT / "NOTICE").read_text(encoding="utf-8") if (ROOT / "NOTICE").exists() else ""
+    for needle in ("AprilTag", "BSD-2-Clause"):
+        if needle not in notice:
+            add(ROOT / "NOTICE", f"the vendored decoder is not attributed - `{needle}` does not "
+                                 f"appear in NOTICE, and BSD-2-Clause asks for exactly that")
+
+    provenance = vendored / "VENDORED.md"
+    if not provenance.exists():
+        add(vendored, "there is no VENDORED.md, so nothing states which version of somebody "
+                      "else's decoder this is, what was taken or how to re-fetch it")
+    else:
+        text = provenance.read_text(encoding="utf-8")
+        if "3.1.0" not in text:
+            add(provenance, "the vendored version is not stated - a fork of an unversioned tree is "
+                            "a fork nobody can update")
+        if "Modifications" not in text:
+            add(provenance, "nothing records whether the vendored files were edited; an "
+                            "unrecorded edit inside a vendored tree is how a fork becomes a guess")
+
+    door = native_root / "calibration" / "apriltag_detector.cpp"
+    includers = []
+    for path in list(native_root.rglob("*.cpp")) + list(native_root.rglob("*.hpp")):
+        if "third_party" in path.parts:
+            continue
+        # The vendored *C* headers, not our wrapper: `apriltag_detector.hpp` is ours, is meant to
+        # be included, and matching on the word alone would forbid the door from being used.
+        if re.search(r'#include\s+[\"<].*(?:third_party/apriltag/|apriltag\.h"|apriltag_pose\.h")',
+                     path.read_text(encoding="utf-8")):
+            includers.append(path)
+    if door not in includers:
+        add(door, "the one translation unit that is allowed to include the vendored decoder no "
+                  "longer does, so the tree is either unused or reached from somewhere else")
+    for path in includers:
+        if path != door:
+            add(path, "includes an apriltag header - the vendored decoder has exactly one door "
+                      "(`calibration/apriltag_detector.cpp`), because its C types must not reach a "
+                      "layer that did not agree to own them")
+
+    # One family, compiled from a list: a second codebook would be a second thing to license,
+    # measure and keep in step with the markers on site.
+    families = sorted(item.name for item in vendored.glob("tag*.c"))
+    if families != ["tag36h11.c"]:
+        add(vendored, f"the vendored tree builds {len(families)} tag families "
+                      f"({', '.join(families) or 'none'}); one family is what a printed marker "
+                      f"uses, and the others are codebooks nobody prints")
+
     jni = native_root / "jni" / "slam_jni.cpp"
     jni_text = jni.read_text(encoding="utf-8")
-    for symbol in ("TagDetector", "estimateScaleFromTagSightings", "tagScale"):
+    if "nativeDetectAprilTagScale" not in jni_text:
+        add(jni, "the decoder is vendored but not exposed over JNI, so no app can ever call it and "
+                 "the tree is paid for and unused")
+    for symbol in ("image_u8_t", "zarray_t", "matd_t", "apriltag_detector_t", "tag36h11_create"):
         if symbol in jni_text:
-            add(jni, f"`{symbol}` is exposed over JNI, but no decoder is compiled into this build "
-                     f"- the app could call a detector that cannot detect anything")
+            add(jni, f"`{symbol}` reaches the JNI layer, which is the one place that must not know "
+                     f"the decoder's types - the door is `calibration/apriltag_detector.cpp`")
     for path in kotlin_sources("app") + kotlin_sources("ar-engine"):
         text = path.read_text(encoding="utf-8")
-        for symbol in ("TagDetector", "estimateScaleFromTagSightings", "tagScale"):
+        for symbol in ("TagDetector", "estimateScaleFromTagSightings"):
             if symbol in text:
-                add(path, f"`{symbol}` is used from the app, but no decoder exists - `docs/"
-                         f"CALIBRATION.md` tier 2 is contract only (finding 188)")
+                add(path, f"`{symbol}` is a native type; the app talks to the decoder through "
+                         f"`NativeSlamEngine.detectAprilTagScale`, which returns metres or nothing")
+
     if not TAG_SCALE_HEADER.exists():
         return
     header = TAG_SCALE_HEADER.read_text(encoding="utf-8")
-    if "Contract only." not in header:
-        add(TAG_SCALE_HEADER, "the header no longer marks itself contract-only - that marker is "
-                              "what a wiring deletes, and deleting it by accident is how a "
-                              "contract becomes a claim")
+    if "Vendored, not wired." not in header:
+        add(TAG_SCALE_HEADER, "the header no longer marks the half that is not wired - that marker "
+                              "is what a wiring deletes, and deleting it by accident is how a "
+                              "decoder in a box becomes a feature on a screen")
     for path in (CALIBRATION_DOC, ROOT / "README.md"):
-        if "detector contract" not in path.read_text(encoding="utf-8"):
-            add(path, "this document no longer calls tier 2 a detector contract, so the summary a "
-                      "reader sees promises a detector that this build does not contain")
+        text = path.read_text(encoding="utf-8").lower()
+        if "vendored" not in text:
+            add(path, "this document no longer says the decoder is vendored, so a reader would "
+                      "have to infer that the repository now redistributes somebody else's code")
+        if "not wired" not in text and "no app source" not in text:
+            add(path, "this document does not say that the app never calls the decoder - the one "
+                      "sentence that keeps 'the decoder exists' from being read as 'it measures "
+                      "rooms'")
 
 
 def check_the_squared_wall_keeps_its_distance() -> None:
@@ -4424,7 +4508,7 @@ def main() -> int:
     check_the_calibration_has_one_home()
     check_the_frame_solver_is_built_everywhere()
     check_the_squared_wall_keeps_its_distance()
-    check_the_tag_contract_is_not_sold_as_a_detector()
+    check_the_tag_decoder_is_vendored_and_credited()
     check_the_plane_fitter_is_reproducible()
     check_totals_are_sums_of_printed_rows()
     check_csv_headers_name_their_cells()

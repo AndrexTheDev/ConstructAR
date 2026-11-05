@@ -26,6 +26,11 @@
 //   nativeLoopCandidates(handle) -> FloatArray (triples: from, to, distance)
 //   nativeFloorplan(handle, heightMetres, bandMetres, cellMetres, rdpEpsilonMetres,
 //                   minSegmentMetres, manhattanToleranceDegrees) -> FloatArray   (see below)
+//   nativeDetectAprilTagScale(gray, w, h, stride, fx, fy, cx, cy, tagSizeMetres) -> FloatArray
+//               [count, (id, x, y, z, margin, hamming) x count] - tags in the camera frame, in
+//               metres, from the vendored tag36h11 decoder. `null` means the arguments were not a
+//               frame (no buffer, no size); count 0 means the frame held no tag. Two different
+//               answers, and the app must be able to tell them apart.
 //   nativeAlignManhattanFrame(handle) -> FloatArray
 //               [valid, residualDeg, planes, snappedPlanes, axis0(3), axis1(3), axis2(3)] - the
 //               frame the last floorplan was squared onto, fitted from the room's walls.
@@ -62,6 +67,7 @@
 #include <mutex>
 #include <vector>
 
+#include "../calibration/apriltag_detector.hpp"
 #include "../geometry/floorplan.hpp"
 #include "../geometry/manhattan_world.hpp"
 #include "../geometry/plane_fit.hpp"
@@ -651,6 +657,45 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeFloorplan(JNIEnv* env, 
   jfloatArray result = env->NewFloatArray(size);
   if (result == nullptr) return nullptr;
   env->SetFloatArrayRegion(result, 0, size, payload.data());
+  return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_constructar_nativebridge_NativeSlamEngine_nativeDetectAprilTagScale(
+    JNIEnv* env, jobject, jbyteArray gray, jint width, jint height, jint rowStride, jfloat fx, jfloat fy,
+    jfloat cx, jfloat cy, jfloat tagSizeMetres) {
+  if (gray == nullptr || width <= 0 || height <= 0 || rowStride < width) return nullptr;
+  const jsize length = env->GetArrayLength(gray);
+  if (length < height * rowStride) return nullptr;
+
+  jbyte* pixels = env->GetByteArrayElements(gray, nullptr);
+  if (pixels == nullptr) return nullptr;
+  constructar::GrayFrameView view{reinterpret_cast<const std::uint8_t*>(pixels), width, height,
+                                  rowStride, 0.0};
+  constructar::TagDetectorOptions options;
+  options.camera = constructar::TagCamera{fx, fy, cx, cy};
+  options.tagSizeMetres = tagSizeMetres;
+  const std::unique_ptr<constructar::TagDetector> detector = constructar::makeTagDetector(options);
+  const std::vector<constructar::TagDetection> tags = detector->detect(view);
+  env->ReleaseByteArrayElements(gray, pixels, JNI_ABORT);
+
+  constexpr int kFloatsPerTag = 6;
+  const jsize count = static_cast<jsize>(tags.size());
+  jfloatArray result = env->NewFloatArray(1 + count * kFloatsPerTag);
+  if (result == nullptr) return nullptr;
+  std::vector<jfloat> values(static_cast<std::size_t>(1 + count * kFloatsPerTag), 0.f);
+  values[0] = static_cast<jfloat>(count);
+  for (jsize index = 0; index < count; ++index) {
+    const constructar::TagDetection& tag = tags[static_cast<std::size_t>(index)];
+    const std::size_t base = 1 + static_cast<std::size_t>(index) * kFloatsPerTag;
+    values[base + 0] = static_cast<jfloat>(tag.id);
+    values[base + 1] = tag.centreInCamera.x;
+    values[base + 2] = tag.centreInCamera.y;
+    values[base + 3] = tag.centreInCamera.z;
+    values[base + 4] = tag.decisionMargin;
+    values[base + 5] = static_cast<jfloat>(tag.hamming);
+  }
+  env->SetFloatArrayRegion(result, 0, static_cast<jsize>(values.size()), values.data());
   return result;
 }
 

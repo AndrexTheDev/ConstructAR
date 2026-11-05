@@ -260,6 +260,36 @@ class NativeSlamEngine internal constructor(
      * fit, so a caller that asks later is asking about a different room.
      */
     /**
+     * Reads tag36h11 markers out of one 8-bit greyscale frame, in metres.
+     *
+     * The decoder is vendored (AprilTag 3.1.0, BSD-2-Clause) and the arithmetic is proved in the
+     * host suite against rendered tags, so a result here is a measurement and not a promise. What
+     * `:app` does not have yet is a path that captures a luminance frame and calls this: nothing in
+     * the app feeds the marker tier (docs/CALIBRATION.md, tier 2).
+     *
+     * `null` when the arguments are not a frame or not a camera, an empty report when the frame
+     * held no tag. `rowStride` is in bytes; `gray` must hold at least `height * rowStride` bytes.
+     */
+    fun detectAprilTagScale(
+        gray: ByteArray,
+        width: Int,
+        height: Int,
+        rowStride: Int,
+        fx: Float,
+        fy: Float,
+        cx: Float,
+        cy: Float,
+        tagSizeMetres: Float,
+    ): AprilTagReport? {
+        if (width <= 0 || height <= 0 || rowStride < width) return null
+        if (gray.size < height * rowStride) return null
+        if (fx <= 0f || fy <= 0f || tagSizeMetres <= 0f) return null
+        return AprilTagReport.from(
+            nativeDetectAprilTagScale(gray, width, height, rowStride, fx, fy, cx, cy, tagSizeMetres),
+        )
+    }
+
+    /**
      * The frame the last [floorplan] call was squared onto, fitted from the room's own walls.
      *
      * `null` when the library is unavailable or cannot say. The fitting happens inside
@@ -477,6 +507,18 @@ class NativeSlamEngine internal constructor(
         @JvmStatic private external fun nativeLastManhattan(handle: Long): FloatArray?
 
         @JvmStatic private external fun nativeAlignManhattanFrame(handle: Long): FloatArray?
+
+        @JvmStatic private external fun nativeDetectAprilTagScale(
+            gray: ByteArray,
+            width: Int,
+            height: Int,
+            rowStride: Int,
+            fx: Float,
+            fy: Float,
+            cx: Float,
+            cy: Float,
+            tagSizeMetres: Float,
+        ): FloatArray?
         @JvmStatic private external fun nativePoseGraphReset(handle: Long)
         @JvmStatic private external fun nativePoseGraphAddNode(handle: Long, pose: FloatArray, fixed: Boolean): Int
 

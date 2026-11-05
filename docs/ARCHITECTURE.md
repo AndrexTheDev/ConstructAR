@@ -270,18 +270,26 @@ the enclosed area by more than a quarter is rejected and the measured loop is re
 tolerance is a parameter of the JNI call (default 10 degrees, 0 disables), and `nativeLastManhattan`
 reports what the step did: the residual in degrees, the runs snapped and the corners moved.
 
-**Passive marker contract** (`calibration/tag_scale.cpp`). Tier 2 of the calibration ladder — a
-printed AprilTag of known size, seen in enough frames, gives the scan a length that does not depend
-on an operator holding a bank card still. The pixel half of that is a decoder to vendor and licence,
-so what exists is the half that can be proved here: `TagDetector`, the interface a decoder will
-implement (whose only implementation in this build reports itself unavailable, and why — an empty
-detection list means "no tags in view" otherwise, which a build with no decoder would report for
-ever), and the marker-to-scale update: pair ratios of nominal over measured against the printed
-layout, a median to find the majority, a deviation filter for the tag that was mis-detected, and a
-baseline-weighted mean of what survives. It publishes a factor, the pairs that agreed, the pairs it
-rejected and the longest baseline behind it, and it decides nothing — the acceptance window lives
-in `:core` beside the bank-card reference, which is why the native directory does not contain its
-two numbers even in a comment. Nothing is wired: no JNI symbol, no app caller, no button.
+**Passive marker detection** (`calibration/apriltag_detector.cpp`, `calibration/tag_scale.cpp`).
+Tier 2 of the calibration ladder — a printed AprilTag of known size, seen in enough frames, gives
+the scan a length that does not depend on an operator holding a bank card still. Since finding 231
+both halves are in the tree. The pixel half is vendored: AprilTag 3.1.0's C core, BSD-2-Clause,
+unmodified, one family (tag36h11), in `third_party/apriltag/` with `VENDORED.md` recording what was
+taken, what was left and how it was obtained, and with the attribution in `NOTICE` and on the Help
+screen. `calibration/apriltag_detector.cpp` is the single translation unit that includes it — a
+decoder this repository did not write must not leak `image_u8_t` into a layer it did — and it turns
+detections into `constructar::TagDetection` in metres, which needs two things the caller must
+supply: the pinhole intrinsics and the printed size of the black square. Without them the detector
+is `NoTagDetector`, whose `available()` is false and whose reason names the camera; an empty
+detection list from a working detector means "no tags in view", and the two answers stay apart for
+the reason finding 98 established for the RTAB-Map back-end. The other half is the marker-to-scale
+update: pair ratios of nominal over measured against the printed layout, a median to find the
+majority, a deviation filter for the tag that was mis-detected, and a baseline-weighted mean of what
+survives. It publishes a factor, the pairs that agreed, the pairs it rejected and the longest
+baseline behind it, and it decides nothing — the acceptance window lives in `:core` beside the
+bank-card reference, which is why the native directory does not contain its two numbers even in a
+comment. **The decoder is vendored and not wired**: `nativeDetectAprilTagScale` is the door,
+`:app` never opens it, and no stored metre depends on a marker today.
 
 **Pose graph** (`slam/pose_graph.cpp`). Gauss–Newton on SE(3) with central-difference Jacobians,
 block-sparse Hessian solved by preconditioned conjugate gradient, backtracking line search (a

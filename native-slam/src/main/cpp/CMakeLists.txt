@@ -13,15 +13,49 @@
 #   * default                    — self-contained (no external C++ dependencies at all)
 #   * CONSTRUCTAR_WITH_RTABMAP   — links a BSD-only RTAB-Map build (see docs/SETUP.md §5.1)
 cmake_minimum_required(VERSION 3.22.1)
-project(constructar_slam LANGUAGES CXX)
+project(constructar_slam LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+et(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
 option(CONSTRUCTAR_WITH_RTABMAP "Compile the RTAB-Map loop-closure back-end" OFF)
 option(CONSTRUCTAR_BUILD_HOST_TESTS "Build the host (non-Android) test binary" OFF)
 set(RTABMAP_SOURCE_DIR "" CACHE PATH "Path to an RTAB-Map source checkout (BSD-3-Clause)")
+
+# AprilTag 3.1.0's C core, vendored unmodified (BSD-2-Clause). See third_party/apriltag/
+# VENDORED.md for the file list, the provenance and why only tag36h11 is here. It is built as its
+# own static library so that `-Werror` - which is a contract for the code this repository writes -
+# does not turn a warning in somebody else's source into our build failure, and so that the one
+# include path it needs stays with it.
+set(APRILTAG_SOURCES
+    third_party/apriltag/apriltag.c
+    third_party/apriltag/apriltag_quad_thresh.c
+    third_party/apriltag/apriltag_pose.c
+    third_party/apriltag/tag36h11.c
+    third_party/apriltag/common/g2d.c
+    third_party/apriltag/common/homography.c
+    third_party/apriltag/common/image_u8.c
+    third_party/apriltag/common/image_u8x3.c
+    third_party/apriltag/common/matd.c
+    third_party/apriltag/common/pnm.c
+    third_party/apriltag/common/svd22.c
+    third_party/apriltag/common/time_util.c
+    third_party/apriltag/common/unionfind.c
+    third_party/apriltag/common/workerpool.c
+    third_party/apriltag/common/zarray.c
+    third_party/apriltag/common/zhash.c
+    third_party/apriltag/common/zmaxheap.c
+)
+
+add_library(apriltag_core STATIC ${APRILTAG_SOURCES})
+target_include_directories(apriltag_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/apriltag)
+# Upstream assumes POSIX (`strdup`, `random`, `usleep`) and is compiled verbatim: no warning flags
+# beyond silencing, because a warning we cannot fix without editing the vendored tree is noise.
+target_compile_options(apriltag_core PRIVATE -w)
+target_compile_definitions(apriltag_core PRIVATE _GNU_SOURCE)
 
 set(SLAM_SOURCES
     tsdf/volume.cpp
@@ -29,6 +63,7 @@ set(SLAM_SOURCES
     slam/pose_graph.cpp
     geometry/manhattan_world.cpp
     calibration/tag_scale.cpp
+    calibration/apriltag_detector.cpp
     geometry/plane_fit.cpp
     geometry/floorplan.cpp
     geometry/surface_mask.cpp
@@ -43,7 +78,7 @@ if(CONSTRUCTAR_BUILD_HOST_TESTS)
   target_include_directories(constructar_host_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
   target_compile_options(constructar_host_tests PRIVATE -O2 -Wall -Wextra -Werror)
   find_package(Threads REQUIRED)
-  target_link_libraries(constructar_host_tests PRIVATE Threads::Threads)
+  target_link_libraries(constructar_host_tests PRIVATE Threads::Threads apriltag_core)
   return()
 endif()
 
@@ -77,6 +112,7 @@ find_library(LOG_LIB log)
 # AHardwareBuffer lives in libandroid (there is no `libhardwarebuffer.so` in the NDK
 # sysroot), and its use is compile-time guarded to API 26+ in jni/slam_jni.cpp.
 target_link_libraries(constructar_slam
+    apriltag_core
     ${LOG_LIB}
     ${ANDROID_LIB}
     jnigraphics
