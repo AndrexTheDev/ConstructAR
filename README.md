@@ -627,7 +627,9 @@ Known limitations, deliberately documented rather than hidden:
   camera rather than decoder, and the marker-to-scale arithmetic (pair ratios against the printed
   layout, a median, a deviation filter, a baseline-weighted mean) which publishes a factor and its
   evidence and decides nothing - the window stays in `:core`. The frame path exists too:
-  `MarkerFrameReader` (`:ar-engine`) packs an ARCore Y plane with `:core`'s `LuminancePlane` (the
+  `:core`'s `MarkerBaseline` turns two sightings of one marker into a factor (camera-to-tag vectors
+  rotated into world axes against ARCore's camera positions, median-filtered, baseline-weighted,
+  and decided by `ReferenceCalibration.accepted`). `MarkerFrameReader` (`:ar-engine`) packs an ARCore Y plane with `:core`'s `LuminancePlane` (the
   plane is strided; a buffer that ignored the padding shears every row and decodes nothing) and
   calls the decoder with the session's intrinsics and the printed size - unit-tested with a decoder
   that records what it was handed, three answers kept apart: `null` for a broken question, an empty
@@ -789,7 +791,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 986 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 995 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 332 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 332 checks, 0 failures, no data race reported |

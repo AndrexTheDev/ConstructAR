@@ -143,7 +143,16 @@ types into a layer it did — `scripts/verify_sources.py` holds that door shut.
   diagnostic screen prints what is missing instead of blaming the room. That is the shape
   `RtabMapBridge::isAvailable` established in finding 98, and it survives the decoder arriving:
   the absence moved, it did not disappear.
-* **`estimateScaleFromTagSightings`**, the marker-to-scale update: the ratios between every pair
+* **`MarkerBaseline`** (`:core`), the case a single printed marker actually is. One tag stuck to a
+  wall has no layout, so the ratios above do not apply; what it has is geometry: seen from two
+  places, the triangle camera-camera-tag gives a baseline twice over - once between the two camera
+  positions in the app's metres, once between the two camera-to-tag vectors in the marker's metres,
+  each rotated into world axes first. Their ratio is the correction, and the rotation is not
+  optional: turn the phone between the sightings and an unrotated subtraction compares two
+  different frames and reports a phone that was right as one that needs recalibrating. It publishes
+  a factor, the agreeing and rejected pair counts, the longest baseline and the spread, and it asks
+  `ReferenceCalibration.accepted` rather than carrying a second window.
+* **`estimateScaleFromTagSightings`**, the layout case: the ratios between every pair
   of tags that the printed layout also knows (`nominal / measured`), a median to find the majority,
   a relative-deviation filter to drop the pairs that disagree with it, and a baseline-weighted mean
   of what survives. Long baselines dominate because a ratio's error falls with its baseline, and a
@@ -155,7 +164,8 @@ types into a layer it did — `scripts/verify_sources.py` holds that door shut.
 
 The decoder is **vendored and not wired to a screen**, and the last metre is stated rather than
 implied: `:app` has no screen
-that requests a frame. What does exist is the frame path itself: `MarkerFrameReader` (`:ar-engine`)
+that requests a frame, and `MarkerBaseline` has no caller either. What does exist is the frame path
+itself: `MarkerFrameReader` (`:ar-engine`)
 packs an ARCore plane with `:core`'s `LuminancePlane` - the Y plane is *strided*, and a buffer that
 ignored the padding would shear every row and decode nothing - and calls the decoder with the
 session's intrinsics and the printed size; the composition is unit-tested with a decoder that

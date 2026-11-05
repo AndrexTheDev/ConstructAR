@@ -283,7 +283,10 @@ supply: the pinhole intrinsics and the printed size of the black square. Without
 is `NoTagDetector`, whose `available()` is false and whose reason names the camera; an empty
 detection list from a working detector means "no tags in view", and the two answers stay apart for
 the reason finding 98 established for the RTAB-Map back-end. The other half is the marker-to-scale
-update: pair ratios of nominal over measured against the printed layout, a median to find the
+update, in two shapes: `MarkerBaseline` (`:core`) for one printed marker seen from two places - the
+camera-to-tag vectors rotated into world axes give one baseline, ARCore's camera positions give
+another, and their ratio is the correction - and `estimateScaleFromTagSightings` for a printed
+sheet of tags: pair ratios of nominal over measured against the printed layout, a median to find the
 majority, a deviation filter for the tag that was mis-detected, and a baseline-weighted mean of what
 survives. It publishes a factor, the pairs that agreed, the pairs it rejected and the longest
 baseline behind it, and it decides nothing — the acceptance window lives in `:core` beside the
