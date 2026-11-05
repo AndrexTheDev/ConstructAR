@@ -4019,6 +4019,19 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
     if "heightM * metresScale" in plan_text or "heightM = heightM *" in plan_text:
         add(plan, "the calibration factor is applied to the wall height, which was never measured "
                   "by the session - only a measured length may be scaled")
+    # A wall is its length times a height, and the height the plan used to be built with was the
+    # *board's*: 2.50 m, the figure the estimator assumes so a board covers a wall without a butt
+    # joint. A 2.80 m room therefore printed 35.0 m² where it has 39.2 m² (finding 227).
+    if "statedRoomHeight(project.wallHeightM)" not in plan_text:
+        add(plan, "the plan never reads the room height the operator stated, so every wall is "
+                  "built at the trade default whatever the room is (finding 227)")
+    if "heightM = wallHeightM" not in plan_text:
+        add(plan, "the walls are built at the default height even when the project carries a "
+                  "stated one - the area, the boards and the picture would all be for a room "
+                  "nobody is standing in")
+    if "wallHeightAssumed" not in plan_text:
+        add(plan, "the plan cannot tell a stated height from the default, so a screen has no way "
+                  "to print an assumption as an assumption (finding 227)")
     if "sessionFloorHeights" not in plan_text:
         add(plan, "the zones are resolved against a single floor, so a node measured in another AR "
                   "session would be given a mounting height from this one (finding 217)")
@@ -4092,6 +4105,9 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
                          "have to assemble the numbers it draws")
     if "com.constructar.app.data.WallPlan" in root_text:
         add(root_screen, "the wall route still imports the deleted app-side plan")
+    if "setWallHeight(" not in root_text:
+        add(root_screen, "the wall screen's height buttons are not wired, so stating the room's "
+                         "height would change nothing")
     for call in ("addOpening(", "removeLastOpening("):
         if call not in root_text:
             add(root_screen, f"the wall route never calls `{call}`, so an opening placed on the "
@@ -4106,6 +4122,9 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
     for call in ("fun addOpening(", "fun removeLastOpening("):
         if call not in view_model_text:
             add(view_model, f"there is no `{call}` - the elevation's buttons would be inert")
+    if "fun setWallHeight(" not in view_model_text:
+        add(view_model, "there is no write path for the room height - the screen's buttons would "
+                        "store nothing and every area would stay at the board's height")
     if "fun setFloorHeight(" not in view_model_text:
         add(view_model, "there is no write path for the floor height, so the field would stay null "
                         "for ever and the zones would never be assigned")
@@ -4156,6 +4175,14 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
     if "R.string.wall_openings_none" not in screen_text:
         add(screen, "the screen deducts nothing without saying why - `0.00 m² openings` beside a "
                     "room with a door reads as a measured zero")
+    if "plan.wallHeightAssumed" not in screen_text or "plan.wallHeightM" not in screen_text:
+        add(screen, "the screen prints areas without saying which height they were made at - the "
+                    "assumption would read as a measurement of the room (finding 227)")
+    if "onSetWallHeight(" not in screen_text:
+        add(screen, "the room's height cannot be stated, so every room keeps the board's height")
+    if "STANDARD_ROOM_HEIGHTS_M" not in screen_text:
+        add(screen, "the height buttons are a list written on the screen - which heights a "
+                    "take-off may be made for is a trade fact and belongs in `:core`")
     if "plan.openingsUnplaced" not in screen_text:
         add(screen, "openings recorded on a wall the room no longer has are not counted - they are "
                     "in the file, in the opening count, and not in the area (finding 225)")
@@ -4183,6 +4210,12 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
         "wall_net": (),
         "wall_boards_value": ("%1$d", "%2$d"),
         "wall_assumptions": ("%1$s", "%2$s", "%3$s", "%4$d"),
+        "wall_height_title": (),
+        "wall_height_assumed": ("%1$s",),
+        "wall_height_stated": ("%1$s",),
+        "wall_height_hint": (),
+        "wall_height_option": ("%1$s",),
+        "wall_height_current": (),
         "wall_zones_no_floor": (),
         "wall_openings_none": (),
         "wall_openings_unplaced": ("%1$d",),

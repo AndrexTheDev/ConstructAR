@@ -291,6 +291,12 @@
     <string name="wall_row">Parete %1$d · %2$s · %3$s</string>
     <string name="wall_length_m">%1$s m</string>
     <string name="wall_area_m2">%1$s m²</string>
+    <string name="wall_height_title">Altezza del locale</string>
+    <string name="wall_height_assumed">%1$s - il valore standard del mestiere, perché l’altezza di questa stanza non è indicata. Ogni superficie, lastra e montante qui sotto vale per una stanza di quell’altezza.</string>
+    <string name="wall_height_stated">%1$s - l’altezza che hai indicato. Ogni superficie, lastra e montante qui sotto vale per una stanza di quell’altezza.</string>
+    <string name="wall_height_hint">Tocca l’altezza che ha la tua stanza. Le superfici, le lastre e la zona soffitto qui sotto la seguono.</string>
+    <string name="wall_height_option">Altezza del locale %1$s</string>
+    <string name="wall_height_current">attuale</string>
     <string name="wall_surface_title">Superficie della parete</string>
     <string name="wall_gross">Lordo</string>
     <string name="wall_openings">Aperture detratte</string>

@@ -291,6 +291,12 @@
     <string name="wall_row">Wand %1$d · %2$s · %3$s</string>
     <string name="wall_length_m">%1$s m</string>
     <string name="wall_area_m2">%1$s m²</string>
+    <string name="wall_height_title">Raumhöhe</string>
+    <string name="wall_height_assumed">%1$s - der Handwerks-Standard, weil die Höhe dieses Raums nicht angegeben ist. Jede Fläche, jede Platte und jeder Ständer unten gilt für einen so hohen Raum.</string>
+    <string name="wall_height_stated">%1$s - die Höhe, die du angegeben hast. Jede Fläche, jede Platte und jeder Ständer unten gilt für einen so hohen Raum.</string>
+    <string name="wall_height_hint">Tippe die Höhe an, die dein Raum hat. Flächen, Platten und Decken-Zone unten richten sich danach.</string>
+    <string name="wall_height_option">Raumhöhe %1$s</string>
+    <string name="wall_height_current">aktuell</string>
     <string name="wall_surface_title">Wandfläche</string>
     <string name="wall_gross">Brutto</string>
     <string name="wall_openings">Abzüglich Öffnungen</string>

@@ -62,6 +62,7 @@ class WallPlanTest {
         sessionFloorHeights: Map<String, Float> = emptyMap(),
         openings: List<PlacedOpening> = emptyList(),
         nodes: List<RouteNodeRecord> = emptyList(),
+        wallHeightM: Float? = null,
     ): ProjectRecord = ProjectRecord(
         id = "p1",
         name = "Kitchen",
@@ -72,6 +73,7 @@ class WallPlanTest {
         floorHeightM = floorHeightM,
         sessionFloorHeights = sessionFloorHeights,
         openings = openings,
+        wallHeightM = wallHeightM,
         routes = if (nodes.isEmpty()) {
             emptyList()
         } else {
@@ -391,6 +393,90 @@ class WallPlanTest {
     }
 
     @Test
+    fun `a stated room height is the height every wall is built at`() {
+        // 14 m of run in a 2.80 m room is 39.20 m², not the 35.00 m² of the 2.50 m default: the
+        // difference is four boards on this room and more on every larger one (finding 227).
+        val plan = wallPlan(project(wallHeightM = 2.80f))
+
+        assertEquals(14f, plan.surface.totalLengthM, 1e-3f)
+        assertEquals(39.2f, plan.surface.grossAreaM2, 1e-2f)
+        assertEquals(2.80f, plan.wallHeightM, 1e-4f)
+        assertFalse(plan.wallHeightAssumed)
+        // One height for the drawing and the purchase, or the picture lies about the boards.
+        assertTrue(plan.walls.all { kotlin.math.abs(it.heightM - 2.80f) < 1e-4f })
+        assertEquals(14, plan.drywall.boards)
+    }
+
+    @Test
+    fun `a room height nobody stated is the trade default, and the plan says so`() {
+        val plan = wallPlan(project())
+
+        assertEquals(DEFAULT_WALL_HEIGHT_M, plan.wallHeightM, 1e-4f)
+        assertTrue(plan.wallHeightAssumed)
+        assertEquals(35f, plan.surface.grossAreaM2, 1e-2f)
+    }
+
+    @Test
+    fun `a height a room cannot have is not a height`() {
+        // A typo in a file is not a room: 1.20 m has no ceiling outlet over it, 4.80 m is a
+        // scaffold, and NaN is not a number. All three fall back to the default *and* stay
+        // marked as assumption rather than being clamped into looking measured.
+        listOf(1.20f, 4.80f, Float.NaN).forEach { nonsense ->
+            val plan = wallPlan(project(wallHeightM = nonsense))
+
+            assertEquals(DEFAULT_WALL_HEIGHT_M, plan.wallHeightM, 1e-4f)
+            assertTrue(plan.wallHeightAssumed)
+            assertEquals(35f, plan.surface.grossAreaM2, 1e-2f)
+        }
+    }
+
+    @Test
+    fun `the ceiling zone follows the stated height, not the board's`() {
+        // 2.65 m above a floor at -1.4 m is y = 1.25. In a 2.50 m room that is above the ceiling
+        // and gets refused; in a 2.80 m room it is exactly the ceiling outlet line, 15 cm under
+        // the ceiling. The zone has to move with the height the wall was built at (finding 227).
+        val point = node(Vec3(0.5f, 1.25f, 0.1f))
+        val low = wallPlan(
+            project(
+                sessionFloorHeights = mapOf("s1" to -1.4f),
+                floorHeightM = -1.4f,
+                nodes = listOf(point),
+            ),
+        )
+        val lowZones = low.installations ?: error("zones expected")
+        assertEquals(0, lowZones.ceilingCount)
+        assertEquals(1, lowZones.rejectedCount)
+
+        val high = wallPlan(
+            project(
+                sessionFloorHeights = mapOf("s1" to -1.4f),
+                floorHeightM = -1.4f,
+                nodes = listOf(point),
+                wallHeightM = 2.80f,
+            ),
+        )
+        val highZones = high.installations ?: error("zones expected")
+        assertEquals(1, highZones.ceilingCount)
+        assertEquals(0, highZones.rejectedCount)
+    }
+
+    @Test
+    fun `statedRoomHeight refuses what no room is, and keeps what one is`() {
+        assertNull(statedRoomHeight(null))
+        assertNull(statedRoomHeight(1.99f))
+        assertNull(statedRoomHeight(4.51f))
+        assertNull(statedRoomHeight(Float.NaN))
+        assertNull(statedRoomHeight(Float.POSITIVE_INFINITY))
+        assertEquals(MIN_ROOM_HEIGHT_M, statedRoomHeight(2.00f) ?: 0f, 1e-4f)
+        assertEquals(2.80f, statedRoomHeight(2.80f) ?: 0f, 1e-4f)
+        // Every height the picker offers is a height the resolver accepts, and the default the
+        // plan falls back to is one of them - a button that stores nothing would be worse than no
+        // button at all.
+        assertTrue(STANDARD_ROOM_HEIGHTS_M.contains(DEFAULT_WALL_HEIGHT_M))
+        assertTrue(STANDARD_ROOM_HEIGHTS_M.all { statedRoomHeight(it) == it })
+    }
+
+    @Test
     fun `a project file written before the floor and openings existed still loads`() {
         val json = Json {
             ignoreUnknownKeys = true
@@ -401,6 +487,7 @@ class WallPlanTest {
 
         val loaded = json.decodeFromString(ProjectRecord.serializer(), legacy)
         assertNull(loaded.floorHeightM)
+        assertNull(loaded.wallHeightM)
         assertTrue(loaded.sessionFloorHeights.isEmpty())
         assertTrue(loaded.openings.isEmpty())
 
@@ -408,6 +495,7 @@ class WallPlanTest {
             floorHeightM = -1.4f,
             sessionFloorHeights = mapOf("s1" to -1.4f),
             openings = listOf(PlacedOpening.door(0, 1f)),
+            wallHeightM = 2.80f,
         )
         val reread = json.decodeFromString(
             ProjectRecord.serializer(),
@@ -416,5 +504,6 @@ class WallPlanTest {
         assertEquals(-1.4f, reread.floorHeightM ?: 0f, 1e-4f)
         assertEquals(-1.4f, reread.sessionFloorHeights["s1"] ?: 0f, 1e-4f)
         assertEquals(1, reread.openings.size)
+        assertEquals(2.80f, reread.wallHeightM ?: 0f, 1e-4f)
     }
 }

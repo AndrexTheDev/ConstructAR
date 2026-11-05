@@ -127,6 +127,22 @@ data class ProjectRecord(
      */
     val sessionFloorHeights: Map<String, Float> = emptyMap(),
     /**
+     * The room's floor-to-ceiling height in metres, as the operator stated it, or `null`.
+     *
+     * Every wall area, board, stud and track on the wall screen is the wall's length times its
+     * height, and until this field existed the height was `DEFAULT_WALL_HEIGHT_M` - the height of
+     * the *board*, 2.50 m, chosen by the estimator so a board fits a wall without a butt joint. A
+     * 2.80 m room therefore lost 0.30 m of every wall-metre: 35.0 m² printed where the room is
+     * 39.2 m², four boards short, on every job with a ceiling that is not the trade default
+     * (finding 227).
+     *
+     * The operator states it on the wall screen; `statedRoomHeight` refuses values outside
+     * 2.00..4.50 m, and `null` means "nobody said", which the screen prints rather than hiding.
+     * Deliberately not derived from the measured points: a run is drawn at socket height, so the
+     * tallest point in a room is not its ceiling.
+     */
+    val wallHeightM: Float? = null,
+    /**
      * Doors, windows and passages the operator placed on the room's walls.
      *
      * Without them the drywall take-off deducts nothing: a door is 1.78 m² of wall that does not

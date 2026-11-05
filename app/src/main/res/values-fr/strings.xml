@@ -291,6 +291,12 @@
     <string name="wall_row">Cloison %1$d · %2$s · %3$s</string>
     <string name="wall_length_m">%1$s m</string>
     <string name="wall_area_m2">%1$s m²</string>
+    <string name="wall_height_title">Hauteur du local</string>
+    <string name="wall_height_assumed">%1$s — la valeur du métier, parce que la hauteur de cette pièce n’est pas indiquée. Chaque surface, plaque et montant ci-dessous vaut pour une pièce de cette hauteur.</string>
+    <string name="wall_height_stated">%1$s — la hauteur que tu as indiquée. Chaque surface, plaque et montant ci-dessous vaut pour une pièce de cette hauteur.</string>
+    <string name="wall_height_hint">Touche la hauteur de ta pièce. Les surfaces, les plaques et la zone de plafond ci-dessous la suivent.</string>
+    <string name="wall_height_option">Hauteur du local %1$s</string>
+    <string name="wall_height_current">actuelle</string>
     <string name="wall_surface_title">Surface de cloison</string>
     <string name="wall_gross">Brut</string>
     <string name="wall_openings">Ouvertures déduites</string>

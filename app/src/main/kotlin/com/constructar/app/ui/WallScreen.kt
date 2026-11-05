@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -42,6 +43,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -54,6 +56,7 @@ import com.constructar.core.wall.DrywallSpec
 import com.constructar.core.wall.OpeningKind
 import com.constructar.core.wall.WINDOW_WIDTH_M
 import com.constructar.core.wall.WallOpening
+import com.constructar.core.wall.STANDARD_ROOM_HEIGHTS_M
 import com.constructar.core.wall.WallPlan
 import com.constructar.core.wall.openingOffsetForTap
 import com.constructar.core.wall.openingsByWall
@@ -77,6 +80,9 @@ import com.constructar.core.wall.stepOpeningFraction
  *    one. The values come from `DrywallSpec`, the same object the estimate was computed with.
  *  - **The zones need a floor**, and the screen says so instead of assigning a socket from a
  *    height that was never measured from the finished floor (see `WallPlan` and finding 214).
+ *  - **The height of the room is stated, and printed as stated or as assumed.** Every area on this
+ *    screen is a length times it; until finding 227 the height was the *board's* 2.50 m and the
+ *    screen did not mention it at all, so a 2.80 m room was priced as a 2.50 m one.
  *  - **An open ring is not a room.** No walls, no boards, no zones - and a sentence that says
  *    what to do about it, because an empty screen is not an explanation.
  *
@@ -102,6 +108,15 @@ fun WallScreen(
     onAddOpening: (wallIndex: Int, kind: OpeningKind, offsetM: Float) -> Unit = { _, _, _ -> },
     /** Removes the last opening placed on a wall. */
     onRemoveOpening: (wallIndex: Int) -> Unit = {},
+    /**
+     * States the room's floor-to-ceiling height in metres.
+     *
+     * Every area, board and stud on this screen is a length times this height, and until the
+     * operator could say it the screen used the height of a *board* - 2.50 m, the trade default -
+     * for every room (finding 227). `:core` owns what counts as a room height; the screen only
+     * hands it the choice.
+     */
+    onSetWallHeight: (heightM: Float) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -193,6 +208,56 @@ fun WallScreen(
                             onClick = { onRemoveOpening(index) },
                             modifier = Modifier.weight(1f),
                             tone = ActionTone.SECONDARY,
+                        )
+                    }
+                }
+            }
+        }
+
+        WallCard(stringResource(R.string.wall_height_title)) {
+            // Said before the numbers, because the numbers are made of it: the height is a fact
+            // about the room that nobody measured, and "35.0 m²" printed without it reads as a
+            // measurement of the walls rather than of a 2.50 m assumption (finding 227).
+            Text(
+                if (plan.wallHeightAssumed) {
+                    stringResource(R.string.wall_height_assumed, shownLength(plan.wallHeightM))
+                } else {
+                    stringResource(R.string.wall_height_stated, shownLength(plan.wallHeightM))
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (plan.wallHeightAssumed) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
+            Text(
+                stringResource(R.string.wall_height_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // Read at composition, because a semantics lambda is not composable.
+            val currentLabel = stringResource(R.string.wall_height_current)
+            STANDARD_ROOM_HEIGHTS_M.chunked(3).forEach { heights ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    heights.forEach { height ->
+                        val label = stringResource(R.string.wall_length_m, shownLength(height))
+                        val optionLabel =
+                            stringResource(R.string.wall_height_option, label)
+                        val chosen = !plan.wallHeightAssumed &&
+                            kotlin.math.abs(plan.wallHeightM - height) < 1e-3f
+                        GloveButton(
+                            label = label,
+                            icon = Icons.Default.Straighten,
+                            onClick = { onSetWallHeight(height) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .semantics {
+                                    contentDescription = optionLabel
+                                    if (chosen) stateDescription = currentLabel
+                                },
+                            tone = if (chosen) ActionTone.PRIMARY else ActionTone.SECONDARY,
+                            selected = chosen,
                         )
                     }
                 }

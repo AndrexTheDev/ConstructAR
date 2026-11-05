@@ -297,6 +297,12 @@
     <string name="wall_row">Ściana %1$d · %2$s · %3$s</string>
     <string name="wall_length_m">%1$s m</string>
     <string name="wall_area_m2">%1$s m²</string>
+    <string name="wall_height_title">Wysokość pomieszczenia</string>
+    <string name="wall_height_assumed">%1$s - wartość branżowa, bo wysokość tego pomieszczenia nie została podana. Każda powierzchnia, płyta i słupek poniżej dotyczą pomieszczenia o tej wysokości.</string>
+    <string name="wall_height_stated">%1$s - wysokość, którą podałeś. Każda powierzchnia, płyta i słupek poniżej dotyczą pomieszczenia o tej wysokości.</string>
+    <string name="wall_height_hint">Dotknij wysokości swojego pomieszczenia. Powierzchnie, płyty i strefa sufitu poniżej idą za nią.</string>
+    <string name="wall_height_option">Wysokość pomieszczenia %1$s</string>
+    <string name="wall_height_current">aktualna</string>
     <string name="wall_surface_title">Powierzchnia ścian</string>
     <string name="wall_gross">Brutto</string>
     <string name="wall_openings">Odjęte otwory</string>

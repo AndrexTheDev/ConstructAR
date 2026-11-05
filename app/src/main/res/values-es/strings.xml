@@ -291,6 +291,12 @@
     <string name="wall_row">Pared %1$d · %2$s · %3$s</string>
     <string name="wall_length_m">%1$s m</string>
     <string name="wall_area_m2">%1$s m²</string>
+    <string name="wall_height_title">Altura del local</string>
+    <string name="wall_height_assumed">%1$s: el valor habitual del oficio, porque no has indicado la altura de esta sala. Cada superficie, placa y montante de abajo corresponde a una sala de esa altura.</string>
+    <string name="wall_height_stated">%1$s: la altura que has indicado. Cada superficie, placa y montante de abajo corresponde a una sala de esa altura.</string>
+    <string name="wall_height_hint">Toca la altura que tiene tu sala. Las superficies, las placas y la zona de techo de abajo la siguen.</string>
+    <string name="wall_height_option">Altura del local %1$s</string>
+    <string name="wall_height_current">actual</string>
     <string name="wall_surface_title">Superficie de pared</string>
     <string name="wall_gross">Bruto</string>
     <string name="wall_openings">Huecos descontados</string>

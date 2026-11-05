@@ -318,6 +318,9 @@ fun AppRoot(viewModel: ProjectViewModel) {
                                 onRemoveOpening = { wallIndex ->
                                     viewModel.removeLastOpening(wallIndex)
                                 },
+                                onSetWallHeight = { heightM ->
+                                    viewModel.setWallHeight(heightM)
+                                },
                             )
                         } else {
                             Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())

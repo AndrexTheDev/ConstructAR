@@ -199,7 +199,7 @@ their wall are clipped to it **and counted**, with the reason enumerated (`NEGAT
 `OUTSIDE_WALL`, `ABOVE_WALL`) rather than silently absorbed, because a window 20 cm past the end of
 its wall is a measurement the operator can check. `estimateDrywall` then applies the trade's
 numbers: boards of 2.50 x 1.25 m (one board is one wall height, which is why the default wall height
-is 2.50 m), CW studs at 62.5 cm centres so every board edge lands on metal (a run gets a stud at
+is 2.50 m - and why the room's own height is a separate, stated fact, finding 227), CW studs at 62.5 cm centres so every board edge lands on metal (a run gets a stud at
 both ends - a 4 m wall is 7, not 6), UW track top and bottom, 29 screws per square metre of
 *installed* board (it is the board that is screwed, not the net wall), and 10 % waste on everything
 that is cut. A spec that cannot be built - zero spacing, zero board - returns `valid = false` with
@@ -415,12 +415,14 @@ the clearance check, had unit tests and no screen. The *Walls* button on the pro
 | Question | Answer, and why that answer |
 |---|---|
 | What is a wall? | An edge of the room's stored ring (`FloorplanSketch`), **including the closing one**: a 4 x 3 m room is 14 m of wall, not 11 m, and 3 m of missing wall is a board and a half on the order. An open ring is not a room yet and produces no walls at all - the card already offers to close it by hand. |
-| Which metres? | The project's `calibrationScale` is applied to the run and to the nodes, once, at the reporting layer - the same rule the bill of materials follows. It is **not** applied to the wall *height*: 2.50 m is the assumption the estimate is made under, not a length the session measured. |
+| Which metres? | The project's `calibrationScale` is applied to the run and to the nodes, once, at the reporting layer - the same rule the bill of materials follows. It is **not** applied to the wall *height*: the height is not a length the session measured. |
+| How high is the wall? | The height the operator stated on the wall screen (`ProjectRecord.wallHeightM`, 2.00–4.50 m through `statedRoomHeight`), or `DEFAULT_WALL_HEIGHT_M` = 2.50 m when nobody stated one. The 2.50 m is the *board's* height - the figure the estimator assumes so one board covers floor to ceiling - and it used to be the height of every room: a 2.80 m room printed 35.0 m² where it has 39.2 m², four boards short (finding 227). `WallPlan.wallHeightM` and `wallHeightAssumed` carry the number and whether it was stated, one of them reaches the drawing, the areas, the boards and the ceiling zone, and the screen prints an assumed height in red as an assumption. It is deliberately not derived from the measured points: a run is drawn at socket height, so the tallest point in a room is not its ceiling. |
 | Where is 30 cm? | On the finished floor - and the only honest source of that is a tracked horizontal plane. ARCore's world origin is wherever the session started, usually at chest height, so `y` alone is a height above nothing an electrician would recognise. `FloorReference` picks the highest upward-facing tracked plane at or below the viewer within 3.5 m (`null` when there is none), `HitResolution` carries it out of `ArHitSource` where the planes are alive, `ProjectRecord.floorHeightM` stores it, and without it `WallPlan.installations` is `null` and the screen says so instead of printing a socket at 1.40 m. |
-| What is not shown? | Openings: nothing in the app records a door or a window yet, so the screen prints `0.00 m²` deducted *and says why* - a silent zero beside a room with a door reads as a measurement. And the clearance check, because nothing constructs an `Obstacle` (§4). |
+| What is not shown? | The clearance check, because nothing constructs an `Obstacle` (§4). Openings are shown: since finding 220 the elevation records doors and windows, `wallSurface` subtracts them as a union, and a room with none says so rather than printing a silent `0.00 m²`. |
 
-The screen prints the assumptions under the purchase (board size, stud spacing, waste) for the same
-reason the protocol prints its expected error: a number without its conditions is an argument. Every
+The screen prints the assumptions under the purchase (board size, stud spacing, waste) and the room
+height it was made at, for the same reason the protocol prints its expected error: a number without
+its conditions is an argument. Every
 digit comes from `LengthFormatter`, every word from six locales, and the retrofit is backward
 compatible — `floorHeightM` is defaulted and `null` is omitted by the repository's JSON, so a room
 recorded by the previous release loads unchanged with no zones and no complaint.

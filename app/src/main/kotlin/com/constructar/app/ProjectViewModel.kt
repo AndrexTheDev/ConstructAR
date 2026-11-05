@@ -40,6 +40,7 @@ import com.constructar.core.model.WorkSession
 import com.constructar.core.price.Pricing
 import com.constructar.core.wall.OpeningKind
 import com.constructar.core.wall.PlacedOpening
+import com.constructar.core.wall.statedRoomHeight
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -643,6 +644,26 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             materialList = buildMaterialList(updated),
         )
         floorWrites.offer(FloorSample(sessionId, heightM))
+        return updated
+    }
+
+    /**
+     * States the room's floor-to-ceiling height - the number every wall area is made of.
+     *
+     * The wall screen used to build every wall at `DEFAULT_WALL_HEIGHT_M`, which is the height of
+     * a *board*, chosen so a 2.50 m board covers a wall without a butt joint. That made a 2.80 m
+     * room report 35.0 m² of wall where it has 39.2 m², four boards short, on every job with a
+     * ceiling that is not the trade default (finding 227).
+     *
+     * `statedRoomHeight` owns what counts as a room height; a number it refuses is not stored, so a
+     * typo cannot become a wall.
+     */
+    fun setWallHeight(heightM: Float, onSaved: (ProjectRecord?) -> Unit = {}): ProjectRecord? {
+        val project = mutableState.value.openProject ?: return null
+        val stated = statedRoomHeight(heightM) ?: return null
+        if (stated == project.wallHeightM) return project
+        val updated = project.copy(wallHeightM = stated)
+        mutate(updated, onSaved)
         return updated
     }
 

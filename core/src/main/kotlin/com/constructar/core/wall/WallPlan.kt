@@ -202,6 +202,22 @@ data class WallPlan(
     val installations: InstallationPlan?,
     /** The most recent floor height the project carries, when it has one. */
     val floorHeightM: Float?,
+    /**
+     * The floor-to-ceiling height every wall in this plan was built at, in metres.
+     *
+     * One number for the drawing, the area, the boards, the studs and the ceiling zone, because
+     * two of them is how a picture ends up showing a 2.80 m wall while the purchase order is for a
+     * 2.50 m one (finding 227).
+     */
+    val wallHeightM: Float,
+    /**
+     * True when [wallHeightM] is the trade default because the room's own height is not stated.
+     *
+     * The screen prints the height either way; this flag is the difference between *"2.50 m"* and
+     * *"2.50 m, assumed"*, and a take-off that prints an assumption as a measurement is the one
+     * the fitter prices the job on.
+     */
+    val wallHeightAssumed: Boolean,
     /** How many openings were subtracted. */
     val openingsRecorded: Int,
     /** The openings themselves, in the order the project stores them - what a screen draws. */
@@ -248,7 +264,11 @@ data class WallPlan(
  */
 fun wallPlan(project: ProjectRecord, spec: DrywallSpec = DrywallSpec()): WallPlan {
     val scale = project.calibrationScale.toFloat().takeIf { it.isFinite() && it > 0f } ?: 1f
-    val walls = ringWalls(project.sketch, metresScale = scale)
+    // The room's own height, when the operator stated one inside the range a room can be; the
+    // trade default otherwise, and `wallHeightAssumed` carries which of the two this plan used.
+    val stated = statedRoomHeight(project.wallHeightM)
+    val wallHeightM = stated ?: DEFAULT_WALL_HEIGHT_M
+    val walls = ringWalls(project.sketch, metresScale = scale, heightM = wallHeightM)
     val openings = openingsByWall(project.openings)
     val surface = wallSurface(walls, openings)
     val drywall = estimateDrywall(surface, spec)
@@ -260,9 +280,11 @@ fun wallPlan(project: ProjectRecord, spec: DrywallSpec = DrywallSpec()): WallPla
         legacyFloorHeightM = project.floorHeightM,
     )
     val points: List<Vec3> = relative.points
-    // The ceiling zone is fixed by the height the walls were measured at, not by the assumed
-    // default: a room estimated at 2.80 m has its ceiling outlets at 2.65 m.
-    val ceilingHeightM = walls.firstOrNull()?.heightM ?: DEFAULT_WALL_HEIGHT_M
+    // The ceiling zone is fixed by the same height the walls were built at - not by
+    // `walls.first().heightM`, which is the same number only as long as one caller remembers to
+    // pass it, and not by the default either: a room estimated at 2.80 m has its ceiling outlets
+    // at 2.65 m (finding 227).
+    val ceilingHeightM = wallHeightM
     val installations = if (points.isEmpty()) {
         null
     } else {
@@ -274,6 +296,8 @@ fun wallPlan(project: ProjectRecord, spec: DrywallSpec = DrywallSpec()): WallPla
         drywall = drywall,
         installations = installations,
         floorHeightM = project.floorHeightM,
+        wallHeightM = wallHeightM,
+        wallHeightAssumed = stated == null,
         openingsRecorded = project.openings.size,
         openings = project.openings,
         openingsUnplaced = project.openings.count { it.wallIndex !in walls.indices },
