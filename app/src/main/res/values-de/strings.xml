@@ -296,6 +296,7 @@
     <string name="wall_openings">Abzüglich Öffnungen</string>
     <string name="wall_net">Nettofläche</string>
     <string name="wall_openings_none">Für diesen Raum sind noch keine Türen und Fenster erfasst, es wird also nichts abgezogen - die Bruttofläche ist nicht die, die du beplankst.</string>
+    <string name="wall_openings_unplaced">Öffnungen an einer Wand, die dieser Raum nicht mehr hat: %1$d. Stehen noch im Projekt, aber es wird keine Fläche dafür abgezogen - prüfe den Grundriss.</string>
     <string name="wall_elevation_title">Wände im Aufriss</string>
     <string name="wall_elevation_hint">Tippe auf die Wand, um die Stelle zu wählen, und füge dann Tür oder Fenster hinzu.</string>
     <string name="wall_opening_door">Tür</string>

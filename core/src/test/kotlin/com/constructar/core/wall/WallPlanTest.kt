@@ -365,6 +365,26 @@ class WallPlanTest {
     }
 
     @Test
+    fun `an opening whose wall is gone is counted, not silently dropped`() {
+        // A four-wall room and a door recorded against wall 5: `wallSurface` cannot subtract from
+        // a wall that does not exist, and the project file still holds the door. The count is what
+        // stops "3 openings" and "0.00 m² deducted" from being two unrelated facts on one screen.
+        val plan = wallPlan(
+            project(
+                openings = listOf(
+                    PlacedOpening.door(0, 1f),
+                    PlacedOpening.door(5, 1f),
+                ),
+            ),
+        )
+
+        assertEquals(4, plan.walls.size)
+        assertEquals(2, plan.openingsRecorded)
+        assertEquals(1, plan.openingsUnplaced)
+        assertEquals(1, plan.surface.lines.sumOf { it.openingsSubtracted })
+    }
+
+    @Test
     fun `a project file written before the floor and openings existed still loads`() {
         val json = Json {
             ignoreUnknownKeys = true

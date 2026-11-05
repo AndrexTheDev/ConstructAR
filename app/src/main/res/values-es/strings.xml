@@ -296,6 +296,7 @@
     <string name="wall_openings">Huecos descontados</string>
     <string name="wall_net">Superficie neta</string>
     <string name="wall_openings_none">Aún no hay puertas ni ventanas registradas en este cuarto, así que no se descuenta nada: la superficie bruta no es la que vas a forrar.</string>
+    <string name="wall_openings_unplaced">Aberturas registradas en una pared que esta sala ya no tiene: %1$d. Siguen en el proyecto, pero no se descuenta superficie por ellas: revisa el contorno.</string>
     <string name="wall_elevation_title">Paredes en alzado</string>
     <string name="wall_elevation_hint">Toca una pared para elegir el punto y añade una puerta o una ventana.</string>
     <string name="wall_opening_door">Puerta</string>

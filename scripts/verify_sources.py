@@ -4136,6 +4136,9 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
     if "R.string.wall_openings_none" not in screen_text:
         add(screen, "the screen deducts nothing without saying why - `0.00 m² openings` beside a "
                     "room with a door reads as a measured zero")
+    if "plan.openingsUnplaced" not in screen_text:
+        add(screen, "openings recorded on a wall the room no longer has are not counted - they are "
+                    "in the file, in the opening count, and not in the area (finding 225)")
     if "LengthFormatter" not in screen_text:
         add(screen, "the screen formats its own numbers - the app's one formatter owns the digits "
                     "and the decimal mark")
@@ -4162,6 +4165,7 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
         "wall_assumptions": ("%1$s", "%2$s", "%3$s", "%4$d"),
         "wall_zones_no_floor": (),
         "wall_openings_none": (),
+        "wall_openings_unplaced": ("%1$d",),
         "wall_elevation_title": (),
         "wall_elevation_a11y": ("%1$d", "%2$d"),
         "wall_elevation_spot_left": (),

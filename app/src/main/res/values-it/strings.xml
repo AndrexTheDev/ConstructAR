@@ -296,6 +296,7 @@
     <string name="wall_openings">Aperture detratte</string>
     <string name="wall_net">Superficie netta</string>
     <string name="wall_openings_none">In questa stanza non sono ancora registrate porte o finestre, quindi non si detrae nulla: la superficie lorda non è quella che rivestirai.</string>
+    <string name="wall_openings_unplaced">Aperture registrate su una parete che questa stanza non ha più: %1$d. Restano nel progetto, ma non viene sottratta superficie: controlla la pianta.</string>
     <string name="wall_elevation_title">Pareti in alzato</string>
     <string name="wall_elevation_hint">Tocca una parete per scegliere il punto, poi aggiungi una porta o una finestra.</string>
     <string name="wall_opening_door">Porta</string>

@@ -202,6 +202,18 @@ data class WallPlan(
     val openingsRecorded: Int,
     /** The openings themselves, in the order the project stores them - what a screen draws. */
     val openings: List<PlacedOpening> = emptyList(),
+    /**
+     * Openings whose wall is not in the ring any more.
+     *
+     * A `wallIndex` is an index into `ringWalls`, and the ring is rebuilt from the sketch on every
+     * read: close a gap by hand, add a corner, or reload a room whose outline changed, and an
+     * opening recorded against wall 5 of a four-wall room is a rectangle that describes no wall.
+     * `wallSurface` ignores it - correctly, it cannot subtract from a wall that does not exist -
+     * and the consequence is a door that is still in the project file, still printed in the
+     * opening count, and no longer in the area. Printing the number is the least a screen can do;
+     * silently losing a door from a take-off is how an order comes up short (finding 225).
+     */
+    val openingsUnplaced: Int = 0,
     /** Points that were classified into a zone. */
     val pointCount: Int,
     /** Points from a session whose floor was never measured - not classifiable, not dropped. */
@@ -260,6 +272,7 @@ fun wallPlan(project: ProjectRecord, spec: DrywallSpec = DrywallSpec()): WallPla
         floorHeightM = project.floorHeightM,
         openingsRecorded = project.openings.size,
         openings = project.openings,
+        openingsUnplaced = project.openings.count { it.wallIndex !in walls.indices },
         pointCount = points.size,
         foreignSessionPoints = relative.foreignSessionCount,
         noFloorPoints = relative.noFloorCount,

@@ -302,6 +302,7 @@
     <string name="wall_openings">Odjęte otwory</string>
     <string name="wall_net">Powierzchnia netto</string>
     <string name="wall_openings_none">W tym pokoju nie ma jeszcze zarejestrowanych drzwi ani okien, więc nic nie jest odjęte - powierzchnia brutto to nie ta, którą obłożysz.</string>
+    <string name="wall_openings_unplaced">Otwory zapisane na ścianie, której to pomieszczenie już nie ma: %1$d. Pozostają w projekcie, ale nie odlicza się za nie powierzchni - sprawdź obrys.</string>
     <string name="wall_elevation_title">Ściany w elewacji</string>
     <string name="wall_elevation_hint">Dotknij ściany, aby wybrać miejsce, a następnie dodaj drzwi lub okno.</string>
     <string name="wall_opening_door">Drzwi</string>

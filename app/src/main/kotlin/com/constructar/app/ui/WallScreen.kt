@@ -224,6 +224,16 @@ fun WallScreen(
                 stringResource(R.string.wall_area_m2, area(plan.surface.netAreaM2)),
                 emphasis = true,
             )
+            if (plan.openingsUnplaced > 0) {
+                // A door on a wall that no longer exists: still in the file, no longer in the
+                // area. Saying so is the difference between a take-off that is wrong and one that
+                // is wrong and admits it (finding 225).
+                Text(
+                    stringResource(R.string.wall_openings_unplaced, plan.openingsUnplaced),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             if (plan.openingsRecorded == 0) {
                 // 0.00 m² deducted is a fact about the record, not about the room: the walls have
                 // a door. Saying which one it is stops the reader from taking the gross area for
