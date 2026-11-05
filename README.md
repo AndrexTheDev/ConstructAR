@@ -468,6 +468,13 @@ gradle :app:assembleRelease              # the shipping artifact: R8 + resource 
 python3 scripts/verify_sources.py        # copyright notice / reflection / i18n gates, no SDK needed
 ```
 
+**16 KB pages (Android 15+).** The NDK build spells the alignment flags out
+(`-Wl,-z,max-page-size=16384`, `-Wl,-z,common-page-size=16384`) instead of trusting the toolchain's
+default, no source file in `:native-slam` assumes a 4 KB page (a gate forbids the literal and any
+`mmap`/`madvise`/aligned allocation that does not ask `sysconf(_SC_PAGESIZE)` first), and CI reads
+the result back: every `LOAD` segment of `libconstructar_slam.so` must be `0x4000` and the packaged
+APK must pass `zipalign -c -P 16 -v 4`.
+
 **Size is a feature.** The release APK is **25 MB** — R8 with resource shrinking, six locales
 instead of the eighty a dependency tree carries, no preview/tooling artifacts, and native
 libraries for one ABI instead of two (the second existed only for the emulator). `app/build.gradle.kts`

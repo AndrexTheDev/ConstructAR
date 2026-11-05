@@ -2761,7 +2761,11 @@ CMAKE_COMMANDS = {
     "add_executable", "add_library", "cmake_minimum_required", "constructar_locate_rtabmap",
     "else", "elseif", "endif", "find_library", "find_package", "foreach", "endforeach", "if",
     "include", "install", "message", "option", "project", "return", "set", "target_compile_definitions",
-    "target_compile_options", "target_include_directories", "target_link_libraries", "unset",
+    "target_compile_options", "target_include_directories", "target_link_libraries",
+    # Since finding 241: the 16 KB page-size flags are link options, and `target_link_options`
+    # (CMake 3.13+, this project requires 3.22.1) is the command that carries them. Adding a
+    # command to this set is a decision, which is why it is one line with a reason on it.
+    "target_link_options", "unset",
 }
 
 
@@ -4655,6 +4659,60 @@ def check_the_readme_states_the_locale_counts() -> None:
         )
 
 
+
+PAGE_SIZE_QUERY = re.compile(r"sysconf\s*\(\s*_SC_(?:PAGESIZE|PAGE_SIZE)\s*\)")
+PAGE_MAPPING = re.compile(r"\b(?:mmap|madvise|aligned_alloc|posix_memalign)\s*\(")
+HARDCODED_PAGE = re.compile(r"\b(?:4096|0x1000)\b")
+NATIVE_CPP = ROOT / "native-slam" / "src" / "main" / "cpp"
+
+
+def check_the_native_knows_no_page_size_of_its_own() -> None:
+    """A page is 16 KB on some Android 15 devices, and every 4 KB figure is a device assumption.
+
+    `mmap`, `madvise` and the aligned allocators all take a page-size-derived argument, and the
+    classic bug is a `4096` written by someone who measured one phone. It still works on every
+    4 KB device - which is nearly all of them - and fails only on the ones that ship 16 KB pages,
+    where the address handed to `madvise` is no longer page-aligned and the call returns `EINVAL`
+    that nothing reads. The same argument applies to the shared library itself, so this rule has
+    two halves: no page-size literal or unaligned page operation in our C++, and the 16 KB linker
+    flags spelled out in the NDK build rather than trusted to the toolchain's default.
+
+    Nothing in the tree does any of this today - the TSDF allocates through `std::vector` and the
+    volume never asks the kernel for pages - and that is exactly why the rule is written now: it
+    costs nothing while the code is clean and it is the only thing that will notice the day
+    somebody adds an `mmap` to speed up a buffer.
+    """
+    offenders = []
+    for path in sorted(NATIVE_CPP.rglob("*")):
+        if not path.is_file() or path.suffix not in {".cpp", ".hpp", ".h", ".cc"}:
+            continue
+        if "third_party" in path.parts:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if HARDCODED_PAGE.search(text):
+            offenders.append(path)
+            add(path, "a page size is written as a literal (4096 / 0x1000): Android 15 devices "
+                      "have 16 KB pages, so every such figure is one device's answer - ask the "
+                      "kernel with `sysconf(_SC_PAGESIZE)`")
+        if PAGE_MAPPING.search(text) and not PAGE_SIZE_QUERY.search(text):
+            offenders.append(path)
+            add(path, "maps or advises memory (mmap/madvise/aligned_alloc) without asking the "
+                      "kernel for the page size - a 4 KB-aligned address is not page-aligned on a "
+                      "16 KB device, and the EINVAL is silent")
+
+    cmake = NATIVE_CPP / "CMakeLists.txt"
+    if not cmake.exists():
+        return
+    build = cmake.read_text(encoding="utf-8")
+    for flag in ("-Wl,-z,max-page-size=16384", "-Wl,-z,common-page-size=16384"):
+        if flag not in build:
+            add(cmake, f"the 16 KB page-size linker flag `{flag}` is missing, so "
+                       f"libconstructar_slam.so ships with whatever alignment the toolchain felt "
+                       f"like and nothing notices until a 16 KB device or a Play upload")
+    if offenders and "sysconf" not in build:
+        return
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -4694,6 +4752,7 @@ def main() -> int:
     check_the_frame_solver_is_built_everywhere()
     check_the_squared_wall_keeps_its_distance()
     check_the_native_cmake_is_spelled_out()
+    check_the_native_knows_no_page_size_of_its_own()
     check_the_tag_decoder_is_vendored_and_credited()
     check_the_plane_fitter_is_reproducible()
     check_totals_are_sums_of_printed_rows()

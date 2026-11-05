@@ -245,6 +245,48 @@ jobs:
           python3 scripts/ci_test_report.py || true
           bash scripts/ci_annotate.sh /tmp/step.log "full gate failed" "$code"
 
+      - name: 16 KB page size - ELF alignment and APK zip alignment
+        # The linker flag in CMakeLists.txt is a claim until the ELF header is read back. Both
+        # checks are here rather than in the static gate because they need artifacts: the .so the
+        # NDK just built and the debug APK the gate just packaged. Android 15 introduced 16 KB
+        # pages; a .so with 4 KB LOAD alignment only works through a compatibility fallback, and
+        # Play refuses uploads that do not opt in.
+        run: |
+          set +e
+          (
+            set -e
+            so=$(find native-slam/build -name 'libconstructar_slam.so' | head -n 1)
+            [ -n "$so" ] || { echo "no libconstructar_slam.so was built"; exit 1; }
+            reader=""
+            for candidate in readelf llvm-readelf \
+                "${ANDROID_NDK_HOME:-/usr/local/lib/android/sdk/ndk/${NDK_VERSION}}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"; do
+              if command -v "$candidate" >/dev/null 2>&1; then reader="$candidate"; break; fi
+            done
+            [ -n "$reader" ] || { echo "no readelf available"; exit 1; }
+            echo "== $reader -lW $so"
+            bad=$("$reader" -lW "$so" | awk '$1 == "LOAD" && $NF != "0x4000"')
+            if [ -n "$bad" ]; then
+              echo "LOAD segments that are not 16 KB aligned:"
+              echo "$bad"
+              "$reader" -lW "$so" | grep '^  LOAD' || true
+              exit 1
+            fi
+            echo "every LOAD segment is 0x4000 (16 KB)"
+
+            apk=$(find app/build/outputs/apk/debug -name '*.apk' | head -n 1)
+            zipalign=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -name zipalign -print -quit 2>/dev/null || true)
+            [ -n "$apk" ] || { echo "no debug APK was built"; exit 1; }
+            if [ -z "$zipalign" ]; then
+              echo "zipalign not found - cannot check the APK (build-tools 35+ needed for -P 16)"
+              exit 1
+            fi
+            "$zipalign" -c -P 16 -v 4 "$apk" | tail -3
+            echo "APK is aligned for 16 KB pages"
+          ) > /tmp/step.log 2>&1
+          code=$?
+          cat /tmp/step.log
+          bash scripts/ci_annotate.sh /tmp/step.log "16 KB page-size check failed" "$code"
+
       - name: Release build - R8, resource shrink, six locales
         # The shipping artifact is the release APK and until this step existed nothing built it,
         # so a shrinking configuration that nothing runs is a configuration that rots. R8 is

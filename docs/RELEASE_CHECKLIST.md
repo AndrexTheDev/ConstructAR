@@ -26,7 +26,9 @@ Everything here is a gate before an APK reaches a site, in the order it should b
 - [ ] `versionCode` bumped, `versionName` matches the protocol PDF footer
 - [ ] R8: verify `NativeSlamEngine` natives, `com.google.ar.core.**`, `io.github.sceneview.**`
       and the kotlinx.serialization serializers survive (`app/proguard-rules.pro`)
-- [ ] 16 KB page-size compatible (`ndk { debugSymbolLevel }`, NDK r27+)
+- [ ] 16 KB page-size compatible: checked, not assumed - CI's *16 KB page size* step reads every
+  `LOAD` segment of `libconstructar_slam.so` back with `readelf` (expects `0x4000`) and runs
+  `zipalign -c -P 16 -v 4` over the debug APK (finding 241)
 
 ## 2. Licensing
 

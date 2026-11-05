@@ -98,6 +98,54 @@ run_suite() {
   fi
 }
 
+# ── 16 KB page sizes (Android 15+) ────────────────────────────────────────────────────────────
+# The NDK build sets `-Wl,-z,max-page-size=16384` (CMakeLists.txt), and that flag is a claim until
+# something reads the ELF back: the loader maps LOAD segments, so *those* are what must be 16 KB
+# aligned. This script runs on a laptop without an NDK, so the check is skipped there with the
+# reason printed - the CI step "16 KB page size" runs the same two commands where the artifacts
+# and the tools exist, and that is where a regression is caught.
+check_page_size() {
+  local so
+  so=$(find native-slam/build -name 'libconstructar_slam.so' -print -quit 2>/dev/null || true)
+  if [[ -z "$so" ]]; then
+    echo "== 16 KB pages: skipped (no NDK-built libconstructar_slam.so - :native-slam:assembleDebug builds it)"
+  else
+    local reader=""
+    for candidate in llvm-readelf readelf "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"; do
+      if [[ -n "$candidate" ]] && command -v "$candidate" >/dev/null 2>&1; then reader="$candidate"; break; fi
+    done
+    if [[ -z "$reader" ]]; then
+      echo "== 16 KB pages: skipped (no readelf on PATH and no NDK to borrow one from)"
+    else
+      local bad
+      bad=$("$reader" -lW "$so" | awk '$1 == "LOAD" && $NF != "0x4000"')
+      if [[ -n "$bad" ]]; then
+        echo "libconstructar_slam.so has a LOAD segment that is not 16 KB aligned:" >&2
+        echo "$bad" >&2
+        exit 1
+      fi
+      echo "== 16 KB pages: every LOAD segment of libconstructar_slam.so is 0x4000"
+    fi
+  fi
+
+  local apk zipalign=""
+  apk=$(find app/build/outputs/apk -name '*.apk' -print -quit 2>/dev/null || true)
+  [[ -n "${ANDROID_HOME:-}" ]] && zipalign=$(find "$ANDROID_HOME/build-tools" -name zipalign -print -quit 2>/dev/null || true)
+  command -v zipalign >/dev/null 2>&1 && zipalign=$(command -v zipalign)
+  if [[ -z "$apk" ]]; then
+    echo "== 16 KB pages: skipped the APK check (no APK built here)"
+  elif [[ -z "$zipalign" ]]; then
+    echo "== 16 KB pages: skipped the APK check (no zipalign; needs build-tools 35+ for -P 16)"
+  else
+    if ! "$zipalign" -c -P 16 -v 4 "$apk" >/dev/null 2>&1; then
+      echo "$apk is not aligned for 16 KB pages:" >&2
+      "$zipalign" -c -P 16 -v 4 "$apk" >&2 || true
+      exit 1
+    fi
+    echo "== 16 KB pages: $(basename "$apk") is zipaligned for 16 KB (-P 16)"
+  fi
+}
+
 if [[ "${1:-}" == "--tsan" ]]; then
   if ! command -v g++ >/dev/null 2>&1; then
     echo "FAIL: --tsan needs g++ with libtsan, and g++ is not installed" >&2
@@ -131,4 +179,5 @@ for compiler in "${compilers[@]}"; do
     run_suite "$binary" "${compiler//+/p}$optimisation"
   done
 done
+check_page_size
 echo "== native host suite passed"

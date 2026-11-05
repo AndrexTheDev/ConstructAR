@@ -118,6 +118,22 @@ target_link_libraries(constructar_slam
     jnigraphics
 )
 
+# ── 16 KB page sizes (Android 15+) ──────────────────────────────────────────────────────────────
+# A device with 16 KB pages cannot map a shared library whose LOAD segments are aligned to 4 KB
+# without the compatibility fallback, and Play rejects new submissions that do not opt in. NDK r27+
+# aligns 16 KB by default, but "the toolchain does it" is a claim, not a build setting: the flags
+# are spelled out here, and `tools/verify-native.sh` plus CI's "16 KB page size" step read the
+# result back off the built .so with `readelf` - the only proof is the ELF header itself.
+#
+# Guarded on ANDROID because the host test binary is an ordinary Linux executable: `-z max-page-size`
+# means something else there, and the suite this repository runs on a laptop is not an APK.
+if(ANDROID)
+    target_link_options(constructar_slam PRIVATE
+        "-Wl,-z,max-page-size=16384"
+        "-Wl,-z,common-page-size=16384"
+    )
+endif()
+
 if(CONSTRUCTAR_WITH_RTABMAP)
   # The layout is detected rather than assumed (finding 110): upstream keeps the headers in
   # `corelib/include`, not `core/include`, and the archives are in `build/bin` only for an
