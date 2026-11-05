@@ -1,3 +1,9 @@
+<!--
+  Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+  All rights reserved. Proprietary and confidential - see LICENSE.
+  SPDX-License-Identifier: LicenseRef-Proprietary
+-->
+
 # Performance notes and measurements
 
 All numbers below were measured **in this repository's CI sandbox** (x86-64 VM, `g++ -O3`,

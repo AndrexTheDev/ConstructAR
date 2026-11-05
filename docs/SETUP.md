@@ -1,3 +1,9 @@
+<!--
+  Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+  All rights reserved. Proprietary and confidential - see LICENSE.
+  SPDX-License-Identifier: LicenseRef-Proprietary
+-->
+
 # Setup — from a clean machine to a building APK
 
 This document is the step-by-step guide the brief asked for: toolchain, Gradle, CMake/NDK,

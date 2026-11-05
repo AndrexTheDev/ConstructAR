@@ -21,6 +21,25 @@
     <string name="home_cancel">Cancelar</string>
     <string name="home_empty">Aún no hay estancias. Crea una para empezar a medir.</string>
     <string name="home_offline_note">Funciona totalmente sin conexión. Nada sale de este teléfono.</string>
+    <string name="card_close_room">Cerrar la estancia</string>
+    <string name="card_close_title">¿Cerrar la estancia?</string>
+    <string name="card_close_body">El escaneo no cerró el contorno de esta estancia: una puerta o una pared de cristal. Si el hueco cuenta como pared, la estancia obtiene superficie, perímetro e imagen. La pared de cierre se marca como trazada a mano.</string>
+    <string name="card_close_confirm">Contar como pared</string>
+    <string name="card_closed_by_hand">muro a mano</string>
+    <string name="pdf_floorplan_title">Plano de la estancia</string>
+    <string name="pdf_floorplan_by_hand">La pared de cierre se trazó a mano, no se midió.</string>
+    <string name="a11y_signature_pad">Campo de firma. Dibuja la firma del cliente con un dedo.</string>
+    <string name="a11y_signature_signed">Firmado</string>
+    <string name="a11y_signature_empty">Aún sin firmar</string>
+    <string name="a11y_signature_clear">Borrar la firma</string>
+    <string name="a11y_ar_view">Vista de la cámara</string>
+    <string name="a11y_ar_place_point">Fijar el punto de medición en el centro de la pantalla</string>
+    <string name="snap_corner">Alineado con la esquina · %1$s cm de desplazamiento</string>
+    <string name="snap_floor_edge">Alineado con el borde del suelo · %1$s cm de desplazamiento</string>
+    <string name="snap_ceiling_edge">Alineado con el borde del techo · %1$s cm de desplazamiento</string>
+    <string name="snap_edge">Alineado con el borde del plano · %1$s cm de desplazamiento</string>
+    <string name="card_area">%1$s m²</string>
+    <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Exportar</string>
 
     <!-- AR measuring screen -->
@@ -262,6 +281,36 @@
     <string name="materials_button">Material y pedido</string>
     <string name="materials_intro">Agrupado por tipo: así se compra. Las cantidades incluyen la reserva de obra.</string>
     <string name="materials_empty">Aún no hay recorridos medidos: nada que pedir.</string>
+
+    <!-- Walls, drywall take-off and installation zones (finding 214). -->
+    <string name="wall_title">Paredes y pladur</string>
+    <string name="wall_open">Paredes</string>
+    <string name="wall_empty">Este cuarto aún no tiene un contorno cerrado. Un despiece necesita el anillo completo: cierra primero el hueco en la ficha del proyecto.</string>
+    <string name="wall_row">Pared %1$d · %2$s · %3$s</string>
+    <string name="wall_length_m">%1$s m</string>
+    <string name="wall_area_m2">%1$s m²</string>
+    <string name="wall_surface_title">Superficie de pared</string>
+    <string name="wall_gross">Bruto</string>
+    <string name="wall_openings">Huecos descontados</string>
+    <string name="wall_net">Superficie neta</string>
+    <string name="wall_openings_none">Aún no hay puertas ni ventanas registradas en este cuarto, así que no se descuenta nada: la superficie bruta no es la que vas a forrar.</string>
+    <string name="wall_drywall_title">Despiece de pladur</string>
+    <string name="wall_boards">Placas a comprar</string>
+    <string name="wall_boards_value">%1$d (%2$d antes de merma)</string>
+    <string name="wall_studs">Montantes</string>
+    <string name="wall_stud_profile">Perfil montante</string>
+    <string name="wall_track_profile">Perfil guía</string>
+    <string name="wall_screws">Tornillos</string>
+    <string name="wall_assumptions">Supuestos: placas de %1$s × %2$s m, montantes cada %3$s m, merma %4$d %%.</string>
+    <string name="wall_zones_title">Zonas de instalación (DIN 18015)</string>
+    <string name="wall_zones_points">Puntos medidos</string>
+    <string name="wall_zones_sockets">Enchufes</string>
+    <string name="wall_zones_switches">Interruptores</string>
+    <string name="wall_zones_ceiling">Salidas de techo</string>
+    <string name="wall_zones_rejected">Fuera de toda zona</string>
+    <string name="wall_zones_ceiling_unavailable">El cuarto es demasiado bajo para una salida de techo.</string>
+    <string name="wall_zones_hint">Enchufes a 30 cm, interruptores a 105 cm, salidas de techo a 15 cm del techo.</string>
+    <string name="wall_zones_no_floor">Todavía no se ha detectado el suelo en este cuarto, así que no hay desde dónde medir una altura. Recorre el cuarto en RA una vez y aparecerán las zonas.</string>
     <string name="materials_net">%1$s neto</string>
     <string name="materials_waste">más %1$d %% de reserva</string>
     <string name="materials_bend_deduction">Descuento por curva %1$s</string>

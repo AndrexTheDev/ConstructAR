@@ -6,7 +6,6 @@
 
 package com.constructar.nativebridge
 
-import com.constructar.core.geo.DepthIntrinsics
 import com.constructar.core.math.Aabb
 import com.constructar.core.mesh.MeshData
 import com.constructar.core.math.Vec3

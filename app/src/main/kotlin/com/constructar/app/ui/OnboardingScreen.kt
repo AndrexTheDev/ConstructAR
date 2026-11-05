@@ -43,7 +43,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.constructar.app.R
-import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 
 /**

@@ -99,6 +99,12 @@ class HitStabilizer(
         if (!reading.settled || point == null) return hit
         // Only the position is replaced: the tier, its confidence and the surface kind are
         // properties of the hit that produced the window, and averaging must never upgrade them.
+        //
+        // The snap record survives on purpose. It describes what the cascade did to the aimed
+        // point - "this was pulled onto a corner, 4.2 cm" - and every sample in a settled window
+        // was snapped to that same feature, so the median of them is still the corner within the
+        // window's own spread. Clearing it here would erase the only evidence the operator was
+        // moved, and the HUD reads the record from the unsettled hit anyway (finding 213).
         return hit.copy(point = point)
     }
 

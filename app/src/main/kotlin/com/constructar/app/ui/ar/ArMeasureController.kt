@@ -100,6 +100,14 @@ class ArMeasureController(private val context: Context) {
     val lastHit: MutableStateFlow<HitResolution?> = MutableStateFlow(null)
 
     /**
+     * The floor the session has seen, in its own coordinates, or `null` while none has been.
+     *
+     * A tap into a doorway is not evidence that the floor went away, so the last height that a
+     * tracked plane produced is kept; the screen stores it on the project (finding 214).
+     */
+    val floorHeight: MutableStateFlow<Float?> = MutableStateFlow(null)
+
+    /**
      * State of the reticle's sample window: whether the point under the crosshair has settled
      * to a centimetre yet. The HUD says "hold steady" until it has, and the committed node is
      * the window's median rather than one noisy frame.
@@ -306,6 +314,7 @@ class ArMeasureController(private val context: Context) {
         val resolution = mutableHitEvents.value ?: return null
         mutableHitEvents.value = null
         lastHit.value = resolution
+        resolution.floorHeightM?.let { height -> floorHeight.value = height }
         val hit = resolution.hit
         if (hit == null) {
             // Tap into nothing: the window is stale, and keeping it would let a later tap
@@ -419,6 +428,16 @@ class ArMeasureController(private val context: Context) {
         renderer = null
         sceneController = null
     }
+
+    /**
+     * The room's card picture, taken while the volume is still alive.
+     *
+     * Called when a run is committed, because that is the moment the operator has finished the room
+     * and the volume still holds the walls he walked; after `release()` the volume is gone and the
+     * picture could only be invented. Delegates to the scan worker (see
+     * `TsdfScanPipeline.floorplan`), which is the only thread allowed to touch the volume.
+     */
+    fun finalFloorplan(): com.constructar.nativebridge.FloorplanPayload? = pipeline.floorplan()
 
     /** Scan statistics for the protocol header: two numbers, both measured (finding 103). */
     fun scanSummary(): ScanSummary {

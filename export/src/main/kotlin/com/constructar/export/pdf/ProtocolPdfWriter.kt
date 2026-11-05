@@ -10,6 +10,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
@@ -113,6 +114,15 @@ class ProtocolPdfWriter(
          * could be built for them; the export side knows them, the project record does not.
          */
         val unbuildableRuns: List<String> = emptyList(),
+        /**
+         * The room's plan, printed on its own page before the signature.
+         *
+         * Drawn from the outline the app stores in the project - the same ring the home card draws
+         * and the same one `thumbnail.svg` is made from - so the page a customer files shows the
+         * room the phone shows. `null` for a room without a closed outline, and the document then
+         * simply has no plan page rather than an empty frame.
+         */
+        val floorplan: FloorplanSection? = null,
         /**
          * The site file, already localised and formatted by the caller: customer block, working
          * time, diary, defects. Printed after the material table, before the signature page.
@@ -486,6 +496,11 @@ class ProtocolPdfWriter(
                 document.finishPage(page)
             }
 
+            content.floorplan?.let { section ->
+                pageNumber += 1
+                drawFloorplanPage(document, pageNumber, section, content)
+            }
+
             content.signature?.let { signature ->
                 pageNumber += 1
                 drawSignaturePage(document, pageNumber, signature, content)
@@ -495,6 +510,69 @@ class ProtocolPdfWriter(
         } finally {
             document.close()
         }
+    }
+
+    /**
+     * The room's plan on a page of its own.
+     *
+     * The drawing is [FloorplanLayout]'s work - one scale, centred, world `z` down, a physical wall -
+     * and this method only puts ink on paper: a grey floor, a wall stroke of the layout's width, the
+     * caller's caption and note underneath. A page that cannot be laid out (three corners are the
+     * least a room can have) is still printed with its caption rather than as an empty frame.
+     */
+    private fun drawFloorplanPage(
+        document: PdfDocument,
+        pageNumber: Int,
+        section: FloorplanSection,
+        content: Content,
+    ) {
+        val page = newPage(document, pageNumber)
+        var y = drawSectionTitle(page.canvas, section.title, MARGIN)
+        y += 8
+        val width = (pageWidth - 2 * MARGIN).toFloat()
+        // What is left for the drawing after the heading, the caption, the note and the footer.
+        val height = (pageHeight - FOOTER_HEIGHT - y - 46).toFloat()
+        val layout = FloorplanLayout.of(section.corners, MARGIN.toFloat(), y.toFloat(), width, height)
+        if (layout != null) {
+            val path = Path()
+            val first = layout.points.first()
+            path.moveTo(first.first, first.second)
+            for (index in 1 until layout.points.size) {
+                val point = layout.points[index]
+                path.lineTo(point.first, point.second)
+            }
+            path.close()
+            page.canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = FLOOR_FILL })
+            page.canvas.drawPath(
+                path,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.BLACK
+                    style = Paint.Style.STROKE
+                    strokeWidth = layout.wallWidthPoints
+                    strokeJoin = Paint.Join.MITER
+                },
+            )
+        }
+        y = pageHeight - FOOTER_HEIGHT - 34
+        if (section.caption.isNotBlank()) {
+            page.canvas.drawText(
+                ellipsize(section.caption, pageWidth - 2 * MARGIN),
+                MARGIN.toFloat(),
+                y.toFloat(),
+                textPaint,
+            )
+            y += 13
+        }
+        if (section.note.isNotBlank()) {
+            page.canvas.drawText(
+                ellipsize(section.note, pageWidth - 2 * MARGIN),
+                MARGIN.toFloat(),
+                y.toFloat(),
+                subtitlePaint,
+            )
+        }
+        drawFooter(page.canvas, pageNumber, content)
+        document.finishPage(page)
     }
 
     /** Signature, rule and caption on a page of their own. */
@@ -678,6 +756,9 @@ class ProtocolPdfWriter(
     private fun format(meters: Float): String = String.format(Locale.ROOT, "%.2f", meters)
 
     companion object {
+
+        /** The floor of the plan: light enough that the wall stroke is the dark thing on paper. */
+        private const val FLOOR_FILL: Int = 0xFFEDEDED.toInt()
         /** A4 at 72 dpi, the unit `PdfDocument` uses. */
         const val A4_WIDTH = 595
         const val A4_HEIGHT = 842

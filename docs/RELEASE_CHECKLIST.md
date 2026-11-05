@@ -1,3 +1,9 @@
+<!--
+  Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+  All rights reserved. Proprietary and confidential - see LICENSE.
+  SPDX-License-Identifier: LicenseRef-Proprietary
+-->
+
 # Release checklist
 
 Everything here is a gate before an APK reaches a site, in the order it should be done.
@@ -29,6 +35,11 @@ Everything here is a gate before an APK reaches a site, in the order it should b
       the Help screen shows the developer note. `python3 scripts/verify_sources.py` prints the
       reminder on every run
 - [ ] `LICENSE` present and unmodified (All Rights Reserved — see `docs/LICENSING.md`)
+- [ ] Every authored file, and every page the site generator writes, states the copyright notice:
+      `python3 tools/build_site.py && python3 scripts/verify_sources.py` reports `OK`. The notice
+      for the published pages comes from `tools/build_site.py` (`NOTICE_HTML` and the manifest's
+      `copyright` member), never from a comment pasted into `docs/` — the next build overwrites it
+      (finding 215)
 - [ ] In-app "Licences" screen lists SceneView, Filament, ARCore, LiteRT, RTAB-Map, Depth Anything V2 Small
       (Help → *Third-party components*, rendered from `:core` `ThirdPartyNotices`, mirrored in
       `NOTICE` and reproduced in full under `licenses/`; `scripts/verify_sources.py` rule 20 checks

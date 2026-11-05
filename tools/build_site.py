@@ -36,6 +36,18 @@ REPO_URL = "https://github.com/AndrexTheDev/ConstructAR"
 EMAIL = "hippie.highho@gmail.com"
 DEVELOPER = "AndrexTheDev"
 
+# The notice every generated file carries. It is emitted *here* and not pasted into `docs/`:
+# `main()` rewrites every page on every run, so a hand-added comment would last exactly until the
+# next build - which is why the two published artefacts a stranger keeps (the 404 page and the web
+# manifest a browser installs) had none at all while the sources did (finding 215).
+NOTICE_HTML = (
+    "<!--\n"
+    f"  Copyright (c) 2026 {DEVELOPER} <{EMAIL}>\n"
+    "  All rights reserved. Proprietary and confidential - see LICENSE.\n"
+    "  SPDX-License-Identifier: LicenseRef-Proprietary\n"
+    "-->\n"
+)
+
 LANGS = ["en", "de", "es", "fr", "it", "pl"]
 LANG_NAMES = {"en": "English", "de": "Deutsch", "es": "Español", "fr": "Français", "it": "Italiano", "pl": "Polski"}
 OG_LOCALES = {"en": "en_GB", "de": "de_DE", "es": "es_ES", "fr": "fr_FR", "it": "it_IT", "pl": "pl_PL"}
@@ -489,7 +501,7 @@ def page(lang: str) -> str:
         for other in LANGS if other != lang
     )
 
-    return f"""<!DOCTYPE html>
+    return NOTICE_HTML + f"""<!DOCTYPE html>
 <html lang="{lang}">
 <head>
 <meta charset="utf-8">
@@ -776,7 +788,7 @@ def not_found() -> str:
         f'<a href="{url_for(code)}" hreflang="{code}">{LANG_NAMES[code]}</a></p>'
         for code, title, line in headings
     )
-    return f"""<!DOCTYPE html>
+    return NOTICE_HTML + f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -814,6 +826,10 @@ def manifest() -> str:
     and because a missing manifest is a console error on every visit.
     """
     data = {
+        # A web manifest has no comment syntax. An unknown member is explicitly ignored by the
+        # spec, so the notice travels in the file a browser stores when the page is installed
+        # instead of being absent from it (finding 215).
+        "copyright": f"Copyright (c) 2026 {DEVELOPER} <{EMAIL}>",
         "name": "ConstructAR",
         "short_name": "ConstructAR",
         "description": CONTENT["en"]["meta_desc"],

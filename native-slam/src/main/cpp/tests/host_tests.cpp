@@ -15,6 +15,8 @@
 //       native-slam/src/main/cpp/geometry/manhattan_world.cpp
 //       native-slam/src/main/cpp/calibration/tag_scale.cpp
 //       native-slam/src/main/cpp/geometry/plane_fit.cpp
+//       native-slam/src/main/cpp/geometry/floorplan.cpp
+//       native-slam/src/main/cpp/geometry/surface_mask.cpp
 //       native-slam/src/main/cpp/slam/rtabmap_bridge.cpp
 //       native-slam/src/main/cpp/tests/host_tests.cpp -o /tmp/constructar_host_tests
 //   /tmp/constructar_host_tests
@@ -37,7 +39,9 @@
 
 #include "../calibration/tag_scale.hpp"
 #include "../core/types.hpp"
+#include "../geometry/floorplan.hpp"
 #include "../geometry/manhattan_world.hpp"
+#include "../geometry/surface_mask.hpp"
 #include "../geometry/plane_fit.hpp"
 #include "../slam/pose_graph.hpp"
 #include "../slam/rtabmap_bridge.hpp"
@@ -70,7 +74,14 @@ using constructar::Mat3;
 using constructar::PoseGraph;
 using constructar::TsdfConfig;
 using constructar::TsdfVolume;
+using constructar::Floorplan;
+using constructar::SlicePoint;
 using constructar::Vec3;
+using constructar::projectToFloor;
+using constructar::maskVerticalSurfaces;
+using constructar::OrientedPoint;
+using constructar::SurfaceMaskOptions;
+using constructar::WallMask;
 
 // ── Synthetic depth sources ───────────────────────────────────────────────────────────────
 
@@ -623,9 +634,11 @@ void testBlocksAllocatedPerFrame() {
  * ThreadSanitizer reports it as three races on those three lines, and what it loses is an
  * observation in the running average (finding 181).
  *
- * The identity this asserts is exact rather than statistical: a voxel's weight goes up by one for
- * every observation the volume accepted, so the sum over all voxels must equal the sum of
- * `voxelUpdates` over all frames. One lost update anywhere in the volume breaks it.
+ * The identity this asserts is exact rather than statistical: a voxel's weight goes up by exactly
+ * the weight the volume accepted, so the sum over all voxels must equal the sum of
+ * `IntegrationStats::voxelWeight` over all frames. One lost update anywhere in the volume breaks
+ * it. Since observations are weighted by 1/Z² the unit is "one observation at one metre", not a
+ * count: the sphere in this case sits at 2 m, so each of them is worth a quarter.
  *
  * It is not, on its own, the guard for the race: losing an update needs the two threads inside the
  * same three instructions, and eight workers over eight rounds did not manage that on this
@@ -643,9 +656,9 @@ void testVoxelFusionUnderConcurrency() {
   // One assertion for the whole sweep, not one per round: `verify_sources.py` holds the README's
   // native count to the number of `check` call sites, which is only honest as long as every call
   // site runs exactly once (finding 99).
-  size_t worstShortfall = 0;
-  size_t countedTotal = 0;
-  size_t storedTotal = 0;
+  double worstShortfall = 0.0;
+  double countedTotal = 0.0;
+  double storedTotal = 0.0;
   int worstRound = -1;
   for (int round = 0; round < kRounds; ++round) {
     TsdfConfig config;
@@ -653,26 +666,31 @@ void testVoxelFusionUnderConcurrency() {
     config.minConfidence = 0;
     config.workerThreads = 8;
     TsdfVolume volume(config);
-    size_t counted = 0;
+    double counted = 0.0;
     for (int frame = 0; frame < kFrames; ++frame) {
-      counted += static_cast<size_t>(volume.integrate(makeFrame(camera, depth, Mat4::identity()), 1).voxelUpdates);
+      counted += volume.integrate(makeFrame(camera, depth, Mat4::identity()), 1).voxelWeight;
     }
-    const size_t stored = volume.totalVoxelWeight();
+    const double stored = volume.totalVoxelWeightExact();
     countedTotal += counted;
     storedTotal += stored;
-    if (stored < counted) {
-      worstShortfall = std::max(worstShortfall, counted - stored);
+    if (counted - stored > worstShortfall) {
+      worstShortfall = counted - stored;
       worstRound = round;
     }
   }
-  check(worstShortfall == 0,
-        "every counted observation is in a voxel: " + std::to_string(storedTotal) + " stored of " +
-            std::to_string(countedTotal) + " counted over " + std::to_string(kRounds) + " rounds" +
+  // The weights are floats summed per voxel and stored as 1/256ths, so the two totals agree to a
+  // rounding error and not to the last bit.
+  const double tolerance = 1e-6 * countedTotal + 1e-9;
+  check(worstShortfall <= tolerance,
+        "every accepted observation's weight is in a voxel: " + std::to_string(storedTotal) +
+            " stored of " + std::to_string(countedTotal) + " accepted over " +
+            std::to_string(kRounds) + " rounds" +
             (worstRound < 0 ? std::string()
                             : ", round " + std::to_string(worstRound) + " lost " +
                                   std::to_string(worstShortfall)));
   check(storedTotal > countedTotal / 2,
-        "the sweep really exercised the volume: " + std::to_string(storedTotal) + " voxel observations");
+        "the sweep really exercised the volume: " + std::to_string(storedTotal) +
+            " observations of evidence");
 }
 
 /**
@@ -1310,6 +1328,492 @@ void testRtabMapBridgeWithoutTheBackEnd() {
   check(!bridge.isAvailable() && bridge.graphSize() == 0, "a reset leaves it unavailable and empty");
 }
 
+/**
+ * The waist-height slice, against a wall whose height is known.
+ *
+ * The camera is placed one metre up and two metres back from a fronto-parallel wall, so the wall
+ * stands from y = 0.04 m to 1.96 m and a slice at y = 1.0 m must cross it while a slice at 3.0 m
+ * finds nothing. That is the whole contract of `sliceSurfaceAtHeight`: points on the *surface* at
+ * the requested height, observed only, and no points from free or unobserved space.
+ */
+void testSurfaceSliceAtHeight() {
+  section("TSDF slice at waist height");
+  SyntheticCamera camera;
+  std::vector<uint16_t> depth(static_cast<size_t>(camera.width * camera.height), 2000);
+  TsdfConfig config;
+  config.voxelSize = 0.02f;
+  config.minConfidence = 0;
+  config.workerThreads = 1;
+  TsdfVolume volume(config);
+  const Mat4 cameraToWorld = Mat4::fromRotationTranslation(Mat3{}, Vec3(0.f, 1.f, 0.f));
+  volume.integrate(makeFrame(camera, depth, cameraToWorld), 2);
+
+  const std::vector<Vec3> slice = volume.sliceSurfaceAtHeight(1.0f, 0.05f);
+  check(slice.size() > 100, "waist-height slice covers the wall (" + std::to_string(slice.size()) +
+                                " voxels)");
+
+  double maxHeightError = 0.0;
+  double maxDepthError = 0.0;
+  float minX = 1e30f, maxX = -1e30f;
+  bool allFinite = true;
+  for (const Vec3& point : slice) {
+    allFinite = allFinite && std::isfinite(point.x) && std::isfinite(point.y) &&
+                std::isfinite(point.z);
+    maxHeightError = std::max(maxHeightError, std::fabs(static_cast<double>(point.y) - 1.0));
+    maxDepthError = std::max(maxDepthError, std::fabs(static_cast<double>(point.z) + 2.0));
+    minX = std::min(minX, point.x);
+    maxX = std::max(maxX, point.x);
+  }
+  check(allFinite, "every sliced point is finite");
+  // Half a voxel of slack: the slice keeps voxel centres, and a surface voxel's centre can sit
+  // half a voxel either side of the plane it belongs to.
+  checkNear(maxHeightError, 0.0, 0.06, "slice stays within the band it was asked for");
+  // A slice emits voxel *centres*, so a point sits up to a voxel either side of the surface it
+  // belongs to - the mesh interpolates its vertices onto the zero crossing, the slice deliberately
+  // does not (a fixed lattice is the point of slicing the volume instead of the mesh).
+  checkNear(maxDepthError, 0.0, 0.05, "sliced points sit on the wall plane");
+  checkNear(maxX - minX, 2.56, 0.15, "the slice spans the wall's visible width (m)");
+
+  check(volume.sliceSurfaceAtHeight(3.0f, 0.05f).empty(), "a slice above the wall is empty");
+  check(volume.sliceSurfaceAtHeight(1.0f, -0.05f).empty(), "a negative band is refused");
+  check(volume.sliceSurfaceAtHeight(std::nanf(""), 0.05f).empty(), "a NaN height is refused");
+  check(volume.sliceSurfaceAtHeight(1.0f, 0.05f).size() == slice.size(),
+        "two slices of one volume agree (no order dependence)");
+
+  TsdfVolume empty(config);
+  check(empty.sliceSurfaceAtHeight(1.0f, 0.05f).empty(), "an unintegrated volume slices to nothing");
+
+  // projectToFloor() is the seam between the slice and the floorplan: the height is dropped and
+  // the footprint is carried through unchanged.
+  const std::vector<SlicePoint> floor = projectToFloor(slice);
+  check(floor.size() == slice.size(), "projection keeps every point");
+  check(floor.empty() || (std::isfinite(floor[0].x) && std::isfinite(floor[0].z)),
+        "projected points carry a finite footprint");
+  bool footprintMatches = true;
+  for (size_t i = 0; i < floor.size(); ++i) {
+    footprintMatches = footprintMatches && floor[i].x == slice[i].x && floor[i].z == slice[i].z;
+  }
+  check(footprintMatches, "projection drops the height and nothing else");
+}
+
+/** Walls sampled every two centimetres along a polygon, the way a scan of that room would look. */
+std::vector<SlicePoint> sampleWallLoop(const std::vector<SlicePoint>& corners) {
+  std::vector<SlicePoint> point;
+  for (size_t i = 0; i < corners.size(); ++i) {
+    const SlicePoint a = corners[i];
+    const SlicePoint b = corners[(i + 1) % corners.size()];
+    const float dx = b.x - a.x;
+    const float dz = b.z - a.z;
+    const float length = std::sqrt(dx * dx + dz * dz);
+    const int steps = std::max(1, static_cast<int>(length / 0.02f));
+    for (int step = 0; step < steps; ++step) {
+      const float t = static_cast<float>(step) / static_cast<float>(steps);
+      point.push_back(SlicePoint{a.x + dx * t, a.z + dz * t});
+    }
+  }
+  return point;
+}
+
+double totalLength(const std::vector<constructar::WallSegment>& segments) {
+  double total = 0.0;
+  for (const auto& segment : segments) total += segment.length();
+  return total;
+}
+
+/**
+ * Slice points -> wall segments (`vectoriseFloorplan`).
+ *
+ * The tolerances are one-sided on purpose: the traced loop is the *outer* face of a surface band
+ * one cell wide, so every wall moves outward by up to a cell and the reported area is a little
+ * larger than the room - measured +1.25 % on a 4 x 3 m room, +1.7 % on an L. A result *below* the
+ * room would mean the loop lost a wall, which is a different bug, so the lower bound is tighter
+ * than the upper one.
+ */
+void testFloorplanVectorise() {
+  section("Floorplan: slice points to wall segments");
+
+  // A closed 4 x 3 m room: four walls, and nothing else.
+  const std::vector<SlicePoint> room =
+      sampleWallLoop({{0.f, 0.f}, {4.f, 0.f}, {4.f, 3.f}, {0.f, 3.f}});
+  const constructar::Floorplan plan = constructar::vectoriseFloorplan(room);
+  check(plan.valid, "a closed room vectorises");
+  check(plan.closed, "the room's loop closed");
+  check(plan.segments.size() == 4, "a rectangular room is four segments (" +
+                                       std::to_string(plan.segments.size()) + ")");
+  checkNear(plan.areaSquareMetres, 12.0, 0.3, "area of a 4 x 3 m room (m2)");
+  check(plan.areaSquareMetres >= 11.7, "the area is never below the room it encloses");
+  checkNear(plan.perimeterMetres, 14.0, 0.3, "perimeter of a 4 x 3 m room (m)");
+  checkNear(totalLength(plan.segments), plan.perimeterMetres, 1e-3,
+            "the segments add up to the perimeter");
+  check(plan.occupiedCells > 200, "the occupancy grid saw the walls (" +
+                                      std::to_string(plan.occupiedCells) + " cells)");
+  bool everyRunIsAWall = true;
+  for (const auto& segment : plan.segments) {
+    everyRunIsAWall = everyRunIsAWall && segment.length() >= 2.5f;
+  }
+  check(everyRunIsAWall, "every wall run is a wall, not a staircase step");
+
+  // Repeated runs must produce byte-identical output: the chainer's vertex keys are integers, so
+  // there is no epsilon to make two runs disagree.
+  const constructar::Floorplan again = constructar::vectoriseFloorplan(room);
+  bool identical = again.segments.size() == plan.segments.size();
+  for (size_t i = 0; identical && i < plan.segments.size(); ++i) {
+    identical = again.segments[i].start.x == plan.segments[i].start.x &&
+                again.segments[i].start.z == plan.segments[i].start.z &&
+                again.segments[i].end.x == plan.segments[i].end.x &&
+                again.segments[i].end.z == plan.segments[i].end.z;
+  }
+  check(identical, "two runs of the same scan produce the same outline");
+
+  // An L-shaped room: six corners, and the concave corner must survive simplification.
+  const std::vector<SlicePoint> ell = sampleWallLoop(
+      {{0.f, 0.f}, {4.f, 0.f}, {4.f, 2.f}, {2.f, 2.f}, {2.f, 4.f}, {0.f, 4.f}});
+  const constructar::Floorplan ellPlan = constructar::vectoriseFloorplan(ell);
+  check(ellPlan.valid, "an L-shaped room vectorises");
+  check(ellPlan.segments.size() == 6, "an L is six segments (" +
+                                          std::to_string(ellPlan.segments.size()) + ")");
+  checkNear(ellPlan.areaSquareMetres, 12.0, 0.4, "area of the L (m2)");
+
+  // A diagonal wall is a staircase of cells that touch only at their corners. Without resolving
+  // those pinches the loop breaks into bubbles and the room is reported as unclosed; this triangle
+  // is what pins that down.
+  const std::vector<SlicePoint> triangle = sampleWallLoop({{0.f, 0.f}, {5.f, 0.f}, {0.f, 3.5f}});
+  const constructar::Floorplan trianglePlan = constructar::vectoriseFloorplan(triangle);
+  check(trianglePlan.valid, "a room with a 45-degree wall vectorises");
+  check(trianglePlan.segments.size() == 3,
+        "the triangle is three segments (" + std::to_string(trianglePlan.segments.size()) + ")");
+  checkNear(trianglePlan.areaSquareMetres, 8.75, 0.4, "area of the 5 x 3.5 m triangle (m2)");
+
+  // A doorway leaves the waist-height ring open. Closing it would draw a wall across the door and
+  // report the area of a room that is not there, so the contract is: no area, no segments, and the
+  // scan still counted. When gap handling lands, this is the test that has to change.
+  std::vector<SlicePoint> doorway;
+  for (float x = 0.f; x <= 4.f + 1e-4f; x += 0.02f) {
+    if (x > 1.5f && x < 2.4f) continue;
+    doorway.push_back({x, 0.f});
+    doorway.push_back({x, 3.f});
+  }
+  for (float z = 0.f; z <= 3.f + 1e-4f; z += 0.02f) {
+    doorway.push_back({0.f, z});
+    doorway.push_back({4.f, z});
+  }
+  const constructar::Floorplan openPlan = constructar::vectoriseFloorplan(doorway);
+  check(!openPlan.valid, "a room with an open doorway is not reported as a closed floorplan");
+  check(!openPlan.closed, "an open ring is not claimed to be closed");
+  check(openPlan.areaSquareMetres == 0.f, "an open plan reports no area rather than a wrong one");
+  check(openPlan.segments.empty(), "an open plan reports no wall runs");
+  check(openPlan.occupiedCells > 200, "the doorway scan was still seen (" +
+                                          std::to_string(openPlan.occupiedCells) + " cells)");
+
+  // Nothing to vectorise, and input that is not a room at all.
+  const std::vector<SlicePoint> nothing;
+  check(!constructar::vectoriseFloorplan(nothing).valid, "no points is not a floorplan");
+  check(!constructar::vectoriseFloorplan(std::vector<SlicePoint>{{0.f, 0.f}}).valid,
+        "one point is not a floorplan");
+  std::vector<SlicePoint> twoWalls;
+  for (float x = 0.f; x <= 3.f + 1e-4f; x += 0.02f) {
+    twoWalls.push_back({x, 0.f});
+    twoWalls.push_back({x, 3.f});
+  }
+  const constructar::Floorplan partial = constructar::vectoriseFloorplan(twoWalls);
+  check(!partial.valid, "two walls cannot close a room");
+  check(partial.occupiedCells > 50, "the two walls were still seen");
+
+
+  std::vector<SlicePoint> poisoned = sampleWallLoop({{0.f, 0.f}, {2.f, 0.f}, {2.f, 2.f}});
+  poisoned.push_back({std::nanf(""), 1.f});
+  poisoned.push_back({1.f, std::nanf("")});
+  const constructar::Floorplan poisonedPlan = constructar::vectoriseFloorplan(poisoned);
+  check(poisonedPlan.valid, "a non-finite point does not destroy an otherwise valid plan");
+
+  // The primitives the pass is built on.
+  const std::vector<SlicePoint> square = {{0.f, 0.f}, {2.f, 0.f}, {2.f, 2.f}, {0.f, 2.f}};
+  checkNear(constructar::polygonArea(square), 4.0, 1e-4, "polygon area of a 2 x 2 square");
+  std::vector<SlicePoint> reversed(square.rbegin(), square.rend());
+  checkNear(constructar::polygonArea(reversed), -4.0, 1e-4, "reversed winding flips the sign");
+  const std::vector<SlicePoint> straight = constructar::simplifyRdp(
+      {{0.f, 0.f}, {1.f, 0.f}, {2.f, 0.f}, {3.f, 0.f}}, 0.01f);
+  check(straight.size() == 2, "a straight chain simplifies to its two ends (" +
+                                  std::to_string(straight.size()) + ")");
+  const std::vector<SlicePoint> corner = constructar::simplifyRdp(
+      {{0.f, 0.f}, {1.f, 0.f}, {2.f, 0.f}, {2.f, 2.f}}, 0.01f);
+  check(corner.size() == 3, "a corner is kept (" + std::to_string(corner.size()) + ")");
+
+  // Segment length filtering: a 2 x 2 m room with a 2 m minimum would keep nothing.
+  constructar::FloorplanOptions coarse;
+  coarse.minSegmentMetres = 3.0f;
+  check(!constructar::vectoriseFloorplan(
+             sampleWallLoop({{0.f, 0.f}, {2.f, 0.f}, {2.f, 2.f}, {0.f, 2.f}}), coarse)
+             .valid,
+        "a room whose walls are all below the minimum segment length is not a floorplan");
+}
+
+/**
+ * The JNI payload is the one place where C++ and Kotlin have to agree without either compiler
+ * seeing the other. Every failure here is silent in the product: a header that is one float short
+ * makes every segment read a loop length, and the room on the home screen becomes a different room
+ * with plausible numbers. So the layout is pinned value by value.
+ */
+void testFloorplanPayload() {
+  section("Floorplan: the JNI payload");
+
+  check(constructar::kFloorplanPayloadHeader == 8,
+        "the payload header is eight floats (Kotlin's FloorplanPayload.HEADER)");
+
+  constructar::Floorplan plan;
+  plan.valid = true;
+  plan.closed = true;
+  plan.areaSquareMetres = 12.f;
+  plan.perimeterMetres = 14.f;
+  plan.occupiedCells = 431;
+  plan.segments.push_back({{0.f, 0.f}, {4.f, 0.f}});
+  plan.segments.push_back({{4.f, 0.f}, {4.f, 3.f}});
+  plan.outline = {{0.f, 0.f}, {4.f, 0.f}, {4.f, 3.f}, {0.f, 3.f}};
+  plan.loopLengths = {4};
+  plan.loopClosed = {1};
+
+  const std::vector<float> payload = constructar::packFloorplanPayload(plan);
+  const size_t header = static_cast<size_t>(constructar::kFloorplanPayloadHeader);
+  check(payload.size() == header + 2 * 4 + 1 * 2 + 4 * 2,
+        "payload length is header + 4 per segment + 2 per loop + 2 per outline point");
+  check(payload[0] == 1.f && payload[1] == 1.f, "valid and closed lead the payload");
+  checkNear(payload[2], 12.0, 1e-6, "area at [2]");
+  checkNear(payload[3], 14.0, 1e-6, "perimeter at [3]");
+  check(payload[4] == 2.f && payload[5] == 1.f && payload[6] == 4.f && payload[7] == 431.f,
+        "segmentCount, loopCount, pointCount and occupiedCells at [4..7]");
+  check(payload[header] == 0.f && payload[header + 1] == 0.f && payload[header + 2] == 4.f &&
+            payload[header + 3] == 0.f,
+        "the first segment is startX, startZ, endX, endZ");
+  check(payload[header + 4] == 4.f && payload[header + 7] == 3.f,
+        "the second segment follows immediately and keeps its own end");
+  const size_t loopsAt = header + 8;
+  check(payload[loopsAt] == 4.f && payload[loopsAt + 1] == 1.f,
+        "the loop length comes first, then its closure flag");
+  const size_t outlineAt = loopsAt + 2;
+  check(payload[outlineAt] == 0.f && payload[outlineAt + 1] == 0.f &&
+            payload[outlineAt + 5] == 3.f,
+        "the outline follows as x/z pairs in order");
+
+  // A closure array shorter than the length array is padded open rather than read past its end.
+  constructar::Floorplan ragged = plan;
+  ragged.loopLengths = {4, 4};
+  ragged.loopClosed = {1};
+  const std::vector<float> padded = constructar::packFloorplanPayload(ragged);
+  const size_t raggedLoops = header + ragged.segments.size() * 4;
+  check(padded.size() == header + 8 + 4 + 8, "a second loop widens the payload by four floats");
+  check(padded[raggedLoops] == 4.f && padded[raggedLoops + 1] == 4.f,
+        "both loop lengths are written");
+  check(padded[raggedLoops + 2] == 1.f && padded[raggedLoops + 3] == 0.f,
+        "a missing closure flag is padded open, not skipped");
+
+  // An empty volume still produces a well-formed header, so the Kotlin side can say "no plan"
+  // from the same array shape it always gets.
+  const std::vector<float> bare = constructar::packFloorplanPayload(constructar::Floorplan{});
+  check(bare.size() == header, "an empty plan is a bare header");
+  check(bare[0] == 0.f && bare[1] == 0.f && bare[4] == 0.f,
+        "an empty plan says invalid, unclosed and carries no segments");
+}
+
+/**
+ * Observations are weighted by their range (1/Z²).
+ *
+ * A depth camera's error grows with range, so the running average in a voxel should not treat the
+ * same wall seen once from across the room and fifty times from arm's length as fifty-one equal
+ * opinions. Before this the increment was a flat one, so a wall re-measured from across the room
+ * carried the same authority as one measured at arm's length.
+ *
+ * Two things are pinned here. The arithmetic: one metre weighs one, four metres a sixteenth (and
+ * a quarter of a metre cannot outvote a frame). And the wiring: the evidence a frame deposits per
+ * voxel-write is exactly that number, so a weighting that never reaches `fuseVoxel` - the helper
+ * correct, the integration unchanged - fails the second half.
+ */
+void testObservationWeight() {
+  section("TSDF: observations are weighted by their range");
+  checkNear(TsdfVolume::observationWeight(1.f), 1.0, 1e-6, "one metre weighs one observation");
+  checkNear(TsdfVolume::observationWeight(2.f), 0.25, 1e-6, "two metres weighs a quarter");
+  checkNear(TsdfVolume::observationWeight(4.f), 1.0 / 16.0, 1e-6, "four metres weighs a sixteenth");
+  checkNear(TsdfVolume::observationWeight(0.5f), 4.0, 1e-6, "half a metre is clamped at four");
+  checkNear(TsdfVolume::observationWeight(0.2f), 4.0, 1e-6, "closer still stays at the clamp");
+  checkNear(TsdfVolume::observationWeight(6.f), 1.0 / 36.0, 1e-6,
+            "the far limit is clamped at 1/36");
+  checkNear(TsdfVolume::observationWeight(9.f), 1.0 / 36.0, 1e-6, "past the far limit too");
+  check(TsdfVolume::observationWeight(0.f) == 0.f, "no range, no weight");
+  check(TsdfVolume::observationWeight(std::nanf("")) == 0.f, "a NaN range is refused");
+  bool monotone = true;
+  for (float z = 0.6f; z < 5.9f; z += 0.1f) {
+    monotone = monotone &&
+               TsdfVolume::observationWeight(z) >= TsdfVolume::observationWeight(z + 0.1f);
+  }
+  check(monotone, "the weight never rises with range inside the integration band");
+
+  // The weight has to reach the volume and not just the helper: the same wall integrated from 4 m
+  // holds a sixteenth of the evidence per voxel that it holds from 1 m. (Fractional weights are
+  // why the block's 16-bit weight array became fixed point - see `TsdfVolume::kWeightScale`.)
+  SyntheticCamera camera;
+  // A volume is not copyable (it owns shards and a mutex), so this is measured, not returned.
+  const auto weightOfWallAt = [&camera](float depthMetres) {
+    std::vector<uint16_t> depth(static_cast<size_t>(camera.width * camera.height),
+                                static_cast<uint16_t>(depthMetres * 1000.f));
+    TsdfConfig config;
+    config.voxelSize = 0.02f;
+    config.minConfidence = 0;
+    config.workerThreads = 1;
+    TsdfVolume volume(config);
+    volume.integrate(makeFrame(camera, depth, Mat4::identity()), 2);
+    return volume.totalVoxelWeightExact();
+  };
+  const double nearWall = weightOfWallAt(1.0f);
+  const double farWall = weightOfWallAt(4.0f);
+  const double nearWallEvidence = nearWall;
+  const double farWallEvidence = farWall;
+  check(nearWallEvidence > 100.0 && farWallEvidence > 100.0,
+        "both walls were integrated (" + std::to_string(nearWallEvidence) + " and " +
+            std::to_string(farWallEvidence) + " observations of evidence)");
+  // The 4 m wall subtends a quarter of the area, so its raw count is lower anyway; what pins the
+  // weighting is the *per-observation* value, which is a sixteenth at 4 m and one at 1 m.
+  check(nearWallEvidence > 8.0 * farWallEvidence,
+        "a wall at 1 m holds more than eight times the evidence of the same one at 4 m");
+  check(farWallEvidence > nearWallEvidence / 32.0,
+        "and less than a thirty-second, so the ratio is the sixteen of 1/Z² and not zero");
+
+  // What an observation deposits, exactly: the wall's total evidence divided by the number of
+  // writes is the 1/Z² of the frame that made them. This is the identity that fails the moment the
+  // weighting is removed from the integration path - a flat weight gives 1.0 at every range.
+  const auto evidencePerWrite = [&camera](float depthMetres) {
+    std::vector<uint16_t> depth(static_cast<size_t>(camera.width * camera.height),
+                                static_cast<uint16_t>(depthMetres * 1000.f));
+    TsdfConfig config;
+    config.voxelSize = 0.02f;
+    config.minConfidence = 0;
+    config.workerThreads = 1;
+    TsdfVolume volume(config);
+    const auto stats = volume.integrate(makeFrame(camera, depth, Mat4::identity()), 2);
+    return stats.voxelUpdates > 0 ? volume.totalVoxelWeightExact() / stats.voxelUpdates : 0.0;
+  };
+  checkNear(evidencePerWrite(2.f), 0.25, 1e-4, "a frame at 2 m deposits a quarter per voxel");
+  checkNear(evidencePerWrite(4.f), 1.0 / 16.0, 1e-4, "a frame at 4 m deposits a sixteenth");
+  checkNear(evidencePerWrite(1.f), 1.0, 1e-4, "and a frame at 1 m deposits one");
+}
+
+/**
+ * Semantic masking: a waist-height slice keeps the walls and drops what a cup could stand on.
+ *
+ * The slice at 1.0 m crosses tables, counters and workbenches as well as walls, and a horizontal
+ * patch vectorised as a wall puts a partition through the middle of the room. The normal is the
+ * only thing that separates them.
+ */
+void testSurfaceMask() {
+  section("Semantic masking: walls kept, flat surfaces dropped");
+  const std::vector<OrientedPoint> synthetic = {
+      {{0.f, 1.f, 0.f}, Vec3(0.f, 0.f, 1.f)},     // a wall facing +Z
+      {{1.f, 1.f, 0.f}, Vec3(-1.f, 0.f, 0.f)},    // a wall facing -X
+      {{2.f, 1.f, 0.f}, Vec3(0.f, 1.f, 0.f)},     // a table top
+      {{3.f, 1.f, 0.f}, Vec3(0.f, -1.f, 0.f)},    // the underside of a shelf
+      {{4.f, 1.f, 0.f}, Vec3(0.f, 0.f, 0.f)},     // no measurable normal
+  };
+  const WallMask mask = maskVerticalSurfaces(synthetic);
+  check(mask.walls == 2 && mask.points.size() == 2, "two of five points are walls (" +
+                                                       std::to_string(mask.walls) + ")");
+  check(mask.horizontal == 2, "both horizontal patches are dropped");
+  check(mask.unoriented == 1, "an unmeasurable normal is counted, not assumed to be a wall");
+  checkNear(mask.keptFraction, 0.4, 1e-6, "the kept fraction is reported");
+  check(mask.valid, "a slice with walls is valid");
+  check(mask.points.size() == 2 && mask.points[0].x == 0.f && mask.points[0].z == 0.f,
+        "the footprint is carried through and the height is dropped");
+  check(mask.points.size() == 2 && mask.points[1].x == 1.f, "input order is preserved");
+
+  // A wall leaning 30 degrees from vertical has |n·up| = 0.5: outside a 20-degree tolerance,
+  // inside a 45-degree one. A wall leaning 10 degrees passes the default.
+  const Vec3 lean30(std::cos(30.f * 3.14159265f / 180.f), std::sin(30.f * 3.14159265f / 180.f), 0.f);
+  const Vec3 lean10(std::cos(10.f * 3.14159265f / 180.f), std::sin(10.f * 3.14159265f / 180.f), 0.f);
+  const std::vector<OrientedPoint> leaning = {{{0.f, 1.f, 0.f}, lean30}};
+  check(maskVerticalSurfaces(leaning).horizontal == 1,
+        "a wall leaning 30 degrees is not a vertical surface at 20 degrees");
+  SurfaceMaskOptions loose;
+  loose.maxTiltFromVerticalDegrees = 45.f;
+  check(maskVerticalSurfaces(leaning, loose).walls == 1,
+        "and it is one at 45 degrees");
+  check(maskVerticalSurfaces({{{0.f, 1.f, 0.f}, lean10}}).walls == 1,
+        "a wall leaning 10 degrees passes the default tolerance");
+  SurfaceMaskOptions strict;
+  strict.maxTiltFromVerticalDegrees = 0.f;
+  check(maskVerticalSurfaces({{{0.f, 1.f, 0.f}, Vec3(0.f, 0.01f, 1.f)}}, strict).walls == 0,
+        "a zero tolerance keeps only exactly vertical surfaces");
+  SurfaceMaskOptions negative;
+  negative.maxTiltFromVerticalDegrees = -30.f;
+  check(maskVerticalSurfaces({{{0.f, 1.f, 0.f}, Vec3(0.f, 0.01f, 1.f)}}, negative).walls == 0,
+        "a negative tolerance is treated as zero, not as an inverted window");
+
+  check(!maskVerticalSurfaces({}).valid, "an empty slice is not valid");
+  checkNear(maskVerticalSurfaces({}).keptFraction, 0.0, 1e-9, "and its kept fraction is zero");
+  const WallMask broken = maskVerticalSurfaces(
+      {{{std::nanf(""), 1.f, 0.f}, Vec3(0.f, 0.f, 1.f)}, {{0.f, 1.f, 0.f}, Vec3(std::nanf(""), 0.f, 0.f)}});
+  check(broken.walls == 0 && broken.unoriented == 1, "a NaN position is skipped, a NaN normal counts");
+
+  // The real thing: a wall measured through the TSDF keeps every point, and a plane above the
+  // camera is dropped in full. The normals come from the SDF gradient, so this also pins the sign
+  // and the orientation the mesher uses.
+  SyntheticCamera camera;
+  std::vector<uint16_t> wallDepth(static_cast<size_t>(camera.width * camera.height), 2000);
+  TsdfConfig volumeConfig;
+  volumeConfig.voxelSize = 0.02f;
+  volumeConfig.minConfidence = 0;
+  volumeConfig.workerThreads = 1;
+  TsdfVolume volume(volumeConfig);
+  volume.integrate(
+      makeFrame(camera, wallDepth, Mat4::fromRotationTranslation(Mat3{}, Vec3(0.f, 1.f, 0.f))), 2);
+  const std::vector<OrientedPoint> wallSlice = volume.sliceSurfacesAtHeight(1.0f, 0.05f);
+  check(wallSlice.size() > 100, "the oriented slice is populated (" +
+                                    std::to_string(wallSlice.size()) + " voxels)");
+  double maxUpComponent = 0.0;
+  double maxNormalError = 0.0;
+  double minFacing = 1.0;
+  for (const auto& point : wallSlice) {
+    maxUpComponent = std::max(maxUpComponent, std::fabs(static_cast<double>(point.normal.y)));
+    maxNormalError = std::max(maxNormalError, std::fabs(static_cast<double>(point.normal.length()) - 1.0));
+    minFacing = std::min(minFacing, static_cast<double>(point.normal.z));
+  }
+  checkNear(maxNormalError, 0.0, 1e-3, "every measured normal is a unit vector");
+  check(maxUpComponent < 0.2, "a vertical wall's gradient is horizontal (max |n·up| = " +
+                                  std::to_string(maxUpComponent) + ")");
+  check(minFacing > 0.9, "and it faces the camera, like the mesher's normals do");
+  const WallMask wallMasked = maskVerticalSurfaces(wallSlice);
+  check(wallMasked.valid && wallMasked.horizontal == 0,
+        "a measured wall survives the mask untouched (" + std::to_string(wallMasked.walls) +
+            " kept, " + std::to_string(wallMasked.horizontal) + " dropped)");
+  check(wallMasked.points.size() == wallSlice.size(), "nothing in a wall slice is discarded");
+
+  const std::vector<OrientedPoint> again = volume.sliceSurfacesAtHeight(1.0f, 0.05f);
+  bool same = again.size() == wallSlice.size();
+  for (size_t i = 0; same && i < again.size(); ++i) {
+    same = again[i].position.x == wallSlice[i].position.x &&
+           again[i].position.z == wallSlice[i].position.z &&
+           again[i].normal.x == wallSlice[i].normal.x;
+  }
+  check(same, "the oriented slice is deterministic");
+  check(volume.sliceSurfacesAtHeight(3.0f, 0.05f).empty(),
+        "an oriented slice above the surface is empty");
+  check(volume.sliceSurfacesAtHeight(std::nanf(""), 0.05f).empty(),
+        "an oriented slice at a NaN height is refused");
+
+  // The same frame, with the camera looking straight up: the surface is now a ceiling by normal
+  // even though it is exactly the plane that was a wall a moment ago. That is the whole point of
+  // masking by normal instead of by height.
+  const Mat3 lookUp = Mat3::fromColumns(Vec3(1.f, 0.f, 0.f), Vec3(0.f, 0.f, 1.f),
+                                        Vec3(0.f, -1.f, 0.f));
+  TsdfVolume ceilingVolume(volumeConfig);
+  ceilingVolume.integrate(
+      makeFrame(camera, wallDepth, Mat4::fromRotationTranslation(lookUp, Vec3(0.f, 0.f, 0.f))), 2);
+  const std::vector<OrientedPoint> ceilingSlice = ceilingVolume.sliceSurfacesAtHeight(2.0f, 0.05f);
+  check(ceilingSlice.size() > 100, "the ceiling plane was sliced (" +
+                                       std::to_string(ceilingSlice.size()) + " voxels)");
+  const WallMask ceilingMasked = maskVerticalSurfaces(ceilingSlice);
+  check(!ceilingMasked.valid && ceilingMasked.walls == 0,
+        "a horizontal surface is not a wall, whatever height it sits at");
+  check(ceilingMasked.horizontal > 100, "every one of its points is counted as horizontal (" +
+                                            std::to_string(ceilingMasked.horizontal) + ")");
+}
+
 void testInvalidInput() {
   section("Invalid input handling");
   TsdfConfig config;
@@ -1345,6 +1849,11 @@ int main() {
   testTagScaleContract();
   testPlaneFit();
   testRtabMapBridgeWithoutTheBackEnd();
+  testSurfaceSliceAtHeight();
+  testFloorplanVectorise();
+  testFloorplanPayload();
+  testObservationWeight();
+  testSurfaceMask();
   testInvalidInput();
 
   std::printf("\n%d checks, %d failures\n", g_checks, g_failures);

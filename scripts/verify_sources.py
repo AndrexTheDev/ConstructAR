@@ -62,10 +62,21 @@ VERBOSE = "--verbose" in sys.argv
 LOCALES = ["values", "values-de", "values-es", "values-fr", "values-it", "values-pl"]
 RES_DIR = ROOT / "app" / "src" / "main" / "res"
 
-HEADER_MARKERS = ("AndrexTheDev",)
+# The notice itself, not the author's name. The sweep used to look for "AndrexTheDev" anywhere in a
+# file, and a GitHub link, a `meta name="author"`, or a sentence *about* copyright satisfied it - so
+# the seven published pages, the web manifest, the R8 keep rules and six documents carried no
+# notice at all and were green (finding 215). A year is required because a notice without one is a
+# claim nobody can date, and the address because that is who a reader has to write to.
+COPYRIGHT_NOTICE = re.compile(
+    r"Copyright\s+\(c\)\s+\d{4}\s+AndrexTheDev\s*<hippie\.highho@gmail\.com>"
+)
+# Every suffix the tree actually authors text in - the ones the old list omitted (`.html`,
+# `.webmanifest`, `.pro`, `.cmake`, `.css`, `.js`) are exactly where an unauthorised copy comes
+# from: a page a scraper saves, a manifest a site installer keeps, a build rule a fork reuses.
 HEADER_SUFFIXES = {
     ".kt", ".kts", ".java", ".cpp", ".cc", ".hpp", ".h", ".c",
     ".xml", ".toml", ".properties", ".yml", ".yaml", ".txt", ".py", ".sh", ".md",
+    ".html", ".css", ".js", ".pro", ".cmake", ".webmanifest",
 }
 
 REFLECTION_PATTERNS = [
@@ -171,6 +182,17 @@ UNHEADERED_LICENCE_DIRS = {"licenses"}
 
 
 def check_headers(files: list[Path]) -> None:
+    """Every authored file states who owns it, and the words have to be the notice (finding 215).
+
+    The sweep was written when the tree was Kotlin and C++ only, and it asked one question: does
+    this file contain the author's handle? Three kinds of file answered yes without a notice — the
+    published pages (a `<meta name="author">` and two GitHub links), five documents (the same links)
+    — and three kinds were never opened at all, because their suffixes were not on the list: the
+    site's 404 page, the web manifest a visitor installs, and the R8 keep rules that decide what
+    survives into the APK. A copyright sweep that reads a *name* rather than a *notice* is a
+    spelling checker, and the files it missed are the ones that travel: what a scraper saves, what
+    a fork keeps.
+    """
     for path in files:
         if path.name in {"LICENSE"}:
             continue
@@ -180,8 +202,10 @@ def check_headers(files: list[Path]) -> None:
             text = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
-        if not any(marker in text for marker in HEADER_MARKERS):
-            add(path, "missing copyright header (AndrexTheDev)")
+        if not COPYRIGHT_NOTICE.search(text):
+            add(path, "missing the copyright notice - `Copyright (c) <year> AndrexTheDev "
+                      "<hippie.highho@gmail.com>`. A link to the project, an author meta tag or the "
+                      "word \"copyright\" in prose does not name the owner of this file")
 
 
 def kotlin_sources(*modules: str) -> list[Path]:
@@ -763,6 +787,12 @@ def check_assert_message_order() -> None:
 
     The rule fires only in files that import `kotlin.test`, and only when a string literal is
     followed by a comma, so `assertTrue("abc".length == 3)` stays legal.
+
+    The other direction is checked too, because the confusion is symmetric and round 95 paid for it
+    (finding 202): a file that imports `org.junit.Assert` and writes `assertFalse(condition,
+    "message")` in the `kotlin.test` order does not compile either - JUnit has no message-last
+    overload, so the string lands where a boolean belongs and the red build arrives one CI round
+    later. For those files the last argument of an assertion call may not be a bare string literal.
     """
     for path in kotlin_sources("app", "ar-engine", "core", "export", "native-slam"):
         if "/src/test/" not in path.as_posix():
@@ -775,6 +805,97 @@ def check_assert_message_order() -> None:
             add(path, f"line {line}: a kotlin.test assertion with the message first - kotlin.test "
                       f"takes the value first (org.junit takes the message first), and the "
                       f"mix-up only shows up as a red build (finding 101)")
+
+    for path in kotlin_sources("app", "ar-engine", "core", "export", "native-slam"):
+        if "/src/test/" not in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "import org.junit.Assert" not in text or "import kotlin.test." in text:
+            continue
+        for match in JUNIT_ASSERTION.finditer(text):
+            arguments = _call_arguments(text, match.end() - 1)
+            if any("=" in argument for argument in arguments):
+                continue  # named arguments say which is which, and say it to the compiler too
+            if not _junit_message_is_last(match.group(1), arguments):
+                continue
+            line = text[: match.start()].count("\n") + 1
+            add(path, f"line {line}: an org.junit assertion with the message last - JUnit takes "
+                      f"the message first, so this call has a String where a value belongs and "
+                      f"does not compile (finding 202)")
+
+
+JUNIT_ASSERTION = re.compile(r"\b(assert[A-Za-z]+)\(")
+
+
+# The assertions whose two-argument JUnit form is `(message, value)`: the message is first, and a
+# literal last means the call was written the `kotlin.test` way round.
+JUNIT_MESSAGE_FIRST_ONLY = {"assertTrue", "assertFalse", "assertNull", "assertNotNull"}
+
+
+def _is_string_literal(argument: str) -> bool:
+    return argument.startswith('"') and argument.endswith('"') and len(argument) > 1
+
+
+def _junit_message_is_last(name: str, arguments: list[str]) -> bool:
+    """Whether an `org.junit` call was written in the `kotlin.test` order (finding 202).
+
+    Deliberately narrow: only the shapes where JUnit has no other reading. `assertEquals(actual,
+    "expected")` is legal JUnit when the *expected* value is a string - `EndToEndJobTest` compares
+    a formatted number against a literal - so the two-argument assert-equality forms are never
+    flagged. The three-argument form is, because there a trailing literal is a message.
+    """
+    if name in JUNIT_MESSAGE_FIRST_ONLY:
+        return (
+            len(arguments) == 2
+            and _is_string_literal(arguments[-1])
+            and not _is_string_literal(arguments[0])
+        )
+    if name in {"assertEquals", "assertNotEquals"}:
+        return (
+            len(arguments) == 3
+            and _is_string_literal(arguments[-1])
+            and not _is_string_literal(arguments[0])
+        )
+    return False
+
+
+def _call_arguments(text: str, open_paren: int) -> list[str]:
+    """The arguments of the call whose `(` sits at [open_paren], split at top-level commas."""
+    arguments: list[str] = []
+    current: list[str] = []
+    depth = 0
+    index = open_paren
+    while index < len(text):
+        character = text[index]
+        if character == '"':
+            current.append(character)
+            index += 1
+            while index < len(text):
+                current.append(text[index])
+                if text[index] == "\\":
+                    index += 1
+                    if index < len(text):
+                        current.append(text[index])
+                elif text[index] == '"':
+                    break
+                index += 1
+        elif character in "([{":
+            depth += 1
+            if depth > 1:
+                current.append(character)
+        elif character in ")]}":
+            depth -= 1
+            if depth == 0:
+                arguments.append("".join(current).strip())
+                return [argument for argument in arguments if argument]
+            current.append(character)
+        elif character == "," and depth == 1:
+            arguments.append("".join(current).strip())
+            current = []
+        else:
+            current.append(character)
+        index += 1
+    return []
 
 
 # Only a declaration, never a KDoc code span: `:native-slam` in a comment is not an identifier.
@@ -2729,6 +2850,1221 @@ def check_the_calibration_has_one_home() -> None:
                           f"fall back to English mid-sentence")
 
 
+FUN_DECLARATION = re.compile(
+    r"^\s*(?:(?:private|internal|public|protected|override|suspend|inline|operator|tailrec)\s+)*fun\b"
+)
+BANG_ON_STABLE = re.compile(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)!!")
+
+
+def kotlin_code_only(text: str) -> str:
+    """The same text with comments and string/char literals blanked, newlines kept.
+
+    A brace count over raw Kotlin is wrong the moment a test writes JSON into a file - the
+    ``"{ this is not json"`` in the corrupt-file case opens a block that never closes, and the
+    scanner then reads three functions as one. Blanking the literals (rather than deleting them)
+    keeps every line and column where it was, so a message can still point at the real line.
+
+    Backticked identifiers are copied verbatim rather than blanked, and they have to be *skipped*:
+    a test named ``the room's own id`` carries an apostrophe, and a scanner that only knows
+    ``"`` and ``'`` reads that apostrophe as the start of a char literal and blanks everything up
+    to the next apostrophe in the file - six hundred lines, silently (finding 200). The identifier
+    is code, not a literal, so it stays; it just may not be read as one.
+    """
+    out: list[str] = []
+    index = 0
+    length = len(text)
+    while index < length:
+        if text.startswith("//", index):
+            while index < length and text[index] != "\n":
+                out.append(" ")
+                index += 1
+        elif text.startswith("/*", index):
+            while index < length and not text.startswith("*/", index):
+                out.append("\n" if text[index] == "\n" else " ")
+                index += 1
+            out.append("  ")
+            index += 2
+        elif text.startswith('"""', index):
+            out.append("   ")
+            index += 3
+            while index < length and not text.startswith('"""', index):
+                out.append("\n" if text[index] == "\n" else " ")
+                index += 1
+            out.append("   ")
+            index += 3
+        elif text[index] == "`":
+            # A backticked name is an identifier, not a literal: copy it, but do not let an
+            # apostrophe inside it open a char literal.
+            out.append("`")
+            index += 1
+            while index < length and text[index] != "`" and text[index] != "\n":
+                out.append(text[index])
+                index += 1
+            if index < length and text[index] == "`":
+                out.append("`")
+                index += 1
+        elif text[index] in "\"'":
+            quote = text[index]
+            out.append(" ")
+            index += 1
+            while index < length:
+                character = text[index]
+                if character == "\\":
+                    out.append("  ")
+                    index += 2
+                    continue
+                out.append("\n" if character == "\n" else " ")
+                index += 1
+                if character == quote:
+                    break
+        else:
+            out.append(text[index])
+            index += 1
+    return "".join(out)
+
+
+def kotlin_function_bodies(text: str):
+    """Yield ``(first line number, body)`` for every Kotlin function, braces balanced.
+
+    Bodies are cut from the literal-free copy, so ``{`` inside a JSON string cannot swallow the
+    rest of the file. An expression body (``fun x() = ...``) that spans more than three lines is
+    reported as its declaration line alone rather than guessed at: this rule only needs the
+    function's own locals, and a wrong boundary could attribute one function's assertions to
+    another.
+    """
+    code = kotlin_code_only(text).splitlines()
+    original = text.splitlines()
+    index = 0
+    while index < len(code):
+        if not FUN_DECLARATION.search(code[index]):
+            index += 1
+            continue
+        start = index
+        depth = 0
+        opened = False
+        while index < len(code):
+            depth += code[index].count("{") - code[index].count("}")
+            if "{" in code[index]:
+                opened = True
+            if opened and depth <= 0:
+                break
+            if not opened and index - start >= 3:
+                break
+            index += 1
+        yield start + 1, "\n".join(original[start:index + 1])
+        index += 1
+
+
+FORMAT_CALL = re.compile(r"String\.format\(")
+
+
+def first_call_argument(code: str, open_paren: int) -> str:
+    """Text of the first argument of the call whose `(` sits at [open_paren]."""
+    depth = 0
+    index = open_paren + 1
+    start = index
+    while index < len(code):
+        character = code[index]
+        if character == "(":
+            depth += 1
+        elif character == ")":
+            if depth == 0:
+                return code[start:index]
+            depth -= 1
+        elif character == "," and depth == 0:
+            return code[start:index]
+        index += 1
+    return code[start:]
+
+
+PROJECT_IMPORT = re.compile(
+    r"^import\s+(com\.constructar\.[\w.]+)(?:\s+as\s+(\w+))?\s*$", re.MULTILINE
+)
+
+
+JNI_SOURCE = ROOT / "native-slam/src/main/cpp/jni/slam_jni.cpp"
+JNI_ENGINE = ROOT / "native-slam/src/main/kotlin/com/constructar/nativebridge/NativeSlamEngine.kt"
+JNI_CLASS_PREFIX = "Java_com_constructar_nativebridge_NativeSlamEngine_"
+FLOORPLAN_HEADER_HPP = ROOT / "native-slam/src/main/cpp/geometry/floorplan.hpp"
+FLOORPLAN_PAYLOAD_KT = ROOT / "native-slam/src/main/kotlin/com/constructar/nativebridge/FloorplanPayload.kt"
+
+
+THUMBNAIL_CHAIN = (
+    ("ar-engine/src/main/kotlin/com/constructar/arengine/scan/TsdfScanPipeline.kt",
+     "dispatcher) { engine?.floorplan(",
+     "the scan worker no longer slices the volume for a plan"),
+    ("app/src/main/kotlin/com/constructar/app/ui/ar/ArMeasureController.kt",
+     "pipeline.floorplan(",
+     "the AR controller no longer asks the pipeline for one"),
+    ("app/src/main/kotlin/com/constructar/app/ui/ar/ArMeasureScreen.kt",
+     "controller.finalFloorplan()?.let(onFloorplan)",
+     "a committed run no longer hands the plan to the caller"),
+    ("app/src/main/kotlin/com/constructar/app/ui/AppRoot.kt",
+     "onFloorplan = { plan -> viewModel.saveFloorplanThumbnail(plan) }",
+     "the screen's plan never reaches the view model"),
+    ("app/src/main/kotlin/com/constructar/app/ProjectViewModel.kt",
+     "repository.saveThumbnail(project.id, svg)",
+     "the view model no longer writes the file"),
+    ("app/src/main/kotlin/com/constructar/app/data/ProjectRepository.kt",
+     "SafeFiles.writeAtomically(thumbnailFileFor(projectId), bytes)",
+     "the file is no longer written atomically"),
+)
+
+
+def check_the_card_picture_has_a_writer() -> None:
+    """The thumbnail is a chain of six links, and every break in it is silent (finding 197).
+
+    A card picture is written by a path that crosses four layers: the scan worker slices the volume
+    before the engine is freed, the AR controller asks for it, the screen hands it to its caller,
+    `AppRoot` routes it to the view model, and the repository writes the SVG next to the project.
+    There is no error at any of those joints - unplug one and the picture simply stops appearing,
+    months after the change, with the README still promising pictures. Nothing in either language
+    links the calls: the types line up at every step, which is exactly why a removal compiles.
+
+    So each link is named here, in the order the data travels, with the sentence the failure
+    deserves. The rule is deliberately a chain and not a "is this referenced" check: a link that is
+    called from somewhere else is still a broken chain, and this round's whole point is that the
+    chain runs.
+    """
+    for relative, marker, complaint in THUMBNAIL_CHAIN:
+        path = ROOT / relative
+        if not path.exists():
+            continue  # a missing file is already a finding above
+        if marker in path.read_text(encoding="utf-8"):
+            continue
+        add(path, f"{complaint} - the card picture stops being written here, and nothing else in "
+                  f"the tree reports it")
+
+
+CARD_OUTLINE_CHAIN = (
+    ("core/src/main/kotlin/com/constructar/core/model/Project.kt",
+     "val sketch: FloorplanSketch? = null,",
+     "the project file no longer has a place to keep the outline"),
+    ("app/src/main/kotlin/com/constructar/app/data/RoomThumbnail.kt",
+     "fun sketch(payload: FloorplanPayload): FloorplanSketch? {",
+     "nothing turns a scan plan into the outline the file stores"),
+    ("app/src/main/kotlin/com/constructar/app/ProjectViewModel.kt",
+     "val sketch = RoomThumbnail.sketch(plan) ?: return",
+     "the view model no longer asks for an outline"),
+    ("app/src/main/kotlin/com/constructar/app/ProjectViewModel.kt",
+     "val updated = project.copy(sketch = sketch)",
+     "the outline is derived but never stored on the room"),
+    ("app/src/main/kotlin/com/constructar/app/data/ProjectRepository.kt",
+     "sketch = project.sketch,",
+     "the home screen's summary stops carrying the outline"),
+    ("app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt",
+     "RoomPicture(project.sketch)",
+     "the row stops handing its outline to the picture"),
+    ("app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt",
+     "RoomThumbnail.pathPoints(",
+     "the picture stops projecting the outline onto the card"),
+)
+
+
+def check_the_card_draws_from_the_project_file() -> None:
+    """The card's picture and the exported SVG are one room drawn twice from one loop (finding 198).
+
+    Round 93 gave every committed run a plan and wrote it out as `thumbnail.svg`; the card still
+    showed an icon, because Android has no SVG renderer and the file was write-only. Round 94 stores
+    the same loop in the project as a handful of corners, which is what the card draws and what a
+    backup carries - and that creates a new way to be wrong that neither side can detect: the JSON
+    can be written and never read (an icon for a room that was measured), or read while the writer
+    quietly stopped filling it (a stale outline that outlives the room it came from). Both compile,
+    both pass every existing test, and both look exactly like "this room has no plan yet".
+
+    So the route from the scan to the pixels is named link by link, in the order the data travels,
+    the same way `check_the_card_picture_has_a_writer` names the SVG route. The two chains are
+    deliberately separate: the SVG is for laptops and paper, the JSON is for the phone, and one of
+    them working says nothing about the other.
+    """
+    for relative, marker, complaint in CARD_OUTLINE_CHAIN:
+        path = ROOT / relative
+        if not path.exists():
+            continue  # a missing file is already a finding above
+        if marker in path.read_text(encoding="utf-8"):
+            continue
+        add(path, f"{complaint} - the card's outline stops travelling here, and nothing else in "
+                  f"the tree reports it (the row just keeps showing the icon)")
+
+
+def check_every_external_function_has_a_symbol() -> None:
+    """A JNI name that does not match its C symbol is a runtime crash, not a compile error (finding 195).
+
+    `external fun nativeFoo` binds to `Java_<package>_<Class>_nativeFoo` by *convention*: nothing in
+    Kotlin, nothing in C++ and nothing in this repository's five host suites compares the two
+    strings. A mismatch compiles clean on both sides and fails the first time an operator opens the
+    scan screen, with `UnsatisfiedLinkError` in a stack trace on a device that is on site - the one
+    place a developer is not. The mapping is mechanical, so it is checked mechanically, in both
+    directions: a symbol with no `external fun` is dead native code that will quietly rot.
+    """
+    if not JNI_SOURCE.exists() or not JNI_ENGINE.exists():
+        return  # a missing file is already a finding above
+    kotlin = JNI_ENGINE.read_text(encoding="utf-8")
+    cpp = JNI_SOURCE.read_text(encoding="utf-8")
+    declared = set(re.findall(r"external fun (\w+)\(", kotlin))
+    for name in sorted(declared):
+        symbol = JNI_CLASS_PREFIX + name.replace("_", "_1")
+        if symbol not in cpp:
+            add(JNI_SOURCE, f"`external fun {name}` has no `{symbol}` - Kotlin binds by convention "
+                            f"only, so this compiles and fails with UnsatisfiedLinkError on the "
+                            f"first device that calls it")
+    for symbol in sorted(set(re.findall(re.escape(JNI_CLASS_PREFIX) + r"(\w+)", cpp))):
+        name = symbol.replace("_1", "_")
+        if name in declared:
+            continue
+        add(JNI_SOURCE, f"`{JNI_CLASS_PREFIX}{symbol}` has no `external fun` in NativeSlamEngine - "
+                        f"dead native code keeps building, keeps passing the host suite and is "
+                        f"never executed (the Kotlin name would be `{name}`)")
+
+
+def check_the_floorplan_payload_header_matches() -> None:
+    """The two sides of the payload header are compared, because neither compiler can (finding 195).
+
+    `nativeFloorplan` returns one `float[]`. The C++ packer writes eight floats of header and the
+    Kotlin parser reads eight, and if the two disagree the payload still *parses*: every segment
+    reads a loop length, every loop reads an outline point, and the room on the card is a different
+    room with plausible numbers. There is no error anywhere and no test in either language that can
+    see the other side's constant. So the constants are read out of the two sources and compared.
+    """
+    if not FLOORPLAN_HEADER_HPP.exists() or not FLOORPLAN_PAYLOAD_KT.exists():
+        return  # a missing file is already a finding above
+    native = re.search(r"kFloorplanPayloadHeader\s*=\s*(\d+)",
+                       FLOORPLAN_HEADER_HPP.read_text(encoding="utf-8"))
+    kotlin = re.search(r"const val HEADER\s*=\s*(\d+)",
+                       FLOORPLAN_PAYLOAD_KT.read_text(encoding="utf-8"))
+    if native is None:
+        add(FLOORPLAN_HEADER_HPP, "`kFloorplanPayloadHeader` is gone - the payload layout has no "
+                                  "single written-down header size, so the parser has nothing to "
+                                  "agree with")
+        return
+    if kotlin is None:
+        add(FLOORPLAN_PAYLOAD_KT, "`FloorplanPayload.HEADER` is gone - the parser would read its "
+                                  "own idea of the layout while C++ writes another")
+        return
+    if native.group(1) != kotlin.group(1):
+        add(FLOORPLAN_PAYLOAD_KT, f"`HEADER = {kotlin.group(1)}` against `kFloorplanPayloadHeader = "
+                                  f"{native.group(1)}` in geometry/floorplan.hpp: the payload would "
+                                  f"parse, and every field after the header would be the wrong "
+                                  f"one - a room that draws and is not the room")
+
+
+def check_project_imports_are_used() -> None:
+    """An `import com.constructar.…` with no use is a rename that was half done (finding 194).
+
+    Round 91 renamed a nested type and left one reference behind. The compiler said only
+    `Unresolved reference 'Drawn'` at a line that read `result is Result.Drawn` - because `Result`
+    resolved perfectly well: to `kotlin.Result`, which the compiler imports into every file. So the
+    stale name compiled as far as the type, failed on its member, and the message pointed at the
+    nested class rather than at the rename. Nothing warns about the import that was then unused:
+    Kotlin has no unused-import warning, and `allWarningsAsErrors` cannot refuse a diagnostic that
+    is never emitted.
+
+    An import of a project type that the file never mentions is exactly the fingerprint of that
+    half-done rename, and it is the only part of it a machine can see without a compiler.
+    """
+    for path in tracked_sources():
+        if path.suffix != ".kt":
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in PROJECT_IMPORT.finditer(text):
+            qualified = match.group(1)
+            alias = match.group(2)
+            simple = alias if alias else qualified.rsplit(".", 1)[-1]
+            rest = text[:match.start()] + text[match.end():]
+            if re.search(r"\b" + re.escape(simple) + r"\b", rest):
+                continue
+            add(path, f"imports `{qualified}` and never mentions `{simple}` - the usual cause is a "
+                      f"rename that left a stale reference behind, and a stale name that happens "
+                      f"to exist in the Kotlin standard library (`Result`, `Unit`, `Nothing`) "
+                      f"compiles as far as the type and fails on the member")
+
+
+def check_exported_numbers_use_the_c_locale() -> None:
+    """Every number that leaves the device is formatted in the C locale (finding 193).
+
+    Three files carry numbers to a customer, and all three break in the same way under a German
+    default locale: a CSV column becomes two (`14,82` is the next column), an SVG `points`
+    attribute loses its polygon because a comma there is a *separator*, and the PDF prints a
+    decimal comma into a document the customer signs. None of it raises - the CSV opens, the SVG
+    parses, the PDF prints - so nothing downstream ever reports it, and the phone's locale is the
+    one variable nobody sets while testing.
+
+    `Locale.ROOT` is the whole fix and it is already the convention in every one of these files;
+    this rule is here because the new SVG writer is the third place to need it and a convention
+    with three copies is a convention that gets forgotten once. `:app` is deliberately out of
+    scope: a screen *should* print the operator's own decimal comma.
+    """
+    for module in ("core", "export"):
+        root = ROOT / module / "src" / "main"
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*.kt")):
+            code = kotlin_code_only(path.read_text(encoding="utf-8"))
+            for match in FORMAT_CALL.finditer(code):
+                argument = first_call_argument(code, match.end() - 1).strip()
+                if argument.startswith("Locale.ROOT"):
+                    continue
+                line = code.count("\n", 0, match.start()) + 1
+                add(path, f"`String.format(` at line {line} does not take `Locale.ROOT` as its "
+                          f"first argument: on a phone set to German the decimal comma reaches a "
+                          f"CSV column, an SVG polygon or a signed PDF, and nothing raises")
+
+
+def check_the_reticle_snap_stays_wired() -> None:
+    """The README's "and it is wired" is derived from the code, not remembered (finding 100's rule).
+
+    Architectural snapping is the one engine in this round that ships *inside* a live path - the
+    reticle and every tap pass through `ReticleSnap` in `ArHitSource.resolve` - while the wall
+    take-off, the DIN zones and the clash check are still unwired and are labelled that way. A
+    claim of wiring is worth exactly the call site behind it: delete the call (or move the
+    cascade to a resolver that forgets it) and the README keeps promising a snap no operator can
+    see, which is the failure mode finding 98 found in five documents at once. So the truth is
+    read from the file and the README must agree in both directions, and the toggle that turns
+    the snap off on a device with ragged polygons is pinned too - without it, the only way out of
+    a bad snap is an uninstall.
+    """
+    source = ROOT / "ar-engine/src/main/kotlin/com/constructar/arengine/hit/ArHitSource.kt"
+    readme = ROOT / "README.md"
+    if not source.exists() or not readme.exists():
+        return  # a missing file is already a finding above
+    text = source.read_text(encoding="utf-8")
+    wired = "ReticleSnap.snap(" in text
+    claims_wired = "**and it is wired**" in readme.read_text(encoding="utf-8")
+    if wired and not claims_wired:
+        add(readme, "the architectural snap is called from `ArHitSource.resolve` and the README no "
+                    "longer says so - a wired engine documented as unwired is a feature nobody "
+                    "turns on")
+    if not wired and claims_wired:
+        add(readme, "the README says the architectural snap 'is wired', and no line in "
+                    "`ArHitSource.resolve` calls `ReticleSnap.snap` - the reticle would show the "
+                    "raw polygon hit while the document promises the room's corners")
+    if not wired:
+        return
+    if "enabled = cascade.snapToArchitecturalFeatures" not in text:
+        add(source, "the snap is called without the cascade's toggle, so a device whose plane "
+                    "polygons are too ragged to measure to has no way to turn it off")
+    if "planes = request.planes" not in text:
+        add(source, "the snap is fed something other than the request's own planes, so the "
+                    "features it derives need not be the surfaces the hit cascade just chose "
+                    "between")
+
+
+def check_a_stable_value_is_asserted_once() -> None:
+    """A second ``!!`` on a stable property is a compiler warning, and CI is ``-Werror`` (finding 192).
+
+    Kotlin smart-casts a stable ``val`` property after the first ``!!``, so
+    ``result.hit!!.x`` three lines in a row compiles into one real assertion and two
+    "unnecessary non-null assertion" warnings. With ``allWarningsAsErrors`` those warnings are a
+    build failure, and the sandbox this repository is developed in has no JVM: the first time
+    anyone sees it is the pull request's `android-build`, one round later, on a test whose
+    *behaviour* was already right. This is the third CI-only failure in three rounds (a clang
+    capitalisation, a missing default argument, this), and each was found by a human re-reading a
+    signature; a property asserted twice in one function is the one shape that can be found by a
+    machine, so it is found here instead.
+
+    ``var`` is exempt by construction: a mutable receiver is never smart-cast, so repeating the
+    assertion on it is both legal and warning-free.
+    """
+    for path in tracked_sources():
+        if path.suffix != ".kt":
+            continue
+        text = path.read_text(encoding="utf-8")
+        for first_line, body in kotlin_function_bodies(text):
+            asserted: dict[str, int] = {}
+            for match in BANG_ON_STABLE.finditer(body):
+                expression = match.group(1)
+                if re.search(r"\bvar\s+" + re.escape(expression.split(".")[0]) + r"\b", body):
+                    continue
+                asserted[expression] = asserted.get(expression, 0) + 1
+            for expression, count in sorted(asserted.items()):
+                if count > 1:
+                    add(path, f"`{expression}!!` is asserted {count} times in the function starting "
+                              f"at line {first_line}: the first `!!` smart-casts the property, so the "
+                              f"rest are warnings and `allWarningsAsErrors` turns them into a build "
+                              f"failure the sandbox cannot see - bind it once (`requireNotNull`)")
+
+
+CONTRACT_ASSERTION = re.compile(r"\b(assertNotNull|requireNotNull)\(\s*([A-Za-z_]\w*)\s*[,)]")
+
+
+def _brace_depth(code: str, position: int) -> int:
+    return code.count("{", 0, position) - code.count("}", 0, position)
+
+
+CARD_SIZE_CHAIN = (
+    ("core/src/main/kotlin/com/constructar/core/model/FloorplanSketch.kt",
+     "val perimeterMeters: Float",
+     "the outline no longer knows how long its ring is"),
+    ("app/src/main/kotlin/com/constructar/app/data/RoomSizeText.kt",
+     "fun of(sketch: FloorplanSketch?): RoomSizeText?",
+     "nothing turns the outline into the two numbers the card states"),
+    ("app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt",
+     "RoomSizeText.of(sketch)",
+     "the badge row stops asking for a size"),
+    ("app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt",
+     "stringResource(R.string.card_area, size.area)",
+     "the area badge stops printing the area"),
+    ("app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt",
+     "stringResource(R.string.card_perimeter, size.perimeter)",
+     "the perimeter badge stops printing the perimeter"),
+)
+
+
+HAND_CLOSED_ROOM_CHAIN = (
+    ("core/src/main/kotlin/com/constructar/core/model/FloorplanSketch.kt",
+     "enum class Closure {",
+     "the outline no longer distinguishes an open ring from a measured one"),
+    ("core/src/main/kotlin/com/constructar/core/model/FloorplanSketch.kt",
+     "fun closedByHand(): FloorplanSketch =",
+     "nothing can assert that a gap is a wall"),
+    ("app/src/main/kotlin/com/constructar/app/data/RoomThumbnail.kt",
+     "?: largestRing(payload.loops, closed = false)",
+     "the derivation only looks for closed rings, so an open room is never stored at all"),
+    ("app/src/main/kotlin/com/constructar/app/data/RoomThumbnail.kt",
+     "val closure = if (ring.closed) FloorplanSketch.Closure.Measured else FloorplanSketch.Closure.Open",
+     "the derivation stops recording whether the scan closed the ring"),
+    ("app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt",
+     "CloseRoomChip(onCloseRoom)",
+     "the card stops offering to close an open room"),
+    ("app/src/main/kotlin/com/constructar/app/ui/AppRoot.kt",
+     "onCloseRoom = viewModel::closeRoomByHand,",
+     "the chip's tap never reaches the view model"),
+    ("app/src/main/kotlin/com/constructar/app/ProjectViewModel.kt",
+     "val updated = project.copy(sketch = open)",
+     "the view model no longer writes the hand-closed ring onto the room"),
+)
+
+
+def check_an_open_room_can_be_closed_by_hand() -> None:
+    """An open ring has to survive the commit, or the only recovery is walking the room again (finding 203).
+
+    Round 94 stored the outline only when the scan closed it - the derivation returned null for an
+    open loop and the commit path returned with it. That is honest about the *picture* and wrong
+    about the *data*: the corners of a room with a doorway in it are exactly what somebody would
+    need to close it by hand later, and the payload they lived in is freed the moment the run is
+    committed. The operator's only recovery became re-walking the whole room, which is the one thing
+    a measuring tool must never ask for.
+
+    So the ring is stored whatever its closure says, and one explicit gesture turns an open ring
+    into a room. The chain below names every joint of that gesture, because each of them is silent
+    when removed: the chip stops appearing, the tap goes nowhere, or the sketch is stored open and
+    the card keeps its icon. The negative check is the specific regression this round fixed - the
+    commit path may not return early when no SVG can be drawn.
+    """
+    for relative, marker, complaint in HAND_CLOSED_ROOM_CHAIN:
+        path = ROOT / relative
+        if not path.exists():
+            continue  # a missing file is already a finding above
+        if marker in path.read_text(encoding="utf-8"):
+            continue
+        add(path, f"{complaint} - an open room then stays unclosable, and no test can reach across "
+                  f"the screen to say so")
+    view_model = ROOT / "app/src/main/kotlin/com/constructar/app/ProjectViewModel.kt"
+    if view_model.exists() and "RoomThumbnail.svg(plan) ?: return" in view_model.read_text(encoding="utf-8"):
+        add(view_model, "the commit path returns early when the plan draws no SVG - that is exactly "
+                        "the open ring, whose corners would then be thrown away (finding 203)")
+
+
+def check_the_card_states_the_room_size() -> None:
+    """The size on the card is a third reader of one outline, and silence is its failure mode (finding 201).
+
+    Round 94 put the ring in the project and round 95 prints it twice more - area and perimeter -
+    from the same `FloorplanSketch`. Every joint on that route fails the same way: the row keeps its
+    picture and simply stops stating a size, which on a card looks exactly like a room nobody has
+    measured yet. Worse, there is a plausible wrong fix that compiles and passes every other test -
+    summing `totalLengthMeters` for a "perimeter", or storing an area in the summary - and then the
+    picture and the numbers describe two different rooms the first time a run is deleted.
+
+    So the route is named link by link, like the two chains above it, and the unit gets a rule of
+    its own direction: `m²` may appear in the six resources, never in the Kotlin. A unit typed into
+    the UI would ship in one language and be invisible to the i18n audit, which only reads numbers
+    and words that go through a resource.
+    """
+    for relative, marker, complaint in CARD_SIZE_CHAIN:
+        path = ROOT / relative
+        if not path.exists():
+            continue  # a missing file is already a finding above
+        if marker in path.read_text(encoding="utf-8"):
+            continue
+        add(path, f"{complaint} - nothing else reports it, and the card just looks like a room "
+                  f"that was never scanned")
+    screen = ROOT / "app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt"
+    if screen.exists():
+        for number, line in enumerate(screen.read_text(encoding="utf-8").splitlines(), start=1):
+            stripped = line.strip()
+            if stripped.startswith(("*", "//", "/*")):
+                continue  # a KDoc sentence may name a unit; a screen may not print one
+            for unit in ("m²", "m³"):
+                if unit in line:
+                    add(screen, f"line {number}: the unit '{unit}' is typed into a screen - the "
+                                f"badge's unit belongs to `card_area`/`card_perimeter`, or it "
+                                f"ships in one language only and the i18n audit cannot see it")
+
+
+GLOVE_TARGET_DP = 64
+
+
+def _kotlin_call(text: str, start: int) -> str:
+    """The text of the call whose `(` is at or after [start], parentheses balanced and quoted."""
+    open_paren = text.find("(", start)
+    if open_paren < 0:
+        return ""
+    depth = 0
+    index = open_paren
+    while index < len(text):
+        character = text[index]
+        if character == '"':
+            index += 1
+            while index < len(text):
+                if text[index] == "\\":
+                    index += 2
+                    continue
+                if text[index] == '"':
+                    break
+                index += 1
+        elif character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+            if depth == 0:
+                return text[start:index + 1]
+        index += 1
+    return ""
+
+
+def check_glove_buttons_are_big_enough() -> None:
+    """Every icon button in the app is at least one gloved finger (finding 205).
+
+    The theme has said `gloveTouchTarget = 64.dp` since the first screen, `GloveButton` is 72 dp
+    because a glove cannot hit a 24 dp glyph - and the buttons that were actually *used* on site
+    were 40, 48, 52 and 56 dp: the delete on a diary row, the toggle on a defect, the two buttons
+    the AR screen shows while the operator holds the phone in one hand and a laser in the other.
+    Nothing catches that. A size is a number in a composable, the theme constant is a different
+    number in a different file, and no compiler, no test and no screenshot in this repository
+    compares them - the design intent lived in one comment and the code did something else.
+
+    So the convention is stated once here: an `IconButton` in `:app` carries
+    `Modifier.size(SiteColors.gloveTouchTarget)` or an explicit size of at least 64 dp (the two AR
+    buttons are 72 dp, the size of `GloveButton`, because they are the primary actions of the
+    screen that is used with gloves on). A bare `IconButton` - Material's 48 dp default - is a
+    finding, and so is any explicit size below the target.
+    """
+    for path in kotlin_sources("app"):
+        if "/src/main/" not in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        index = 0
+        while True:
+            start = text.find("IconButton(", index)
+            if start < 0:
+                break
+            call = _kotlin_call(text, start)
+            index = start + len("IconButton")
+            if not call:
+                continue
+            # `.size(...)` may sit behind a padding in the same chain: what matters is the size.
+            if ".size(SiteColors.gloveTouchTarget)" in call:
+                continue
+            explicit = re.search(r"Modifier\.size\((\d+)\.dp\)", call)
+            if explicit and int(explicit.group(1)) >= GLOVE_TARGET_DP:
+                continue
+            line = text[:start].count("\n") + 1
+            size = f"{explicit.group(1)} dp" if explicit else "Material's 48 dp default"
+            add(path, f"line {line}: an IconButton sized {size} - the glove target is "
+                      f"{GLOVE_TARGET_DP} dp (`SiteColors.gloveTouchTarget`), and a gloved finger "
+                      f"cannot hit a smaller one; nothing else in the tree compares the two numbers")
+
+
+def check_the_protocol_prints_the_room_plan() -> None:
+    """The signed protocol carries the room, not only its numbers (finding 206).
+
+    The app draws the room on the home card, states its area and perimeter, and can close an open
+    ring by hand - and the document a customer signs printed neither a plan nor a caption: an area,
+    a bill, a signature. The plan page exists now, and it is the same ring as the card's:
+    `:app` maps the stored `FloorplanSketch` through `RoomPlanPage`, `:export` lays it out
+    (`FloorplanLayout`: one scale, world `z` down, a physical wall), and `ProtocolPdfWriter` prints
+    it on its own page before the signature.
+
+    Every link of that chain can be dropped without a compile error - a nullable parameter nobody
+    passes, a section that is passed and never drawn, a page drawn after the signature is already
+    on the paper - so each one is asserted here, and so is the rule that the page states *why* a
+    closing wall exists when a person drew it.
+    """
+    plan_page = (ROOT / "export" / "src" / "main" / "kotlin" / "com" / "constructar" / "export" /
+                 "pdf" / "FloorplanPage.kt")
+    plan_text = plan_page.read_text(encoding="utf-8")
+    if "class FloorplanLayout" not in plan_text or "fun of(" not in plan_text:
+        add(plan_page, "the plan page has no layout - the drawing would have to be sized inside "
+                       "the writer, where no test can see it")
+    # The wall is `(WALL_METERS * scale).coerceIn(...)`: it follows the page and stays printable.
+    if "WALL_METERS" not in plan_text or "coerceIn" not in plan_text:
+        add(plan_page, "the wall no longer follows the page's scale and the printable range - "
+                       "a fixed width is a hairline on a hall and a blot on a bathroom")
+    writer = (ROOT / "export" / "src" / "main" / "kotlin" / "com" / "constructar" / "export" /
+              "pdf" / "ProtocolPdfWriter.kt")
+    writer_text = writer.read_text(encoding="utf-8")
+    if "val floorplan: FloorplanSection? = null" not in writer_text:
+        add(writer, "the protocol's content has no floorplan section, so no caller can ask for "
+                    "the page at all")
+    if "content.floorplan?.let" not in writer_text:
+        add(writer, "the protocol accepts a floorplan and never prints it")
+    if writer_text.count("companion object") > 1:
+        add(writer, "the writer has more than one companion object - Kotlin allows one per class, "
+                    "and a constant added next to the code it belongs to lands in a second one "
+                    "(finding 208)")
+    if "layout.wallWidthPoints" not in writer_text:
+        add(writer, "the plan is stroked with a width of its own instead of the layout's, so the "
+                    "clamped wall never reaches the paper")
+    draw_plan = writer_text.find("drawFloorplanPage(document")
+    draw_signature = writer_text.find("drawSignaturePage(document")
+    if draw_plan < 0:
+        add(writer, "nothing calls drawFloorplanPage - the section is passed and thrown away")
+    elif draw_signature >= 0 and draw_plan > draw_signature:
+        add(writer, "the plan page is drawn after the signature page; the plan belongs in the "
+                    "document, before the page the customer signs - not in an annex")
+    service = (ROOT / "export" / "src" / "main" / "kotlin" / "com" / "constructar" / "export" /
+               "ExportService.kt")
+    service_text = service.read_text(encoding="utf-8")
+    if "import com.constructar.export.pdf.FloorplanSection" not in service_text:
+        # The request lives in `com.constructar.export`, the section in `...export.pdf` (finding 209).
+        add(service, "the export request names `FloorplanSection` without importing it - the class "
+                    "is one package down, and the build stops at `Unresolved reference`")
+    if "val floorplan: FloorplanSection? = null" not in service_text:
+        add(service, "the export request has no floorplan, so the screen cannot hand one over")
+    if "floorplan = request.floorplan" not in service_text:
+        add(service, "the export service accepts the plan and never passes it to the writer")
+    mapper = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "data" /
+              "RoomPlanPage.kt")
+    mapper_text = mapper.read_text(encoding="utf-8")
+    if "point.xMeters" not in mapper_text or "point.zMeters" not in mapper_text:
+        add(mapper, "the page's corners are not the stored ring's metres - a plan built from "
+                    "anything else is a second description of the room")
+    if "Closure.DrawnByHand" not in mapper_text:
+        add(mapper, "a wall the operator drew by hand is no longer stated on the page, so the "
+                    "customer reads a closed room as a measured one")
+    screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+              "ExportScreen.kt")
+    screen_text = screen.read_text(encoding="utf-8")
+    if "floorplan = floorplanPage" not in screen_text:
+        add(screen, "the export screen builds no floorplan for the request - the document would "
+                    "print the room's numbers without the room")
+    if "RoomPlanPage.of(" not in screen_text:
+        add(screen, "the screen no longer uses RoomPlanPage, so the page's words and its corners "
+                    "are assembled somewhere the app's tests cannot reach")
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if not path.exists():
+            continue
+        strings, _ = load_locale(folder)
+        if not (strings.get("pdf_floorplan_title") or "").strip():
+            add(path, "missing string 'pdf_floorplan_title' - the plan page would have no heading")
+        if not (strings.get("pdf_floorplan_by_hand") or "").strip():
+            add(path, "missing string 'pdf_floorplan_by_hand' - a hand-closed room would be "
+                      "printed as if every wall had been measured")
+
+
+def check_every_interactive_row_announces_itself() -> None:
+    """A tap target says what it is, what it does and what it currently is (finding 211).
+
+    Every control in this app was sized for a gloved hand, and the round before this one made sure
+    of that. None of them were written for a screen reader: a row that opens the paywall was an
+    unlabelled `clickable`, a three-way severity choice was three `clickable` texts whose selection
+    lived in a background colour, a `Switch` sat beside its own label as a second node that could
+    not say *which* format it belonged to, the signature pad - a blank canvas with two pointer
+    inputs - had no name, no state and no way to clear it, and the AR screen's full-surface tap
+    target was a camera preview with nothing to double-tap. A sighted operator with gloves was
+    served; a blind one was not, in an app whose measuring screen is one enormous unlabelled Box.
+
+    So the conventions are stated once, here, because each of them is a composable modifier in one
+    file and a promise in another:
+
+      * `clickable`, `selectable` and `toggleable` carry a `role` - a row that acts is a button, a
+        choice in a group is a radio button, a setting is a switch;
+      * a `Switch` hands its tap to the row (`onCheckedChange = null`), so the label and the state
+        are one node instead of two;
+      * every `OutlinedTextField` has a `label`, which is the field's accessible name - a
+        placeholder is decoration and announces nothing;
+      * the signature pad exposes its name, its state and a clear action;
+      * the AR tap surface offers the action a camera preview can offer without a fingertip;
+      * both chooser rows are a `selectableGroup`.
+    """
+    for path in kotlin_sources("app"):
+        if "/src/main/" not in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for needle, rule_name in (
+            (".clickable(", "clickable"),
+            (".selectable(", "selectable"),
+            (".toggleable(", "toggleable"),
+        ):
+            index = 0
+            while True:
+                start = text.find(needle, index)
+                if start < 0:
+                    break
+                call = _kotlin_call(text, start + len(needle) - 1)
+                index = start + len(needle)
+                if not call:
+                    continue
+                if "role = Role." not in call:
+                    line = text[:start].count("\n") + 1
+                    add(path, f"line {line}: `{rule_name}` without a `role` - the row acts, so it "
+                              f"has to say what it is; an unlabelled clickable is announced as "
+                              f"tappable and nothing more")
+        # A Switch that keeps its own tap is a second, nameless control beside the label.
+        index = 0
+        while True:
+            start = text.find("Switch(", index)
+            if start < 0:
+                break
+            call = _kotlin_call(text, start)
+            index = start + len("Switch(")
+            if not call:
+                continue
+            if "onCheckedChange = null" not in call:
+                line = text[:start].count("\n") + 1
+                add(path, f"line {line}: a `Switch` with its own `onCheckedChange` - the tap then "
+                          f"belongs to a node that cannot name the setting it changes; hand it to "
+                          f"the row with `onCheckedChange = null` inside a `toggleable`")
+        # A field whose only hint is a placeholder has no accessible name.
+        index = 0
+        while True:
+            start = text.find("OutlinedTextField(", index)
+            if start < 0:
+                break
+            call = _kotlin_call(text, start)
+            index = start + len("OutlinedTextField(")
+            if not call:
+                continue
+            if "label = " not in call:
+                line = text[:start].count("\n") + 1
+                add(path, f"line {line}: an `OutlinedTextField` without a `label` - a placeholder "
+                          f"is not a name, so a screen reader meets an unlabelled edit box")
+    pad = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+           "SignaturePad.kt")
+    pad_text = pad.read_text(encoding="utf-8")
+    # `=` matters: the import line alone would satisfy a bare token search, which is exactly how a
+    # clause written against a word instead of an assignment reads green while announcing nothing.
+    if not re.search(r"stateDescription\s*=", pad_text):
+        add(pad, "the signature pad never says whether the page will carry a signature - a screen "
+                 "reader user has no way to know the pad is signed")
+    if not re.search(r"customActions\s*=\s*listOf\(", pad_text) or "CustomAccessibilityAction" not in pad_text:
+        add(pad, "the signature pad cannot be cleared without a fingertip: its clear action is not "
+                 "reachable as an accessibility action")
+    if "contentDescription = padLabel" not in pad_text:
+        add(pad, "the signature pad has no name, so it is announced as an unnamed canvas")
+    ar = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+          "ar" / "ArMeasureScreen.kt")
+    ar_text = ar.read_text(encoding="utf-8")
+    if "detectTapGestures" in ar_text and "onClick(label = tapAction)" not in ar_text:
+        add(ar, "the AR tap surface is a camera preview with no accessibility action - the only "
+                "way to set a point cannot be performed by a screen reader user")
+    for path, name in ((ar, "the conduit spec row"), ):
+        if "selectableGroup()" not in path.read_text(encoding="utf-8"):
+            add(path, f"{name} is not a group, so the chosen spec is announced without the fact "
+                      f"that it is chosen out of five")
+    book = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+            "FieldBookScreen.kt")
+    if "selectableGroup()" not in book.read_text(encoding="utf-8"):
+        add(book, "the severity choice is not a selectable group, so the chosen severity is "
+                  "announced as three unrelated chips")
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if not path.exists():
+            continue
+        strings, _ = load_locale(folder)
+        for key in ("a11y_signature_pad", "a11y_signature_signed", "a11y_signature_empty",
+                    "a11y_signature_clear", "a11y_ar_view", "a11y_ar_place_point"):
+            if not (strings.get(key) or "").strip():
+                add(path, f"missing string '{key}' - the control it names would be announced as "
+                          f"an unnamed element")
+
+
+def check_the_hud_says_when_the_reticle_moved() -> None:
+    """A point the architectural snap moved is a point the screen has to account for (finding 213).
+
+    `ReticleSnap` pulls a plane hit onto a corner or an edge when it is within ten centimetres of
+    one, and it did so silently: the reticle jumped, the number under the crosshair changed, and
+    the operator had no way to tell an exact corner from a noisy frame. His remedy was to tap
+    again - training him to distrust the one step that makes the measurement exact.
+
+    The move is recorded on the hit (`SnapInfo`), turned into four whole sentences per language
+    (`SnapFeatureKind.snapMovedRes`, because a placeholder cannot be declined), printed with the
+    distance in centimetres from the app's one formatter, and drawn as a ring at the point the
+    reticle samples. Every link can be dropped without a compile error - a record nobody sets, a
+    record nobody prints, a sentence nobody reaches - so each one is named here.
+    """
+    models = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" / "arengine" /
+              "hit" / "HitModels.kt")
+    models_text = models.read_text(encoding="utf-8")
+    if "data class SnapInfo(" not in models_text:
+        models_text = ""
+        add(models, "there is no record of where a snap moved a point and by how much - the move "
+                    "would be invisible to every screen for ever")
+    if models_text:
+        if "val kind: SnapFeatureKind" not in models_text:
+            add(models, "the snap record does not say which kind of feature the point was moved "
+                        "onto, so the screen cannot name it")
+        if "val distanceM: Float" not in models_text:
+            add(models, "the snap record carries no distance, so nothing can say how far the "
+                        "reticle jumped")
+        if "val snap: SnapInfo? = null" not in models_text:
+            add(models, "a `SurfaceHit` cannot carry the record, so no hit can report a move")
+    snap = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" / "arengine" /
+            "hit" / "ReticleSnap.kt")
+    if "snap = SnapInfo(" not in snap.read_text(encoding="utf-8"):
+        add(snap, "the snap moves the point and records nothing - the silent jump this round is "
+                  "about")
+    labels = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+              "Labels.kt")
+    labels_text = labels.read_text(encoding="utf-8")
+    for kind, resource in (
+        ("CORNER", "snap_corner"),
+        ("FLOOR_EDGE", "snap_floor_edge"),
+        ("CEILING_EDGE", "snap_ceiling_edge"),
+        ("EDGE", "snap_edge"),
+    ):
+        if f"SnapFeatureKind.{kind} -> R.string.{resource}" not in labels_text:
+            add(labels, f"`{kind}` has no sentence of its own - a snap onto it would be printed "
+                        f"as some other feature, or as nothing")
+    reading = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+               "ar" / "SnapReading.kt")
+    reading_text = reading.read_text(encoding="utf-8")
+    if "LengthUnit.CENTIMETER" not in reading_text:
+        add(reading, "the moved distance is not stated in centimetres - the whole tolerance is ten "
+                     "of them, and metres would print a number the operator has to convert")
+    if "isFinite()" not in reading_text or "< 0f" not in reading_text:
+        add(reading, "the distance is printed without a guard: a NaN or a negative would reach the "
+                     "HUD as a sentence")
+    screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+              "ar" / "ArMeasureScreen.kt")
+    screen_text = screen.read_text(encoding="utf-8")
+    if "snap.kind.snapMovedRes()" not in screen_text:
+        add(screen, "the screen never prints the snap sentence, so the record reaches nobody")
+    if "SnapMarker(" not in screen_text:
+        add(screen, "the screen draws no marker where the reticle was moved, so the jump stays "
+                    "invisible at the place it happens")
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if not path.exists():
+            continue
+        strings, _ = load_locale(folder)
+        for key in ("snap_corner", "snap_floor_edge", "snap_ceiling_edge", "snap_edge"):
+            value = strings.get(key)
+            if value is None:
+                add(path, f"missing string '{key}' - that kind of snap would print as nothing")
+                continue
+            if "%1$s" not in value:
+                add(path, f"'{key}' has no distance placeholder - the line would state the feature "
+                          f"and not how far the point moved")
+            if "cm" not in value:
+                add(path, f"'{key}' names no centimetre - the unit lives in the resource, so a "
+                          f"translator dropping it would leave a bare number")
+
+
+def check_a_contract_assertion_is_believed() -> None:
+    """An asserted value read with `?.` is a warning, and CI is `-Werror` (finding 199).
+
+    `kotlin.test.assertNotNull` and `requireNotNull` carry a *contract* - `returns() implies
+    (value != null)` - so the compiler smart-casts the value afterwards and reports every following
+    `?.` on it as an "unnecessary safe call", which `allWarningsAsErrors` turns into a build
+    failure. The author wrote the `?.` because the value is declared nullable two lines up, and the
+    code reads correctly: it is the *contract* that makes it wrong, and nothing in the file says so
+    out loud. This is the fourth CI-only compile failure in four rounds (findings 192, 193, 194 are
+    the same shape) and the second one where the fix is to *believe* an assertion the compiler
+    already understands.
+
+    Two exemptions keep this honest. A `var` is never smart-cast, so repeated assertions on it are
+    legal - the sibling rule for `!!` (finding 192) exempts it for the same reason. And a JUnit
+    `assertNotNull` has no contract: the rule only reads `assertNotNull` in a file that imports it
+    from `kotlin.test`, while `requireNotNull` is stdlib either way.
+    """
+    for path in tracked_sources():
+        if path.suffix != ".kt":
+            continue
+        text = path.read_text(encoding="utf-8")
+        kotlin_test_assert = "kotlin.test.assertNotNull" in text or "kotlin.test.*" in text
+        code = kotlin_code_only(text)
+        for match in CONTRACT_ASSERTION.finditer(code):
+            kind, name = match.group(1), match.group(2)
+            if kind == "assertNotNull" and not kotlin_test_assert:
+                continue
+            if re.search(r"\bvar\s+" + re.escape(name) + r"\b", code):
+                continue
+            asserted_depth = _brace_depth(code, match.start())
+            for safe in re.finditer(r"\b" + re.escape(name) + r"\?\.", code[match.end():]):
+                position = match.end() + safe.start()
+                # Only a `?.` that cannot be outside the block the assertion sits in is a smart
+                # cast: a `}` between the two means the value was re-opened to nullability.
+                if _brace_depth(code, position) < asserted_depth:
+                    continue
+                span = code[match.end():position]
+                if _brace_depth(code[:match.end()] + span, position) < asserted_depth:
+                    continue
+                line = code.count("\n", 0, position) + 1
+                add(path, f"`{name}` is asserted non-null at line {code.count(chr(10), 0, match.start()) + 1} "
+                          f"and read with `?.` at line {line}: the assertion's contract already "
+                          f"smart-casts it, so the safe call is a warning and `allWarningsAsErrors` "
+                          f"turns it into a build failure the sandbox cannot see - read `{name}.`")
+
+
+def check_the_wall_screen_uses_the_core_numbers() -> None:
+    """Three engines, one screen, and every link in the chain can be cut silently (finding 214).
+
+    `wallSurface`, `estimateDrywall` and `classifyInstallations` were written in phase 2 and had
+    never been called from anywhere but their own tests: a take-off that exists only in a unit test
+    is a take-off the person buying the boards does not have. The chain this round closes is six
+    links long and not one of them produces a compile error when dropped - an estimator nobody
+    calls, a wall ring that forgets its closing wall, a calibration factor applied twice or not at
+    all, a floor reference that is assumed to be zero, a zone screen with no route to it, a string
+    that only one language has.
+
+    The floor is the interesting link. ARCore's origin is wherever the session started, so a
+    mounting height has to come from a *tracked* plane - `FloorReference` names it, `HitResolution`
+    carries it out of the hit source where the planes live, the project stores it, and the plan
+    refuses to assign a zone without it. Any one of those steps missing leaves the app printing
+    heights it cannot vouch for, which is exactly what this app may not do.
+    """
+    core = ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core"
+    if not (core / "wall" / "DrywallEstimator.kt").exists():
+        add(core / "wall" / "DrywallEstimator.kt", "the drywall estimator is gone - the wall screen "
+            "would have no numbers to show")
+        return
+
+    plan = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "data" / "WallPlan.kt"
+    if not plan.exists():
+        add(plan, "there is no assembly of the room's walls, take-off and zones - the three "
+                  "engines would stay unwired")
+        return
+    plan_text = plan.read_text(encoding="utf-8")
+    for call in ("wallSurface(", "estimateDrywall(", "classifyInstallations("):
+        if call not in plan_text:
+            add(plan, f"the plan never calls `{call}`, so that engine still reaches no screen")
+    # The closing wall is a wall: a 4 x 3 m room is 14 m, not 11 m, and 3 m of missing wall is a
+    # board and a half on the purchase order.
+    if "% points.size" not in plan_text:
+        add(plan, "the ring is not closed - the edge from the last corner back to the first is a "
+                  "wall like every other one and it would be missing from the take-off")
+    if "calibrationScale" not in plan_text:
+        add(plan, "the plan ignores the project's calibration factor, so its metres would be the "
+                  "uncorrected ones while the bill of materials bills the corrected ones")
+    # A wall height is an assumption, not a measurement: scaling it would price a room that does
+    # not exist, so the factor belongs to the run and to the nodes - and to nothing else.
+    if "heightM * metresScale" in plan_text or "heightM = heightM *" in plan_text:
+        add(plan, "the calibration factor is applied to the wall height, which was never measured "
+                  "by the session - only a measured length may be scaled")
+    if "floorHeightM" not in plan_text:
+        add(plan, "the zones are computed from a height that is not relative to the finished "
+                  "floor, which is the one thing ARCore cannot supply on its own")
+
+    project = core / "model" / "Project.kt"
+    project_text = project.read_text(encoding="utf-8")
+    if "val floorHeightM: Float? = null" not in project_text:
+        add(project, "the project cannot store the floor's height, so every mounting height "
+                     "would have to be assumed and none could be checked")
+
+    floor_ref = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
+                 "arengine" / "hit" / "FloorReference.kt")
+    if not floor_ref.exists():
+        add(floor_ref, "nothing decides which tracked plane is the floor - the reference every "
+                       "mounting height is measured from would be the session origin again")
+    hit_models = floor_ref.parent / "HitModels.kt"
+    if "val floorHeightM: Float? = null" not in hit_models.read_text(encoding="utf-8"):
+        add(hit_models, "a resolution cannot carry the floor out of the hit source, so no screen "
+                        "can ever see it")
+    hit_source = floor_ref.parent / "ArHitSource.kt"
+    if "FloorReference.heightFrom(" not in hit_source.read_text(encoding="utf-8"):
+        add(hit_source, "the hit source holds the only live planes and does not look for a floor "
+                        "among them - the reference would be lost at the one place it exists")
+    measure = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+               "ar" / "ArMeasureScreen.kt")
+    if "onFloorHeight(" not in measure.read_text(encoding="utf-8"):
+        add(measure, "the AR screen never hands the floor it has seen to the caller, so the "
+                     "project keeps none")
+    root_screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+                   "AppRoot.kt")
+    root_text = root_screen.read_text(encoding="utf-8")
+    if "setFloorHeight(" not in root_text:
+        add(root_screen, "the floor the session measured is not written to the project")
+    if "composable(Routes.WALLS)" not in root_text:
+        add(root_screen, "the wall screen has no route, so nothing reaches it")
+    if "onWalls = " not in root_text:
+        add(root_screen, "no button leads to the wall screen - the screen would be unreachable")
+    view_model = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" /
+                  "ProjectViewModel.kt")
+    if "fun setFloorHeight(" not in view_model.read_text(encoding="utf-8"):
+        add(view_model, "there is no write path for the floor height, so the field would stay null "
+                        "for ever and the zones would never be assigned")
+
+    screen = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" / "WallScreen.kt"
+    if not screen.exists():
+        add(screen, "the take-off has no screen - the last unwired pair of phase 5 would stay "
+                    "unwired")
+        return
+    screen_text = screen.read_text(encoding="utf-8")
+    # The assumptions behind a purchase are part of the purchase: a fitter with 60 cm stud spacing
+    # reads 63 cm as an error, one with 2.60 m ceilings reads 2.50 m as one.
+    if "R.string.wall_assumptions" not in screen_text:
+        add(screen, "the drywall card prints its numbers without the board size, stud spacing and "
+                    "waste they were computed under")
+    if "R.string.wall_zones_no_floor" not in screen_text:
+        add(screen, "the zone card has no state for a room whose floor was never tracked - it "
+                    "would have to print a height it cannot vouch for, or nothing at all")
+    if "R.string.wall_openings_none" not in screen_text:
+        add(screen, "the screen deducts nothing without saying why - `0.00 m² openings` beside a "
+                    "room with a door reads as a measured zero")
+    if "LengthFormatter" not in screen_text:
+        add(screen, "the screen formats its own numbers - the app's one formatter owns the digits "
+                    "and the decimal mark")
+    if "stringResource(" not in screen_text:
+        add(screen, "the screen does not read its words from the resources")
+
+    gloves = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+              "ProjectScreen.kt")
+    gloves_text = gloves.read_text(encoding="utf-8")
+    if "R.string.wall_open" not in gloves_text:
+        add(gloves, "the project card has no button labelled for the wall screen")
+    if "onClick = onWalls," not in gloves_text:
+        add(gloves, "the wall button is not wired to the navigation callback")
+
+    required = {
+        "wall_title": (),
+        "wall_open": (),
+        "wall_empty": (),
+        "wall_row": ("%1$d", "%2$s", "%3$s"),
+        "wall_length_m": ("%1$s",),
+        "wall_area_m2": ("%1$s",),
+        "wall_net": (),
+        "wall_boards_value": ("%1$d", "%2$d"),
+        "wall_assumptions": ("%1$s", "%2$s", "%3$s", "%4$d"),
+        "wall_zones_no_floor": (),
+        "wall_openings_none": (),
+    }
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if not path.exists():
+            continue
+        strings, _ = load_locale(folder)
+        for key, placeholders in required.items():
+            value = strings.get(key)
+            if value is None:
+                add(path, f"missing string '{key}' - the wall screen would print nothing, or "
+                          f"English, in that language")
+                continue
+            for placeholder in placeholders:
+                if placeholder not in value:
+                    add(path, f"'{key}' lost `{placeholder}` - the row would state a fact without "
+                              f"its number, or crash on a missing argument")
+        assumptions = strings.get("wall_assumptions")
+        if assumptions is not None and "%%" not in assumptions:
+            add(path, "'wall_assumptions' has an unescaped percent - aapt reads it as the start "
+                      "of a format argument and the build fails")
+
+
+def check_the_generated_pages_keep_their_notice() -> None:
+    """The site is generated, so its notice has to be generated too (finding 215).
+
+    Six landing pages, one 404 page and a web manifest are written by `tools/build_site.py` on
+    every run, and all eight were published without a copyright notice: two of them (the 404 page
+    and the manifest a browser stores when the page is installed) carried the string
+    "AndrexTheDev" nowhere at all, and the six landing pages only in a `<meta name="author">` and
+    two GitHub links. Pasting a comment into `docs/` would not have fixed it - the next build
+    overwrites every page - so the notice is emitted by the generator, and this rule fails if a
+    future refactor stops emitting it, or if the checked-in pages fall out of step with the
+    generator that claims to write them.
+
+    The manifest is the exception that proves the rule: JSON has no comment syntax, so the notice
+    is a member. The web manifest spec requires clients to ignore members they do not know, so the
+    file stays valid and the notice travels with it.
+    """
+    builder = ROOT / "tools" / "build_site.py"
+    text = builder.read_text(encoding="utf-8")
+    if "NOTICE_HTML" not in text:
+        add(builder, "the site generator defines no notice, so every page it writes is published "
+                     "without one - a comment pasted into docs/ does not survive the next build")
+    emitted = text.count("NOTICE_HTML + f")
+    if emitted < 2:
+        add(builder, f"only {emitted} of the two page builders prepend the notice - the landing "
+                     f"pages and the 404 page are written by different functions, and the 404 page "
+                     f"is the one a stranger is most likely to land on")
+    if '"copyright":' not in text:
+        add(builder, "the web manifest carries no copyright member - JSON has no comments, so the "
+                     "one file a browser stores when the page is installed would name no owner")
+
+    # The site's language codes, not the app's resource folders: `values-de` is a directory name in
+    # `res/`, and `docs/values-de/index.html` has never existed.
+    site_langs = ["de", "es", "fr", "it", "pl"]
+    pages = [ROOT / "docs" / "index.html", ROOT / "docs" / "404.html"]
+    pages += [ROOT / "docs" / lang / "index.html" for lang in site_langs]
+    for page in pages:
+        if not page.exists():
+            add(page, "a generated page is missing from the tree")
+            continue
+        head = page.read_text(encoding="utf-8")[:400]
+        if not COPYRIGHT_NOTICE.search(head):
+            add(page, "the published page does not start with the copyright notice - either it was "
+                      "not regenerated, or the generator stopped emitting it")
+    manifest = ROOT / "docs" / "manifest.webmanifest"
+    if manifest.exists() and not COPYRIGHT_NOTICE.search(manifest.read_text(encoding="utf-8")):
+        add(manifest, "the published web manifest names no owner")
+
+
+UNWIRED_CLAIM = re.compile(
+    r"(?i)(not wired|not yet wired|nothing calls|no screen calls|nobody calls|no caller|"
+    r"has no caller|nothing in `:app` calls)"
+)
+BACKTICKED = re.compile(r"`([^`]+)`")
+
+
+def check_the_docs_do_not_call_a_live_path_dead() -> None:
+    """A document that calls a shipped path dead is wrong in the direction nobody checks (finding 216).
+
+    The README's native section still ended the floorplan paragraph with "Nothing calls
+    `floorplan()` from `:app` yet: it belongs on the scan worker, not on a screen, and the caller is
+    the next step" - eleven rounds after that caller was written
+    (`ArMeasureController.finalFloorplan` from `commitRun`, `onFloorplan`, and
+    `ProjectViewModel.saveFloorplanThumbnail`). The same README describes the finished chain three
+    hundred lines earlier, and ARCHITECTURE §5b documents it step by step, so one document gave two
+    answers to "does this work", and the wrong one was in the section a maintainer reads when
+    deciding whether a code path is live.
+
+    The rules that guard the other direction - a feature wired but never mentioned - do not catch
+    this, because nothing is missing: the sentence is simply out of date. What makes it checkable is
+    that these claims name their subject: a sentence that says *nothing calls* X, with X in
+    backticks, is a claim about `app/src/main`, and it is false the moment X appears there.
+
+    `docs/TESTING.md` is exempt: it is a log of what was true when a defect was found, and rows
+    about a path that has since been wired must keep saying what the defect was.
+    """
+    app_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (ROOT / "app" / "src" / "main").rglob("*")
+        if path.suffix in {".kt", ".xml"} and path.is_file()
+    )
+    docs = [ROOT / "README.md"] + sorted(
+        path for path in (ROOT / "docs").glob("*.md") if path.name != "TESTING.md"
+    )
+    for doc in docs:
+        if not doc.exists():
+            continue
+        text = doc.read_text(encoding="utf-8")
+        for sentence in re.split(r"(?<=[.!?])\s+", text):
+            if not UNWIRED_CLAIM.search(sentence):
+                continue
+            for symbol in BACKTICKED.findall(sentence):
+                # Paths (`core/.../wall`, `geometry/floorplan.cpp`) are places, not callables: the
+                # rule is about code the app could reach, and a path contains no claim about one.
+                if "/" in symbol:
+                    continue
+                base = symbol.rstrip("()").split(".")[-1]
+                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", base):
+                    continue
+                if base in app_text:
+                    add(doc, f"the text says nothing calls `{symbol}`, and `app/src/main` mentions "
+                             f"`{base}` - either the sentence is out of date or the code is dead, "
+                             f"and both are findings")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -2810,6 +4146,24 @@ def main() -> int:
     check_backticked_names()
     check_money_fields_are_not_rekeyed()
     check_manifest_hardening()
+    check_a_stable_value_is_asserted_once()
+    check_a_contract_assertion_is_believed()
+    check_glove_buttons_are_big_enough()
+    check_the_protocol_prints_the_room_plan()
+    check_every_interactive_row_announces_itself()
+    check_the_hud_says_when_the_reticle_moved()
+    check_the_wall_screen_uses_the_core_numbers()
+    check_the_generated_pages_keep_their_notice()
+    check_the_docs_do_not_call_a_live_path_dead()
+    check_the_reticle_snap_stays_wired()
+    check_exported_numbers_use_the_c_locale()
+    check_project_imports_are_used()
+    check_the_card_picture_has_a_writer()
+    check_the_card_draws_from_the_project_file()
+    check_the_card_states_the_room_size()
+    check_an_open_room_can_be_closed_by_hand()
+    check_every_external_function_has_a_symbol()
+    check_the_floorplan_payload_header_matches()
     check_kotlin_structure()
     check_resource_xml()
     check_licence_key()

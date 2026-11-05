@@ -12,6 +12,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import com.constructar.core.io.SafeFiles
+import com.constructar.core.model.FloorplanSketch
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.model.RouteDraft
 import com.constructar.core.model.WorkTime
@@ -82,6 +83,14 @@ class ProjectRepository(private val context: Context) {
          * (finding 144). Defaulted so a summary written by an older build still decodes.
          */
         val customerName: String = "",
+        /**
+         * The room's outline for the card picture, or `null` while no closed plan has been measured.
+         *
+         * Carried in the summary rather than read per row: the list already parses every project
+         * file to build these, so the outline costs nothing extra, and a card that opened the JSON
+         * again would parse the same tree twice.
+         */
+        val sketch: FloorplanSketch? = null,
     )
 
     /**
@@ -128,6 +137,7 @@ class ProjectRepository(private val context: Context) {
                     openDefects = project.openDefectCount,
                     workRunning = WorkTime.isRunning(project.sessions),
                     customerName = project.customerName,
+                    sketch = project.sketch,
                 )
             }
         }
@@ -374,6 +384,10 @@ class ProjectRepository(private val context: Context) {
         // be offered again on the next start (with nothing to attach it to). The result of *that*
         // delete is not the answer to "was the room deleted": with no draft it is `false`.
         draftFileFor(id).delete()
+        // The room's own folder holds its card picture; an orphaned folder is a picture of a room
+        // that no longer exists, which the home screen would never show and the operator could
+        // never delete. `deleteRecursively` is bounded by the id check above.
+        File(directory, id).deleteRecursively()
         removed
     }
 
@@ -464,6 +478,38 @@ class ProjectRepository(private val context: Context) {
     suspend fun loadPhoto(projectId: String, maxDimensionPx: Int = 1_200): Bitmap? =
         loadPhotoAs(projectId, maxDimensionPx)
 
+    /**
+     * Writes the room's card picture next to its JSON.
+     *
+     * The write is the same [SafeFiles.writeAtomically] path a project uses - temporary file,
+     * `fsync`, rename - because a card is read while the phone is being put away, and a half-written
+     * SVG is a broken image on the home screen with nothing to say why. The id is checked like every
+     * other id that reaches the file system ([isSafeToken]), and the text is capped: an SVG of a room
+     * is a few hundred bytes, so anything near [MAX_PROJECT_BYTES] is a bug rather than a picture,
+     * and writing it would be a good way to fill the phone.
+     *
+     * Returns false when the id is not safe, the text is too large, or the write did not land. The
+     * caller has nothing to show the operator: a thumbnail is a convenience, and the run it pictures
+     * is already saved.
+     */
+    suspend fun saveThumbnail(projectId: String, svg: String): Boolean = withContext(Dispatchers.IO) {
+        if (!isSafeToken(projectId)) return@withContext false
+        val bytes = svg.toByteArray(Charsets.UTF_8)
+        if (bytes.isEmpty() || bytes.size > MAX_THUMBNAIL_BYTES) return@withContext false
+        SafeFiles.writeAtomically(thumbnailFileFor(projectId), bytes)
+    }
+
+    /**
+     * Where the card picture for [projectId] lives: `projects/<id>/thumbnail.svg`.
+     *
+     * A folder per room rather than a sibling file, because the picture is not the only thing a
+     * room will grow here (the product plan puts the exported floorplan beside it) and `<id>.json`
+     * must stay a single file the list can read without opening a folder. `list()` and
+     * `backupEntries()` filter on `.json`, so a folder is invisible to both.
+     */
+    fun thumbnailFileFor(projectId: String): File =
+        File(File(directory, projectId), RoomThumbnail.FILE_NAME)
+
     /** Where exports are staged before the operator picks a destination folder. */
     fun exportStagingDirectory(): File = File(context.cacheDir, "exports").apply { mkdirs() }
 
@@ -490,5 +536,13 @@ class ProjectRepository(private val context: Context) {
 
         /** Generous for a project file, small enough that a wrong pick cannot exhaust the heap. */
         const val MAX_PROJECT_BYTES: Int = 8 * 1024 * 1024
+
+        /**
+         * The card picture's cap: a floorplan SVG of any real room is under 4 kB (a corner is ~18
+         * bytes of coordinates), so 256 kB is a hundred rooms' worth and still nothing.
+         */
+        const val MAX_THUMBNAIL_BYTES: Int = 256 * 1024
+
+
     }
 }

@@ -207,6 +207,43 @@ class NativeSlamEngine internal constructor(
         return nativeLastBounds(active)
     }
 
+    /**
+     * The room's floorplan: a slice at [heightMetres], the horizontal surfaces dropped, the rest
+     * vectorised into wall runs and an outline.
+     *
+     * **Call this on the scan worker, not from a screen.** It walks the whole volume (that is what
+     * a slice is) and the native side holds the volume lock for the duration, so a call from the
+     * UI thread would stall integration and drop frames. The pipeline's single-threaded dispatcher
+     * is the only correct caller, which is also why nothing in `:app` calls it yet.
+     *
+     * Defaults are `FloorplanOptions`' own (`cellMetres` 5 cm, `rdpEpsilonMetres` 8 cm,
+     * `minSegmentMetres` 25 cm); the native side refuses implausible values by returning null
+     * rather than drawing a room out of a division by zero.
+     *
+     * Returns null when the library is unavailable, the native side refused the parameters, or the
+     * payload is truncated - see [FloorplanPayload.parse] for what "truncated" means and why a
+     * short payload is not read into zeros.
+     */
+    fun floorplan(
+        heightMetres: Float = 1f,
+        bandMetres: Float = 0.1f,
+        cellMetres: Float = 0.05f,
+        rdpEpsilonMetres: Float = 0.08f,
+        minSegmentMetres: Float = 0.25f,
+    ): FloorplanPayload? {
+        val active = handle
+        if (active == 0L) return null
+        val payload = nativeFloorplan(
+            active,
+            heightMetres,
+            bandMetres,
+            cellMetres,
+            rdpEpsilonMetres,
+            minSegmentMetres,
+        )
+        return FloorplanPayload.parse(payload)
+    }
+
     fun reset() {
         val active = handle
         if (active != 0L) nativeReset(active)
@@ -392,6 +429,14 @@ class NativeSlamEngine internal constructor(
 
         @JvmStatic private external fun nativeExtractMesh(handle: Long, isoLevel: Float): Array<Any>?
         @JvmStatic private external fun nativeLastBounds(handle: Long): FloatArray?
+        @JvmStatic private external fun nativeFloorplan(
+            handle: Long,
+            heightMetres: Float,
+            bandMetres: Float,
+            cellMetres: Float,
+            rdpEpsilonMetres: Float,
+            minSegmentMetres: Float,
+        ): FloatArray?
         @JvmStatic private external fun nativePoseGraphReset(handle: Long)
         @JvmStatic private external fun nativePoseGraphAddNode(handle: Long, pose: FloatArray, fixed: Boolean): Int
 

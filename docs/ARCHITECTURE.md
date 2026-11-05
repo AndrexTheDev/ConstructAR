@@ -1,3 +1,9 @@
+<!--
+  Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+  All rights reserved. Proprietary and confidential - see LICENSE.
+  SPDX-License-Identifier: LicenseRef-Proprietary
+-->
+
 # Architecture
 
 ## 1. The one rule
@@ -69,6 +75,13 @@ which said nothing about the worker that was still pinning it.
    * *tier 4* — `HitResult.Type.POINT`, confidence 0.4.
    * A normal is derived per tier (plane normal, least-squares fit of a 5×5 depth patch, or
      flipped towards the camera) and always oriented towards the operator.
+   * **Snap** (`ReticleSnap`, tier 1 only) — the accepted plane hit is measured against the
+     room's derived edges and corners: each pair of tracked, non-subsumed polygons is
+     intersected and the resulting line is clipped to *both* polygons, so two walls that do
+     not touch produce no corner. Within 10 cm the hit becomes the feature's closest point.
+     Depth and feature-point hits keep their raw point — they carry no polygon to derive an
+     edge from — and the normal stays the aimed wall's. Toggle:
+     `HitCascadeConfig.snapToArchitecturalFeatures`.
 4. **Node** → `RouteSession.addNode(hit)`: rejects taps closer than 2 cm to the previous node,
    creates an `Anchor` whose +Y axis is the surface normal, appends a `RouteNodeRecord`.
 5. **Anchor refinement** → every frame `RouteSession.onFrame()` re-reads anchor poses and moves
@@ -113,6 +126,106 @@ points and the sliver that would otherwise become walls, and a rejected candidat
 points leave the cloud so the same set cannot be proposed again, and the next surface is looked
 for, because ending the fit there cost a scan every plane behind a bolt head (finding 191); the normal's sign is fixed towards the
 centre of the cloud, so two fits of one room agree.
+
+**Waist-height slice and floorplan** (`tsdf/volume.cpp`, `geometry/floorplan.cpp`). A 2D plan
+starts as a horizontal cut through the volume at y = 1.0 m: `sliceSurfaceAtHeight` walks every
+shard under the integration and shard locks and emits the voxels whose `|sdf| <= 0.5` and whose
+`weight > 0` inside the band, so the result is measured surface at that height and nothing from
+free or unobserved space. The cut is taken from the *volume* rather than the mesh on purpose — the
+mesh is a triangle soup whose vertices sit wherever the triangulator placed them, so slicing it
+depends on the triangulation, while the voxel lattice has a fixed spacing and a fixed cost.
+`vectoriseFloorplan` then rasterises the points into a 5 cm grid, resolves the cells that touch only
+at a corner (a 45° wall is a staircase of exactly those, and without the resolution its boundary
+breaks into four-point bubbles and the room never closes), collects each occupied cell's
+empty-sided edges with the interior on the left, chains them into loops through integer corner keys
+— so closure is an exact comparison, not an epsilon — and simplifies each loop with
+Ramer–Douglas–Peucker, splitting it at the vertex farthest from the start so the simplification does
+not pin two arbitrary corners. Of the closed loops the largest one that encloses at least a quarter
+of the slice's bounding rectangle is reported: smaller closed loops are slivers where a band's two
+faces meet, and calling one of those "the room" is how a doorway scan would claim 0.23 m². Because
+the loop is the outer face of a one-cell band, every wall moves outward by up to a cell and the area
+reads high — measured +1.25 % on a 4 × 3 m room — and the suite's tolerance is one-sided for that
+reason. A doorway leaves the ring open; the call then reports no area and no segments rather than
+joining the last wall run to the first, which would draw a wall across the doorway. Manhattan angle
+snapping and door/window classification are the next step and are not claimed.
+
+**The plan crossing the bridge.** `nativeFloorplan(handle, height, band, cell, rdpEpsilon,
+minSegment)` slices the volume, masks the horizontal surfaces and vectorises what is left, and
+returns one `float[]`. The mask lives on the native side because it needs the point normals, which
+only exist there; doing it in Kotlin would mean shipping a slice *and* its normals across the bridge
+to throw half of them away. The call takes the volume lock, which is why it belongs on the scan
+worker and not on a screen: from the UI thread it would stall integration and drop frames.
+
+The payload is a contract neither compiler can check, so it is pinned three ways - the packer is a
+plain function with fifteen host assertions on its exact layout, the header size is a named constant
+on both sides (`kFloorplanPayloadHeader` / `FloorplanPayload.HEADER`) and
+`scripts/verify_sources.py` compares them, and the Kotlin parser refuses any payload whose length
+does not prove its own header: a truncated array read field by field returns zeros, and a room with
+zero-length walls is a plan that draws and is wrong. Parameters are validated natively (band in
+`(0, 1] m`, cell in `[0.01, 1] m`, non-negative tolerances, NaN refused by every comparison) and
+answered with `null` rather than a division by zero.
+
+**Semantic masking** (`geometry/surface_mask.cpp`) sits between the slice and the vectoriser,
+because a waist-height cut is not a cut through walls: it also crosses every table, counter and
+workbench in the room, and a horizontal patch handed to a 2D vectoriser becomes a wall through the
+middle of the plan, a partition in the deliverable and a wall area the material estimate pays for.
+The separator is the surface normal, which costs nothing extra because a TSDF's gradient *is* the
+normal: `sliceSurfacesAtHeight` takes a central difference over the observed voxels in the band
+(one-sided where only one side was observed) and hands back oriented points. The mask keeps a point
+when its normal is within `maxTiltFromVerticalDegrees` (20°) of vertical, and counts what it
+dropped: horizontal patches in one bucket, points whose normal could not be measured in another.
+Unmeasured points are *not* admitted - letting them through would reintroduce exactly the phantoms
+the mask exists to remove - and the counts are published so a slice made mostly of them is visible
+as such.
+
+**Distance-weighted fusion.** Every observation is weighted by 1/Z² (`observationWeight`, clamped
+to [1/36, 4]), because a depth camera's error grows with range: without it, one frame taken from
+across the room pulls as hard on a voxel as fifty frames taken at arm's length. The weight is
+applied inside `fuseVoxel`, under the shard lock, and the running average uses it - so the
+observations that are worth more are the ones that decide where the surface is. Two consequences
+worth naming: the voxel weight array stopped being a count and became 16-bit fixed point in
+1/256ths (`TsdfVolume::kWeightScale`), since a flat array would have truncated a 0.0625 observation
+to zero; and `IntegrationStats::voxelWeight` reports the evidence a frame added, so the volume's
+`totalVoxelWeightExact()` is exactly the sum of it over every frame - the accounting identity that
+catches a fusion which is counted but not stored (finding 181's guard).
+
+**Net wall area and the drywall take-off** (`core/.../wall`). The first `:core` package that
+turns geometry into a *purchase order*. `wallSurface` subtracts each wall's openings as a **union**
+of axis-aligned rectangles - swept over the x edges the openings introduce, with the y spans merged
+inside each strip - so two windows that overlap take board off the wall once. That is not a detail:
+subtracting the sum removes board from a wall that is still there, and the estimate then comes out
+short, which is the failure that ends with a fitter in a half-boarded room. Openings that do not fit
+their wall are clipped to it **and counted**, with the reason enumerated (`NEGATIVE_SIZE`,
+`OUTSIDE_WALL`, `ABOVE_WALL`) rather than silently absorbed, because a window 20 cm past the end of
+its wall is a measurement the operator can check. `estimateDrywall` then applies the trade's
+numbers: boards of 2.50 x 1.25 m (one board is one wall height, which is why the default wall height
+is 2.50 m), CW studs at 62.5 cm centres so every board edge lands on metal (a run gets a stud at
+both ends - a 4 m wall is 7, not 6), UW track top and bottom, 29 screws per square metre of
+*installed* board (it is the board that is screwed, not the net wall), and 10 % waste on everything
+that is cut. A spec that cannot be built - zero spacing, zero board - returns `valid = false` with
+every number zero rather than dividing by it. Both entry points are pure and unit-tested; since
+phase 5 they are reached from a screen — see §5e below, which is where the last link of the chain
+lives.
+
+**DIN 18015 zones and clash detection** (`core/.../wall`). Two checks that stand between a
+measured run and a drawing. A tap in AR lands where the reticle rests, not where the standard says,
+so `snapToInstallationZone` assigns a height to the socket line (30 cm), the switch line (105 cm) or
+the ceiling outlet (ceiling − 15 cm, so it follows the room rather than being a fixed number) and
+refuses anything more than the tolerance away - naming the line it was nearest, because "25 cm above
+the socket line" is a sentence the operator can act on and a silent snap is a socket at 55 cm on a
+drawing that claims the standard. Ties within 1e-4 go to the lower zone: the lines are 75 cm apart,
+so a tie means the point is not between two of them. `checkClearance` then holds the measured
+polyline against boxes that stand for walls, beams and services, with three deliberate choices: the
+intersection test is a real slab clip, because a segment through the *middle* of a beam touches none
+of its twelve edges and an edge-only check reports a penetration as half a metre clear; the
+non-intersecting distance is closed-form (both endpoints, then the twelve edge-to-segment distances),
+never sampled, because a step size that cannot miss a crossing is finer than the clearances being
+asked about; and invalid input - a non-finite point, a route of one point, an inside-out box -
+returns `valid = false` with no hits, since "clear" computed from nonsense is worse than no answer.
+The zones are wired into the *Walls* screen (§5e). The clearance check is **not**: nothing in
+`:app` constructs an `Obstacle` yet — the app has no source of walls, beams and services as boxes,
+and a clearance card with nothing to check against would print a claim it cannot back, so it stays
+in `:core` with its tests until a source exists.
 
 **Manhattan-World frame** (`geometry/manhattan_world.cpp`). A room is meant to be orthogonal;
 the planes fitted from depth are not, because each carries its own noise and the pose graph's
@@ -196,6 +309,123 @@ small, traversed distance large) which the UI asks the operator to confirm.
 
 ---
 
+## 5a. Controls and the gloved hand
+
+`SiteColors.gloveTouchTarget` is 64 dp and `GloveButton` is 72 dp; every `IconButton` in `:app`
+carries one or the other. The convention is enforced, not remembered:
+`check_glove_buttons_are_big_enough` walks every `IconButton` call in `:app` and refuses a bare one
+(Material's 48 dp default) or an explicit size below the target, naming the size it found
+(finding 205). The two AR buttons — export and leave, the primary actions of the screen used with
+gloves on — are 72 dp. A card that opens a room passes `role = Role.Button` to `clickable`, and the
+room picture is decorative by design: the row prints name, runs, metres, area and perimeter as text,
+which is what a screen reader reads.
+
+---
+
+## 5b. The plan page in the protocol
+
+The protocol's floorplan page is a page of its own, printed before the signature: a closed path
+through the stored ring, a grey floor, a caption with the room's area and perimeter, and - when the
+ring was closed by a person rather than by the scan - the sentence that says so.
+
+The split follows the module boundaries that already existed:
+
+| Where | What it owns | Why there |
+|---|---|---|
+| `:app` `data/RoomPlanPage` | which ring, and which words | the sketch is the app's, and `:export` has no string table: it receives a title, a caption and a note, never composing a sentence (finding 100's rule) |
+| `:export` `pdf/FloorplanLayout` | the projection into the printable box | geometry that must be testable without a `PdfDocument`, exactly like `PageFlow` |
+| `:export` `pdf/ProtocolPdfWriter` | ink: path, stroke, text | the writer is the only place that knows what a page looks like |
+
+`FloorplanLayout` borrows the SVG's three rules so paper and phone cannot show different rooms: one
+scale for both axes (the longer extent sets it), world `z` running down the page, and a wall that is
+a physical 10 cm at that scale clamped to `[0.75, 6]` points. It returns `null` - and the writer then
+prints the heading with no drawing rather than an empty frame - for fewer than three corners, a
+non-finite coordinate, a box without area, or an outline with no extent at all. A caller that has no
+closed ring hands over `null` and the document simply has no plan page.
+
+`check_the_protocol_prints_the_room_plan` walks the chain - mapper, request, service, writer, and the
+two resources in six locales - because every link of it can be dropped without a compile error: a
+nullable field nobody passes, a section that is passed and never drawn, a page drawn after the
+signature is already on the paper (finding 206).
+
+---
+
+## 5c. What the screen says out loud
+
+Every acting row in `:app` announces three things: what it is (`role`), what it does, and what it
+currently is (`selected`, `stateDescription`, or the value a `toggleable` carries). The conventions
+live in one place — `check_every_interactive_row_announces_itself` — because each of them is a
+modifier in one file and a promise in another:
+
+| Convention | Why it is not optional | Where it is enforced |
+|---|---|---|
+| `clickable`/`selectable`/`toggleable` carry a `role` | an unlabelled clickable is announced as tappable and nothing more | every call in `:app`, read with balanced parentheses |
+| a `Switch` hands its tap to its row (`onCheckedChange = null`) | otherwise the control is a second node that cannot name the setting it changes | every `Switch(` in `:app` |
+| every `OutlinedTextField` has a `label` | a placeholder is decoration inside the box and not the field's name; Material draws the label in the same spot when the field is empty | every field in `:app` |
+| a chooser is a `selectableGroup` | "16 mm, selected" only means something inside a group of five | the severity row and the conduit-spec row |
+| the signature pad has a name, a state and a clear action | a canvas with two pointer inputs is silence, and its clear button is across the screen from it | `SignaturePad.kt` |
+| the AR tap surface offers `onClick` | it is the only way to set a point; a camera preview with no action cannot be measured by a screen reader user | `ArMeasureScreen.kt` |
+
+The words are resources like every other word in the app: `a11y_signature_pad`, `_signed`,
+`_empty`, `_clear`, `a11y_ar_view` and `a11y_ar_place_point`, in six locales, checked by
+`tools/i18n_audit.py` and by `A11yLabelsTest` — which cannot judge a translation, but can refuse
+two sentences that must not be confused in the ear being the same string.
+
+---
+
+## 5d. A point that was moved, and the screen that says so
+
+`ReticleSnap` pulls an accepted plane hit onto the nearest derived corner or edge within 10 cm, in
+the engine, before the hit can become a route node. That is the right default and it is silent by
+nature: the operator's aim was not the measurement, the architecture is. Silence is the problem —
+a reticle that jumps two centimetres and a length that changes between two taps read as an unstable
+tool, so the operator taps again and keeps whichever number he likes.
+
+The move therefore travels with the hit:
+
+| Step | Where | What it carries |
+|---|---|---|
+| record | `:ar-engine` `SnapInfo` on `SurfaceHit` | the kind of feature and the distance moved |
+| survive the window | `HitStabilizer.stabilize` | the record stays while the point becomes the median of a settled window — every sample was snapped to the same feature |
+| say it | `:app` `SnapReading` + `SnapFeatureKind.snapMovedRes` | centimetres from `LengthFormatter`, one whole sentence per kind per language |
+| show it | `:app` `SnapMarker` | a ring at the centre of the AR view, where the reticle samples |
+
+Two deliberate omissions. The record is **not** part of `SurfaceHit.toRouteNode`: a stored node
+records where the point *is*, and the protocol prints that position, not the reticle's opinion of
+it. And the sentence is **not** one resource with the feature as an argument: German needs *an der
+Ecke* against *an der Bodenkante*, Polish needs a different case again, and a placeholder would
+force every translator to bend a sentence around a noun they cannot decline. Four sentences per
+language is smaller than the grammar it avoids.
+
+`check_the_hud_says_when_the_reticle_moved` names the five links — record, snap, sentences, digits
+with their guard, screen — and the four resources in six locales (finding 213).
+
+## 5e. The take-off, the floor it is measured from, and the screen that shows both
+
+Three `:core` engines - net wall area, the drywall estimate, the DIN 18015 zones - plus a fourth,
+the clearance check, had unit tests and no screen. The *Walls* button on the project card now opens
+`WallScreen`, and `WallPlanBuilder` is the whole of what stands between the project file and it:
+
+| Question | Answer, and why that answer |
+|---|---|
+| What is a wall? | An edge of the room's stored ring (`FloorplanSketch`), **including the closing one**: a 4 x 3 m room is 14 m of wall, not 11 m, and 3 m of missing wall is a board and a half on the order. An open ring is not a room yet and produces no walls at all - the card already offers to close it by hand. |
+| Which metres? | The project's `calibrationScale` is applied to the run and to the nodes, once, at the reporting layer - the same rule the bill of materials follows. It is **not** applied to the wall *height*: 2.50 m is the assumption the estimate is made under, not a length the session measured. |
+| Where is 30 cm? | On the finished floor - and the only honest source of that is a tracked horizontal plane. ARCore's world origin is wherever the session started, usually at chest height, so `y` alone is a height above nothing an electrician would recognise. `FloorReference` picks the highest upward-facing tracked plane at or below the viewer within 3.5 m (`null` when there is none), `HitResolution` carries it out of `ArHitSource` where the planes are alive, `ProjectRecord.floorHeightM` stores it, and without it `WallPlan.installations` is `null` and the screen says so instead of printing a socket at 1.40 m. |
+| What is not shown? | Openings: nothing in the app records a door or a window yet, so the screen prints `0.00 m²` deducted *and says why* - a silent zero beside a room with a door reads as a measurement. And the clearance check, because nothing constructs an `Obstacle` (§4). |
+
+The screen prints the assumptions under the purchase (board size, stud spacing, waste) for the same
+reason the protocol prints its expected error: a number without its conditions is an argument. Every
+digit comes from `LengthFormatter`, every word from six locales, and the retrofit is backward
+compatible — `floorHeightM` is defaulted and `null` is omitted by the repository's JSON, so a room
+recorded by the previous release loads unchanged with no zones and no complaint.
+
+`check_the_wall_screen_uses_the_core_numbers` names each link — the three calls, the closing wall,
+where the calibration factor is and is not applied, the floor's four hops from plane to screen, the
+route and the button, the four sentences a reader needs to understand an empty or refused state —
+and the eleven resources in six locales (finding 214).
+
+---
+
 ## 6. Persistence
 
 A project is one JSON file (`filesDir/projects/<uuid>.json`) written atomically (temp file +
@@ -212,6 +442,64 @@ points, the conduit spec, whether the loop was closed); what cannot survive is t
 origin, so the recovered route is marked `recovered`: it counts fully in the bill of materials
 and the protocol, and it is kept out of the 3D export and the AR preview, where its coordinates
 would be a length of conduit floating somewhere in the room.
+
+**The room's picture.** Next to the JSON, in `filesDir/projects/`, the product plan puts a
+`thumbnail.svg` for the home screen's card — a few hundred bytes of polygon instead of a camera
+frame, drawn by `:export`'s `FloorplanSvg` from the outline in world metres (one scale for both
+axes, plan view: world `x` right, world `z` down, walls 10 cm thick to scale with a 1 px floor).
+The chain that writes it, in the order the data travels:
+
+1. `TsdfScanPipeline.floorplan()` — `withContext(dispatcher)` puts the slice in the queue behind the
+   frame being integrated, so it takes the volume lock from the one thread that already owns it. A
+   bounded 400 ms wait: a picture is a convenience and the run must not wait for it.
+2. `ArMeasureController.finalFloorplan()` — called from `commitRun`, the moment a run is finished and
+   the volume still holds the walls that were walked. After `release()` the volume is gone.
+3. `ArMeasureScreen` hands the plan to `onFloorplan` (the screen has no repository, and does not
+   grow one for a picture).
+4. `ProjectViewModel.saveFloorplanThumbnail` → `RoomThumbnail.svg` — the largest **closed** loop is
+   the room; a doorway leaves the ring open, and closing it here would draw a wall across the door.
+5. `ProjectRepository.saveThumbnail` — `files/projects/<id>/thumbnail.svg` through
+   `SafeFiles.writeAtomically`, with the id token-checked and the text capped at 256 kB; `delete()`
+   removes the whole folder, so no orphan picture outlives its room.
+
+A per-room folder rather than a sibling file keeps `<id>.json` a single file that `list()` and
+`backupEntries()` read by extension; a folder is invisible to both. The SVG is **not** in the
+backup - it is derived, and it is rewritten the next time a run is committed - but the outline the
+card draws *is*, because it is a field on the project.
+
+**The card draws the project, not the file.** Android has no SVG renderer, so step 5's output is
+for laptops, mail and paper; what the home screen draws is a field on the room itself. The same
+`largestClosedLoop` decision is taken a second time by `RoomThumbnail.sketch`, which turns the loop
+into `ProjectRecord.sketch: FloorplanSketch?` — a list of `{xMeters, zMeters}` corners, at most
+`FloorplanSketch.MAX_POINTS` (512, and three needed before anything is drawable), written by the same
+`repository.save` that writes every other field and projected by `RoomThumbnail.pathPoints` into the
+40 dp `Canvas` in `HomeScreen.RoomPicture`. The projection is `FloorplanSvg`'s (one scale, centred,
+world `z` down) because the card and the exported picture are the same room; the two are pinned to
+each other by a test, not by a comment.
+
+**The open ring is data, not a failure.** A scan of a room with a doorway in it traces a ring that
+never closes; round 94 stored nothing at all for it, and the payload those corners lived in is freed
+when the run is committed - so the only recovery was re-walking the room. The sketch is now stored
+whatever its closure says, `FloorplanSketch.Closure` is the three-way answer (`Open`, `Measured`,
+`DrawnByHand`), and `closeRoomByHand` performs the one gesture that turns an open ring into a room:
+`ProjectViewModel.closeRoomByHand` loads the room, takes `closedByHand()`, saves it through the same
+atomic write, writes the SVG from the sketch (`RoomThumbnail.svg(sketch)`, the same renderer the
+payload path uses), and refreshes the list. The card's chip asks before it acts, and the row shows
+that the wall was drawn. Nothing here guesses: a doorway stays a doorway until a person says
+otherwise.
+
+The same outline is read a third time for the card's **size** badges: `RoomSizeText.of(sketch)`
+turns the ring into the digits of its area (`PolygonMath.area`) and its perimeter (the closed walk,
+last corner back to the first) and returns `null` for anything the picture would refuse — the two
+states cannot disagree about whether the room was measured. The units are resources
+(`card_area`, `card_perimeter`); a unit typed into a screen would ship in one language, and the
+i18n audit reads resources, not Kotlin.
+
+Two consequences worth stating. The outline is inside the project JSON, so `backupEntries()` carries
+it: a room restored on another phone still draws its plan, while the `thumbnail.svg` beside it is
+regenerated or simply absent (`explicitNulls = false` means a room that was never scanned writes no
+`sketch` key at all, and such a file loads unchanged). And the outline is *not* the scan: it is eight
+floats per corner, which is the reason it can live in the JSON while the TSDF volume never does.
 
 Schema version `1`; `ProjectMigrations` is the place for the next one.
 

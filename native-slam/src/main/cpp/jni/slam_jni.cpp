@@ -24,10 +24,19 @@
 //   nativePoseGraphAddEdge(handle, from, to, measurement[16], rotWeight, transWeight, loop)
 //   nativePoseGraphOptimize(handle, iterations) -> FloatArray (report + flattened poses)
 //   nativeLoopCandidates(handle) -> FloatArray (triples: from, to, distance)
+//   nativeFloorplan(handle, heightMetres, bandMetres, cellMetres, rdpEpsilonMetres,
+//                   minSegmentMetres) -> FloatArray                      (see below)
 //
 // Mesh payload: FloatArray = [vertexCount, triangleCount, positions(3n), normals(3n)],
 //               IntArray   = indices(3t). Both arrays come from the same snapshot, so they
 //               are always consistent (unlike two separate JNI calls).
+//
+// Floorplan payload: one FloatArray, header of `kFloorplanPayloadHeader` (8) floats, then the
+//               segments, the loop lengths and closure flags, then the outline points - the exact
+//               layout is written down once, in `geometry/floorplan.hpp`, and the packer that
+//               produces it is host-tested. The Kotlin parser checks the length before it reads a
+//               single field: a truncated array read field by field yields zeros, and a room with
+//               zero-size walls is a plan that draws and is wrong.
 #include <jni.h>
 
 #include <algorithm>
@@ -46,6 +55,8 @@
 #include <mutex>
 #include <vector>
 
+#include "../geometry/floorplan.hpp"
+#include "../geometry/surface_mask.hpp"
 #include "../slam/pose_graph.hpp"
 #include "../slam/rtabmap_bridge.hpp"
 #include "../tsdf/volume.hpp"
@@ -492,6 +503,69 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeRtabMapAvailable(JNIEnv
                                                                         jlong handle) {
   EngineContext* context = contextFrom(handle);
   return (context != nullptr && context->rtabMap.isAvailable()) ? JNI_TRUE : JNI_FALSE;
+}
+
+/**
+ * Vectorised floorplan of the waist-height slice, as a packed `float[]`.
+ *
+ * The pipeline is the one the geometry files document: slice the TSDF at [heightMetres] with
+ * [bandMetres] of thickness, drop the horizontal surfaces (a table top is not a wall), project what
+ * is left onto the floor plane and vectorise it. Doing the mask here rather than in Kotlin is not
+ * an optimisation: the mask needs the point normals, which only exist on this side of the bridge,
+ * and a slice without it produces a floorplan of the table the operator walked around.
+ *
+ * **Refused parameters return null, never a crash or a guess.** A cell size of 0 divides the grid
+ * by zero, a negative epsilon makes RDP keep everything, and a band wider than a metre is a slab
+ * of the room rather than a slice through it. NaN fails every comparison below, so it is refused
+ * with the rest.
+ *
+ * The payload layout is documented once, in `geometry/floorplan.hpp`, next to the packer the host
+ * suite exercises. This function adds nothing to it but the copy.
+ */
+JNIEXPORT jfloatArray JNICALL
+Java_com_constructar_nativebridge_NativeSlamEngine_nativeFloorplan(JNIEnv* env, jobject,
+                                                                 jlong handle, jfloat heightMetres,
+                                                                 jfloat bandMetres, jfloat cellMetres,
+                                                                 jfloat rdpEpsilonMetres,
+                                                                 jfloat minSegmentMetres) {
+  EngineContext* context = contextFrom(handle);
+  if (context == nullptr) return nullptr;
+  if (!(bandMetres > 0.f) || !(bandMetres <= 1.f)) {
+    LOGE("floorplan refused: band %f m outside (0, 1]", static_cast<double>(bandMetres));
+    return nullptr;
+  }
+  if (!(cellMetres >= 0.01f) || !(cellMetres <= 1.f)) {
+    LOGE("floorplan refused: cell %f m outside [0.01, 1]", static_cast<double>(cellMetres));
+    return nullptr;
+  }
+  if (!(rdpEpsilonMetres >= 0.f) || !(minSegmentMetres >= 0.f)) {
+    LOGE("floorplan refused: negative tolerance (eps %f, min length %f)",
+         static_cast<double>(rdpEpsilonMetres), static_cast<double>(minSegmentMetres));
+    return nullptr;
+  }
+
+  std::vector<float> payload;
+  {
+    std::lock_guard<std::mutex> lock(context->volumeMutex);
+    if (!context->volume) return nullptr;
+
+    const std::vector<constructar::OrientedPoint> slice =
+        context->volume->sliceSurfacesAtHeight(heightMetres, bandMetres);
+    const constructar::WallMask mask = constructar::maskVerticalSurfaces(slice);
+
+    constructar::FloorplanOptions options;
+    options.cellMetres = cellMetres;
+    options.rdpEpsilonMetres = rdpEpsilonMetres;
+    options.minSegmentMetres = minSegmentMetres;
+    payload = constructar::packFloorplanPayload(constructar::vectoriseFloorplan(mask.points, options));
+  }
+  if (payload.empty()) return nullptr;
+
+  const jsize size = static_cast<jsize>(payload.size());
+  jfloatArray result = env->NewFloatArray(size);
+  if (result == nullptr) return nullptr;
+  env->SetFloatArrayRegion(result, 0, size, payload.data());
+  return result;
 }
 
 }  // extern "C"

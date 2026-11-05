@@ -18,6 +18,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,6 +68,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -86,6 +91,7 @@ import com.constructar.app.ui.rememberTimePattern
 import com.constructar.app.ui.label
 import com.constructar.app.ui.message
 import com.constructar.app.ui.routingLabel
+import com.constructar.app.ui.snapMovedRes
 import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.app.ui.tierLabel
@@ -129,6 +135,14 @@ fun ArMeasureScreen(
     onBack: () -> Unit,
     onRouteFinished: (com.constructar.core.model.ConduitRoute) -> Unit,
     onScanSummary: (com.constructar.core.model.ScanSummary) -> Unit,
+    /**
+     * The vectorised plan of the room, handed over once per committed run.
+     *
+     * The screen does not write the picture: the plan is data the caller stores (the card thumbnail
+     * is derived from it), and the screen has no repository. It is taken here because *this* is
+     * where the volume is still alive.
+     */
+    onFloorplan: (com.constructar.nativebridge.FloorplanPayload) -> Unit = {},
     onOpenExport: () -> Unit,
     /** A run a killed process left behind, loaded by the caller. Offered back once per entry. */
     draft: RouteDraft? = null,
@@ -145,6 +159,15 @@ fun ArMeasureScreen(
      * customer would be the uncorrected ones.
      */
     onCalibration: (Double) -> Unit = {},
+    /**
+     * Stores the floor's height in the session's coordinates, once a tracked plane is one.
+     *
+     * The reference every mounting height in the trade is measured from cannot be assumed: ARCore's
+     * origin is wherever the session started, so DIN 18015's 30 cm socket would be printed at
+     * whatever height the phone happened to be held. The planes only exist inside the hit source,
+     * so this screen is the last place that can see one; the project keeps it (finding 214).
+     */
+    onFloorHeight: (Float) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -239,6 +262,12 @@ fun ArMeasureScreen(
     val hudPosition by controller.hudScreenPixels.collectAsStateWithLifecycle()
     val lastHit by controller.lastHit.collectAsStateWithLifecycle()
     val stability by controller.stability.collectAsStateWithLifecycle()
+    val floorHeight by controller.floorHeight.collectAsStateWithLifecycle()
+    // Handed to the caller as soon as a floor is seen, and not again for the same plane: the
+    // project's write path ignores a repeat within a centimetre (finding 214).
+    LaunchedEffect(floorHeight) {
+        floorHeight?.let { if (it.isFinite()) onFloorHeight(it) }
+    }
 
     var spec by remember { mutableStateOf(ConduitPresets.all.first()) }
     var showScanner by remember { mutableStateOf(true) }
@@ -295,6 +324,10 @@ fun ArMeasureScreen(
             // Snapshot the scan statistics with the first finished run: the protocol header must
             // describe the room as it was measured.
             onScanSummary(controller.scanSummary())
+            // The plan comes last: the summary is a measurement and the picture is a convenience,
+            // so if the worker is too busy to answer within its bounded wait, the run still keeps
+            // its statistics.
+            controller.finalFloorplan()?.let(onFloorplan)
         }
     }
     val leave: () -> Unit = {
@@ -495,15 +528,46 @@ fun ArMeasureScreen(
 
                 // Full-surface tap target. Sits above the AR view so SceneView's own gesture
                 // handling cannot swallow a tap, and below the controls.
+                //
+                // It is also the only way to set a point, and until now it was a camera preview
+                // with no name, no action and no state: a screen reader user could aim the phone
+                // and had nothing to double-tap. It now announces itself and offers the one
+                // action a camera view can have without a fingertip - "set the point in the
+                // middle of the screen" - which is where the reticle already is (finding 211).
+                var tapSurface by remember { mutableStateOf(IntSize.Zero) }
+                val tapHint = stringResource(R.string.a11y_ar_view)
+                val tapAction = stringResource(R.string.a11y_ar_place_point)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .onSizeChanged { tapSurface = it }
+                        .semantics {
+                            contentDescription = tapHint
+                            onClick(label = tapAction) {
+                                if (tapSurface.width > 0 && tapSurface.height > 0) {
+                                    controller.requestTap(
+                                        tapSurface.width / 2f,
+                                        tapSurface.height / 2f,
+                                        tapSurface.width,
+                                        tapSurface.height,
+                                    )
+                                }
+                                true
+                            }
+                        }
                         .pointerInput(Unit) {
                             detectTapGestures { offset ->
                                 controller.requestTap(offset.x, offset.y, size.width, size.height)
                             }
                         },
-                )
+                ) {
+                    // The ring appears where the reticle samples, for as long as the last point
+                    // really was moved onto a corner or an edge (finding 213).
+                    SnapMarker(
+                        active = SnapReading.moved(lastHit?.hit?.snap) != null,
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                }
             }
         }
 
@@ -590,14 +654,14 @@ fun ArMeasureScreen(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         )
                     }
-                    IconButton(onClick = onOpenExport, modifier = Modifier.size(56.dp)) {
+                    IconButton(onClick = onOpenExport, modifier = Modifier.size(72.dp)) {
                         Icon(
                             Icons.Default.Share,
                             contentDescription = stringResource(R.string.home_export),
                             tint = Color.White,
                         )
                     }
-                    IconButton(onClick = leave, modifier = Modifier.size(56.dp)) {
+                    IconButton(onClick = leave, modifier = Modifier.size(72.dp)) {
                         Icon(
                             Icons.Default.Close,
                             contentDescription = stringResource(R.string.ar_close),
@@ -668,6 +732,19 @@ fun ArMeasureScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (hit != null) HudStyle.hint else SiteColors.danger,
                     )
+                    // The reticle was pulled onto a corner or an edge: say which one, and by how
+                    // far, in the accent colour - otherwise the jump is a mystery and the operator
+                    // taps again to "fix" a point that was already better than his aim
+                    // (finding 213).
+                    val snap = hit?.snap
+                    val moved = SnapReading.moved(snap)
+                    if (snap != null && moved != null) {
+                        Text(
+                            text = stringResource(snap.kind.snapMovedRes(), moved),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = SiteColors.accent,
+                        )
+                    }
                 }
             }
         }
@@ -680,7 +757,12 @@ fun ArMeasureScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // One conduit spec out of five: a group of radio buttons, so TalkBack says which one
+            // is chosen instead of reading five identical-looking buttons (finding 211).
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.selectableGroup(),
+            ) {
                 ConduitPresets.all.forEach { preset ->
                     SpecChip(
                         spec = preset,
@@ -1006,10 +1088,19 @@ private fun SpecChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // A local with a name of its own: inside `semantics { }` an unqualified `selected` resolves to
+    // the receiver's own property, so writing `this.selected = selected` there would read the very
+    // property it assigns and announce nothing - the same shape as finding 204's narrower helper.
+    val chosen = selected
     Button(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
-        modifier = modifier.padding(vertical = 2.dp),
+        // The selection used to be a background colour and nothing else. `selected` makes the
+        // button announce "selected" inside its group; the colour stays what a sighted gloved
+        // hand sees (finding 211).
+        modifier = modifier
+            .padding(vertical = 2.dp)
+            .semantics { this.selected = chosen },
         colors = ButtonDefaults.buttonColors(
             // The selected chip used to be the spec colour at 90 % under *white* text - white on
             // gold measures 1.4:1, so the one chip the worker just tapped was the one he could not

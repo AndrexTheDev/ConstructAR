@@ -62,6 +62,15 @@ data class ProjectRecord(
     val updatedAtEpochMs: Long,
     val routes: List<ConduitRoute> = emptyList(),
     val scan: ScanSummary? = null,
+    /**
+     * The room's outline as the home screen's card draws it, or `null` before a closed plan exists.
+     *
+     * Written when a run is committed, from the same plan that produces
+     * `files/projects/<id>/thumbnail.svg` (see `FloorplanSketch` for why the phone draws from the
+     * JSON rather than from the SVG). Defaults to `null`, so a project file written before this
+     * field existed loads and behaves exactly as it did - its card shows the icon.
+     */
+    val sketch: FloorplanSketch? = null,
     /** What happened on site, newest first. */
     val diary: List<DiaryEntry> = emptyList(),
     /** Open and closed defects, newest first. */
@@ -88,6 +97,20 @@ data class ProjectRecord(
      * operator measures what the phone sees, and the paperwork says what the calibration says.
      */
     val calibrationScale: Double = 1.0,
+    /**
+     * The floor plane's height in the AR session's own coordinates, or `null` when none was seen.
+     *
+     * ARCore's world origin is wherever the session started - usually the phone at chest height -
+     * so a node's `y` is *not* a height above the finished floor. Anything that talks about
+     * mounting heights (DIN 18015 sockets at 30 cm, switches at 105 cm) needs the floor as a
+     * reference, and the only honest source of it is a horizontal plane the session actually
+     * tracked: the app records the plane's height here (see `FloorReference`) instead of assuming
+     * the floor is at zero, which would put a socket at 1.4 m on every job.
+     *
+     * `null` is not a failure: it means the installation zones cannot be assigned yet, and the
+     * screen says so rather than printing heights it cannot vouch for.
+     */
+    val floorHeightM: Float? = null,
     val schemaVersion: Int = SCHEMA_VERSION,
 ) {
     /** Defects still to be fixed — the number the project screen shows in red. */

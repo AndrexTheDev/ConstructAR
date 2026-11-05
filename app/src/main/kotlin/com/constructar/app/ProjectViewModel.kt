@@ -15,6 +15,7 @@ import com.constructar.app.billing.EntitlementStore
 import com.constructar.app.billing.LicencePublicKey
 import com.constructar.app.data.DraftGate
 import com.constructar.app.data.ProjectRepository
+import com.constructar.app.data.RoomThumbnail
 import com.constructar.app.data.SiteSettings
 import com.constructar.app.data.UiPreferences
 import com.constructar.app.ui.FieldPhotos
@@ -583,6 +584,24 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         return updated
     }
 
+    /**
+     * Records the floor plane's height in the session's coordinates.
+     *
+     * Written by the AR screen as soon as the hit source sees a floor (see `FloorReference`), and
+     * only when it actually changes: the session re-reports the same plane on every frame, and a
+     * JSON write per frame would be a file written thirty times a second. A centimetre of jitter
+     * around the same plane is the same floor.
+     */
+    fun setFloorHeight(heightM: Float, onSaved: (ProjectRecord?) -> Unit = {}): ProjectRecord? {
+        val project = mutableState.value.openProject ?: return null
+        if (!heightM.isFinite()) return null
+        val current = project.floorHeightM
+        if (current != null && kotlin.math.abs(current - heightM) < FLOOR_TOLERANCE_M) return project
+        val updated = project.copy(floorHeightM = heightM)
+        mutate(updated, onSaved)
+        return updated
+    }
+
     /** The rate this project bills at: its own override, or the firm's default. */
     fun hourlyRateCents(project: ProjectRecord): Int =
         project.hourlyRateCents ?: mutableState.value.firmHourlyRateCents
@@ -713,6 +732,70 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
      * Called when a run is finished, so the protocol describes the room as it was scanned
      * rather than whatever the last frame happened to contain.
      */
+    /**
+     * Stores the room's outline, derived from the plan the AR screen took at commit time.
+     *
+     * The outline is stored even when the ring did **not** close: a doorway leaves it open, and an
+     * open ring is not a picture and not a size - but it is the only record of the corners the scan
+     * saw, and the only thing an operator could later close by hand (finding 203). What is *not*
+     * stored is a wall nobody measured: an open ring keeps `Closure.Open` and the card keeps its
+     * placeholder until a person says the gap is a wall.
+     *
+     * The SVG is written only for a drawable ring, and its refusal is not an error: a room under
+     * 10 cm produces neither a picture nor a size.
+     *
+     * A failed save is reported like any other: a card that silently stays an icon is a room whose
+     * picture the operator will look for and not find.
+     */
+    fun saveFloorplanThumbnail(plan: com.constructar.nativebridge.FloorplanPayload) {
+        val project = mutableState.value.openProject ?: return
+        val sketch = RoomThumbnail.sketch(plan) ?: return
+        // The outline goes into the project file as well as the exported SVG: the card draws from
+        // the JSON (Android has no SVG renderer and this app has no third-party libraries), and a
+        // restored project keeps its picture without the file system having to keep a cache.
+        val updated = project.copy(sketch = sketch)
+        mutableState.value = mutableState.value.copy(openProject = updated)
+        viewModelScope.launch {
+            val written = repository.save(updated)
+            if (!written) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_SAVE_FAILED)
+            }
+            val svg = RoomThumbnail.svg(sketch)
+            if (svg != null) repository.saveThumbnail(project.id, svg)
+            refresh()
+        }
+    }
+
+    /**
+     * Closes the open ring of a room by hand: the operator walked the gap and says it is a wall.
+     *
+     * This is the only way an open plan becomes a room, and it is deliberately a separate, explicit
+     * action - nothing here guesses that a doorway should be boarded. The corners stay exactly as
+     * the scan recorded them; the closing wall is a statement about the gap between the last and the
+     * first, and the sketch records that it was drawn and not measured, so a protocol that prints
+     * an accuracy never silently includes it as a measured wall.
+     *
+     * Idempotent by construction: a measured ring, or one already closed by hand, is left alone.
+     */
+    fun closeRoomByHand(projectId: String) {
+        viewModelScope.launch {
+            val project = repository.load(projectId) ?: return@launch
+            val open = project.sketch?.closedByHand() ?: return@launch
+            if (open.closure == project.sketch?.closure) return@launch
+            val updated = project.copy(sketch = open)
+            val written = repository.save(updated)
+            if (!written) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_SAVE_FAILED)
+            }
+            val svg = RoomThumbnail.svg(open)
+            if (svg != null) repository.saveThumbnail(projectId, svg)
+            if (mutableState.value.openProject?.id == projectId) {
+                mutableState.value = mutableState.value.copy(openProject = updated)
+            }
+            refresh()
+        }
+    }
+
     fun updateScanSummary(summary: com.constructar.core.model.ScanSummary) {
         val project = mutableState.value.openProject ?: return
         val updated = project.copy(scan = summary)
@@ -887,6 +970,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 }
+
+/** A floor within a centimetre of the stored one is the same floor: ARCore reports it per frame. */
+private const val FLOOR_TOLERANCE_M = 0.01f
+
 
 /**
  * Where an already-copied field photo belongs.

@@ -21,6 +21,25 @@
     <string name="home_cancel">Abbrechen</string>
     <string name="home_empty">Noch keine Räume. Leg einen an, um zu messen.</string>
     <string name="home_offline_note">Läuft vollständig offline. Nichts verlässt dieses Gerät.</string>
+    <string name="card_close_room">Raum schließen</string>
+    <string name="card_close_title">Raum schließen?</string>
+    <string name="card_close_body">Der Scan hat den Umriss dieses Raums nicht geschlossen – eine Türöffnung oder eine Glaswand. Wird die Lücke als Wand gezählt, bekommt der Raum Fläche, Umfang und Bild. Die Schlusswand wird als von Hand gezeichnet vermerkt.</string>
+    <string name="card_close_confirm">Als Wand zählen</string>
+    <string name="card_closed_by_hand">Wand von Hand</string>
+    <string name="pdf_floorplan_title">Raumplan</string>
+    <string name="pdf_floorplan_by_hand">Die Schlusswand wurde von Hand gezeichnet, nicht gemessen.</string>
+    <string name="a11y_signature_pad">Unterschriftenfeld. Unterschrift des Kunden mit einem Finger zeichnen.</string>
+    <string name="a11y_signature_signed">Unterschrieben</string>
+    <string name="a11y_signature_empty">Noch nicht unterschrieben</string>
+    <string name="a11y_signature_clear">Unterschrift löschen</string>
+    <string name="a11y_ar_view">Kamerabild</string>
+    <string name="a11y_ar_place_point">Messpunkt in der Bildmitte setzen</string>
+    <string name="snap_corner">An der Ecke ausgerichtet · %1$s cm verschoben</string>
+    <string name="snap_floor_edge">An der Bodenkante ausgerichtet · %1$s cm verschoben</string>
+    <string name="snap_ceiling_edge">An der Deckenkante ausgerichtet · %1$s cm verschoben</string>
+    <string name="snap_edge">An der Plattenkante ausgerichtet · %1$s cm verschoben</string>
+    <string name="card_area">%1$s m²</string>
+    <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Export</string>
 
     <!-- AR measuring screen -->
@@ -262,6 +281,36 @@
     <string name="materials_button">Material und Bestellung</string>
     <string name="materials_intro">Pro Sorte zusammengefasst - so wird es gekauft. Bestellmengen inklusive Reserve.</string>
     <string name="materials_empty">Noch keine Strecken gemessen - nichts zu bestellen.</string>
+
+    <!-- Walls, drywall take-off and installation zones (finding 214). -->
+    <string name="wall_title">Wände und Trockenbau</string>
+    <string name="wall_open">Wände</string>
+    <string name="wall_empty">Für diesen Raum gibt es noch keinen geschlossenen Umriss. Eine Mengenermittlung braucht den ganzen Ring - schließe zuerst die Lücke auf der Projektkarte.</string>
+    <string name="wall_row">Wand %1$d · %2$s · %3$s</string>
+    <string name="wall_length_m">%1$s m</string>
+    <string name="wall_area_m2">%1$s m²</string>
+    <string name="wall_surface_title">Wandfläche</string>
+    <string name="wall_gross">Brutto</string>
+    <string name="wall_openings">Abzüglich Öffnungen</string>
+    <string name="wall_net">Nettofläche</string>
+    <string name="wall_openings_none">Für diesen Raum sind noch keine Türen und Fenster erfasst, es wird also nichts abgezogen - die Bruttofläche ist nicht die, die du beplankst.</string>
+    <string name="wall_drywall_title">Trockenbau-Mengen</string>
+    <string name="wall_boards">Zu kaufende Platten</string>
+    <string name="wall_boards_value">%1$d (%2$d vor Verschnitt)</string>
+    <string name="wall_studs">Ständer</string>
+    <string name="wall_stud_profile">CW-Profil</string>
+    <string name="wall_track_profile">UW-Profil</string>
+    <string name="wall_screws">Schrauben</string>
+    <string name="wall_assumptions">Annahmen: Platten %1$s × %2$s m, Ständer alle %3$s m, Verschnitt %4$d %%.</string>
+    <string name="wall_zones_title">Installationszonen (DIN 18015)</string>
+    <string name="wall_zones_points">Messpunkte</string>
+    <string name="wall_zones_sockets">Steckdosen</string>
+    <string name="wall_zones_switches">Schalter</string>
+    <string name="wall_zones_ceiling">Deckenauslässe</string>
+    <string name="wall_zones_rejected">Außerhalb jeder Zone</string>
+    <string name="wall_zones_ceiling_unavailable">Der Raum ist zu niedrig für einen Deckenauslass.</string>
+    <string name="wall_zones_hint">Steckdosen auf 30 cm, Schalter auf 105 cm, Deckenauslässe 15 cm unter der Decke.</string>
+    <string name="wall_zones_no_floor">In diesem Raum wurde noch kein Boden erfasst, aus dem sich eine Höhe messen ließe. Geh den Raum einmal in AR ab, dann erscheinen die Zonen.</string>
     <string name="materials_net">%1$s netto</string>
     <string name="materials_waste">plus %1$d %% Reserve</string>
     <string name="materials_bend_deduction">Biegeabzug %1$s</string>

@@ -39,4 +39,17 @@ internal object DefectToggle {
         Action.RESOLVE -> R.string.field_defect_resolve
         Action.REOPEN -> R.string.field_defect_reopen
     }
+
+    /**
+     * What the defect *is*, not what the tap would do - the half a screen reader could not hear.
+     *
+     * The button's label is the action ("Mark resolved" / "Open again"), because that is what a
+     * tap does; a TalkBack user who lands on the button of a resolved defect therefore hears an
+     * instruction to reopen it without being told it is closed. The sighted operator has the
+     * detail line ("· Resolved") and the tick's own shape; the spoken row has neither, so the
+     * state travels on the button as `stateDescription` (finding 211). Reuses the two words the
+     * protocol already prints for a defect's status, so screen and paperwork cannot disagree.
+     */
+    fun stateRes(resolved: Boolean): Int =
+        if (resolved) R.string.pdf_status_resolved else R.string.pdf_status_open
 }

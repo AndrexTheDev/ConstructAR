@@ -11,6 +11,7 @@ import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -43,10 +45,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.constructar.app.BuildConfig
 import com.constructar.app.R
+import com.constructar.app.data.RoomPlanPage
+import com.constructar.app.data.RoomSizeText
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.licence.Entitlements
@@ -183,6 +188,29 @@ fun ExportScreen(
     val photoAppendix = remember(project, fieldPhotos, siteFileTexts) {
         buildPhotoAppendix(project, fieldPhotos, siteFileTexts)
     }
+    // The plan page is the room's own outline, with the words the app owns. Built here, in
+    // composition, because `stringResource` cannot be called from the launcher's callback - and
+    // because a page whose title changed with the locale must be built from the locale in force.
+    val floorplanTitle = stringResource(R.string.pdf_floorplan_title)
+    val floorplanByHandNote = stringResource(R.string.pdf_floorplan_by_hand)
+    val roomSize = remember(project.sketch) { RoomSizeText.of(project.sketch) }
+    val roomAreaText = stringResource(R.string.card_area, roomSize?.area ?: "")
+    val roomPerimeterText = stringResource(R.string.card_perimeter, roomSize?.perimeter ?: "")
+    val floorplanPage = remember(
+        project.sketch,
+        floorplanTitle,
+        roomAreaText,
+        roomPerimeterText,
+        floorplanByHandNote,
+    ) {
+        RoomPlanPage.of(
+            sketch = project.sketch,
+            title = floorplanTitle,
+            areaText = roomAreaText,
+            perimeterText = roomPerimeterText,
+            byHandNote = floorplanByHandNote,
+        )
+    }
 
     val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -239,6 +267,9 @@ fun ExportScreen(
                             signatureCaption = signatureCaption,
                             labels = pdfLabels,
                             calibrationLabel = calibrationLabel,
+                            // The room drawn from the outline the project stores, with the
+                            // note that a closing wall was drawn by hand (finding 206).
+                            floorplan = floorplanPage,
                             sections = sectionsNow(),
                             photos = photoAppendix,
                             photosTitle = siteFileTexts.photosTitle,
@@ -312,7 +343,7 @@ fun ExportScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack, modifier = Modifier.padding(end = 8.dp)) {
+            IconButton(onClick = onBack, modifier = Modifier.padding(end = 8.dp).size(SiteColors.gloveTouchTarget)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.export_back))
             }
             Column(Modifier.weight(1f)) {
@@ -546,7 +577,9 @@ private fun LockedRow(label: String, description: String, onUpgrade: () -> Unit)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onUpgrade)
+            // A row that opens the paywall is a button, and says so: without the role a screen
+            // reader announces the two texts and stops before the fact that they can be tapped.
+            .clickable(role = Role.Button, onClick = onUpgrade)
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -574,8 +607,13 @@ private fun FormatRow(
     checked: Boolean,
     onChange: (Boolean) -> Unit,
 ) {
+    // The whole row toggles, and the switch is its state, not a second control: a bare `Switch`
+    // announces "off, switch" with no idea of *which* format it turns off, and the label beside it
+    // is a separate node a screen reader reaches first and cannot act on (finding 211).
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -586,7 +624,9 @@ private fun FormatRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Switch(checked = checked, onCheckedChange = onChange)
+        // `onCheckedChange = null` on purpose: Material's documented pattern for a switch that
+        // belongs to a clickable row, so the tap is reported once and the row carries the label.
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 

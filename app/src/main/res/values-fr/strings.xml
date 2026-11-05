@@ -21,6 +21,25 @@
     <string name="home_cancel">Annuler</string>
     <string name="home_empty">Aucune pièce pour l’instant. Crée-en une pour commencer à mesurer.</string>
     <string name="home_offline_note">Fonctionne entièrement hors ligne. Rien ne quitte ce téléphone.</string>
+    <string name="card_close_room">Fermer la pièce</string>
+    <string name="card_close_title">Fermer la pièce ?</string>
+    <string name="card_close_body">Le scan n’a pas fermé le contour de cette pièce : une porte ou une cloison vitrée. En comptant l’ouverture comme un mur, la pièce obtient une surface, un périmètre et une image. Le mur de fermeture est marqué comme tracé à la main.</string>
+    <string name="card_close_confirm">Compter comme mur</string>
+    <string name="card_closed_by_hand">mur à la main</string>
+    <string name="pdf_floorplan_title">Plan de la pièce</string>
+    <string name="pdf_floorplan_by_hand">Le mur de fermeture a été tracé à la main, pas mesuré.</string>
+    <string name="a11y_signature_pad">Champ de signature. Tracez la signature du client avec un doigt.</string>
+    <string name="a11y_signature_signed">Signé</string>
+    <string name="a11y_signature_empty">Pas encore signé</string>
+    <string name="a11y_signature_clear">Effacer la signature</string>
+    <string name="a11y_ar_view">Vue de la caméra</string>
+    <string name="a11y_ar_place_point">Placer le point de mesure au centre de l’écran</string>
+    <string name="snap_corner">Aligné sur l’angle · décalé de %1$s cm</string>
+    <string name="snap_floor_edge">Aligné sur le bord du sol · décalé de %1$s cm</string>
+    <string name="snap_ceiling_edge">Aligné sur le bord du plafond · décalé de %1$s cm</string>
+    <string name="snap_edge">Aligné sur le bord du plan · décalé de %1$s cm</string>
+    <string name="card_area">%1$s m²</string>
+    <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Exporter</string>
 
     <!-- AR measuring screen -->
@@ -262,6 +281,36 @@
     <string name="materials_button">Matériel et commande</string>
     <string name="materials_intro">Regroupé par type : c’est ainsi qu’on achète. Les quantités incluent la réserve de chantier.</string>
     <string name="materials_empty">Aucun tracé mesuré : rien à commander.</string>
+
+    <!-- Walls, drywall take-off and installation zones (finding 214). -->
+    <string name="wall_title">Cloisons et placo</string>
+    <string name="wall_open">Cloisons</string>
+    <string name="wall_empty">Cette pièce n’a pas encore de contour fermé. Un métré a besoin de l’anneau complet : fermez d’abord l’ouverture sur la fiche du chantier.</string>
+    <string name="wall_row">Cloison %1$d · %2$s · %3$s</string>
+    <string name="wall_length_m">%1$s m</string>
+    <string name="wall_area_m2">%1$s m²</string>
+    <string name="wall_surface_title">Surface de cloison</string>
+    <string name="wall_gross">Brut</string>
+    <string name="wall_openings">Ouvertures déduites</string>
+    <string name="wall_net">Surface nette</string>
+    <string name="wall_openings_none">Aucune porte ni fenêtre n’est encore relevée dans cette pièce : rien n’est déduit, et la surface brute n’est pas celle que tu vas doubler.</string>
+    <string name="wall_drywall_title">Métré placo</string>
+    <string name="wall_boards">Plaques à acheter</string>
+    <string name="wall_boards_value">%1$d (%2$d avant chutes)</string>
+    <string name="wall_studs">Montants</string>
+    <string name="wall_stud_profile">Profil montant</string>
+    <string name="wall_track_profile">Profil rail</string>
+    <string name="wall_screws">Vis</string>
+    <string name="wall_assumptions">Hypothèses : plaques %1$s × %2$s m, montants tous les %3$s m, chutes %4$d %%.</string>
+    <string name="wall_zones_title">Zones d’installation (DIN 18015)</string>
+    <string name="wall_zones_points">Points mesurés</string>
+    <string name="wall_zones_sockets">Prises</string>
+    <string name="wall_zones_switches">Interrupteurs</string>
+    <string name="wall_zones_ceiling">Sorties de plafond</string>
+    <string name="wall_zones_rejected">Hors de toute zone</string>
+    <string name="wall_zones_ceiling_unavailable">La pièce est trop basse pour une sortie de plafond.</string>
+    <string name="wall_zones_hint">Prises à 30 cm, interrupteurs à 105 cm, sorties de plafond à 15 cm sous le plafond.</string>
+    <string name="wall_zones_no_floor">Aucun sol n’a encore été détecté dans cette pièce : aucune hauteur ne peut y être mesurée. Parcourez la pièce en RA une fois et les zones apparaîtront.</string>
     <string name="materials_net">%1$s net</string>
     <string name="materials_waste">plus %1$d %% de réserve</string>
     <string name="materials_bend_deduction">Déduction de cintrage %1$s</string>

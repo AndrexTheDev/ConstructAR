@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -92,6 +93,8 @@ fun ProjectScreen(
     onSaveTechnician: (String) -> Unit,
     onRemoveRoute: (String) -> Unit,
     onMaterials: () -> Unit,
+    /** The room's walls, drywall take-off and installation zones - the other half of the numbers. */
+    onWalls: () -> Unit,
     onFieldBook: () -> Unit,
     onSaveCustomer: (name: String, address: String, phone: String) -> Unit,
     /** Effective rate for this job - the project's own, or the firm default behind it. */
@@ -236,7 +239,7 @@ fun ProjectScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { if (unsavedEdits) confirmLeave = true else onBack() }) {
+            IconButton(onClick = { if (unsavedEdits) confirmLeave = true else onBack() }, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.paywall_back),
@@ -264,7 +267,7 @@ fun ProjectScreen(
                     nameDraft = project.name
                     renameOpen = true
                 },
-                modifier = Modifier.size(52.dp),
+                modifier = Modifier.size(SiteColors.gloveTouchTarget),
             ) {
                 Icon(
                     Icons.Default.Edit,
@@ -272,7 +275,7 @@ fun ProjectScreen(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            IconButton(onClick = { deleteOpen = true }, modifier = Modifier.size(52.dp)) {
+            IconButton(onClick = { deleteOpen = true }, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
                 Icon(
                     Icons.Default.Delete,
                     contentDescription = stringResource(R.string.action_delete),
@@ -478,6 +481,14 @@ fun ProjectScreen(
             modifier = Modifier.fillMaxWidth(),
         )
         GloveButton(
+            label = stringResource(R.string.wall_open),
+            icon = Icons.Default.Build,
+            tone = ActionTone.SECONDARY,
+            enabled = measured,
+            onClick = onWalls,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        GloveButton(
             label = stringResource(R.string.project_field_button) +
                 if (project.openDefectCount > 0) {
                     "  ·  " + stringResource(R.string.field_open_count, project.openDefectCount)
@@ -605,7 +616,7 @@ fun ProjectScreen(
                 OutlinedTextField(
                     value = technicianDraft,
                     onValueChange = { technicianDraft = it },
-                    placeholder = { Text(stringResource(R.string.technician_hint)) },
+                    label = { Text(stringResource(R.string.technician_hint)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -633,7 +644,7 @@ fun ProjectScreen(
                         notesDraft = it
                         notesSaved = false
                     },
-                    placeholder = { Text(stringResource(R.string.notes_hint)) },
+                    label = { Text(stringResource(R.string.notes_hint)) },
                     minLines = 2,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -812,7 +823,7 @@ private fun RouteRow(
             }
         }
         Text(length, style = MaterialTheme.typography.titleSmall, color = SiteColors.gold)
-        IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onDelete, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.Default.Delete,
                 contentDescription = stringResource(R.string.run_delete),

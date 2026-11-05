@@ -7,6 +7,8 @@
 package com.constructar.arengine
 
 import com.constructar.arengine.hit.HitStabilizer
+import com.constructar.arengine.hit.SnapFeatureKind
+import com.constructar.arengine.hit.SnapInfo
 import com.constructar.arengine.hit.SurfaceHit
 import com.constructar.core.math.Vec3
 import com.constructar.core.model.HitSource
@@ -58,6 +60,24 @@ class HitStabilizerTest {
         // 0,997 / 1,000 / 1,004 -> median 1,000
         assertClose(1.000f, reading.point!!.x)
         assertTrue(reading.spreadMeters <= 0.010f)
+    }
+
+    @Test
+    fun `a settled point keeps the record of the snap that produced it`() {
+        // The median is applied after the snap, so the committed point is not exactly the corner -
+        // but every sample in the window was pulled onto that same corner, and the record of the
+        // move is the only thing the HUD can tell the operator (finding 213).
+        val stabilizer = HitStabilizer()
+        val snapped = SnapInfo(kind = SnapFeatureKind.CORNER, distanceM = 0.042f)
+        val sample = hit(1.000f, 0f, 0f).copy(snap = snapped)
+        stabilizer.sample(sample, 1_000L)
+        stabilizer.sample(sample.copy(point = Vec3(1.004f, 0f, 0f)), 1_040L)
+        stabilizer.sample(sample.copy(point = Vec3(0.997f, 0f, 0f)), 1_080L)
+
+        val committed = stabilizer.stabilize(sample.copy(point = Vec3(1.001f, 0f, 0f)), 1_100L)
+
+        assertEquals(snapped, committed.snap)
+        assertEquals(SnapFeatureKind.CORNER, committed.snap?.kind)
     }
 
     @Test

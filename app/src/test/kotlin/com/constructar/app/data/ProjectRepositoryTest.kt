@@ -12,9 +12,11 @@ import com.constructar.core.io.SafeFiles
 import com.constructar.core.math.Vec3
 import com.constructar.core.model.ConduitPresets
 import com.constructar.core.model.ConduitRoute
+import com.constructar.core.model.FloorplanSketch
 import com.constructar.core.model.HitSource
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.model.RouteNodeRecord
+import com.constructar.core.model.SketchPoint
 import com.constructar.core.model.SurfaceKind
 import com.constructar.core.model.WorkSession
 import kotlinx.coroutines.runBlocking
@@ -204,6 +206,84 @@ class ProjectRepositoryTest {
         assertNull(repository.importProject("{\"not\": \"a project\"}"))
         assertNull(repository.importProject(""))
         assertTrue(repository.list().projects.isEmpty())
+    }
+
+    @Test
+    fun `the outline survives a save and a load, and reaches the list`(): Unit = runBlocking {
+        val outline = FloorplanSketch(
+            listOf(
+                SketchPoint(0f, 0f),
+                SketchPoint(4f, 0f),
+                SketchPoint(4f, 3f),
+                SketchPoint(0f, 3f),
+            ),
+        )
+        val project = repository.create("Hall").let { repository.save(it.copy(sketch = outline)); it }
+
+        val loaded = repository.load(project.id)
+
+        // `kotlin.test.assertNotNull` is a contract, so the compiler knows `loaded` is non-null
+        // here - a `?.` after it is an "unnecessary safe call" and therefore a red build.
+        assertNotNull(loaded)
+        assertEquals(outline, loaded.sketch)
+        // The home screen draws from the summary, so the outline has to reach it through `list()`.
+        assertEquals(outline, repository.list().projects.single().sketch)
+    }
+
+    @Test
+    fun `a room without an outline writes no outline key and loads without one`(): Unit = runBlocking {
+        val project = repository.create("Old room")
+
+        val text = File(projectsDirectory, "${project.id}.json").readText()
+
+        // `explicitNulls = false`, so a room nobody has scanned yet carries no key at all - which is
+        // exactly the shape a project file written before the field existed has.
+        assertFalse(text.contains("sketch"), "a null outline must not be written")
+        assertNull(repository.load(project.id)?.sketch)
+    }
+
+    @Test
+    fun `the card picture lands in the room's own folder`(): Unit = runBlocking {
+        val project = repository.create("Kitchen")
+
+        val saved = repository.saveThumbnail(project.id, "<svg/>")
+
+        assertTrue(saved, "the write must land")
+        val file = File(File(projectsDirectory, project.id), RoomThumbnail.FILE_NAME)
+        assertTrue(file.isFile, "expected ${file.path}")
+        assertEquals("<svg/>", file.readText())
+        // The list reads the projects folder, so a per-room folder must not look like a room.
+        assertEquals(1, repository.list().projects.size)
+        assertEquals(0, repository.list().unreadable)
+    }
+
+    @Test
+    fun `a thumbnail id that could reach another folder is refused`(): Unit = runBlocking {
+        assertFalse(repository.saveThumbnail("../escape", "<svg/>"))
+        assertFalse(File(context.filesDir, "escape").exists())
+        assertFalse(File(context.filesDir, "projects/../escape").exists())
+    }
+
+    @Test
+    fun `an oversized picture is refused rather than written`(): Unit = runBlocking {
+        val project = repository.create("Workshop")
+        val huge = "x".repeat(ProjectRepository.MAX_THUMBNAIL_BYTES + 1)
+
+        assertFalse(repository.saveThumbnail(project.id, huge))
+        assertFalse(repository.thumbnailFileFor(project.id).exists())
+    }
+
+    @Test
+    fun `deleting a room takes its picture with it`(): Unit = runBlocking {
+        val project = repository.create("Attic")
+        repository.saveThumbnail(project.id, "<svg/>")
+        val file = repository.thumbnailFileFor(project.id)
+        assertTrue(file.isFile)
+
+        repository.delete(project.id)
+
+        assertFalse(file.exists(), "an orphaned picture is a picture of a room that is gone")
+        assertFalse(File(projectsDirectory, project.id).exists())
     }
 
     @Test

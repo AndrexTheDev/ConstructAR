@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import com.constructar.arengine.depth.DepthFrameSnapshot
+import com.constructar.nativebridge.FloorplanPayload
 import com.constructar.nativebridge.IntegrationResult
 import com.constructar.nativebridge.NativeSlamEngine
 import com.constructar.nativebridge.ScanMesh
@@ -390,6 +391,32 @@ class TsdfScanPipeline(
         else -> ThrottleMode.NOMINAL
     }
 
+    /**
+     * One floorplan of the volume as it stands, taken on the scan worker.
+     *
+     * The volume is sliced on the worker and nowhere else: `nativeFloorplan` holds the volume lock
+     * for the whole walk, so calling it from the main thread would block the next integration and
+     * drop frames - and calling it from a *third* thread would be the very race the lock exists to
+     * prevent. `withContext(dispatcher)` puts it in the queue behind the frame being integrated.
+     *
+     * The wait is bounded and short. A floorplan is a picture for a card, not a measurement: if the
+     * worker is busy with a large extraction, the caller gets `null` and the room simply has no
+     * picture, which is better than a screen that hangs when a run is committed. Returns `null`
+     * too when the library never loaded, and when the parameters the native side refuses come back
+     * as a null payload.
+     */
+    fun floorplan(
+        heightMetres: Float = FLOORPLAN_HEIGHT_METRES,
+        bandMetres: Float = FLOORPLAN_BAND_METRES,
+    ): FloorplanPayload? {
+        if (engine == null) return null
+        return kotlinx.coroutines.runBlocking {
+            kotlinx.coroutines.withTimeoutOrNull(FLOORPLAN_TIMEOUT_MS) {
+                kotlinx.coroutines.withContext(dispatcher) { engine?.floorplan(heightMetres, bandMetres) }
+            }
+        }
+    }
+
     /** Clears the volume and pose graph (new room). */
     fun reset() {
         engine?.reset()
@@ -454,5 +481,23 @@ class TsdfScanPipeline(
 
         /** How long `stop()` waits for the worker before returning; never how long it waits to free. */
         private const val WORKER_JOIN_TIMEOUT_MS = 500L
+
+        /**
+         * Waist height: above worktops and below door frames, so the cut meets walls and nothing a
+         * fitter would call furniture. The same 1.0 m the native slice is documented with.
+         */
+        private const val FLOORPLAN_HEIGHT_METRES = 1.0f
+
+        /** A 10 cm band: one TSDF voxel plus slack around the cut. */
+        private const val FLOORPLAN_BAND_METRES = 0.10f
+
+        /**
+         * How long a card picture may cost the caller.
+         *
+         * A slice of a scanned room walks every shard; measured on the host suite it is well under
+         * a frame's worth of work for a room, so this is a generous ceiling that only a wedged
+         * worker or a very large volume reaches - and in that case the picture is what is dropped.
+         */
+        private const val FLOORPLAN_TIMEOUT_MS = 400L
     }
 }

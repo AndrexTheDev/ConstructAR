@@ -21,6 +21,25 @@
     <string name="home_cancel">Annulla</string>
     <string name="home_empty">Nessun locale. Creane uno per iniziare a misurare.</string>
     <string name="home_offline_note">Funziona completamente offline. Nulla esce da questo telefono.</string>
+    <string name="card_close_room">Chiudi la stanza</string>
+    <string name="card_close_title">Chiudere la stanza?</string>
+    <string name="card_close_body">La scansione non ha chiuso il contorno di questa stanza: una porta o una parete di vetro. Se il varco conta come parete, la stanza ottiene superficie, perimetro e immagine. La parete di chiusura è contrassegnata come tracciata a mano.</string>
+    <string name="card_close_confirm">Conta come parete</string>
+    <string name="card_closed_by_hand">muro a mano</string>
+    <string name="pdf_floorplan_title">Pianta della stanza</string>
+    <string name="pdf_floorplan_by_hand">La parete di chiusura è stata tracciata a mano, non misurata.</string>
+    <string name="a11y_signature_pad">Campo firma. Traccia la firma del cliente con un dito.</string>
+    <string name="a11y_signature_signed">Firmato</string>
+    <string name="a11y_signature_empty">Non ancora firmato</string>
+    <string name="a11y_signature_clear">Cancella la firma</string>
+    <string name="a11y_ar_view">Vista della fotocamera</string>
+    <string name="a11y_ar_place_point">Imposta il punto di misura al centro dello schermo</string>
+    <string name="snap_corner">Allineato all’angolo · spostato di %1$s cm</string>
+    <string name="snap_floor_edge">Allineato al bordo del pavimento · spostato di %1$s cm</string>
+    <string name="snap_ceiling_edge">Allineato al bordo del soffitto · spostato di %1$s cm</string>
+    <string name="snap_edge">Allineato al bordo del piano · spostato di %1$s cm</string>
+    <string name="card_area">%1$s m²</string>
+    <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Esporta</string>
 
     <!-- AR measuring screen -->
@@ -262,6 +281,36 @@
     <string name="materials_button">Materiale e ordine</string>
     <string name="materials_intro">Raggruppato per tipo: è così che si compra. Le quantità includono la scorta di cantiere.</string>
     <string name="materials_empty">Nessun percorso misurato: niente da ordinare.</string>
+
+    <!-- Walls, drywall take-off and installation zones (finding 214). -->
+    <string name="wall_title">Pareti e cartongesso</string>
+    <string name="wall_open">Pareti</string>
+    <string name="wall_empty">Questa stanza non ha ancora un contorno chiuso. Un computo ha bisogno dell’anello completo: chiudi prima lo spazio sulla scheda del progetto.</string>
+    <string name="wall_row">Parete %1$d · %2$s · %3$s</string>
+    <string name="wall_length_m">%1$s m</string>
+    <string name="wall_area_m2">%1$s m²</string>
+    <string name="wall_surface_title">Superficie della parete</string>
+    <string name="wall_gross">Lordo</string>
+    <string name="wall_openings">Aperture detratte</string>
+    <string name="wall_net">Superficie netta</string>
+    <string name="wall_openings_none">In questa stanza non sono ancora registrate porte o finestre, quindi non si detrae nulla: la superficie lorda non è quella che rivestirai.</string>
+    <string name="wall_drywall_title">Computo del cartongesso</string>
+    <string name="wall_boards">Lastre da acquistare</string>
+    <string name="wall_boards_value">%1$d (%2$d prima degli sfridi)</string>
+    <string name="wall_studs">Montanti</string>
+    <string name="wall_stud_profile">Profilo montante</string>
+    <string name="wall_track_profile">Profilo guida</string>
+    <string name="wall_screws">Viti</string>
+    <string name="wall_assumptions">Ipotesi: lastre %1$s × %2$s m, montanti ogni %3$s m, sfrido %4$d %%.</string>
+    <string name="wall_zones_title">Zone di installazione (DIN 18015)</string>
+    <string name="wall_zones_points">Punti misurati</string>
+    <string name="wall_zones_sockets">Prese</string>
+    <string name="wall_zones_switches">Interruttori</string>
+    <string name="wall_zones_ceiling">Uscite a soffitto</string>
+    <string name="wall_zones_rejected">Fuori da ogni zona</string>
+    <string name="wall_zones_ceiling_unavailable">La stanza è troppo bassa per un’uscita a soffitto.</string>
+    <string name="wall_zones_hint">Prese a 30 cm, interruttori a 105 cm, uscite a soffitto 15 cm sotto il soffitto.</string>
+    <string name="wall_zones_no_floor">In questa stanza non è ancora stato rilevato il pavimento, quindi nessuna altezza può essere misurata da lì. Percorri la stanza in AR una volta e le zone compariranno.</string>
     <string name="materials_net">%1$s netto</string>
     <string name="materials_waste">più %1$d %% di scorta</string>
     <string name="materials_bend_deduction">Deduzione per curva %1$s</string>

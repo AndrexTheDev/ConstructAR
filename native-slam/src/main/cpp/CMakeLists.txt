@@ -30,6 +30,8 @@ set(SLAM_SOURCES
     geometry/manhattan_world.cpp
     calibration/tag_scale.cpp
     geometry/plane_fit.cpp
+    geometry/floorplan.cpp
+    geometry/surface_mask.cpp
     slam/rtabmap_bridge.cpp
 )
 

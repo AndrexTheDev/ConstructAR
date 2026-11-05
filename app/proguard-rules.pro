@@ -1,3 +1,7 @@
+# Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+# All rights reserved. Proprietary and confidential - see LICENSE.
+# SPDX-License-Identifier: LicenseRef-Proprietary
+#
 # Room, Retrofit and Firebase are absent by design: this app has no network stack at all.
 # The rules below only cover what ARCore/Filament/SceneView and kotlinx.serialization need.
 

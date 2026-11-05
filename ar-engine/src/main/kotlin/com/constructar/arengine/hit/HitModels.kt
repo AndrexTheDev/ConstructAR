@@ -56,6 +56,23 @@ data class PlaneCandidate(
     }
 }
 
+/**
+ * Where a hit was pulled to, and by how far - the record of a snap that moved the reticle.
+ *
+ * The snap is silent by design ([ReticleSnap] only moves a point within its tolerance), and a
+ * silent move is exactly what an operator cannot diagnose: the reticle jumps two centimetres, the
+ * number changes, and nothing on the screen says whether that was the corner or the sensor. This
+ * carries the *fact* of the move - which architectural feature, how many metres - so a screen can
+ * say it. It is deliberately not part of [SurfaceHit.toRouteNode]: a stored node records where the
+ * point is, and the protocol prints that position, not the reticle's opinion of it.
+ */
+data class SnapInfo(
+    /** The kind of feature the point was pulled onto. */
+    val kind: SnapFeatureKind,
+    /** Metres between the raw hit and the feature it was moved onto. */
+    val distanceM: Float,
+)
+
 /** A resolved 3D surface point, ready to become a route node. */
 data class SurfaceHit(
     val point: Vec3,
@@ -69,6 +86,8 @@ data class SurfaceHit(
     val planeId: String? = null,
     val surfaceKind: SurfaceKind = SurfaceKind.UNKNOWN,
     val label: String = "",
+    /** Set when [ReticleSnap] moved this point onto an architectural corner or edge. */
+    val snap: SnapInfo? = null,
 ) {
     fun toRouteNode(id: String, anchorId: String? = null): RouteNodeRecord = RouteNodeRecord(
         id = id,
@@ -95,6 +114,14 @@ data class HitResolution(
     val attempts: List<TierOutcome>,
     /** Metres between the accepted point and the previous route node, when known. */
     val distanceFromPreviousMeters: Float? = null,
+    /**
+     * The floor's height in the session's coordinates, when a tracked plane could be it.
+     *
+     * Carried on the resolution because the planes it comes from are only alive inside the hit
+     * source: nothing above this layer sees a `PlaneCandidate`. `null` means no floor was seen,
+     * and the installation zones stay unassigned rather than measured from an imaginary zero.
+     */
+    val floorHeightM: Float? = null,
 ) {
     val accepted: Boolean get() = hit != null
 
@@ -146,4 +173,10 @@ data class HitCascadeConfig(
      * Always true for planes: the closest valid plane is the one the user is aiming at.
      */
     val preferNearestPlane: Boolean = true,
+    /**
+     * Pull accepted plane hits onto architectural edges and corners ([ReticleSnap]).
+     * Off = the reticle reports the raw polygon hit; useful when a device's plane polygons
+     * are too ragged for the derived edges to be trusted.
+     */
+    val snapToArchitecturalFeatures: Boolean = true,
 )

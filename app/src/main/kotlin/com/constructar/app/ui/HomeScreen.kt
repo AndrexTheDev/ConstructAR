@@ -6,6 +6,7 @@
 
 package com.constructar.app.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,8 +43,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,9 +65,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.constructar.app.R
 import com.constructar.app.data.ProjectRepository
+import com.constructar.app.data.RoomSizeText
+import com.constructar.app.data.RoomThumbnail
 import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.licence.Entitlements
+import com.constructar.core.model.FloorplanSketch
 import com.constructar.core.units.LengthFormatter
 
 /**
@@ -81,6 +91,14 @@ fun HomeScreen(
     onCreate: (String) -> Unit,
     onUpgrade: () -> Unit,
     onHelp: () -> Unit,
+    /**
+     * Closes the open ring of a room by hand, by project id.
+     *
+     * A scan that never closed its ring (a doorway, a glass wall) leaves the card with an icon and
+     * no size. The corners are stored, so the operator can say "this gap is a wall" instead of
+     * re-walking the room - and the sketch records that the closing wall was drawn, not measured.
+     */
+    onCloseRoom: (String) -> Unit = {},
     /**
      * Project files in the app's folder that could not be read. They are kept - nothing here
      * deletes a room it does not understand - so the list has to say they exist, or a damaged
@@ -177,7 +195,11 @@ fun HomeScreen(
                         OutlinedTextField(
                             value = query,
                             onValueChange = { query = it },
-                            placeholder = { Text(stringResource(R.string.home_search_hint)) },
+                            // `label`, not `placeholder`: a placeholder is decoration inside the
+                            // box and is not the field's name, so a screen reader met an unnamed
+                            // edit box. Material's label sits in exactly that spot when the field
+                            // is empty, so nothing moves on screen (finding 211).
+                            label = { Text(stringResource(R.string.home_search_hint)) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -194,7 +216,11 @@ fun HomeScreen(
                     }
                 } else {
                     items(filtered, key = { it.id }) { project ->
-                        ProjectRow(project = project, onClick = { onOpen(project.id) })
+                        ProjectRow(
+                            project = project,
+                            onClick = { onOpen(project.id) },
+                            onCloseRoom = { onCloseRoom(project.id) },
+                        )
                     }
                 }
             } else {
@@ -223,7 +249,8 @@ fun HomeScreen(
                         shape = RoundedCornerShape(18.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(onClick = onUpgrade),
+                            // A card that opens the paywall is a button (finding 211).
+                            .clickable(role = Role.Button, onClick = onUpgrade),
                     ) {
                         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -356,7 +383,7 @@ private fun DamagedFilesCard(names: List<String>, onDelete: (String) -> Unit) {
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    IconButton(onClick = { onDelete(name) }) {
+                    IconButton(onClick = { onDelete(name) }, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
                         Icon(
                             Icons.Default.Delete,
                             contentDescription = stringResource(R.string.home_damaged_delete),
@@ -404,7 +431,7 @@ private fun Header(
                 )
             }
         }
-        IconButton(onClick = onHelp, modifier = Modifier.size(56.dp)) {
+        IconButton(onClick = onHelp, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.AutoMirrored.Filled.HelpOutline,
                 contentDescription = stringResource(R.string.home_help),
@@ -432,7 +459,8 @@ fun PlanChip(entitlements: Entitlements, trialDaysLeft: Long, onClick: () -> Uni
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(50))
-            .clickable(onClick = onClick)
+            // The chip is the app's plan status *and* the way to the paywall: a button.
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 4.dp),
     ) {
         if (entitlements.isPro) {
@@ -496,16 +524,22 @@ private fun ContinueCard(
 }
 
 @Composable
-private fun ProjectRow(project: ProjectRepository.ProjectSummary, onClick: () -> Unit) {
+private fun ProjectRow(
+    project: ProjectRepository.ProjectSummary,
+    onClick: () -> Unit,
+    onCloseRoom: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
+            // A card opens a room: saying so to the screen reader turns "double tap to activate"
+            // into "button", which is what the row is.
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Default.Cable, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        RoomPicture(project.sketch)
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             Text(
                 project.name,
@@ -514,6 +548,7 @@ private fun ProjectRow(project: ProjectRepository.ProjectSummary, onClick: () ->
                 overflow = TextOverflow.Ellipsis,
             )
             ProjectMetaLine(project)
+            RoomSizeBadges(project.sketch, onCloseRoom)
         }
         Text(
             LengthFormatter.format(project.totalLengthMeters),
@@ -521,6 +556,136 @@ private fun ProjectRow(project: ProjectRepository.ProjectSummary, onClick: () ->
             color = SiteColors.gold,
         )
     }
+}
+
+/**
+ * The room's own shape where the list used to show the same cable icon on every row.
+ *
+ * Drawn from the outline stored in the project (`FloorplanSketch`), not from the exported
+ * `thumbnail.svg`: the platform has no SVG renderer, and a second parser for a format this app only
+ * writes would be a liability. The projection is [RoomThumbnail.pathPoints] - the same single scale
+ * and the same "world z runs down the screen" as the exported file, so the card and the file show
+ * one room.
+ *
+ * A room without a closed plan (nobody measured one yet, or the scan had a doorway in it) keeps the
+ * icon: a placeholder outline would be a shape the operator never walked. The picture is decoration
+ * — the row already prints the name, the runs, the metres and the date as text, which is what a
+ * screen reader announces — so it carries no `contentDescription` of its own.
+ */
+@Composable
+private fun RoomPicture(sketch: FloorplanSketch?) {
+    if (sketch == null || !sketch.isDrawable) {
+        Icon(Icons.Default.Cable, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+    val strokeColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val fillColor = MaterialTheme.colorScheme.surfaceVariant
+    Canvas(Modifier.size(40.dp)) {
+        val points = RoomThumbnail.pathPoints(
+            sketch = sketch,
+            sizePx = size.minDimension,
+            paddingPx = 2.dp.toPx(),
+        )
+        if (points.size < 3) return@Canvas
+        val path = Path()
+        path.moveTo(points[0].first, points[0].second)
+        for (index in 1 until points.size) path.lineTo(points[index].first, points[index].second)
+        path.close()
+        drawPath(path = path, color = fillColor, style = Fill)
+        // A miter joint, so a right-angled room reads as a right-angled room.
+        drawPath(path = path, color = strokeColor, style = Stroke(width = 1.5.dp.toPx(), join = StrokeJoin.Miter))
+    }
+}
+
+/**
+ * The room's area and perimeter, as two small badges under the row's name.
+ *
+ * Read from the outline stored in the project and from nothing else: the same ring the picture
+ * beside them draws, so the shape and the numbers cannot describe two different rooms. Both are
+ * absent together - a room without a closed plan keeps its icon and states no size, because
+ * "0.0 m²" would be a claim about the scan rather than about the room.
+ *
+ * The numbers are digits from [RoomSizeText] (the `Locale.ROOT` ones the length column of this same
+ * row prints) and the units come from the resources, which is why nothing here is a Kotlin string
+ * literal: `:app` owns every word a screen shows, in all six locales.
+ */
+@Composable
+private fun RoomSizeBadges(sketch: FloorplanSketch?, onCloseRoom: () -> Unit) {
+    if (sketch == null) return
+    if (sketch.closure == FloorplanSketch.Closure.Open) {
+        // The scan walked the room but never closed the ring - a doorway, a glazed partition. The
+        // corners are stored, so one tap can state that the gap is a wall; the card then has a
+        // picture and a size, and the sketch remembers the wall was drawn rather than measured.
+        CloseRoomChip(onCloseRoom)
+        return
+    }
+    val size = RoomSizeText.of(sketch) ?: return
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 3.dp)) {
+        SizeBadge(stringResource(R.string.card_area, size.area))
+        SizeBadge(stringResource(R.string.card_perimeter, size.perimeter))
+        if (sketch.closure == FloorplanSketch.Closure.DrawnByHand) {
+            SizeBadge(stringResource(R.string.card_closed_by_hand))
+        }
+    }
+}
+
+/**
+ * The one action an open ring offers: say the gap is a wall.
+ *
+ * A full `gloveTouchTarget` tall, because the operator is standing in the room with gloves on when
+ * he decides this - and because it sits inside a row that is itself clickable, so a miss would open
+ * the room instead of closing it.
+ */
+@Composable
+private fun CloseRoomChip(onCloseRoom: () -> Unit) {
+    var asking by remember { mutableStateOf(false) }
+    TextButton(
+        onClick = { asking = true },
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+        modifier = Modifier.heightIn(min = SiteColors.gloveTouchTarget),
+    ) {
+        Text(
+            stringResource(R.string.card_close_room),
+            style = MaterialTheme.typography.labelLarge,
+            color = SiteColors.accent,
+        )
+    }
+    // One tap must not rewrite a room: the question says what the gap is, what counting it changes
+    // and that the closing wall is marked as drawn rather than measured. The chip sits inside a
+    // clickable row, so the dialog is also what keeps a mis-tap from opening the room instead.
+    if (asking) {
+        AlertDialog(
+            onDismissRequest = { asking = false },
+            title = { Text(stringResource(R.string.card_close_title)) },
+            text = { Text(stringResource(R.string.card_close_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        asking = false
+                        onCloseRoom()
+                    },
+                ) { Text(stringResource(R.string.card_close_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { asking = false }) {
+                    Text(stringResource(R.string.home_cancel))
+                }
+            },
+        )
+    }
+}
+
+/** One badge. Decoration for the eye: the same numbers are in the row's text for a screen reader. */
+@Composable
+private fun SizeBadge(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp))
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    )
 }
 
 @Composable

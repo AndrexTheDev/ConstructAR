@@ -57,6 +57,23 @@ struct Vec3 {
 
 inline Vec3 operator*(float s, const Vec3& v) { return v * s; }
 
+/**
+ * A surface point with the direction the surface faces.
+ *
+ * The waist-height slice hands these to the semantic mask, which drops the surfaces a cup could
+ * stand on: at standing height a slice also cuts every table top, workbench and counter, and each
+ * of those is a horizontal patch that a 2D vectoriser would draw as a wall through the middle of
+ * the room. The normal is the only thing that tells the two apart.
+ *
+ * A zero normal means "no direction could be measured" (a voxel whose neighbours were never
+ * observed). It is kept, not guessed: the mask counts those separately rather than treating them
+ * as walls.
+ */
+struct OrientedPoint {
+  Vec3 position;
+  Vec3 normal;
+};
+
 /** Row-major 3x3; only used for rotation extraction/assembly. */
 struct Mat3 {
   float m[9] = {1.f, 0.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.f, 1.f};

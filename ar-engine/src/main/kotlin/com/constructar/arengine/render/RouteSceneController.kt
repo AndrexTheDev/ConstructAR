@@ -7,7 +7,6 @@
 package com.constructar.arengine.render
 
 import android.util.Log
-import com.constructar.arengine.route.AnchorFactory
 import com.constructar.arengine.route.RouteSession
 import com.constructar.core.math.Quat
 import com.constructar.core.math.Vec3

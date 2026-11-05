@@ -13,7 +13,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,6 +23,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -58,6 +59,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.constructar.app.R
@@ -190,7 +194,7 @@ fun FieldBookScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { if (unsavedDraft) confirmLeave = true else onBack() }) {
+            IconButton(onClick = { if (unsavedDraft) confirmLeave = true else onBack() }, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.paywall_back),
@@ -288,7 +292,7 @@ fun FieldBookScreen(
             OutlinedTextField(
                 value = diaryDraft,
                 onValueChange = { diaryDraft = it },
-                placeholder = { Text(stringResource(R.string.field_diary_hint)) },
+                label = { Text(stringResource(R.string.field_diary_hint)) },
                 minLines = 2,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -340,18 +344,23 @@ fun FieldBookScreen(
             OutlinedTextField(
                 value = defectTitle,
                 onValueChange = { defectTitle = it },
-                placeholder = { Text(stringResource(R.string.field_defect_hint)) },
+                label = { Text(stringResource(R.string.field_defect_hint)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 value = defectLocation,
                 onValueChange = { defectLocation = it },
-                placeholder = { Text(stringResource(R.string.field_defect_location_hint)) },
+                label = { Text(stringResource(R.string.field_defect_location_hint)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            // One choice out of three, announced as exactly that: a group of radio buttons, not
+            // three unrelated texts that happen to sit in a row (finding 211).
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().selectableGroup(),
+            ) {
                 SeverityChip(
                     label = stringResource(R.string.severity_low),
                     selected = defectSeverity == DefectSeverity.LOW,
@@ -550,7 +559,7 @@ private fun SessionRow(session: WorkSession, nowMs: Long, onDelete: () -> Unit) 
         )
         // The only correction there is: a stopped clock could not be edited before finding 44,
         // so a forgotten stop cost the operator the whole night's hours.
-        IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+        IconButton(onClick = onDelete, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.Default.Delete,
                 contentDescription = stringResource(R.string.field_time_delete),
@@ -599,7 +608,7 @@ private fun DiaryRow(
                 )
             }
         }
-        IconButton(onClick = onPhoto, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onPhoto, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.Default.PhotoCamera,
                 contentDescription = stringResource(
@@ -612,7 +621,7 @@ private fun DiaryRow(
                 },
             )
         }
-        IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onDelete, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.Default.Delete,
                 contentDescription = stringResource(R.string.field_delete),
@@ -649,8 +658,16 @@ private fun DefectRow(
     // reopened it, silently, on the row he is most likely to tap while reading the punch list
     // (finding 136) - so the symbol and the sentence follow the direction of the tap.
     val toggle = DefectToggle.action(defect.resolved)
+    // The icon says what the tap does; the state says what the defect is. A screen reader needs
+    // both, and the detail line beside it is a separate node (finding 211).
+    val stateLabel = stringResource(DefectToggle.stateRes(defect.resolved))
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        IconButton(onClick = onToggle, modifier = Modifier.size(52.dp)) {
+        IconButton(
+            onClick = onToggle,
+            modifier = Modifier
+                .size(SiteColors.gloveTouchTarget)
+                .semantics { stateDescription = stateLabel },
+        ) {
             Icon(
                 if (toggle == DefectToggle.Action.REOPEN) Icons.AutoMirrored.Filled.Undo else Icons.Default.Check,
                 contentDescription = stringResource(DefectToggle.labelRes(toggle)),
@@ -688,7 +705,7 @@ private fun DefectRow(
                 )
             }
         }
-        IconButton(onClick = onPhoto, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onPhoto, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.Default.PhotoCamera,
                 contentDescription = stringResource(
@@ -701,7 +718,7 @@ private fun DefectRow(
                 },
             )
         }
-        IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onDelete, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.Default.Delete,
                 contentDescription = stringResource(R.string.field_delete),
@@ -737,7 +754,9 @@ private fun SeverityChip(
             .heightIn(min = 56.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(if (selected) accent else MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(onClick = onClick)
+            // `selectable` rather than `clickable`: it carries the selected state and the radio
+            // role, so the choice is heard instead of only seen as a filled background.
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 18.dp),
     )
 }

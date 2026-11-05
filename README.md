@@ -1,3 +1,9 @@
+<!--
+  Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+  All rights reserved. Proprietary and confidential - see LICENSE.
+  SPDX-License-Identifier: LicenseRef-Proprietary
+-->
+
 # ConstructAR
 
 **Offline AR measuring and routing for electrical, plumbing and ventilation work.**
@@ -52,6 +58,133 @@ metric depth field, a loop-closure pose graph (built and host-tested — *not ye
 scan pipeline*, see finding 98), thermal-aware degradation, and explicit handling for every way
 AR can fail on a site.
 
+**Drywall take-off** (`core/.../wall`, **and it is wired**: the project card's *Walls* button
+renders `WallPlan`, which builds the room's ring from the stored outline, calls `wallSurface` and
+`estimateDrywall`, and prints the board size, stud spacing and waste the numbers were computed
+under — a purchase order without its assumptions is a number to argue with): net wall area with
+the openings subtracted as a *union* (two windows that overlap take
+board off a wall once, not twice — double-subtracting is how an estimate comes out short), then
+boards at the standard 2.50 × 1.25 m, CW studs at 62.5 cm centres (a stud under every board edge),
+UW track top and bottom, 29 screws per square metre of installed board, and 10 % waste on
+everything that gets cut. An opening that does not fit its wall is clipped *and counted*, with the
+reason enumerated, rather than quietly absorbed.
+
+**DIN 18015 zones** (`core/.../wall`, **and it is wired**: the same *Walls* screen classifies every
+measured point and prints the sockets, switches and ceiling outlets, and it refuses to classify
+anything until the session has tracked a floor — ARCore's origin is wherever the phone started, so
+a height taken from it would print a socket at 1.40 m; `FloorReference` names the tracked
+horizontal plane under the operator, `HitResolution` carries it out of the hit source where the
+planes live, and the project stores it in `floorHeightM`): a measured height is snapped to the
+socket line (30 cm), the switch line (105 cm) or the
+ceiling outlet (15 cm below the ceiling, so it follows the room), and refused outside a 10 cm
+tolerance with the nearest line still named — a point 25 cm off the socket line is not silently
+drawn as a socket at 30 cm.
+
+**Clash detection** (`core/.../wall`, arithmetic and unit tests only — **no screen calls it yet**,
+because nothing in the app constructs an `Obstacle` yet: there is no source of walls, beams and
+services as boxes, and a clearance card with nothing to check against would be a claim the app
+cannot back): answers the other question a run has to pass — the
+measured polyline against boxes standing for walls, beams and services, with a proper slab
+intersection (a segment through the *middle* of a beam touches none of its twelve edges, so an
+edge-only check calls a penetration "0.5 m clear"), exact segment-to-box distances, and the default
+or per-obstacle clearance enforced.
+
+**Architectural snapping** (`ar-engine/.../hit`, **and it is wired**: `ReticleSnap` runs inside
+`ArHitSource.resolve`, so every accepted plane hit - the reticle's and the tap's - is pulled onto
+the room's own geometry before it can become a route node): the edges and corners of a room are
+derived from the tracked plane polygons by intersecting each pair and clipping the result to
+*both* polygons, because two walls that do not touch still intersect in an infinite line and
+snapping to that line would put a measurement on a wall that is not there. A hit within 10 cm of
+a derived edge or corner *is* that edge or corner - 3 cm short of a corner is the corner - so a
+run ends exactly where the fitter stopped and the exported plan shows the room that was measured
+rather than the room ARCore happened to see. Only `HitSource.PLANE_POLYGON` hits move: a depth or
+feature-point hit has no polygon of its own, and pulling it onto a corner would claim precision
+the sensor never measured; the accepted normal likewise stays the aimed wall's, so a corner does
+not silently move the line onto the perpendicular wall. The minimum feature length (20 cm) is
+deliberately longer than the tolerance (10 cm) - a corner whose clipped segment is shorter than
+the tolerance could never be reached from a hit near its end, and would disappear. This is the
+room's geometry; the 4 cm crosshair snap above is a different rule, and still snaps to corners the
+*run* already has.
+
+**When the snap moves the reticle, the screen says so.** A pulled point is a *different* point from
+the one the operator aimed at - up to ten centimetres away - and until now the only trace of it was
+the number under the crosshair changing between two taps, which trains a fitter to tap again and
+distrust the one step that makes his measurement exact. The move is now recorded on the hit
+(`SnapInfo`: which kind of feature, how many metres), stated on the HUD in the accent colour -
+*aligned to the corner · moved 4.2 cm* - and drawn as a ring where the reticle samples, so the
+jump has an explanation at the place it happens. Four whole sentences per language instead of one
+sentence with the noun as an argument: *an der Ecke* and *an der Bodenkante* are different cases,
+and a placeholder would make every translator bend the grammar around a word they cannot decline.
+The digits come from the same formatter as every other length in the app, and a distance that is
+not a length (a NaN, a negative) prints nothing rather than a sentence with a hole in it
+(finding 213).
+
+**Room thumbnails** (`export/.../svg` + `app/.../data/RoomThumbnail.kt`): the home screen's card
+wants a picture of *that* room, and a JPEG of the camera frame is the wrong answer twice over — it
+carries the customer's kitchen into a file list, and it is 40 kB of pixels to say "4 x 3 m".
+`FloorplanSvg` writes a standalone SVG of the outline instead: a few hundred bytes, sharp at any
+size, drawn from the same numbers the protocol prints. One scale factor serves both axes (a stretch
+is exactly what makes opposite walls stop being parallel), the long side sets that scale and the
+drawing is centred in the square, the wall is a *physical* 10 cm so a 2 m bathroom and a 20 m
+corridor both read right, and a 1 px floor keeps the walls of a 200 m hall visible. Numbers are
+written in the C locale: a decimal comma inside an SVG `points` list is a *separator*, so the picture
+would silently become a different polygon, and nothing anywhere would report it. The file holds no
+text at all — `:export` receives numbers and identifiers, `:app` owns every word (finding 100's
+rule), and an unnamed `role="img"` is announced as a nameless image, so the card, which prints the
+room's name next to the drawing, is the accessible element. Only a real room is drawn: fewer than
+three corners, a NaN, a room under 10 cm or one over 200 m is refused with an enumerated reason
+rather than guessed at.
+
+The picture is **written**, at the moment a run is committed: the scan worker slices the volume
+while it is still alive (`TsdfScanPipeline.floorplan`, bounded to 400 ms and never called from a
+screen's thread), `RoomThumbnail` picks the room out of the plan — the largest *closed* loop, because
+a doorway leaves the ring open and joining it would draw a wall across the door — and the repository
+writes `files/projects/<id>/thumbnail.svg` through the same temp-file/`fsync`/rename path a project
+file uses. Deleting a room deletes its folder, so no orphan picture outlives the room it shows.
+
+The **card** does not read that file, and must not: Android ships no SVG renderer, and a second
+parser for a format this app only writes would be a liability with no upside. The same loop — same
+corners, same order, chosen once — is stored in the project file itself, as
+`sketch: [{xMeters, zMeters}, …]` on `ProjectRecord` (at most 512 corners, drawn only from three,
+its area from the same `PolygonMath` the protocol uses), and the card draws it into a 40 dp
+`Canvas` through `RoomThumbnail.pathPoints`: one scale on the long side, centred in the square,
+world `z` running down — the numbers `FloorplanSvg` prints, and the tests pin them to the same
+pixel. Because the outline lives in the room, a backup carries it and a restored room still has its
+picture; the SVG stays what it always was for: the artefact that leaves the phone. A room with no
+closed plan keeps the icon, because a placeholder outline would be a shape the operator never
+walked.
+
+A room the scan never closed keeps its icon, but its corners are **not thrown away**: the sketch is
+stored with `Closure.Open`, and the card offers the one gesture that fixes it — *close the room*.
+The operator has walked the gap and says it is a wall; the ring becomes a room with an area, a
+perimeter, a picture and an exported SVG, and `Closure.DrawnByHand` records that the closing wall was
+asserted rather than measured, so a protocol that prints an accuracy never counts it as measured.
+Nothing is decided on the operator's behalf: a doorway is a doorway until he says otherwise.
+
+**The protocol carries the plan, not only its numbers.** The document a customer signs had an area,
+a bill and a signature line, and no picture of the room those numbers describe — the one page he
+keeps looked the same for a 4 m bathroom and a hall. It now has a plan page of its own, printed
+before the signature and built from exactly the ring the card draws: `FloorplanSection` carries the
+corners and the words, `FloorplanLayout` fits them into the printable box (one scale for both axes,
+the longer extent setting it, world `z` down the page, a 10 cm wall that is clamped to the printable
+range of 0.75 to 6 points so a hall's wall is not a hairline and a bathroom's is not a blot), and
+`ProtocolPdfWriter` draws a closed path with that stroke, the caption and the note underneath. The
+caption is the two numbers the card shows, formatted once by `RoomSizeText`; the note says that the
+closing wall was drawn by hand when it was. Both are resources in six languages — `:export` receives
+them, never composes a sentence (finding 100's rule). A room without a closed ring gets no plan page
+at all, because a plan of a walk that never came back to its first corner is not the room. The
+geometry is a class with no `PdfDocument` in it, so the scale, the orientation, the clamped wall and
+the refusals are tested on the JVM — the same reason `PageFlow` exists.
+
+The same outline states the room's **size**. Under the card's name sit two badges — the area from
+`PolygonMath.area` and the perimeter of the ring, closing edge included (a 4 × 3 m room is 12.0 m²
+and 14.00 m, not 11 m: the walk back to the first corner is a wall, and it is what skirting and
+trunking are priced on). Both numbers are `LengthFormatter`'s `Locale.ROOT` digits, the same ones
+the length column of that row prints, and both units live in the resources (`card_area`,
+`card_perimeter`) so six locales stay in step. They appear only when the picture does: a row that
+drew a shape but stated no size, or stated a size beside an icon, would be two answers to "was this
+room measured".
+
 **Depth fusion policy.** ARCore depth is metric but holey; the network is dense but only
 relative. `AiDepthFusion` therefore lets the network **fill holes only** — a confident ARCore
 sample is never overwritten — after `MetricDepthCalibrator` fits `1/z = s·d + t` against
@@ -75,7 +208,12 @@ Four screens, in the order of the job, and no screen that exists only to show of
    *note for the office* live here, one tap deeper. **Material & order** opens the shopping list —
    per conduit type, net metres plus the metres to order with the site's waste factor, and the
    clips, couplings and bends the runs actually need. The person who drives to the wholesaler is
-   standing in the room with this phone, not reading the PDF at a desk.
+   standing in the room with this phone, not reading the PDF at a desk. **Walls** opens the other
+   half of the same job: the room's ring as wall area (openings subtracted, the closing wall
+   counted), the drywall purchase with the board size, stud spacing and waste it was computed
+   under, and the DIN 18015 zones — sockets at 30 cm, switches at 105 cm, ceiling outlets under
+   the ceiling — assigned from the floor the AR session actually tracked, or not assigned at all
+   when it tracked none.
 4. **Measure → Export** — the AR viewfinder with its HUD, then the export screen, where the
    operator picks a folder once and gets PDF, CSV (plus an optional one-line-per-article order
    list for the wholesaler) and, with Pro, GLB/PLY. The customer can sign
@@ -85,6 +223,31 @@ Four screens, in the order of the job, and no screen that exists only to show of
 This replaced a two-screen design (list → AR) that was technically sufficient and practically
 wrong: a foreman standing in a basement could not tell whether the scan had worked, whether the
 runs were saved, or what was left to do.
+
+**Every control is glove-sized.** The theme's `gloveTouchTarget` is 64 dp and the primary buttons
+are 72 dp, because the phone is used with work gloves on, one-handed, next to a laser. That was a
+comment for eleven rounds while the buttons that are actually pressed on site were 40, 48, 52 and
+56 dp — the delete on a diary row, the defect toggle, and the two buttons the AR screen shows while
+the other hand is busy. They are all at the target now, and `scripts/verify_sources.py` reads every
+`IconButton` in `:app` and refuses one smaller: the design constant and the composable are two
+numbers in two files, and no compiler compares them (finding 205). The card that opens a room also
+announces itself as a button to a screen reader, and the room's picture carries no description of
+its own — the row already prints the name, the runs, the metres, the area and the perimeter as
+text.
+
+**And every control says what it is.** Glove-sized was half of it; the other half is spoken. A row
+that opens the paywall was an unlabelled `clickable`, the three-way severity choice was three texts
+whose selection lived in a background colour, the export format switches were a nameless `Switch`
+beside a label it could not name, the conduit-spec buttons never said which one was chosen, the
+signature pad was a blank canvas with no name and no way to clear it, and the AR screen — the one
+screen a blind operator would need most — ended in a full-surface `Box` with nothing to
+double-tap. Every acting row now carries a role; choices are `selectable` groups that announce the
+chosen one; a setting's tap belongs to its row, not to a switch that cannot name it; every text
+field has a `label` rather than a placeholder, because a placeholder is decoration and not a name;
+the pad announces its field, whether it is signed, and offers *clear* as an accessibility action;
+and the camera surface offers the only action it can offer without a fingertip — set the point in
+the middle of the screen, where the reticle already is (finding 211). Six new sentences in six
+locales, and `scripts/verify_sources.py` reads the modifiers instead of trusting them.
 
 ---
 
@@ -291,7 +454,7 @@ git clone https://github.com/AndrexTheDev/ConstructAR.git && cd ConstructAR
 gradle assembleDebug testDebugUnitTest   # the full gate: every module, warnings are errors
 gradle :app:assembleDebug                # APK in app/build/outputs/apk/debug/
 gradle :app:assembleRelease              # the shipping artifact: R8 + resource shrink
-python3 scripts/verify_sources.py        # header / reflection / i18n gates, no SDK needed
+python3 scripts/verify_sources.py        # copyright notice / reflection / i18n gates, no SDK needed
 ```
 
 **Size is a feature.** The release APK is **25 MB** — R8 with resource shrinking, six locales
@@ -314,6 +477,8 @@ g++ -std=c++20 -O2 -pthread -I native-slam/src/main/cpp \
     native-slam/src/main/cpp/slam/pose_graph.cpp \
     native-slam/src/main/cpp/geometry/manhattan_world.cpp \
     native-slam/src/main/cpp/geometry/plane_fit.cpp \
+    native-slam/src/main/cpp/geometry/floorplan.cpp \
+    native-slam/src/main/cpp/geometry/surface_mask.cpp \
     native-slam/src/main/cpp/calibration/tag_scale.cpp \
     native-slam/src/main/cpp/slam/rtabmap_bridge.cpp \
     native-slam/src/main/cpp/tests/host_tests.cpp -o /tmp/host_tests && /tmp/host_tests
@@ -377,7 +542,7 @@ Known limitations, deliberately documented rather than hidden:
 
 ## Testing
 
-* **Native (C++) — 185 assertions, all green**, exercised with plain `g++` (no Android SDK):
+* **Native (C++) — 287 assertions, all green**, exercised with plain `g++` (no Android SDK):
   SE(3) exp/log round trip, TSDF integration on synthetic depth, sphere/wall reconstruction
   areas and extents, a 30°-tilted plane (which pins the depth convention), free-space carving
   (a ghost disappears, the real wall does not), triangle budget, invalid input, pose-graph
@@ -399,6 +564,47 @@ Known limitations, deliberately documented rather than hidden:
   chain — a synthetic 4 × 3 m room cloud with 3 mm of noise and one wall 8° off square, six
   surfaces, one frame, five snapped planes and the crooked wall left at the 4 m it was measured
   at.
+* **Waist-height slice and floorplan** (`tsdf/volume.cpp`, `geometry/floorplan.cpp`) — the first
+  half of a 2D plan: `sliceSurfaceAtHeight(1.0f, 0.05f)` returns the surface voxels inside a 5 cm
+  band at standing height (observed voxels only, so free and unseen space contribute nothing), and
+  `vectoriseFloorplan` turns those points into wall segments — a 5 cm occupancy grid, boundary
+  edges with the room on the left, loops chained through integer corner keys, and
+  Ramer–Douglas–Peucker over each loop. A 4 × 3 m room comes back as four segments, 12.15 m² and
+  14.10 m; an L-shaped room as six; a room with a 45° wall as three (the grid's corner-touching
+  pinches are resolved first, or a diagonal wall breaks the loop into bubbles). Two things are
+  deliberate: the traced loop is the *outer* face of a one-cell surface band, so area reads up to
+  ~2 % high — measured +1.25 % on the rectangle, +1.7 % on the L, +2.4 % on the triangle, and the
+  suite's tolerance is one-sided because reading *low* would mean a lost wall; and a doorway opens
+  the ring, so a scan with the door open reports **no** area and **no** segments rather than
+  closing the gap with a wall that is not there. Gap classification is the next step.
+* **The plan reaches Kotlin** (`jni/slam_jni.cpp` → `nativebridge/FloorplanPayload.kt`) — one
+  `float[]` per call: eight floats of header (valid, closed, area, perimeter, three counts and the
+  occupied cells), then the wall runs as `x/z` pairs, the loop lengths with their closure flags and
+  the outline. The pipeline (slice → mask → vectorise) runs entirely on the native side, because
+  the mask needs the point normals and the normals never cross the bridge; a table top in the slice
+  becomes a floorplan of the table the operator walked around. The *packer* is a plain function in
+  `geometry/floorplan.cpp` with fifteen host assertions on its exact layout, so the payload is
+  tested even though the JNI call itself cannot be. The Kotlin parser refuses anything the length
+  does not prove — a truncated array read field by field yields zeros, and a room with zero-length
+  walls is a plan that draws and is wrong — and a count that is fractional, negative or larger than
+  the array is a broken writer rather than a rounding. The plan reaches the app the moment a run is
+  committed — the scan worker slices the volume while it is still alive (400 ms bound),
+  `ArMeasureController.finalFloorplan()` hands the payload on, and
+  `ProjectViewModel.saveFloorplanThumbnail` writes the room's outline and its SVG (see *Room
+  thumbnails* above and ARCHITECTURE §5b for the four links of that chain).
+* **Semantic masking and distance-weighted fusion** — two pieces the slice needs to be usable. A
+  waist-height cut crosses tables, counters and workbenches as well as walls, and a horizontal
+  patch drawn as a wall puts a partition through the middle of the room: `maskVerticalSurfaces`
+  keeps a point only when the surface normal is within 20° of vertical, which is the SDF gradient
+  the slice already carries (`sliceSurfacesAtHeight`), and it publishes how many points it dropped
+  as horizontal and how many had no measurable normal rather than guessing either. Measured on a
+  synthetic frame: a vertical wall keeps all 2 580 of its points, the same plane seen by a camera
+  looking straight up is 100 % dropped. And observations are now weighted by **1/Z²**, so a reading
+  at 1 m carries sixteen times the authority of the same pixel at 4 m in the voxel's running
+  average (clamped to [1/36, 4]); the evidence a frame deposits per voxel write is asserted to be
+  exactly that number, so a helper that never reaches the integrator fails. Fractional weights are
+  why the block's 16-bit weight array became fixed point in 1/256ths (`kWeightScale`) instead of a
+  count. Both are host-tested and **not yet wired**: no JNI symbol, no caller.
 * **AprilTag — detector contract, no detector.** `calibration/tag_scale.hpp` holds the interface a
   decoder will implement (whose only implementation says it is unavailable, and why) and the
   marker-to-scale arithmetic: pair ratios against the printed layout, a median, a deviation
@@ -409,7 +615,11 @@ Known limitations, deliberately documented rather than hidden:
   read-modify-write of two arrays done by several workers, and only the sanitizer can see it when
   that update escapes the shard lock (finding 181). It reports none.
 * **JVM (`:core`)** — transform maths, plane fits and polygon containment, fillet smoothing,
-  measurement, tube/duct mesh invariants, BOM aggregation, the working-time clock, the money
+  measurement, net wall area with openings subtracted as a union (the overlap case included),
+  the drywall take-off's arithmetic (boards, studs per run, tracks, screws, waste), DIN 18015 zone
+  snapping (refusals, tie-break, a room with no ceiling zone), clash geometry (segment–box slab
+  clip, exact distances, segment–segment),
+  tube/duct mesh invariants, BOM aggregation, the working-time clock, the money
   arithmetic (`Pricing`: rounding, both decimal separators, thousand dots, euro forced on a
   `pl-PL` phone), the photo-token naming contract and the third-party notice list the Help screen
   shows (every linked component attributed, only fee-free licences).
@@ -422,19 +632,32 @@ Known limitations, deliberately documented rather than hidden:
   computed for every text pair the UI draws and asserted at 4.5:1.
 * **JVM (`:app`)** — the printed cost block: no block without time or material, labour +
   material = net total through the same formatter the PDF uses, a running session billed to now,
-  a project rate overriding the firm's.
+  a project rate overriding the firm's. Plus the wall screen's assembly: a closed ring is four
+  walls and the closing one counts, an open ring is none, the calibration factor scales the run
+  and not the assumed wall height, a mounting height that is not relative to a tracked floor
+  produces no zones, a point below the floor is refused rather than assigned, and a project file
+  written before `floorHeightM` existed still loads.
 * **JVM (`:native-slam`)** — the pose-graph report as it crosses the JNI bridge: the
   optimiser's convergence verdict is carried across instead of being re-derived from the two
   costs, and the pose block is read past that flag rather than from it. Plus the engine's
   lifetime: `close()` frees the native context once however often it is called (three calls in a
   row, or two threads at the same moment), and every other method is a no-op afterwards instead of
   handing a freed pointer to the JNI layer (finding 182).
-* **JVM (`:ar-engine`, `:export`)** — hit cascade priority and rejection reasons, metric depth
+* **JVM (`:ar-engine`, `:export`)** — hit cascade priority and rejection reasons, architectural
+  snapping (a derived corner found, an edge clipped out of two polygons, walls that stop short
+  producing no corner, the tie that a corner wins over an edge, and the tiers that are never
+  snapped), metric depth
   calibration (including "refuses to fit on noise"), routing/anchor behaviour, GLB/PLY/CSV
-  structural validation, the protocol's note for a capture that hit the scan limit, the rows of
+  structural validation, the SVG thumbnail (one scale for both axes, a physical wall width, the
+  C locale under a German default, and every refusal) and the picture the AR screen writes from a
+  plan (the largest closed loop wins, an open loop is never closed here, a bigger open loop never
+  beats a smaller closed one, the file lands in the room's own folder, an unsafe id and an
+  oversized SVG are refused, and deleting a room takes the file with it), the protocol's note for a capture that hit the scan limit, the rows of
   its summary, the order list's uncertain-hit note, the HUD's detail budget, the tracking
   monitor's steady state (a frame that changes nothing publishes nothing), the torch's refusal
-  path (a camera that says no is not asked again), and the ten rules of the reticle stabiliser (a settled median, an
+  path (a camera that says no is not asked again), which plane under the operator is *the floor*
+  (a ceiling is not, the highest floor below the phone wins, a stairwell's storey is not this
+  room), and the ten rules of the reticle stabiliser (a settled median, an
   outvoted stray frame, a moving hand that never locks, a plane or tier change that resets the
   window, a miss that clears it).
 * **JVM (`:core` licence)** — the freemium gate: a signed licence verifies, a tampered payload
@@ -456,8 +679,11 @@ Known limitations, deliberately documented rather than hidden:
   (warnings are errors), asserts `libconstructar_slam.so` is inside the arm64 APK, and uploads
   the test reports. That workflow — not a local machine — is where the "it compiles" claim is
   proven.
-* **Static gates**: `scripts/verify_sources.py` checks copyright headers, the reflection ban,
-  the published test and assertion counts against the suites themselves,
+* **Static gates**: `scripts/verify_sources.py` checks that every authored file states its owner -
+  the notice itself (`Copyright (c) <year> AndrexTheDev <hippie…>`), not merely the author's handle,
+  which a GitHub link satisfies (finding 215) - the reflection ban,
+  the published test and assertion counts against the suites themselves, that no document calls a
+  shipped path dead (finding 216),
   hardcoded UI text in shipped code, string-resource references, locale parity, XML
   well-formedness and the manifest hardening — without needing a JDK. One of its rules holds the
   native layer to its four build lists at once (a `geometry/*.cpp` must be compiled by CMake, the
@@ -535,15 +761,15 @@ errors:
 
 | Gate | Result |
 |------|--------|
-| `scripts/verify_sources.py` (headers, reflection ban, i18n parity, no stale claim) | pass — every tracked source file |
+| `scripts/verify_sources.py` (copyright notice, reflection ban, i18n parity, no stale claim) | pass — every authored file, the eight generated site artefacts included |
 | `tools/seo_audit.py` (metadata, structured data, links, sitemap, manifest) | pass — 6 pages + 404 |
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 715 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 910 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
-| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 185 checks, 0 failures |
-| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 185 checks, 0 failures, no data race reported |
+| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 287 checks, 0 failures |
+| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 287 checks, 0 failures, no data race reported |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
 | APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |
