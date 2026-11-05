@@ -301,6 +301,9 @@
     <string name="wall_opening_door">Puerta</string>
     <string name="wall_opening_window">Ventana</string>
     <string name="wall_opening_remove">Quitar la última abertura</string>
+    <string name="wall_elevation_a11y">Pared %1$d, próxima abertura al %2$d %% de la pared</string>
+    <string name="wall_elevation_spot_left">Mover la marca a la izquierda</string>
+    <string name="wall_elevation_spot_right">Mover la marca a la derecha</string>
     <string name="wall_drywall_title">Despiece de pladur</string>
     <string name="wall_boards">Placas a comprar</string>
     <string name="wall_boards_value">%1$d (%2$d antes de merma)</string>

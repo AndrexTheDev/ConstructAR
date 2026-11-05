@@ -98,6 +98,26 @@ fun openingsByWall(openings: List<PlacedOpening>): Map<Int, List<WallOpening>> {
     return grouped
 }
 
+/** One nudge of the spot: a tenth of the wall, which is about a door's width on a 4 m run. */
+const val SPOT_STEP: Float = 0.10f
+
+/**
+ * The spot a nudge moves the *next* opening to, kept inside the wall.
+ *
+ * A tap is not a control a screen reader can use, and it is not a precise one for a gloved finger
+ * either. The elevation offers the same choice as two accessibility actions ("left", "right") that
+ * move a tenth of the wall at a time, and this is the arithmetic behind them - in `:core` for the
+ * same reason the clamping is (finding 223): a screen that stepped its own fractions would step off
+ * the end of the wall, and the opening it placed would be clipped by `wallSurface` for a reason
+ * nobody on the screen could see.
+ */
+fun stepOpeningFraction(fraction: Float, steps: Int, stepFraction: Float = SPOT_STEP): Float {
+    val start = if (fraction.isFinite()) fraction else 0.5f
+    val step = if (stepFraction.isFinite() && stepFraction > 0f) stepFraction else SPOT_STEP
+    // `steps` is an Int by design: a caller that wants "a bit" of a step has `stepFraction`.
+    return (start + steps * step).coerceIn(0f, 1f)
+}
+
 /**
  * An opening as a rectangle in its wall's own frame, every edge a fraction of the wall.
  *

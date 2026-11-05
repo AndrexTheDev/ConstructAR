@@ -307,6 +307,9 @@
     <string name="wall_opening_door">Drzwi</string>
     <string name="wall_opening_window">Okno</string>
     <string name="wall_opening_remove">Usuń ostatni otwór</string>
+    <string name="wall_elevation_a11y">Ściana %1$d, następny otwór na %2$d %% długości ściany</string>
+    <string name="wall_elevation_spot_left">Przesuń znacznik w lewo</string>
+    <string name="wall_elevation_spot_right">Przesuń znacznik w prawo</string>
     <string name="wall_drywall_title">Przedmiar suchej zabudowy</string>
     <string name="wall_boards">Płyty do zakupu</string>
     <string name="wall_boards_value">%1$d (%2$d bez odpadu)</string>

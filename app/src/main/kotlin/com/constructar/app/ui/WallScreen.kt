@@ -38,6 +38,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -54,6 +58,7 @@ import com.constructar.core.wall.WallPlan
 import com.constructar.core.wall.openingOffsetForTap
 import com.constructar.core.wall.openingsByWall
 import com.constructar.core.wall.rectOn
+import com.constructar.core.wall.stepOpeningFraction
 
 /**
  * The room's paperwork: wall area, drywall purchase and the DIN 18015 zones.
@@ -156,6 +161,7 @@ fun WallScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 WallElevation(
+                    wallIndex = index,
                     lengthM = line.lengthM,
                     heightM = line.heightM,
                     openings = openings,
@@ -368,14 +374,23 @@ fun WallScreen(
  */
 @Composable
 private fun WallElevation(
+    wallIndex: Int,
     lengthM: Float,
     heightM: Float,
     openings: List<WallOpening>,
     onPlace: (fraction: Float, kind: OpeningKind) -> Unit,
 ) {
-    var tapFraction by remember { mutableStateOf(0.5f) }
+    // Where the *next* opening goes. Kept in the composition, not in the drawing: a marker the
+    // operator cannot see is the same as no marker, and a spot a screen reader cannot move is the
+    // same as no spot (finding 223).
+    var spot by remember { mutableStateOf(0.5f) }
     val wallColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f)
     val holeColor = MaterialTheme.colorScheme.error.copy(alpha = 0.40f)
+    val markerColor = MaterialTheme.colorScheme.primary
+    // Read at composition, because a semantics lambda is not composable.
+    val spotLabel = stringResource(R.string.wall_elevation_a11y, wallIndex + 1, PercentText.of(spot))
+    val leftLabel = stringResource(R.string.wall_elevation_spot_left)
+    val rightLabel = stringResource(R.string.wall_elevation_spot_right)
     val rects = remember(openings, lengthM, heightM) {
         openings.mapNotNull { it.rectOn(lengthM, heightM) }
     }
@@ -383,9 +398,25 @@ private fun WallElevation(
         modifier = Modifier
             .fillMaxWidth()
             .height(ELEVATION_HEIGHT)
+            // A canvas is a picture to a screen reader unless it is given a name, and a tap target
+            // it cannot reach unless the choice is offered as an action. Both, and the actions
+            // step a tenth of the wall at a time (`stepOpeningFraction`, which owns the clamp).
+            .semantics {
+                contentDescription = spotLabel
+                customActions = listOf(
+                    CustomAccessibilityAction(leftLabel) {
+                        spot = stepOpeningFraction(spot, -1)
+                        true
+                    },
+                    CustomAccessibilityAction(rightLabel) {
+                        spot = stepOpeningFraction(spot, 1)
+                        true
+                    },
+                )
+            }
             .pointerInput(lengthM) {
                 detectTapGestures { point ->
-                    if (size.width > 0) tapFraction = (point.x / size.width).coerceIn(0f, 1f)
+                    if (size.width > 0) spot = (point.x / size.width).coerceIn(0f, 1f)
                 }
             },
     ) {
@@ -403,19 +434,28 @@ private fun WallElevation(
                 size = Size((right - left).coerceAtLeast(1f), (bottom - top).coerceAtLeast(1f)),
             )
         }
+        // The spot the buttons will use, drawn: without it the operator taps, sees nothing, and
+        // has no way of knowing whether the tap landed or where.
+        val markerX = spot * size.width
+        drawLine(
+            color = markerColor,
+            start = Offset(markerX, 0f),
+            end = Offset(markerX, size.height),
+            strokeWidth = 2.dp.toPx(),
+        )
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         GloveButton(
             label = stringResource(R.string.wall_opening_door),
             icon = Icons.Default.Add,
-            onClick = { onPlace(tapFraction, OpeningKind.DOOR) },
+            onClick = { onPlace(spot, OpeningKind.DOOR) },
             modifier = Modifier.weight(1f),
             tone = ActionTone.SECONDARY,
         )
         GloveButton(
             label = stringResource(R.string.wall_opening_window),
             icon = Icons.Default.Add,
-            onClick = { onPlace(tapFraction, OpeningKind.WINDOW) },
+            onClick = { onPlace(spot, OpeningKind.WINDOW) },
             modifier = Modifier.weight(1f),
             tone = ActionTone.SECONDARY,
         )

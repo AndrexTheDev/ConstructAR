@@ -301,6 +301,9 @@
     <string name="wall_opening_door">Door</string>
     <string name="wall_opening_window">Window</string>
     <string name="wall_opening_remove">Remove last opening</string>
+    <string name="wall_elevation_a11y">Wall %1$d, next opening at %2$d %% along the wall</string>
+    <string name="wall_elevation_spot_left">Move the spot left</string>
+    <string name="wall_elevation_spot_right">Move the spot right</string>
     <string name="wall_drywall_title">Drywall take-off</string>
     <string name="wall_boards">Boards to buy</string>
     <string name="wall_boards_value">%1$d (%2$d before waste)</string>

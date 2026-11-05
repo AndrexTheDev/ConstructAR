@@ -4115,6 +4115,17 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
                     "of a wall would put a door through the corner")
     if "R.string.wall_elevation_title" not in screen_text:
         add(screen, "the screen shows no elevation, so the openings it deducts are invisible")
+    # The elevation is a tap target. A `Canvas` with a gesture modifier is a picture to a screen
+    # reader: no name, no state, no way to choose the spot (finding 223, the same shape as 211).
+    if "customActions = listOf(" not in screen_text or "contentDescription = spotLabel" not in screen_text:
+        add(screen, "the wall elevation is a tap target with no name and no accessibility actions - "
+                    "a screen reader cannot place an opening at all")
+    if "stepOpeningFraction(" not in screen_text:
+        add(screen, "the elevation's spot is not moved by `:core`'s stepping, so an action could "
+                    "walk off the end of the wall")
+    if "drawLine(" not in screen_text:
+        add(screen, "the spot the buttons will use is not drawn - a tap would leave no trace on "
+                    "screen until the opening appeared")
     if "R.string.wall_openings_none" not in screen_text:
         add(screen, "the screen deducts nothing without saying why - `0.00 m² openings` beside a "
                     "room with a door reads as a measured zero")
@@ -4145,6 +4156,9 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
         "wall_zones_no_floor": (),
         "wall_openings_none": (),
         "wall_elevation_title": (),
+        "wall_elevation_a11y": ("%1$d", "%2$d"),
+        "wall_elevation_spot_left": (),
+        "wall_elevation_spot_right": (),
         "wall_elevation_hint": (),
         "wall_opening_door": (),
         "wall_opening_window": (),

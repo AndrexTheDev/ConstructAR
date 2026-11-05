@@ -271,6 +271,19 @@ class WallPlanTest {
     }
 
     @Test
+    fun `a nudge moves the spot by a tenth of the wall and stops at its ends`() {
+        // The elevation's two accessibility actions, which are the only way to choose a spot
+        // without a tap.
+        assertEquals(0.6f, stepOpeningFraction(0.5f, 1), 1e-4f)
+        assertEquals(0.4f, stepOpeningFraction(0.5f, -1), 1e-4f)
+        assertEquals(0.95f, stepOpeningFraction(0.95f, 1), 1e-4f)
+        assertEquals(0f, stepOpeningFraction(0.05f, -3), 1e-4f)
+        // Nonsense in, the middle of the wall out - the one answer that is never off the wall.
+        assertEquals(0.5f, stepOpeningFraction(Float.NaN, 1), 1e-4f)
+        assertEquals(0.5f, stepOpeningFraction(0.5f, 1, Float.NaN), 1e-4f)
+    }
+
+    @Test
     fun `the openings a project stores are grouped by the wall they sit on`() {
         val grouped = openingsByWall(
             listOf(

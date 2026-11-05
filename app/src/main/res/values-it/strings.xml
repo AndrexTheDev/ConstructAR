@@ -301,6 +301,9 @@
     <string name="wall_opening_door">Porta</string>
     <string name="wall_opening_window">Finestra</string>
     <string name="wall_opening_remove">Rimuovi l’ultima apertura</string>
+    <string name="wall_elevation_a11y">Parete %1$d, prossima apertura al %2$d %% della parete</string>
+    <string name="wall_elevation_spot_left">Sposta il segno a sinistra</string>
+    <string name="wall_elevation_spot_right">Sposta il segno a destra</string>
     <string name="wall_drywall_title">Computo del cartongesso</string>
     <string name="wall_boards">Lastre da acquistare</string>
     <string name="wall_boards_value">%1$d (%2$d prima degli sfridi)</string>

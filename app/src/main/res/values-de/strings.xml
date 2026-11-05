@@ -301,6 +301,9 @@
     <string name="wall_opening_door">Tür</string>
     <string name="wall_opening_window">Fenster</string>
     <string name="wall_opening_remove">Letzte Öffnung entfernen</string>
+    <string name="wall_elevation_a11y">Wand %1$d, nächste Öffnung bei %2$d %% der Wandlänge</string>
+    <string name="wall_elevation_spot_left">Markierung nach links</string>
+    <string name="wall_elevation_spot_right">Markierung nach rechts</string>
     <string name="wall_drywall_title">Trockenbau-Mengen</string>
     <string name="wall_boards">Zu kaufende Platten</string>
     <string name="wall_boards_value">%1$d (%2$d vor Verschnitt)</string>
