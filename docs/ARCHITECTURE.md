@@ -326,11 +326,14 @@ is still reached from nowhere, and no stored metre depends on a marker today.
 block-sparse Hessian solved by preconditioned conjugate gradient, backtracking line search (a
 full step overshoots on a room with one closure), snapshot/rollback so a diverging iteration can
 never corrupt the trajectory. Loop closures carry 100× the odometry weight because they are
-appearance-verified. The graph is fed since finding 243: `KeyframeFeed` decides on each placed frame which pose is
-worth a node (`KeyframeSelector`, `:core`), the render thread enqueues, and the scan worker
-writes the node and the odometry edge to the previous one. The optimiser is still not called and
-no closure is proposed (finding 98), so the graph records the walk without correcting it, and
-the app measures on ARCore's own tracking.
+appearance-verified. The graph is fed since finding 243: `KeyframeFeed` decides on each placed
+frame which pose is worth a node (`KeyframeSelector`, `:core`), the render thread enqueues, and
+the scan worker writes the node and the odometry edge to the previous one. Since finding 245 it
+can be corrected too, but only on a human's word: `ProximityLoopClosureDetector` proposes a
+revisit, `ClosurePolicy` decides whether and which one to ask about, and a confirmed closure adds
+the edge at 100x the odometry weight and optimises on the worker. The corrected poses are
+reported, not written back - a run's metres were measured with taps, and finding 217's rule
+applies to the graph too.
 
 **Monocular depth fusion.** Optional and strictly additive, and it names itself: the model's asset
 path comes from `BuildConfig.DEPTH_MODEL_ASSET` (one declaration, so a variant that ships a

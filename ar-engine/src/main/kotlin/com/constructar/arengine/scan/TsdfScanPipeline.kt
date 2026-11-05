@@ -15,6 +15,9 @@ import com.constructar.arengine.keyframe.KeyframeFeed
 import com.constructar.arengine.keyframe.KeyframeQueue
 import com.constructar.arengine.keyframe.NativePoseGraphSink
 import com.constructar.arengine.keyframe.PoseGraphStatus
+import com.constructar.arengine.keyframe.ClosureState
+import com.constructar.arengine.keyframe.NativePoseGraphSource
+import com.constructar.arengine.keyframe.PoseGraphCloser
 import com.constructar.core.calib.MarkerSweep
 import com.constructar.core.calib.MarkerSweepOptions
 import com.constructar.nativebridge.FloorplanPayload
@@ -223,6 +226,24 @@ class TsdfScanPipeline(
     val poseGraphStatus: StateFlow<PoseGraphStatus> = mutablePoseGraphStatus.asStateFlow()
 
     /**
+     * What the loop-closure conversation is saying (finding 245).
+     *
+     * Published from the worker, where the graph is safe to touch; the screen only displays it and
+     * the three buttons below enqueue.
+     */
+    private val mutableClosureState = MutableStateFlow<ClosureState>(ClosureState.Idle)
+    val closureState: StateFlow<ClosureState> = mutableClosureState.asStateFlow()
+
+    /** Asks arriving from the UI. Applied on the worker, never on the thread that tapped. */
+    private val closureActions = Channel<ClosureAction>(capacity = 4)
+
+    private enum class ClosureAction { LOOK, CONFIRM, DISMISS }
+
+    /** Runs the conversation on the worker. Null until the engine exists. */
+    @Volatile
+    private var poseGraphCloser: PoseGraphCloser? = null
+
+    /**
      * What the render thread offers every placed frame to, or null until the engine exists.
      *
      * Public because the AR screen drives it: it is the one piece of the pose graph the frame loop
@@ -269,6 +290,7 @@ class TsdfScanPipeline(
         keyframeQueue = KeyframeQueue()
         keyframeApplier = KeyframeApplier(NativePoseGraphSink(created))
         keyframeFeed = KeyframeFeed(keyframeQueue)
+        poseGraphCloser = PoseGraphCloser(NativePoseGraphSource(created))
         workerJob = scope.launch(dispatcher) {
             try {
                 // Ends when the channel is closed and drained — see `stop()`.
@@ -367,6 +389,7 @@ class TsdfScanPipeline(
         // touch the pose graph, and a keyframe is worth less than a frame - so the drain is
         // bounded and the rest waits for the next one.
         drainKeyframes()
+        applyClosureActions()
         val startedNanos = System.nanoTime()
         // Read the stride once: the render thread may update `pendingPixelStep` concurrently.
         val pixelStep = pendingPixelStep
@@ -574,6 +597,8 @@ class TsdfScanPipeline(
         keyframeApplier = null
         keyframeQueue.close()
         mutablePoseGraphStatus.value = PoseGraphStatus()
+        poseGraphCloser = null
+        mutableClosureState.value = ClosureState.Idle
         val job = workerJob
         workerJob = null
         val active = engine
@@ -590,6 +615,42 @@ class TsdfScanPipeline(
         // direction (a leaked volume versus a use-after-free).
         kotlinx.coroutines.runBlocking {
             kotlinx.coroutines.withTimeoutOrNull(WORKER_JOIN_TIMEOUT_MS) { job.join() }
+        }
+    }
+
+    // ── Loop closure ────────────────────────────────────────────────────────────────────
+
+    /** Ask the detector whether the walk has come back somewhere it has been. */
+    fun lookForClosure() {
+        closureActions.trySend(ClosureAction.LOOK)
+    }
+
+    /** The operator confirmed: apply the closure and optimise, on the worker. */
+    fun confirmClosure() {
+        closureActions.trySend(ClosureAction.CONFIRM)
+    }
+
+    /** The operator refused: remembered, and the next question waits for the cooldown. */
+    fun dismissClosure() {
+        closureActions.trySend(ClosureAction.DISMISS)
+    }
+
+    /**
+     * Runs the queued ask/confirm/refuse on the worker.
+     *
+     * The node count is the applier's, not the graph's: it is the number of keyframes this session
+     * actually fed in, which is the number the policy's floor is written against.
+     */
+    private fun applyClosureActions() {
+        val closer = poseGraphCloser ?: return
+        while (true) {
+            val action = closureActions.tryReceive().getOrNull() ?: return
+            val now = android.os.SystemClock.uptimeMillis()
+            mutableClosureState.value = when (action) {
+                ClosureAction.LOOK -> closer.look(keyframeApplier?.appliedNodes ?: 0, now)
+                ClosureAction.CONFIRM -> closer.confirm(now)
+                ClosureAction.DISMISS -> closer.dismiss(now)
+            }
         }
     }
 

@@ -335,9 +335,9 @@ class NativeSlamEngine internal constructor(
     // ── Pose graph (loop closure) ────────────────────────────────────────────────────────
     // Fed since finding 243: `KeyframeFeed` accepts a keyframe, `KeyframeQueue` carries it across
     // to the pipeline worker, and `NativePoseGraphSink` makes the node and its odometry edge here.
-    // Nothing calls `optimizePoseGraph` and no closure is proposed (finding 98), so the graph is a
-    // record of the walk, not a correction of it - the app still measures on ARCore's own
-    // tracking. See docs/SETUP.md 5.2 before quoting a closure.
+    // Since finding 245 the optimiser runs too - when, and only when, the operator confirms a
+    // closure the proximity detector proposed - and its corrected poses are reported, never
+    // written back into the measured runs. See docs/SETUP.md 5.2.
 
     fun resetPoseGraph() {
         val active = handle

@@ -79,6 +79,13 @@
     <string name="marker_state_walking">Ora sposta il telefono di circa un metro di lato, tenendo il marker in vista.</string>
     <string name="ar_pose_graph">Grafo delle pose: %1$d nodi · %2$d archi</string>
     <string name="ar_pose_graph_lost">Fotogrammi chiave persi: %1$d</string>
+    <string name="loop_check">Verifica ritorno</string>
+    <string name="loop_title">Chiudi il ciclo</string>
+    <string name="loop_offer">Il percorso è di nuovo a %1$s da un punto precedente. Chiudere presuppone che sia lo stesso luogo.</string>
+    <string name="loop_confirm">Stesso luogo</string>
+    <string name="loop_none">Nessun ciclo trovato.</string>
+    <string name="loop_closed">Ciclo chiuso: errore residuo %1$s → %2$s.</string>
+    <string name="loop_failed">Non è stato possibile ottimizzare il grafo.</string>
     <string name="ar_add_point">Aggiungi punto al centro</string>
     <string name="ar_undo">Annulla</string>
     <string name="ar_close_loop">Chiudi</string>

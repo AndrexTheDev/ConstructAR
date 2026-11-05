@@ -79,6 +79,13 @@
     <string name="marker_state_walking">Bewege das Handy jetzt etwa einen Meter seitlich; der Marker bleibt im Bild.</string>
     <string name="ar_pose_graph">Pose-Graph: %1$d Knoten · %2$d Kanten</string>
     <string name="ar_pose_graph_lost">Verlorene Keyframes: %1$d</string>
+    <string name="loop_check">Rückkehr prüfen</string>
+    <string name="loop_title">Schleife schließen</string>
+    <string name="loop_offer">Der Weg ist wieder %1$s von einem früheren Punkt entfernt. Schließen setzt voraus, dass es derselbe Ort ist.</string>
+    <string name="loop_confirm">Derselbe Ort</string>
+    <string name="loop_none">Keine Schleife gefunden.</string>
+    <string name="loop_closed">Schleife geschlossen: Restfehler %1$s → %2$s.</string>
+    <string name="loop_failed">Der Graph konnte nicht optimiert werden.</string>
     <string name="ar_add_point">Punkt in der Mitte</string>
     <string name="ar_undo">Zurück</string>
     <string name="ar_close_loop">Schließen</string>

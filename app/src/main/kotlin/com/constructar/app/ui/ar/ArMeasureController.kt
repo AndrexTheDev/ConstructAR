@@ -13,6 +13,7 @@ import android.util.Log
 import com.constructar.arengine.hit.ArInteraction
 import com.constructar.arengine.hit.HitResolution
 import com.constructar.arengine.hit.HitStabilizer
+import com.constructar.arengine.keyframe.ClosureState
 import com.constructar.arengine.keyframe.PoseGraphStatus
 import com.constructar.arengine.render.RouteSceneController
 import com.constructar.arengine.render.SceneMeshRenderer
@@ -97,6 +98,18 @@ class ArMeasureController(private val context: Context) {
      * screen only has to say them.
      */
     val poseGraphStatus: StateFlow<PoseGraphStatus> get() = pipeline.poseGraphStatus
+
+    /** The loop-closure conversation, as the worker publishes it (finding 245). */
+    val closureState: StateFlow<ClosureState> get() = pipeline.closureState
+
+    /** Ask whether the walk has come back somewhere it has been. */
+    fun lookForClosure() = pipeline.lookForClosure()
+
+    /** The operator said "same place": close the loop and optimise. */
+    fun confirmClosure() = pipeline.confirmClosure()
+
+    /** The operator said no. */
+    fun dismissClosure() = pipeline.dismissClosure()
 
     @Volatile
     private var markerProbe: MarkerProbe? = null

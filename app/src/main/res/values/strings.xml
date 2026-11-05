@@ -79,6 +79,13 @@
     <string name="marker_state_walking">Now move the phone sideways about a metre, keeping the tag in view.</string>
     <string name="ar_pose_graph">Pose graph: %1$d nodes · %2$d edges</string>
     <string name="ar_pose_graph_lost">Keyframes lost: %1$d</string>
+    <string name="loop_check">Check return</string>
+    <string name="loop_title">Close the loop</string>
+    <string name="loop_offer">The walk is %1$s from an earlier point again. Closing assumes it is the same place.</string>
+    <string name="loop_confirm">Same place</string>
+    <string name="loop_none">No loop found.</string>
+    <string name="loop_closed">Loop closed: residual %1$s → %2$s.</string>
+    <string name="loop_failed">The graph could not be optimised.</string>
     <string name="ar_add_point">Add point at centre</string>
     <string name="ar_undo">Undo</string>
     <string name="ar_close_loop">Close loop</string>

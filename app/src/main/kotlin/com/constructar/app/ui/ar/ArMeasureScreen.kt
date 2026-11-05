@@ -194,6 +194,7 @@ fun ArMeasureScreen(
     // whether it is open has to survive a recomposition - but not a rotation, because a rotation is
     // a new ARCore session and the sweep would be pairing two world origins (finding 235).
     var markerOpen by remember { mutableStateOf(false) }
+    var closureOpen by remember { mutableStateOf(false) }
     val markerState by controller.markerProbeState.collectAsStateWithLifecycle()
     val markerAvailable = remember(controller) { controller.isMarkerProbeAvailable() }
 
@@ -287,6 +288,7 @@ fun ArMeasureScreen(
     // decided yet" and "recorded" (finding 228).
     val floorLine = floorHudLine(floorDecision?.status)
     val graphStatus by controller.poseGraphStatus.collectAsStateWithLifecycle()
+    val closureState by controller.closureState.collectAsStateWithLifecycle()
     val aiDepthRunning by controller.aiDepthRunning.collectAsStateWithLifecycle()
     val aiDepthSettled by controller.aiDepthSettled.collectAsStateWithLifecycle()
     // Which depth is actually in use. A phone with neither ARCore's depth API nor the bundled
@@ -943,6 +945,38 @@ fun ArMeasureScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            // ── Loop closure ────────────────────────────────────────────────────────
+            // The one write in the SLAM path that needs a person: two visits half a metre apart
+            // can be the same doorway or two different corners, and a wrong closure folds the
+            // room without anything looking wrong. Enabled once the graph holds nodes at all;
+            // the policy's own floor decides whether there is anything to ask about.
+            GloveButton(
+                label = stringResource(R.string.loop_check),
+                icon = Icons.Default.Loop,
+                tone = ActionTone.SECONDARY,
+                enabled = graphStatus.nodes > 0,
+                onClick = {
+                    closureOpen = true
+                    controller.lookForClosure()
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            if (closureOpen) {
+                LoopClosureDialog(
+                    state = closureState,
+                    onConfirm = {
+                        controller.confirmClosure()
+                        closureOpen = false
+                    },
+                    onRefuse = {
+                        controller.dismissClosure()
+                        closureOpen = false
+                    },
+                    onClose = { closureOpen = false },
+                )
+            }
 
             // ── Marker check ────────────────────────────────────────────────────────
             // A printed tag of known size, measured through the camera: the second tier of

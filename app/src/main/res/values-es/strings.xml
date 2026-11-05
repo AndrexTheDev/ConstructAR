@@ -79,6 +79,13 @@
     <string name="marker_state_walking">Ahora desplaza el teléfono un metro hacia un lado sin perder la etiqueta.</string>
     <string name="ar_pose_graph">Grafo de poses: %1$d nodos · %2$d aristas</string>
     <string name="ar_pose_graph_lost">Fotogramas clave perdidos: %1$d</string>
+    <string name="loop_check">Comprobar regreso</string>
+    <string name="loop_title">Cerrar el bucle</string>
+    <string name="loop_offer">El recorrido vuelve a estar a %1$s de un punto anterior. Cerrar supone que es el mismo lugar.</string>
+    <string name="loop_confirm">El mismo lugar</string>
+    <string name="loop_none">No se ha encontrado ningún bucle.</string>
+    <string name="loop_closed">Bucle cerrado: error residual %1$s → %2$s.</string>
+    <string name="loop_failed">No se pudo optimizar el grafo.</string>
     <string name="ar_add_point">Añadir punto en el centro</string>
     <string name="ar_undo">Deshacer</string>
     <string name="ar_close_loop">Cerrar</string>
