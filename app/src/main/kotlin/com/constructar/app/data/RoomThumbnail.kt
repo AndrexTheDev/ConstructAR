@@ -24,7 +24,8 @@ import kotlin.math.abs
  *    vectoriser reports that honestly (no area, no segments). Joining such a loop's ends here would
  *    draw a wall across the doorway and put a picture of a smaller room on the card - the shape a
  *    customer would then ask about. So a plan with no closed loop produces no picture at all, and
- *    the card falls back to its own placeholder.
+ *    the card falls back to its own placeholder. The ring itself is still *kept* - see [sketch],
+ *    which stores the largest open ring as `Closure.Open` so a person can close it later.
  *  * **The largest closed loop wins.** A room with a cupboard or a niche scanned into it can trace
  *    more than one closed loop; the biggest one is the room, and the same rule produces the area
  *    the protocol prints - so the picture and the number describe the same shape.
@@ -68,13 +69,18 @@ object RoomThumbnail {
      * loop is the room, it is the same choice written in the model the JSON carries.
      */
     fun sketch(payload: FloorplanPayload): FloorplanSketch? {
-        val best = largestClosedLoop(payload.loops) ?: return null
-        if (best.points.size < 3 || best.points.size > FloorplanSketch.MAX_POINTS) return null
-        val points = best.points.map { SketchPoint(it.xMeters, it.zMeters) }
-        // An open ring is kept, marked as open: it is not a picture and not a size, but it is the
-        // only record of where the walls were, and the only thing the operator can close by hand
-        // later (finding 203). Nothing is invented here - `closed` is the vectoriser's own word.
-        val closure = if (best.closed) FloorplanSketch.Closure.Measured else FloorplanSketch.Closure.Open
+        // A closed ring wins whenever there is one - that is the room, and it is what the exported
+        // picture shows. Only when the scan closed nothing is the largest *open* ring kept: it is
+        // not a picture and not a size, but it is the only record of where the walls were, and the
+        // only thing the operator can close by hand later (finding 203).
+        val ring = largestRing(payload.loops, closed = true)
+            ?: largestRing(payload.loops, closed = false)
+            ?: return null
+        if (ring.points.size > FloorplanSketch.MAX_POINTS) return null
+        val points = ring.points.map { SketchPoint(it.xMeters, it.zMeters) }
+        // Nothing is invented here: `closed` is the vectoriser's own word, and a ring it never
+        // closed is stored as open rather than drawn as if it were a room.
+        val closure = if (ring.closed) FloorplanSketch.Closure.Measured else FloorplanSketch.Closure.Open
         return FloorplanSketch(points, closure)
     }
 
@@ -149,11 +155,21 @@ object RoomThumbnail {
     fun areaSquareMeters(loop: PlanLoop): Float =
         PolygonMath.area(loop.points.map { Vec3(it.xMeters, 0f, it.zMeters) })
 
-    private fun largestClosedLoop(loops: List<PlanLoop>): PlanLoop? {
+    private fun largestClosedLoop(loops: List<PlanLoop>): PlanLoop? = largestRing(loops, closed = true)
+
+    /**
+     * The largest ring of one kind, by the area its corners enclose.
+     *
+     * For an *open* ring that area is the shape the corners would enclose if the gap were a wall -
+     * which is exactly the question the operator is asked later, so it is the right measure of
+     * "largest" even when the ring is not yet a room. A ring with fewer than three corners measures
+     * nothing and is skipped.
+     */
+    private fun largestRing(loops: List<PlanLoop>, closed: Boolean): PlanLoop? {
         var best: PlanLoop? = null
         var bestArea = 0f
         for (loop in loops) {
-            if (!loop.closed) continue
+            if (loop.closed != closed) continue
             if (loop.points.size < 3) continue
             val area = abs(areaSquareMeters(loop))
             if (area > bestArea) {
