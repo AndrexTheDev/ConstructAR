@@ -2742,6 +2742,12 @@ def kotlin_code_only(text: str) -> str:
     ``"{ this is not json"`` in the corrupt-file case opens a block that never closes, and the
     scanner then reads three functions as one. Blanking the literals (rather than deleting them)
     keeps every line and column where it was, so a message can still point at the real line.
+
+    Backticked identifiers are copied verbatim rather than blanked, and they have to be *skipped*:
+    a test named ``the room's own id`` carries an apostrophe, and a scanner that only knows
+    ``"`` and ``'`` reads that apostrophe as the start of a char literal and blanks everything up
+    to the next apostrophe in the file - six hundred lines, silently (finding 200). The identifier
+    is code, not a literal, so it stays; it just may not be read as one.
     """
     out: list[str] = []
     index = 0
@@ -2765,6 +2771,17 @@ def kotlin_code_only(text: str) -> str:
                 index += 1
             out.append("   ")
             index += 3
+        elif text[index] == "`":
+            # A backticked name is an identifier, not a literal: copy it, but do not let an
+            # apostrophe inside it open a char literal.
+            out.append("`")
+            index += 1
+            while index < length and text[index] != "`" and text[index] != "\n":
+                out.append(text[index])
+                index += 1
+            if index < length and text[index] == "`":
+                out.append("`")
+                index += 1
         elif text[index] in "\"'":
             quote = text[index]
             out.append(" ")
@@ -3146,6 +3163,59 @@ def check_a_stable_value_is_asserted_once() -> None:
                               f"failure the sandbox cannot see - bind it once (`requireNotNull`)")
 
 
+CONTRACT_ASSERTION = re.compile(r"\b(assertNotNull|requireNotNull)\(\s*([A-Za-z_]\w*)\s*[,)]")
+
+
+def _brace_depth(code: str, position: int) -> int:
+    return code.count("{", 0, position) - code.count("}", 0, position)
+
+
+def check_a_contract_assertion_is_believed() -> None:
+    """An asserted value read with `?.` is a warning, and CI is `-Werror` (finding 199).
+
+    `kotlin.test.assertNotNull` and `requireNotNull` carry a *contract* - `returns() implies
+    (value != null)` - so the compiler smart-casts the value afterwards and reports every following
+    `?.` on it as an "unnecessary safe call", which `allWarningsAsErrors` turns into a build
+    failure. The author wrote the `?.` because the value is declared nullable two lines up, and the
+    code reads correctly: it is the *contract* that makes it wrong, and nothing in the file says so
+    out loud. This is the fourth CI-only compile failure in four rounds (findings 192, 193, 194 are
+    the same shape) and the second one where the fix is to *believe* an assertion the compiler
+    already understands.
+
+    Two exemptions keep this honest. A `var` is never smart-cast, so repeated assertions on it are
+    legal - the sibling rule for `!!` (finding 192) exempts it for the same reason. And a JUnit
+    `assertNotNull` has no contract: the rule only reads `assertNotNull` in a file that imports it
+    from `kotlin.test`, while `requireNotNull` is stdlib either way.
+    """
+    for path in tracked_sources():
+        if path.suffix != ".kt":
+            continue
+        text = path.read_text(encoding="utf-8")
+        kotlin_test_assert = "kotlin.test.assertNotNull" in text or "kotlin.test.*" in text
+        code = kotlin_code_only(text)
+        for match in CONTRACT_ASSERTION.finditer(code):
+            kind, name = match.group(1), match.group(2)
+            if kind == "assertNotNull" and not kotlin_test_assert:
+                continue
+            if re.search(r"\bvar\s+" + re.escape(name) + r"\b", code):
+                continue
+            asserted_depth = _brace_depth(code, match.start())
+            for safe in re.finditer(r"\b" + re.escape(name) + r"\?\.", code[match.end():]):
+                position = match.end() + safe.start()
+                # Only a `?.` that cannot be outside the block the assertion sits in is a smart
+                # cast: a `}` between the two means the value was re-opened to nullability.
+                if _brace_depth(code, position) < asserted_depth:
+                    continue
+                span = code[match.end():position]
+                if _brace_depth(code[:match.end()] + span, position) < asserted_depth:
+                    continue
+                line = code.count("\n", 0, position) + 1
+                add(path, f"`{name}` is asserted non-null at line {code.count(chr(10), 0, match.start()) + 1} "
+                          f"and read with `?.` at line {line}: the assertion's contract already "
+                          f"smart-casts it, so the safe call is a warning and `allWarningsAsErrors` "
+                          f"turns it into a build failure the sandbox cannot see - read `{name}.`")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -3228,6 +3298,7 @@ def main() -> int:
     check_money_fields_are_not_rekeyed()
     check_manifest_hardening()
     check_a_stable_value_is_asserted_once()
+    check_a_contract_assertion_is_believed()
     check_the_reticle_snap_stays_wired()
     check_exported_numbers_use_the_c_locale()
     check_project_imports_are_used()

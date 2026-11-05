@@ -222,8 +222,10 @@ class ProjectRepositoryTest {
 
         val loaded = repository.load(project.id)
 
+        // `kotlin.test.assertNotNull` is a contract, so the compiler knows `loaded` is non-null
+        // here - a `?.` after it is an "unnecessary safe call" and therefore a red build.
         assertNotNull(loaded)
-        assertEquals(outline, loaded?.sketch)
+        assertEquals(outline, loaded.sketch)
         // The home screen draws from the summary, so the outline has to reach it through `list()`.
         assertEquals(outline, repository.list().projects.single().sketch)
     }
