@@ -108,9 +108,19 @@ while it is still alive (`TsdfScanPipeline.floorplan`, bounded to 400 ms and nev
 screen's thread), `RoomThumbnail` picks the room out of the plan — the largest *closed* loop, because
 a doorway leaves the ring open and joining it would draw a wall across the door — and the repository
 writes `files/projects/<id>/thumbnail.svg` through the same temp-file/`fsync`/rename path a project
-file uses. Deleting a room deletes its folder, so no orphan picture outlives the room it shows. What
-is **not** there yet: the card itself still shows a placeholder — nothing reads the SVG back. That is
-phase 5's work, and until then the file is written and unused.
+file uses. Deleting a room deletes its folder, so no orphan picture outlives the room it shows.
+
+The **card** does not read that file, and must not: Android ships no SVG renderer, and a second
+parser for a format this app only writes would be a liability with no upside. The same loop — same
+corners, same order, chosen once — is stored in the project file itself, as
+`sketch: [{xMeters, zMeters}, …]` on `ProjectRecord` (at most 512 corners, drawn only from three,
+its area from the same `PolygonMath` the protocol uses), and the card draws it into a 40 dp
+`Canvas` through `RoomThumbnail.pathPoints`: one scale on the long side, centred in the square,
+world `z` running down — the numbers `FloorplanSvg` prints, and the tests pin them to the same
+pixel. Because the outline lives in the room, a backup carries it and a restored room still has its
+picture; the SVG stays what it always was for: the artefact that leaves the phone. A room with no
+closed plan keeps the icon, because a placeholder outline would be a shape the operator never
+walked.
 
 **Depth fusion policy.** ARCore depth is metric but holey; the network is dense but only
 relative. `AiDepthFusion` therefore lets the network **fill holes only** — a confident ARCore
@@ -651,7 +661,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 838 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 853 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 287 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 287 checks, 0 failures, no data race reported |

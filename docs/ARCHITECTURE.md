@@ -336,11 +336,25 @@ The chain that writes it, in the order the data travels:
    removes the whole folder, so no orphan picture outlives its room.
 
 A per-room folder rather than a sibling file keeps `<id>.json` a single file that `list()` and
-`backupEntries()` read by extension; a folder is invisible to both. The picture is **not** in the
-backup: it draws a scan, and the scan is not backed up either.
+`backupEntries()` read by extension; a folder is invisible to both. The SVG is **not** in the
+backup - it is derived, and it is rewritten the next time a run is committed - but the outline the
+card draws *is*, because it is a field on the project.
 
-The card that will read it is phase 5's work; today the file is written and unread, and the README
-says so.
+**The card draws the project, not the file.** Android has no SVG renderer, so step 5's output is
+for laptops, mail and paper; what the home screen draws is a field on the room itself. The same
+`largestClosedLoop` decision is taken a second time by `RoomThumbnail.sketch`, which turns the loop
+into `ProjectRecord.sketch: FloorplanSketch?` — a list of `{xMeters, zMeters}` corners, at most
+`FloorplanSketch.MAX_POINTS` (512, and three needed before anything is drawable), written by the same
+`repository.save` that writes every other field and projected by `RoomThumbnail.pathPoints` into the
+40 dp `Canvas` in `HomeScreen.RoomPicture`. The projection is `FloorplanSvg`'s (one scale, centred,
+world `z` down) because the card and the exported picture are the same room; the two are pinned to
+each other by a test, not by a comment.
+
+Two consequences worth stating. The outline is inside the project JSON, so `backupEntries()` carries
+it: a room restored on another phone still draws its plan, while the `thumbnail.svg` beside it is
+regenerated or simply absent (`explicitNulls = false` means a room that was never scanned writes no
+`sketch` key at all, and such a file loads unchanged). And the outline is *not* the scan: it is eight
+floats per corner, which is the reason it can live in the JSON while the TSDF volume never does.
 
 Schema version `1`; `ProjectMigrations` is the place for the next one.
 

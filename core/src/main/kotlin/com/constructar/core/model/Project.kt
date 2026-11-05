@@ -62,6 +62,15 @@ data class ProjectRecord(
     val updatedAtEpochMs: Long,
     val routes: List<ConduitRoute> = emptyList(),
     val scan: ScanSummary? = null,
+    /**
+     * The room's outline as the home screen's card draws it, or `null` before a closed plan exists.
+     *
+     * Written when a run is committed, from the same plan that produces
+     * `files/projects/<id>/thumbnail.svg` (see `FloorplanSketch` for why the phone draws from the
+     * JSON rather than from the SVG). Defaults to `null`, so a project file written before this
+     * field existed loads and behaves exactly as it did - its card shows the icon.
+     */
+    val sketch: FloorplanSketch? = null,
     /** What happened on site, newest first. */
     val diary: List<DiaryEntry> = emptyList(),
     /** Open and closed defects, newest first. */

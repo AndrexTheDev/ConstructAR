@@ -6,6 +6,7 @@
 
 package com.constructar.app.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +42,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.Composable
@@ -58,9 +63,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.constructar.app.R
 import com.constructar.app.data.ProjectRepository
+import com.constructar.app.data.RoomThumbnail
 import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.licence.Entitlements
+import com.constructar.core.model.FloorplanSketch
 import com.constructar.core.units.LengthFormatter
 
 /**
@@ -505,7 +512,7 @@ private fun ProjectRow(project: ProjectRepository.ProjectSummary, onClick: () ->
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Default.Cable, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        RoomPicture(project.sketch)
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             Text(
                 project.name,
@@ -520,6 +527,45 @@ private fun ProjectRow(project: ProjectRepository.ProjectSummary, onClick: () ->
             style = MaterialTheme.typography.titleMedium,
             color = SiteColors.gold,
         )
+    }
+}
+
+/**
+ * The room's own shape where the list used to show the same cable icon on every row.
+ *
+ * Drawn from the outline stored in the project (`FloorplanSketch`), not from the exported
+ * `thumbnail.svg`: the platform has no SVG renderer, and a second parser for a format this app only
+ * writes would be a liability. The projection is [RoomThumbnail.pathPoints] - the same single scale
+ * and the same "world z runs down the screen" as the exported file, so the card and the file show
+ * one room.
+ *
+ * A room without a closed plan (nobody measured one yet, or the scan had a doorway in it) keeps the
+ * icon: a placeholder outline would be a shape the operator never walked. The picture is decoration
+ * — the row already prints the name, the runs, the metres and the date as text, which is what a
+ * screen reader announces — so it carries no `contentDescription` of its own.
+ */
+@Composable
+private fun RoomPicture(sketch: FloorplanSketch?) {
+    if (sketch == null || !sketch.isDrawable) {
+        Icon(Icons.Default.Cable, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+    val strokeColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val fillColor = MaterialTheme.colorScheme.surfaceVariant
+    Canvas(Modifier.size(40.dp)) {
+        val points = RoomThumbnail.pathPoints(
+            sketch = sketch,
+            sizePx = size.minDimension,
+            paddingPx = 2.dp.toPx(),
+        )
+        if (points.size < 3) return@Canvas
+        val path = Path()
+        path.moveTo(points[0].first, points[0].second)
+        for (index in 1 until points.size) path.lineTo(points[index].first, points[index].second)
+        path.close()
+        drawPath(path = path, color = fillColor, style = Fill)
+        // A miter joint, so a right-angled room reads as a right-angled room.
+        drawPath(path = path, color = strokeColor, style = Stroke(width = 1.5.dp.toPx(), join = StrokeJoin.Miter))
     }
 }
 

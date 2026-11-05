@@ -8,6 +8,8 @@ package com.constructar.app.data
 
 import com.constructar.core.math.PolygonMath
 import com.constructar.core.math.Vec3
+import com.constructar.core.model.FloorplanSketch
+import com.constructar.core.model.SketchPoint
 import com.constructar.export.svg.FloorplanSvg
 import com.constructar.nativebridge.FloorplanPayload
 import com.constructar.nativebridge.PlanLoop
@@ -56,6 +58,67 @@ object RoomThumbnail {
             // picture; the refusal is the renderer's rule (10 cm .. 200 m) and is not second-guessed
             // here.
             is FloorplanSvg.Output.Refused -> null
+        }
+    }
+
+    /**
+     * The same room as a [FloorplanSketch] - the form the project file stores and the card draws.
+     *
+     * Same loop, same corners, same order as [outline]: this is not a second choice about which
+     * loop is the room, it is the same choice written in the model the JSON carries.
+     */
+    fun sketch(payload: FloorplanPayload): FloorplanSketch? {
+        val best = largestClosedLoop(payload.loops) ?: return null
+        if (best.points.size < 3 || best.points.size > FloorplanSketch.MAX_POINTS) return null
+        val points = best.points.map { SketchPoint(it.xMeters, it.zMeters) }
+        return FloorplanSketch(points)
+    }
+
+    /**
+     * The outline projected into a square box, in pixels: one scale for both axes, centred, world
+     * `z` running **down** the screen.
+     *
+     * The same projection `FloorplanSvg` uses, and it has to be: the card and the exported picture
+     * are the same room, and a second convention would draw one of them mirrored. Kept here rather
+     * than in the composable so it can be asserted without a screen - the numbers in the test are
+     * the numbers `FloorplanSvgTest` pins (a 4 x 4 m room in a 320 px box with 16 px of padding is
+     * 16 and 304).
+     *
+     * Returns an empty list when there is nothing drawable, so a caller can decide what a card
+     * without a picture looks like instead of drawing a dot.
+     */
+    fun pathPoints(
+        sketch: FloorplanSketch,
+        sizePx: Float,
+        paddingPx: Float,
+    ): List<Pair<Float, Float>> {
+        if (!sketch.isDrawable) return emptyList()
+        val inner = sizePx - 2f * paddingPx
+        if (!(inner > 0f)) return emptyList()
+
+        var minX = Float.MAX_VALUE
+        var maxX = -Float.MAX_VALUE
+        var minZ = Float.MAX_VALUE
+        var maxZ = -Float.MAX_VALUE
+        for (point in sketch.points) {
+            if (!point.xMeters.isFinite() || !point.zMeters.isFinite()) return emptyList()
+            if (point.xMeters < minX) minX = point.xMeters
+            if (point.xMeters > maxX) maxX = point.xMeters
+            if (point.zMeters < minZ) minZ = point.zMeters
+            if (point.zMeters > maxZ) maxZ = point.zMeters
+        }
+        val width = maxX - minX
+        val depth = maxZ - minZ
+        val longest = if (width > depth) width else depth
+        if (!(longest > 0f)) return emptyList()
+
+        val scale = inner / longest
+        val offsetX = (sizePx - width * scale) / 2f
+        val offsetY = (sizePx - depth * scale) / 2f
+        return sketch.points.map { point ->
+            val x = offsetX + (point.xMeters - minX) * scale
+            val y = offsetY + (point.zMeters - minZ) * scale
+            x to y
         }
     }
 

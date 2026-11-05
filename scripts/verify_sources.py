@@ -2898,6 +2898,57 @@ def check_the_card_picture_has_a_writer() -> None:
                   f"the tree reports it")
 
 
+CARD_OUTLINE_CHAIN = (
+    ("core/src/main/kotlin/com/constructar/core/model/Project.kt",
+     "val sketch: FloorplanSketch? = null,",
+     "the project file no longer has a place to keep the outline"),
+    ("app/src/main/kotlin/com/constructar/app/data/RoomThumbnail.kt",
+     "fun sketch(payload: FloorplanPayload): FloorplanSketch? {",
+     "nothing turns a scan plan into the outline the file stores"),
+    ("app/src/main/kotlin/com/constructar/app/ProjectViewModel.kt",
+     "val sketch = RoomThumbnail.sketch(plan) ?: return",
+     "the view model no longer asks for an outline"),
+    ("app/src/main/kotlin/com/constructar/app/ProjectViewModel.kt",
+     "val updated = project.copy(sketch = sketch)",
+     "the outline is derived but never stored on the room"),
+    ("app/src/main/kotlin/com/constructar/app/data/ProjectRepository.kt",
+     "sketch = project.sketch,",
+     "the home screen's summary stops carrying the outline"),
+    ("app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt",
+     "RoomPicture(project.sketch)",
+     "the row stops handing its outline to the picture"),
+    ("app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt",
+     "RoomThumbnail.pathPoints(",
+     "the picture stops projecting the outline onto the card"),
+)
+
+
+def check_the_card_draws_from_the_project_file() -> None:
+    """The card's picture and the exported SVG are one room drawn twice from one loop (finding 198).
+
+    Round 93 gave every committed run a plan and wrote it out as `thumbnail.svg`; the card still
+    showed an icon, because Android has no SVG renderer and the file was write-only. Round 94 stores
+    the same loop in the project as a handful of corners, which is what the card draws and what a
+    backup carries - and that creates a new way to be wrong that neither side can detect: the JSON
+    can be written and never read (an icon for a room that was measured), or read while the writer
+    quietly stopped filling it (a stale outline that outlives the room it came from). Both compile,
+    both pass every existing test, and both look exactly like "this room has no plan yet".
+
+    So the route from the scan to the pixels is named link by link, in the order the data travels,
+    the same way `check_the_card_picture_has_a_writer` names the SVG route. The two chains are
+    deliberately separate: the SVG is for laptops and paper, the JSON is for the phone, and one of
+    them working says nothing about the other.
+    """
+    for relative, marker, complaint in CARD_OUTLINE_CHAIN:
+        path = ROOT / relative
+        if not path.exists():
+            continue  # a missing file is already a finding above
+        if marker in path.read_text(encoding="utf-8"):
+            continue
+        add(path, f"{complaint} - the card's outline stops travelling here, and nothing else in "
+                  f"the tree reports it (the row just keeps showing the icon)")
+
+
 def check_every_external_function_has_a_symbol() -> None:
     """A JNI name that does not match its C symbol is a runtime crash, not a compile error (finding 195).
 
@@ -3181,6 +3232,7 @@ def main() -> int:
     check_exported_numbers_use_the_c_locale()
     check_project_imports_are_used()
     check_the_card_picture_has_a_writer()
+    check_the_card_draws_from_the_project_file()
     check_every_external_function_has_a_symbol()
     check_the_floorplan_payload_header_matches()
     check_kotlin_structure()

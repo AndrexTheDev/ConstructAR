@@ -727,9 +727,22 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
      */
     fun saveFloorplanThumbnail(plan: com.constructar.nativebridge.FloorplanPayload) {
         val project = mutableState.value.openProject ?: return
+        val sketch = RoomThumbnail.sketch(plan) ?: return
         val svg = RoomThumbnail.svg(plan) ?: return
+        // The outline goes into the project file as well as the exported SVG: the card draws from
+        // the JSON (Android has no SVG renderer and this app has no third-party libraries), and a
+        // restored project keeps its picture without the file system having to keep a cache.
+        val updated = project.copy(sketch = sketch)
+        mutableState.value = mutableState.value.copy(openProject = updated)
         viewModelScope.launch {
+            // The outline is part of the room, so a failed save is reported like any other: a card
+            // that silently stays an icon is a room whose picture he will look for and not find.
+            val written = repository.save(updated)
+            if (!written) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_SAVE_FAILED)
+            }
             repository.saveThumbnail(project.id, svg)
+            refresh()
         }
     }
 

@@ -12,6 +12,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import com.constructar.core.io.SafeFiles
+import com.constructar.core.model.FloorplanSketch
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.model.RouteDraft
 import com.constructar.core.model.WorkTime
@@ -82,6 +83,14 @@ class ProjectRepository(private val context: Context) {
          * (finding 144). Defaulted so a summary written by an older build still decodes.
          */
         val customerName: String = "",
+        /**
+         * The room's outline for the card picture, or `null` while no closed plan has been measured.
+         *
+         * Carried in the summary rather than read per row: the list already parses every project
+         * file to build these, so the outline costs nothing extra, and a card that opened the JSON
+         * again would parse the same tree twice.
+         */
+        val sketch: FloorplanSketch? = null,
     )
 
     /**
@@ -128,6 +137,7 @@ class ProjectRepository(private val context: Context) {
                     openDefects = project.openDefectCount,
                     workRunning = WorkTime.isRunning(project.sessions),
                     customerName = project.customerName,
+                    sketch = project.sketch,
                 )
             }
         }

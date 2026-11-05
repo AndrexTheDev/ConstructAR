@@ -6,12 +6,15 @@
 
 package com.constructar.app.data
 
+import com.constructar.core.model.FloorplanSketch
+import com.constructar.core.model.SketchPoint
 import com.constructar.nativebridge.FloorplanPayload
 import com.constructar.nativebridge.PlanLoop
 import com.constructar.nativebridge.PlanPoint
 import com.constructar.nativebridge.PlanSegment
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -113,6 +116,88 @@ class RoomThumbnailTest {
     @Test
     fun `the area of a loop is the area the app measures with`() {
         assertEquals(12f, RoomThumbnail.areaSquareMeters(room), 1e-4f)
+    }
+
+    @Test
+    fun `the sketch is the same loop the svg draws, in metres`() {
+        val sketch = RoomThumbnail.sketch(payload(listOf(room)))
+
+        assertNotNull("a closed loop must produce a sketch", sketch)
+        assertEquals(4, sketch!!.points.size)
+        assertEquals(SketchPoint(4f, 0f), sketch.points[1])
+        assertEquals(12f, sketch.areaSquareMeters, 1e-4f)
+        assertTrue(sketch.isDrawable)
+    }
+
+    @Test
+    fun `an open plan produces no sketch and no file`() {
+        val doorway = loop(listOf(0f to 0f, 4f to 0f, 4f to 3f, 0f to 3f), closed = false)
+
+        assertNull(RoomThumbnail.sketch(payload(listOf(doorway))))
+        assertNull(RoomThumbnail.svg(payload(listOf(doorway))))
+    }
+
+    @Test
+    fun `the card projection is the exported file's projection`() {
+        // The numbers `FloorplanSvgTest` pins: 4 x 4 m in a 320 px box with 16 px of padding.
+        val square = FloorplanSketch(
+            listOf(
+                SketchPoint(0f, 0f),
+                SketchPoint(4f, 0f),
+                SketchPoint(4f, 4f),
+                SketchPoint(0f, 4f),
+            ),
+        )
+        val points = RoomThumbnail.pathPoints(square, sizePx = 320f, paddingPx = 16f)
+
+        assertEquals(4, points.size)
+        assertEquals(16f, points[0].first, 1e-4f)
+        assertEquals(16f, points[0].second, 1e-4f)
+        assertEquals(304f, points[1].first, 1e-4f)
+        assertEquals(304f, points[2].second, 1e-4f)
+    }
+
+    @Test
+    fun `the card centres a long room instead of stretching it`() {
+        val long = FloorplanSketch(
+            listOf(
+                SketchPoint(-2f, 0f),
+                SketchPoint(2f, 0f),
+                SketchPoint(2f, 8f),
+                SketchPoint(-2f, 8f),
+            ),
+        )
+        val points = RoomThumbnail.pathPoints(long, sizePx = 320f, paddingPx = 16f)
+
+        assertEquals(88f, points[0].first, 1e-4f)
+        assertEquals(232f, points[1].first, 1e-4f)
+        assertEquals(304f, points[2].second, 1e-4f)
+    }
+
+    @Test
+    fun `world z runs down the card`() {
+        val points = RoomThumbnail.pathPoints(
+            FloorplanSketch(listOf(SketchPoint(0f, 0f), SketchPoint(4f, 0f), SketchPoint(0f, 3f))),
+            sizePx = 200f,
+            paddingPx = 0f,
+        )
+
+        assertTrue("a larger z must be lower on the card", points[2].second > points[0].second)
+    }
+
+    @Test
+    fun `nothing drawable projects to nothing`() {
+        assertTrue(RoomThumbnail.pathPoints(FloorplanSketch(), sizePx = 320f, paddingPx = 16f).isEmpty())
+        // A box too small for its own padding is not a picture either.
+        val square = FloorplanSketch(listOf(SketchPoint(0f, 0f), SketchPoint(1f, 0f), SketchPoint(0f, 1f)))
+        assertTrue(RoomThumbnail.pathPoints(square, sizePx = 20f, paddingPx = 10f).isEmpty())
+    }
+
+    @Test
+    fun `a sketch with no extent is not projected`() {
+        val sliver = FloorplanSketch(listOf(SketchPoint(1f, 1f), SketchPoint(1f, 1f), SketchPoint(1f, 1f)))
+
+        assertTrue(RoomThumbnail.pathPoints(sliver, sizePx = 320f, paddingPx = 16f).isEmpty())
     }
 
     @Test

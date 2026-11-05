@@ -12,9 +12,11 @@ import com.constructar.core.io.SafeFiles
 import com.constructar.core.math.Vec3
 import com.constructar.core.model.ConduitPresets
 import com.constructar.core.model.ConduitRoute
+import com.constructar.core.model.FloorplanSketch
 import com.constructar.core.model.HitSource
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.model.RouteNodeRecord
+import com.constructar.core.model.SketchPoint
 import com.constructar.core.model.SurfaceKind
 import com.constructar.core.model.WorkSession
 import kotlinx.coroutines.runBlocking
@@ -204,6 +206,38 @@ class ProjectRepositoryTest {
         assertNull(repository.importProject("{\"not\": \"a project\"}"))
         assertNull(repository.importProject(""))
         assertTrue(repository.list().projects.isEmpty())
+    }
+
+    @Test
+    fun `the outline survives a save and a load, and reaches the list`(): Unit = runBlocking {
+        val outline = FloorplanSketch(
+            listOf(
+                SketchPoint(0f, 0f),
+                SketchPoint(4f, 0f),
+                SketchPoint(4f, 3f),
+                SketchPoint(0f, 3f),
+            ),
+        )
+        val project = repository.create("Hall").let { repository.save(it.copy(sketch = outline)); it }
+
+        val loaded = repository.load(project.id)
+
+        assertNotNull(loaded)
+        assertEquals(outline, loaded?.sketch)
+        // The home screen draws from the summary, so the outline has to reach it through `list()`.
+        assertEquals(outline, repository.list().projects.single().sketch)
+    }
+
+    @Test
+    fun `a room without an outline writes no outline key and loads without one`(): Unit = runBlocking {
+        val project = repository.create("Old room")
+
+        val text = File(projectsDirectory, "${project.id}.json").readText()
+
+        // `explicitNulls = false`, so a room nobody has scanned yet carries no key at all - which is
+        // exactly the shape a project file written before the field existed has.
+        assertFalse(text.contains("sketch"), "a null outline must not be written")
+        assertNull(repository.load(project.id)?.sketch)
     }
 
     @Test
