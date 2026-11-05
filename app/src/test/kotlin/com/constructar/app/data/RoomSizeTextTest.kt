@@ -53,9 +53,9 @@ class RoomSizeTextTest {
             val text = size?.area.orEmpty() + "|" + size?.perimeter.orEmpty()
 
             // The unit is in `card_area`/`card_perimeter`, never in Kotlin.
-            assertFalse(text.contains("m"), "the unit belongs to the resource")
+            assertFalse("the unit belongs to the resource", text.contains("m"))
             // A German phone still gets a dot from this side: the row's length column does too.
-            assertFalse(text.contains(","), "no decimal comma on the card")
+            assertFalse("no decimal comma on the card", text.contains(","))
         } finally {
             Locale.setDefault(previous)
         }

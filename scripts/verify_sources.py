@@ -763,6 +763,12 @@ def check_assert_message_order() -> None:
 
     The rule fires only in files that import `kotlin.test`, and only when a string literal is
     followed by a comma, so `assertTrue("abc".length == 3)` stays legal.
+
+    The other direction is checked too, because the confusion is symmetric and round 95 paid for it
+    (finding 202): a file that imports `org.junit.Assert` and writes `assertFalse(condition,
+    "message")` in the `kotlin.test` order does not compile either - JUnit has no message-last
+    overload, so the string lands where a boolean belongs and the red build arrives one CI round
+    later. For those files the last argument of an assertion call may not be a bare string literal.
     """
     for path in kotlin_sources("app", "ar-engine", "core", "export", "native-slam"):
         if "/src/test/" not in path.as_posix():
@@ -775,6 +781,97 @@ def check_assert_message_order() -> None:
             add(path, f"line {line}: a kotlin.test assertion with the message first - kotlin.test "
                       f"takes the value first (org.junit takes the message first), and the "
                       f"mix-up only shows up as a red build (finding 101)")
+
+    for path in kotlin_sources("app", "ar-engine", "core", "export", "native-slam"):
+        if "/src/test/" not in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "import org.junit.Assert" not in text or "import kotlin.test." in text:
+            continue
+        for match in JUNIT_ASSERTION.finditer(text):
+            arguments = _call_arguments(text, match.end() - 1)
+            if any("=" in argument for argument in arguments):
+                continue  # named arguments say which is which, and say it to the compiler too
+            if not _junit_message_is_last(match.group(1), arguments):
+                continue
+            line = text[: match.start()].count("\n") + 1
+            add(path, f"line {line}: an org.junit assertion with the message last - JUnit takes "
+                      f"the message first, so this call has a String where a value belongs and "
+                      f"does not compile (finding 202)")
+
+
+JUNIT_ASSERTION = re.compile(r"\b(assert[A-Za-z]+)\(")
+
+
+# The assertions whose two-argument JUnit form is `(message, value)`: the message is first, and a
+# literal last means the call was written the `kotlin.test` way round.
+JUNIT_MESSAGE_FIRST_ONLY = {"assertTrue", "assertFalse", "assertNull", "assertNotNull"}
+
+
+def _is_string_literal(argument: str) -> bool:
+    return argument.startswith('"') and argument.endswith('"') and len(argument) > 1
+
+
+def _junit_message_is_last(name: str, arguments: list[str]) -> bool:
+    """Whether an `org.junit` call was written in the `kotlin.test` order (finding 202).
+
+    Deliberately narrow: only the shapes where JUnit has no other reading. `assertEquals(actual,
+    "expected")` is legal JUnit when the *expected* value is a string - `EndToEndJobTest` compares
+    a formatted number against a literal - so the two-argument assert-equality forms are never
+    flagged. The three-argument form is, because there a trailing literal is a message.
+    """
+    if name in JUNIT_MESSAGE_FIRST_ONLY:
+        return (
+            len(arguments) == 2
+            and _is_string_literal(arguments[-1])
+            and not _is_string_literal(arguments[0])
+        )
+    if name in {"assertEquals", "assertNotEquals"}:
+        return (
+            len(arguments) == 3
+            and _is_string_literal(arguments[-1])
+            and not _is_string_literal(arguments[0])
+        )
+    return False
+
+
+def _call_arguments(text: str, open_paren: int) -> list[str]:
+    """The arguments of the call whose `(` sits at [open_paren], split at top-level commas."""
+    arguments: list[str] = []
+    current: list[str] = []
+    depth = 0
+    index = open_paren
+    while index < len(text):
+        character = text[index]
+        if character == '"':
+            current.append(character)
+            index += 1
+            while index < len(text):
+                current.append(text[index])
+                if text[index] == "\\":
+                    index += 1
+                    if index < len(text):
+                        current.append(text[index])
+                elif text[index] == '"':
+                    break
+                index += 1
+        elif character in "([{":
+            depth += 1
+            if depth > 1:
+                current.append(character)
+        elif character in ")]}":
+            depth -= 1
+            if depth == 0:
+                arguments.append("".join(current).strip())
+                return [argument for argument in arguments if argument]
+            current.append(character)
+        elif character == "," and depth == 1:
+            arguments.append("".join(current).strip())
+            current = []
+        else:
+            current.append(character)
+        index += 1
+    return []
 
 
 # Only a declaration, never a KDoc code span: `:native-slam` in a comment is not an identifier.
