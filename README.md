@@ -61,7 +61,10 @@ AR can fail on a site.
 **Drywall take-off** (`core/.../wall`, **and it is wired**: the project card's *Walls* button
 renders `WallPlan`, which builds the room's ring from the stored outline, calls `wallSurface` and
 `estimateDrywall`, and prints the board size, stud spacing and waste the numbers were computed
-under — a purchase order without its assumptions is a number to argue with): net wall area with
+under — a purchase order without its assumptions is a number to argue with; each wall is drawn as
+an elevation, a tap on it chooses where a door or a window goes, and the picture is built from the
+same rectangles the take-off subtracts, so a hole in the drawing is a hole in the purchase
+order): net wall area with
 the openings subtracted as a *union* (two windows that overlap take
 board off a wall once, not twice — double-subtracting is how an estimate comes out short), then
 boards at the standard 2.50 × 1.25 m, CW studs at 62.5 cm centres (a stud under every board edge),
@@ -72,9 +75,12 @@ reason enumerated, rather than quietly absorbed.
 **DIN 18015 zones** (`core/.../wall`, **and it is wired**: the same *Walls* screen classifies every
 measured point and prints the sockets, switches and ceiling outlets, and it refuses to classify
 anything until the session has tracked a floor — ARCore's origin is wherever the phone started, so
-a height taken from it would print a socket at 1.40 m; `FloorReference` names the tracked
-horizontal plane under the operator, `HitResolution` carries it out of the hit source where the
-planes live, and the project stores it in `floorHeightM`): a measured height is snapped to the
+a height taken from it would print a socket at 1.40 m; `FloorEvaluator` scores the candidate planes
+on area, distance from the phone's chest height and depth and reports `TRACKED`, `UNCERTAIN` or
+`MISSING` with its evidence, `HitResolution` carries that decision out of the hit source where the
+planes live, and the project stores one floor **per AR session** — a height is a difference inside
+one coordinate system, and a node from another session is refused rather than measured from this
+one (finding 217)): a measured height is snapped to the
 socket line (30 cm), the switch line (105 cm) or the
 ceiling outlet (15 cm below the ceiling, so it follows the room), and refused outside a 10 cm
 tolerance with the nearest line still named — a point 25 cm off the socket line is not silently
@@ -210,10 +216,11 @@ Four screens, in the order of the job, and no screen that exists only to show of
    clips, couplings and bends the runs actually need. The person who drives to the wholesaler is
    standing in the room with this phone, not reading the PDF at a desk. **Walls** opens the other
    half of the same job: the room's ring as wall area (openings subtracted, the closing wall
-   counted), the drywall purchase with the board size, stud spacing and waste it was computed
-   under, and the DIN 18015 zones — sockets at 30 cm, switches at 105 cm, ceiling outlets under
-   the ceiling — assigned from the floor the AR session actually tracked, or not assigned at all
-   when it tracked none.
+   counted), an elevation per wall where a tap places a door or a window, the drywall purchase with
+   the board size, stud spacing and waste it was computed under, and the DIN 18015 zones — sockets
+   at 30 cm, switches at 105 cm, ceiling outlets under the ceiling — assigned from the floor the AR
+   session actually tracked, or not assigned at all when it tracked none, with the count of points
+   from another session printed instead of quietly dropped.
 4. **Measure → Export** — the AR viewfinder with its HUD, then the export screen, where the
    operator picks a folder once and gets PDF, CSV (plus an optional one-line-per-article order
    list for the wholesaler) and, with Pro, GLB/PLY. The customer can sign
@@ -766,7 +773,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 934 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 939 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 287 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 287 checks, 0 failures, no data race reported |

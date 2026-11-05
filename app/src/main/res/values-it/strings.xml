@@ -295,6 +295,11 @@
     <string name="wall_openings">Aperture detratte</string>
     <string name="wall_net">Superficie netta</string>
     <string name="wall_openings_none">In questa stanza non sono ancora registrate porte o finestre, quindi non si detrae nulla: la superficie lorda non è quella che rivestirai.</string>
+    <string name="wall_elevation_title">Pareti in alzato</string>
+    <string name="wall_elevation_hint">Tocca una parete per scegliere il punto, poi aggiungi una porta o una finestra.</string>
+    <string name="wall_opening_door">Porta</string>
+    <string name="wall_opening_window">Finestra</string>
+    <string name="wall_opening_remove">Rimuovi l’ultima apertura</string>
     <string name="wall_drywall_title">Computo del cartongesso</string>
     <string name="wall_boards">Lastre da acquistare</string>
     <string name="wall_boards_value">%1$d (%2$d prima degli sfridi)</string>

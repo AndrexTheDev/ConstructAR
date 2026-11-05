@@ -6,17 +6,22 @@
 
 package com.constructar.app.ui
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -24,8 +29,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,8 +46,15 @@ import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.units.LengthFormatter
 import com.constructar.core.units.LengthUnit
 import com.constructar.core.units.PercentText
+import com.constructar.core.wall.DOOR_WIDTH_M
 import com.constructar.core.wall.DrywallSpec
+import com.constructar.core.wall.OpeningKind
+import com.constructar.core.wall.WINDOW_WIDTH_M
+import com.constructar.core.wall.WallOpening
 import com.constructar.core.wall.WallPlan
+import com.constructar.core.wall.openingOffsetForTap
+import com.constructar.core.wall.openingsByWall
+import com.constructar.core.wall.rectOn
 
 /**
  * The room's paperwork: wall area, drywall purchase and the DIN 18015 zones.
@@ -67,6 +86,18 @@ fun WallScreen(
     plan: WallPlan,
     spec: DrywallSpec = DrywallSpec(),
     onBack: () -> Unit,
+    /**
+     * Places a door or a window at [offsetM] along wall [wallIndex].
+     *
+     * The offset is the one `:core` computed (`openingOffsetForTap`) from the tap's fraction and
+     * the wall's length - the screen finds out where the finger landed and the wall's length from
+     * the plan, and hands both to the function that owns the clamping. A screen that did the
+     * division itself would be a second definition of where the opening is, and the picture would
+     * eventually disagree with the purchase order.
+     */
+    onAddOpening: (wallIndex: Int, kind: OpeningKind, offsetM: Float) -> Unit = { _, _, _ -> },
+    /** Removes the last opening placed on a wall. */
+    onRemoveOpening: (wallIndex: Int) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -107,6 +138,60 @@ fun WallScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             return@Column
+        }
+
+        WallCard(stringResource(R.string.wall_elevation_title)) {
+            // One elevation per wall, drawn from the same rectangles `wallSurface` subtracts:
+            // a hole in the picture is a hole in the take-off, always.
+            val byWall = remember(plan.openings) { openingsByWall(plan.openings) }
+            plan.surface.lines.forEachIndexed { index, line ->
+                val openings = byWall[index].orEmpty()
+                Text(
+                    stringResource(
+                        R.string.wall_row,
+                        index + 1,
+                        stringResource(R.string.wall_length_m, LengthFormatter.number(line.lengthM)),
+                        stringResource(R.string.wall_area_m2, area(line.netAreaM2)),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                WallElevation(
+                    lengthM = line.lengthM,
+                    heightM = line.heightM,
+                    openings = openings,
+                    onPlace = { fraction, kind ->
+                        // The trade width of the thing being placed decides how far it has to be
+                        // pulled back from the end of the wall, so `:core` needs to know which.
+                        val widthM = when (kind) {
+                            OpeningKind.WINDOW -> WINDOW_WIDTH_M
+                            OpeningKind.DOOR, OpeningKind.PASSAGE -> DOOR_WIDTH_M
+                        }
+                        onAddOpening(
+                            index,
+                            kind,
+                            openingOffsetForTap(fraction, line.lengthM, widthM),
+                        )
+                    },
+                )
+                if (openings.isEmpty()) {
+                    Text(
+                        stringResource(R.string.wall_elevation_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GloveButton(
+                            label = stringResource(R.string.wall_opening_remove),
+                            icon = Icons.Default.Delete,
+                            onClick = { onRemoveOpening(index) },
+                            modifier = Modifier.weight(1f),
+                            tone = ActionTone.SECONDARY,
+                        )
+                    }
+                }
+            }
         }
 
         WallCard(stringResource(R.string.wall_surface_title)) {
@@ -274,6 +359,70 @@ fun WallScreen(
     }
 }
 
+/**
+ * One wall as an elevation, with its holes, and the two ways to make a hole.
+ *
+ * The drawing is a rectangle and a few rectangles inside it - the numbers behind it come from
+ * `rectOn`, which clips exactly the way `wallSurface` subtracts, so the picture cannot promise a
+ * hole the purchase order does not take off. A tap on the elevation places an opening where the
+ * finger landed; the two buttons say which kind.
+ */
+@Composable
+private fun WallElevation(
+    lengthM: Float,
+    heightM: Float,
+    openings: List<WallOpening>,
+    onPlace: (fraction: Float, kind: OpeningKind) -> Unit,
+) {
+    var tapFraction by remember { mutableStateOf(0.5f) }
+    val wallColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f)
+    val holeColor = MaterialTheme.colorScheme.error.copy(alpha = 0.40f)
+    val rects = remember(openings, lengthM, heightM) {
+        openings.mapNotNull { it.rectOn(lengthM, heightM) }
+    }
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(ELEVATION_HEIGHT)
+            .pointerInput(lengthM) {
+                detectTapGestures { point ->
+                    if (size.width > 0) tapFraction = (point.x / size.width).coerceIn(0f, 1f)
+                }
+            },
+    ) {
+        drawRect(color = wallColor, size = size)
+        rects.forEach { rect ->
+            // Canvas y grows downwards and `rectOn` measures from the floor upwards: the flip is
+            // the one piece of arithmetic this screen owns.
+            val left = rect.leftFraction * size.width
+            val right = rect.rightFraction * size.width
+            val top = (1f - rect.topFraction) * size.height
+            val bottom = (1f - rect.bottomFraction) * size.height
+            drawRect(
+                color = holeColor,
+                topLeft = Offset(left, top),
+                size = Size((right - left).coerceAtLeast(1f), (bottom - top).coerceAtLeast(1f)),
+            )
+        }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        GloveButton(
+            label = stringResource(R.string.wall_opening_door),
+            icon = Icons.Default.Add,
+            onClick = { onPlace(tapFraction, OpeningKind.DOOR) },
+            modifier = Modifier.weight(1f),
+            tone = ActionTone.SECONDARY,
+        )
+        GloveButton(
+            label = stringResource(R.string.wall_opening_window),
+            icon = Icons.Default.Add,
+            onClick = { onPlace(tapFraction, OpeningKind.WINDOW) },
+            modifier = Modifier.weight(1f),
+            tone = ActionTone.SECONDARY,
+        )
+    }
+}
+
 /** One section, in the same card the rest of the app uses for a block of numbers. */
 @Composable
 private fun WallCard(title: String, content: @Composable () -> Unit) {
@@ -334,3 +483,6 @@ private fun area(squareMeters: Float): String =
     LengthFormatter.number(squareMeters, LengthUnit.METER, AREA_DECIMALS)
 
 private const val AREA_DECIMALS = 1
+
+/** An elevation is a sketch beside its numbers, not a drawing: 88 dp is a storey at a glance. */
+private val ELEVATION_HEIGHT = 88.dp

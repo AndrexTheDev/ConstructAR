@@ -255,6 +255,101 @@ class WallPlanTest {
     }
 
     @Test
+    fun `a tap on a wall places the opening where the finger landed, kept inside the wall`() {
+        // A door on a 4 m wall tapped at three quarters: centred on the tap, so it starts at
+        // 3.0 m - 0.4425 m. Tapped at the very end, it is pulled back so the whole leaf fits.
+        assertEquals(2.5575f, openingOffsetForTap(0.75f, 4f, DOOR_WIDTH_M), 1e-4f)
+        assertEquals(4f - DOOR_WIDTH_M, openingOffsetForTap(1f, 4f, 1.0f), 1e-4f)
+        // A door wider than its wall starts at 0 and `wallSurface` reports the clip, rather than
+        // the app silently moving the door somewhere it was not tapped.
+        assertEquals(0f, openingOffsetForTap(0.5f, 0.6f, 0.885f), 1e-4f)
+        // Nonsense in, no placement out.
+        assertEquals(0f, openingOffsetForTap(Float.NaN, 4f, 0.885f), 1e-4f)
+        assertEquals(0f, openingOffsetForTap(0.5f, 0f, 0.885f), 1e-4f)
+    }
+
+    @Test
+    fun `the openings a project stores are grouped by the wall they sit on`() {
+        val grouped = openingsByWall(
+            listOf(
+                PlacedOpening.door(0, 1f),
+                PlacedOpening.window(1, 0.5f),
+                PlacedOpening.window(1, 1.5f),
+                PlacedOpening.door(-1, 0f),
+            ),
+        )
+
+        // A negative wall index is not a wall: it would be drawn on nothing, so it is dropped
+        // rather than subtracted from a wall that does not exist.
+        assertEquals(setOf(0, 1), grouped.keys)
+        assertEquals(1, grouped[0]?.size)
+        assertEquals(2, grouped[1]?.size)
+        assertEquals(OpeningKind.WINDOW, grouped[1]?.get(0)?.kind)
+    }
+
+    @Test
+    fun `an opening is drawn as a fraction of its wall, clipped the way it is subtracted`() {
+        // A 1.20 x 1.40 m window with a 0.90 m parapet on a 4 m wall of 2.50 m: 30 % of the run
+        // wide, from 36 % to 92 % of the height above the floor.
+        val window = PlacedOpening.window(wallIndex = 0, offsetM = 0.6f).opening
+
+        val rect = window.rectOn(wallLengthM = 4f, wallHeightM = 2.5f) ?: error("a rect expected")
+
+        assertEquals(0.15f, rect.leftFraction, 1e-4f)
+        assertEquals(0.45f, rect.rightFraction, 1e-4f)
+        assertEquals(0.36f, rect.bottomFraction, 1e-4f)
+        assertEquals(0.92f, rect.topFraction, 1e-4f)
+        assertEquals(0.30f, rect.widthFraction, 1e-4f)
+        assertTrue(rect.isVisible)
+
+        // The same rectangle past the end of the wall is clipped to it, not drawn outside the
+        // canvas and not silently moved.
+        val past = PlacedOpening.window(wallIndex = 0, offsetM = 3.4f).opening
+        val clipped = past.rectOn(wallLengthM = 4f, wallHeightM = 2.5f) ?: error("a rect expected")
+        assertEquals(1f, clipped.rightFraction, 1e-4f)
+
+        // An opening entirely past the wall is nothing to draw, like it is nothing to subtract.
+        val outside = PlacedOpening.window(wallIndex = 0, offsetM = 4.5f).opening
+        assertNull(outside.rectOn(wallLengthM = 4f, wallHeightM = 2.5f))
+        assertNull(outside.rectOn(wallLengthM = 0f, wallHeightM = 2.5f))
+    }
+
+    @Test
+    fun `the plan carries the openings its own numbers deducted`() {
+        val plan = wallPlan(
+            project(
+                openings = listOf(
+                    PlacedOpening.door(0, 1f),
+                    PlacedOpening.window(2, 1f),
+                ),
+            ),
+        )
+
+        assertEquals(2, plan.openings.size)
+        assertEquals(plan.openingsRecorded, plan.openings.size)
+        assertEquals(2, plan.surface.lines.sumOf { it.openingsSubtracted })
+    }
+
+    @Test
+    fun `two windows that overlap are taken off the wall once, not twice`() {
+        // The claim `PlacedOpening` makes - no Clipper2, the union computed exactly - has to hold
+        // on the wall the operator actually draws: 1 m wide windows at 0.5 and 1.0 m of a 4 m
+        // wall overlap over half a metre, so they cover 1.5 m of run, not 2.0.
+        val plan = wallPlan(
+            project(
+                openings = listOf(
+                    PlacedOpening(wallIndex = 0, kind = OpeningKind.WINDOW, offsetM = 0.5f, widthM = 1f, sillHeightM = 1f, heightM = 1f),
+                    PlacedOpening(wallIndex = 0, kind = OpeningKind.WINDOW, offsetM = 1f, widthM = 1f, sillHeightM = 1f, heightM = 1f),
+                ),
+            ),
+        )
+
+        assertEquals(1.5f, plan.surface.lines[0].openingAreaM2, 1e-3f)
+        assertEquals(1.5f, plan.surface.openingAreaM2, 1e-3f)
+        assertEquals(2, plan.surface.lines[0].openingsSubtracted)
+    }
+
+    @Test
     fun `a project file written before the floor and openings existed still loads`() {
         val json = Json {
             ignoreUnknownKeys = true

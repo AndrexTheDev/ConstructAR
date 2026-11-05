@@ -99,6 +99,52 @@ fun openingsByWall(openings: List<PlacedOpening>): Map<Int, List<WallOpening>> {
 }
 
 /**
+ * An opening as a rectangle in its wall's own frame, every edge a fraction of the wall.
+ *
+ * A screen draws on a canvas whose size it learns at layout time and which has nothing to do with
+ * metres; a take-off needs metres. Rather than let the screen divide by a length it was handed
+ * (which is geometry, and geometry is not a screen's job), the clip is done once here: the same
+ * clip `wallSurface` applies before subtracting, so what is drawn and what is priced cannot
+ * disagree about where the hole is.
+ *
+ * `bottomFraction` counts **from the floor** (0) to the top of the wall (1), which is the way a
+ * canvas is *not* laid out - the screen flips it, and that flip is the one line of arithmetic it
+ * owns.
+ */
+data class OpeningRect(
+    val leftFraction: Float,
+    val rightFraction: Float,
+    val bottomFraction: Float,
+    val topFraction: Float,
+) {
+    /** Width as a fraction of the wall - 0 for a degenerate rectangle, which is never drawn. */
+    val widthFraction: Float get() = (rightFraction - leftFraction).coerceAtLeast(0f)
+
+    /** Height as a fraction of the wall - 0 for a degenerate rectangle. */
+    val heightFraction: Float get() = (topFraction - bottomFraction).coerceAtLeast(0f)
+
+    val isVisible: Boolean get() = widthFraction > 0f && heightFraction > 0f
+}
+
+/**
+ * This opening on a wall of [wallLengthM] metres and [wallHeightM] metres, or `null` when nothing
+ * of it would land on the wall.
+ */
+fun WallOpening.rectOn(wallLengthM: Float, wallHeightM: Float): OpeningRect? {
+    if (!wallLengthM.isFinite() || !wallHeightM.isFinite()) return null
+    if (wallLengthM <= 0f || wallHeightM <= 0f) return null
+    if (!offsetM.isFinite() || !widthM.isFinite() || !sillHeightM.isFinite() || !heightM.isFinite()) {
+        return null
+    }
+    val left = (offsetM / wallLengthM).coerceIn(0f, 1f)
+    val right = ((offsetM + widthM) / wallLengthM).coerceIn(0f, 1f)
+    val bottom = (sillHeightM / wallHeightM).coerceIn(0f, 1f)
+    val top = ((sillHeightM + heightM) / wallHeightM).coerceIn(0f, 1f)
+    val rect = OpeningRect(left, right, bottom, top)
+    return if (rect.isVisible) rect else null
+}
+
+/**
  * The opening a tap at [fraction] of the wall would place, kept inside the wall.
  *
  * A door is 0.885 m wide and a wall can be 0.60 m: the placement is clamped so the rectangle
@@ -134,6 +180,8 @@ data class WallPlan(
     val floorHeightM: Float?,
     /** How many openings were subtracted. */
     val openingsRecorded: Int,
+    /** The openings themselves, in the order the project stores them - what a screen draws. */
+    val openings: List<PlacedOpening> = emptyList(),
     /** Points that were classified into a zone. */
     val pointCount: Int,
     /** Points from a session whose floor was never measured - not classifiable, not dropped. */
@@ -191,6 +239,7 @@ fun wallPlan(project: ProjectRecord, spec: DrywallSpec = DrywallSpec()): WallPla
         installations = installations,
         floorHeightM = project.floorHeightM,
         openingsRecorded = project.openings.size,
+        openings = project.openings,
         pointCount = points.size,
         foreignSessionPoints = relative.foreignSessionCount,
         noFloorPoints = relative.noFloorCount,

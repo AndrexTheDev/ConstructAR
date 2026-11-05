@@ -295,6 +295,11 @@
     <string name="wall_openings">Ouvertures déduites</string>
     <string name="wall_net">Surface nette</string>
     <string name="wall_openings_none">Aucune porte ni fenêtre n’est encore relevée dans cette pièce : rien n’est déduit, et la surface brute n’est pas celle que tu vas doubler.</string>
+    <string name="wall_elevation_title">Murs en élévation</string>
+    <string name="wall_elevation_hint">Touche un mur pour choisir l’emplacement, puis ajoute une porte ou une fenêtre.</string>
+    <string name="wall_opening_door">Porte</string>
+    <string name="wall_opening_window">Fenêtre</string>
+    <string name="wall_opening_remove">Retirer la dernière ouverture</string>
     <string name="wall_drywall_title">Métré placo</string>
     <string name="wall_boards">Plaques à acheter</string>
     <string name="wall_boards_value">%1$d (%2$d avant chutes)</string>

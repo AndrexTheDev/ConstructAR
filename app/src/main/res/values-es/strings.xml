@@ -295,6 +295,11 @@
     <string name="wall_openings">Huecos descontados</string>
     <string name="wall_net">Superficie neta</string>
     <string name="wall_openings_none">Aún no hay puertas ni ventanas registradas en este cuarto, así que no se descuenta nada: la superficie bruta no es la que vas a forrar.</string>
+    <string name="wall_elevation_title">Paredes en alzado</string>
+    <string name="wall_elevation_hint">Toca una pared para elegir el punto y añade una puerta o una ventana.</string>
+    <string name="wall_opening_door">Puerta</string>
+    <string name="wall_opening_window">Ventana</string>
+    <string name="wall_opening_remove">Quitar la última abertura</string>
     <string name="wall_drywall_title">Despiece de pladur</string>
     <string name="wall_boards">Placas a comprar</string>
     <string name="wall_boards_value">%1$d (%2$d antes de merma)</string>

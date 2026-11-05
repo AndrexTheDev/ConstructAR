@@ -38,6 +38,8 @@ import com.constructar.core.model.RouteDraft
 import com.constructar.core.model.RouteLabels
 import com.constructar.core.model.WorkSession
 import com.constructar.core.price.Pricing
+import com.constructar.core.wall.OpeningKind
+import com.constructar.core.wall.PlacedOpening
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -664,6 +666,51 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         if (!saved) {
             mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_SAVE_FAILED)
         }
+    }
+
+    /**
+     * Records a door or a window on a wall of the room's ring.
+     *
+     * The offset is in metres along the wall, computed by `:core` from the tap
+     * (`openingOffsetForTap`) - the screen knows where the finger landed, not how long the wall is
+     * or how wide a door is. Everything here does is append the rectangle the plan will subtract
+     * and redraw; the union subtraction itself stays in `wallSurface`, so two windows that overlap
+     * take board off the wall once rather than twice.
+     */
+    fun addOpening(
+        wallIndex: Int,
+        kind: OpeningKind,
+        offsetM: Float,
+        onSaved: (ProjectRecord?) -> Unit = {},
+    ): ProjectRecord? {
+        val project = mutableState.value.openProject ?: return null
+        if (wallIndex < 0 || !offsetM.isFinite() || offsetM < 0f) return null
+        val opening = when (kind) {
+            OpeningKind.WINDOW -> PlacedOpening.window(wallIndex, offsetM)
+            // A passage is a door with no leaf; the trade dimensions of the reveal are the same.
+            OpeningKind.DOOR, OpeningKind.PASSAGE -> PlacedOpening.door(wallIndex, offsetM)
+        }
+        val updated = project.copy(openings = project.openings + opening)
+        mutate(updated, onSaved)
+        return updated
+    }
+
+    /**
+     * Removes the last opening placed on [wallIndex] - the only removal a tap-placed list needs.
+     *
+     * A room has four walls and a handful of openings; an operator who mis-tapped wants the last
+     * one gone, not a numbered list to manage. Nothing is removed from another wall by mistake:
+     * the index is part of the question.
+     */
+    fun removeLastOpening(wallIndex: Int, onSaved: (ProjectRecord?) -> Unit = {}): ProjectRecord? {
+        val project = mutableState.value.openProject ?: return null
+        val last = project.openings.indexOfLast { it.wallIndex == wallIndex }
+        if (last < 0) return project
+        val updated = project.copy(
+            openings = project.openings.filterIndexed { index, _ -> index != last },
+        )
+        mutate(updated, onSaved)
+        return updated
     }
 
     /** The rate this project bills at: its own override, or the firm's default. */

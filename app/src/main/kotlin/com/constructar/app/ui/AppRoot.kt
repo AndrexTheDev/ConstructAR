@@ -306,6 +306,12 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             projectName = project.name,
                             plan = plan,
                             onBack = { navController.popBackStack() },
+                            onAddOpening = { wallIndex, kind, offsetM ->
+                                viewModel.addOpening(wallIndex, kind, offsetM)
+                            },
+                            onRemoveOpening = { wallIndex ->
+                                viewModel.removeLastOpening(wallIndex)
+                            },
                         )
                     } else {
                         Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())

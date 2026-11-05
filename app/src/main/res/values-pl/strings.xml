@@ -301,6 +301,11 @@
     <string name="wall_openings">Odjęte otwory</string>
     <string name="wall_net">Powierzchnia netto</string>
     <string name="wall_openings_none">W tym pokoju nie ma jeszcze zarejestrowanych drzwi ani okien, więc nic nie jest odjęte - powierzchnia brutto to nie ta, którą obłożysz.</string>
+    <string name="wall_elevation_title">Ściany w elewacji</string>
+    <string name="wall_elevation_hint">Dotknij ściany, aby wybrać miejsce, a następnie dodaj drzwi lub okno.</string>
+    <string name="wall_opening_door">Drzwi</string>
+    <string name="wall_opening_window">Okno</string>
+    <string name="wall_opening_remove">Usuń ostatni otwór</string>
     <string name="wall_drywall_title">Przedmiar suchej zabudowy</string>
     <string name="wall_boards">Płyty do zakupu</string>
     <string name="wall_boards_value">%1$d (%2$d bez odpadu)</string>

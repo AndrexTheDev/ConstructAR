@@ -3919,13 +3919,21 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
                          "have to assemble the numbers it draws")
     if "com.constructar.app.data.WallPlan" in root_text:
         add(root_screen, "the wall route still imports the deleted app-side plan")
+    for call in ("addOpening(", "removeLastOpening("):
+        if call not in root_text:
+            add(root_screen, f"the wall route never calls `{call}`, so an opening placed on the "
+                             f"elevation would go nowhere")
     if "composable(Routes.WALLS)" not in root_text:
         add(root_screen, "the wall screen has no route, so nothing reaches it")
     if "onWalls = " not in root_text:
         add(root_screen, "no button leads to the wall screen - the screen would be unreachable")
     view_model = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" /
                   "ProjectViewModel.kt")
-    if "fun setFloorHeight(" not in view_model.read_text(encoding="utf-8"):
+    view_model_text = view_model.read_text(encoding="utf-8")
+    for call in ("fun addOpening(", "fun removeLastOpening("):
+        if call not in view_model_text:
+            add(view_model, f"there is no `{call}` - the elevation's buttons would be inert")
+    if "fun setFloorHeight(" not in view_model_text:
         add(view_model, "there is no write path for the floor height, so the field would stay null "
                         "for ever and the zones would never be assigned")
 
@@ -3951,6 +3959,16 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
                     "absence from the counts would be invisible")
     if "com.constructar.app.data.WallPlan" in screen_text:
         add(screen, "the screen still imports the deleted app-side plan")
+    # A hole in the picture is a hole in the take-off, or the two claims disagree (finding 218's
+    # sibling): the elevation has to be drawn from the same rectangles `wallSurface` subtracts.
+    if "rectOn(" not in screen_text:
+        add(screen, "the wall elevation is not drawn from the rectangles the take-off subtracts, "
+                    "so the picture could show a hole the purchase order does not")
+    if "openingOffsetForTap(" not in screen_text:
+        add(screen, "the screen places openings without `:core`'s clamping, so a tap near the end "
+                    "of a wall would put a door through the corner")
+    if "R.string.wall_elevation_title" not in screen_text:
+        add(screen, "the screen shows no elevation, so the openings it deducts are invisible")
     if "R.string.wall_openings_none" not in screen_text:
         add(screen, "the screen deducts nothing without saying why - `0.00 m² openings` beside a "
                     "room with a door reads as a measured zero")
@@ -3980,6 +3998,11 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
         "wall_assumptions": ("%1$s", "%2$s", "%3$s", "%4$d"),
         "wall_zones_no_floor": (),
         "wall_openings_none": (),
+        "wall_elevation_title": (),
+        "wall_elevation_hint": (),
+        "wall_opening_door": (),
+        "wall_opening_window": (),
+        "wall_opening_remove": (),
         "wall_zones_foreign": ("%1$d",),
         "wall_zones_no_floor_points": ("%1$d",),
         "wall_zones_partial": ("%1$d", "%2$d"),
