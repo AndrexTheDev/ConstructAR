@@ -89,6 +89,7 @@
     <string name="ar_closed_loop">chiuso</string>
     <string name="ar_confidence_weak">Punto più debole %1$d %%: toccalo di nuovo per migliorare la tratta</string>
     <string name="ar_no_surface">Nessuna superficie trovata. Inquadra una parete o il pavimento.</string>
+    <string name="ar_floor_recorded">Pavimento registrato. Ogni altezza di installazione di questa stanza si misura da lì.</string>
     <string name="ar_floor_uncertain">Altezza del pavimento incerta: forse c’è un tavolo in mezzo. Inquadra il pavimento e percorri la stanza.</string>
     <string name="ar_depth_planes_only">Nessun sensore di profondità né modello IA su questo telefono: i punti provengono dai piani riconosciuti. Inquadra superfici nitide e texturizzate.</string>
     <string name="ar_scan_progress">Dettaglio %1$d %% · %2$d k triangoli</string>

@@ -89,6 +89,7 @@
     <string name="ar_closed_loop">zamknięta</string>
     <string name="ar_confidence_weak">Najsłabszy punkt %1$d %% - dotknij go ponownie, aby poprawić trasę</string>
     <string name="ar_no_surface">Nie znaleziono powierzchni. Wyceluj w ścianę lub podłogę.</string>
+    <string name="ar_floor_recorded">Podłoga zapisana. Każda wysokość montażowa w tym pomieszczeniu jest mierzona od niej.</string>
     <string name="ar_floor_uncertain">Wysokość podłogi niepewna: coś może zasłaniać podłogę. Skieruj kamerę na podłogę i obejdź pomieszczenie.</string>
     <string name="ar_depth_planes_only">Brak czujnika głębi i modelu AI na tym telefonie: punkty pochodzą z rozpoznanych płaszczyzn. Celuj w wyraźne, teksturowane powierzchnie.</string>
     <string name="ar_scan_progress">Detal %1$d %% · %2$d tys. trójkątów</string>

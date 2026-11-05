@@ -7,9 +7,11 @@
 package com.constructar.arengine
 
 import com.constructar.arengine.hit.FloorDecision
+import com.constructar.arengine.hit.FloorHudLine
 import com.constructar.arengine.hit.FloorReference
 import com.constructar.arengine.hit.FloorReferenceStatus
 import com.constructar.arengine.hit.PlaneCandidate
+import com.constructar.arengine.hit.floorHudLine
 import com.constructar.core.math.Vec3
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -184,6 +186,19 @@ class FloorReferenceTest {
         assertFalse(decision(FloorReferenceStatus.UNCERTAIN, -0.75f).usable)
         assertFalse(decision(FloorReferenceStatus.MISSING, null).usable)
         assertFalse(FloorDecision.MISSING.usable)
+    }
+
+    @Test
+    fun `the HUD says which of the three floor states it is in`() {
+        // "No line at all" used to mean both "nothing decided yet" and "recorded", and only the
+        // uncertain case was ever spoken. Three statuses, three lines, none of them shared
+        // (finding 228).
+        assertEquals(FloorHudLine.RECORDED, floorHudLine(FloorReferenceStatus.TRACKED))
+        assertEquals(FloorHudLine.UNCERTAIN, floorHudLine(FloorReferenceStatus.UNCERTAIN))
+        assertEquals(FloorHudLine.NONE, floorHudLine(FloorReferenceStatus.MISSING))
+        assertEquals(FloorHudLine.NONE, floorHudLine(null))
+        // A recorded floor is not silent any more, and the three lines never collapse into one.
+        assertEquals(3, FloorHudLine.values().toSet().size)
     }
 
     @Test

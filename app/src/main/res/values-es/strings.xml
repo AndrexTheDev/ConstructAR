@@ -89,6 +89,7 @@
     <string name="ar_closed_loop">cerrado</string>
     <string name="ar_confidence_weak">Punto más débil %1$d %%: vuelve a tocarlo para mejorar el tramo</string>
     <string name="ar_no_surface">No se ha encontrado superficie. Apunta a una pared o al suelo.</string>
+    <string name="ar_floor_recorded">Suelo registrado. Todas las alturas de montaje de esta sala se miden desde él.</string>
     <string name="ar_floor_uncertain">Altura del suelo insegura: puede haber una mesa en medio. Apunta la cámara al suelo y recorre la sala.</string>
     <string name="ar_depth_planes_only">Sin sensor de profundidad ni modelo de IA en este teléfono: los puntos salen de los planos reconocidos. Apunta a superficies claras y con textura.</string>
     <string name="ar_scan_progress">Detalle %1$d %% · %2$d k triángulos</string>

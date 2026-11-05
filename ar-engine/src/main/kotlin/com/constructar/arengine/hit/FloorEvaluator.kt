@@ -70,6 +70,37 @@ data class FloorDecision(
 }
 
 /**
+ * The line the AR HUD owes the operator about the floor - one of three, and all three distinct.
+ *
+ * The screen used to speak only when the decision was `UNCERTAIN` (finding 218), which left the
+ * two states that matter most indistinguishable: *no floor yet* and *floor recorded* both looked
+ * like an empty HUD. The wall screen had meanwhile started telling the operator to walk the room
+ * in AR once (finding 214) and, since finding 226, walking it really does record the floor - with
+ * nothing on screen to say it worked. A state change the whole take-off hangs on, printed
+ * nowhere, is the same defect as a tap target with no trace on it (finding 223).
+ *
+ * Kept as a pure function of the status, so the mapping is a unit test rather than a composable
+ * nobody can run without a device.
+ */
+enum class FloorHudLine {
+    /** A tracked floor is recorded: heights are measured from it. */
+    RECORDED,
+
+    /** An upward-facing plane under the phone, but not clearly *the* floor: a warning. */
+    UNCERTAIN,
+
+    /** Nothing to say - no plane has been judged a floor yet. */
+    NONE,
+}
+
+/** Which [FloorHudLine] a decision status earns. */
+fun floorHudLine(status: FloorReferenceStatus?): FloorHudLine = when (status) {
+    FloorReferenceStatus.TRACKED -> FloorHudLine.RECORDED
+    FloorReferenceStatus.UNCERTAIN -> FloorHudLine.UNCERTAIN
+    FloorReferenceStatus.MISSING, null -> FloorHudLine.NONE
+}
+
+/**
  * Which horizontal plane under the camera is the finished floor.
  *
  * Every mounting height in the trade is measured from it (DIN 18015-3: sockets at 30 cm, switches

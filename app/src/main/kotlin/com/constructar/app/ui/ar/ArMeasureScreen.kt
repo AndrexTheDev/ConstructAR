@@ -98,7 +98,8 @@ import com.constructar.app.ui.snapMovedRes
 import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.app.ui.tierLabel
-import com.constructar.arengine.hit.FloorReferenceStatus
+import com.constructar.arengine.hit.FloorHudLine
+import com.constructar.arengine.hit.floorHudLine
 import com.constructar.arengine.render.ArScene
 import com.constructar.arengine.session.ArReadiness
 import com.constructar.arengine.tracking.TrackingQuality
@@ -273,8 +274,10 @@ fun ArMeasureScreen(
     val floorDecision by controller.floor.collectAsStateWithLifecycle()
     // A table top is upward-facing, below the phone and higher than the floor: the one case
     // "highest plane wins" got wrong (finding 218). When the evaluator is not sure, the HUD says
-    // so instead of the app quietly recording a floor it will later print mounting heights from.
-    val floorUncertain = floorDecision?.status == FloorReferenceStatus.UNCERTAIN
+    // so instead of the app quietly recording a floor it will later print mounting heights from -
+    // and when it *is* sure it says that too, because "no line at all" used to mean both "nothing
+    // decided yet" and "recorded" (finding 228).
+    val floorLine = floorHudLine(floorDecision?.status)
     val aiDepthRunning by controller.aiDepthRunning.collectAsStateWithLifecycle()
     val aiDepthSettled by controller.aiDepthSettled.collectAsStateWithLifecycle()
     // Which depth is actually in use. A phone with neither ARCore's depth API nor the bundled
@@ -736,12 +739,18 @@ fun ArMeasureScreen(
                         color = SiteColors.warning,
                     )
                 }
-                if (floorUncertain) {
-                    Text(
+                when (floorLine) {
+                    FloorHudLine.RECORDED -> Text(
+                        text = stringResource(R.string.ar_floor_recorded),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SiteColors.accent,
+                    )
+                    FloorHudLine.UNCERTAIN -> Text(
                         text = stringResource(R.string.ar_floor_uncertain),
                         style = MaterialTheme.typography.bodyMedium,
                         color = SiteColors.warning,
                     )
+                    FloorHudLine.NONE -> Unit
                 }
                 warningText?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)

@@ -4092,6 +4092,14 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
     if "onFloorResolved = " not in floor_controller_text:
         add(floor_controller, "nothing observes the reticle's floor, so the HUD and the project "
                               "only learn about it when the operator happens to tap")
+    # The floor is now recorded by walking, so the HUD has to say it was recorded: before this,
+    # "no line at all" meant both "nothing decided yet" and "the floor is stored" (finding 228).
+    if "floorHudLine(" not in measure_text:
+        add(measure, "the HUD decides the floor line itself instead of using `:ar-engine`'s "
+                     "mapping, so the recorded and the not-yet states could collapse again")
+    if "R.string.ar_floor_recorded" not in measure_text:
+        add(measure, "a recorded floor is never confirmed on screen - the operator cannot tell "
+                     "whether walking the room worked (finding 228)")
     if "if (!decision.usable)" not in measure_text:
         add(measure, "an uncertain floor is handed to the project, so every mounting height in "
                      "the room would be measured from a table top (finding 218)")
