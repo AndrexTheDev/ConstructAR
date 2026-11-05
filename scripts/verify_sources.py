@@ -3501,6 +3501,10 @@ def check_the_protocol_prints_the_room_plan() -> None:
     service = (ROOT / "export" / "src" / "main" / "kotlin" / "com" / "constructar" / "export" /
                "ExportService.kt")
     service_text = service.read_text(encoding="utf-8")
+    if "import com.constructar.export.pdf.FloorplanSection" not in service_text:
+        # The request lives in `com.constructar.export`, the section in `...export.pdf` (finding 209).
+        add(service, "the export request names `FloorplanSection` without importing it - the class "
+                    "is one package down, and the build stops at `Unresolved reference`")
     if "val floorplan: FloorplanSection? = null" not in service_text:
         add(service, "the export request has no floorplan, so the screen cannot hand one over")
     if "floorplan = request.floorplan" not in service_text:

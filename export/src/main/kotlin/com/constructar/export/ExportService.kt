@@ -15,6 +15,7 @@ import com.constructar.core.model.ProjectRecord
 import com.constructar.export.csv.MaterialCsvWriter
 import com.constructar.export.glb.GlbWriter
 import com.constructar.export.ply.PlyWriter
+import com.constructar.export.pdf.FloorplanSection
 import com.constructar.export.pdf.PdfLabels
 import com.constructar.export.pdf.PdfPhoto
 import com.constructar.export.pdf.PdfSection
