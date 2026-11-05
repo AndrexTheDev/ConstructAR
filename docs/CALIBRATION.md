@@ -181,7 +181,11 @@ room the operator left stops voting; and two sightings from the same spot leave 
 (baseline floor, relative deviation) are read out of `TagScaleOptions` over
 `nativeTagScaleDefaults()` — this file does not restate them and neither does `:app`. The AR screen
 samples one frame in fifteen while the marker dialog is open, drops the sweep when ARCore starts a
-new session, and offers `Apply` only for a factor `ReferenceCalibration.accepted` would take. What is
+new session, and offers `Apply` only for a factor `ReferenceCalibration.accepted` would take. What
+the dialog prints is `:core`'s `MarkerStatusLine`: four cases (off, watching, measured, outside the
+window) with the evidence travelling alongside the factor - pairs that agreed, pairs the deviation
+filter rejected, and the baseline they span - because a bare "factor 1.03" cannot tell the operator
+whether it rests on one 20 cm pair or six pairs over three metres (finding 237). What is
 still unproven: a real printed tag on a real device, which is the one thing no JVM test can supply.
 `estimateScaleFromTagSightings` — the printed *layout* sheet — is still reached from nowhere, and no
 stored number depends on a marker today.

@@ -641,9 +641,10 @@ Known limitations, deliberately documented rather than hidden:
   screen has: sightings stamped with the ARCore session, so a re-localisation cannot pair two
   world origins; capped per marker, so a tag seen in another room stops voting; and `Watching`
   until a real baseline exists instead of the 1.0 that standing still would certify. The AR
-  screen's marker dialog shows that state in six locales, announces the number as a live region
-  while the operator walks, and applies an accepted factor through the same reporting-layer
-  callback the two-tap sweep uses. The two trust knobs come from the native `TagScaleOptions`
+  screen's marker dialog shows that state in six locales through `:core`'s `MarkerStatusLine`,
+  which never prints a factor without the evidence behind it - the pairs that agreed and the
+  baseline they span - announces the number as a live region while the operator walks, and applies
+  an accepted factor through the same reporting-layer callback the two-tap sweep uses. The two trust knobs come from the native `TagScaleOptions`
   over `nativeTagScaleDefaults()`; `:app` invents none of them. Unproven and stated as such: no
   device has held a real tag against this path, and `estimateScaleFromTagSightings` - the printed
   *layout* sheet - is still reached from nowhere. `tools/verify-native.sh` builds and runs all of it the way CI does;
@@ -802,7 +803,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1012 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1017 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 332 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 332 checks, 0 failures, no data race reported |

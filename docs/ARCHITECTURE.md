@@ -312,7 +312,12 @@ come from `TagScaleOptions` over `nativeTagScaleDefaults()`, so the Kotlin side 
 definition of a baseline worth measuring. `TsdfScanPipeline.openMarkerProbe` builds the whole chain
 against the engine it already owns, and `ArMeasureController` samples one frame in fifteen - a
 sweep is answered by a walk, not by 30 pictures a second - and drops the sweep when a new session
-begins. `estimateScaleFromTagSightings` - the printed *layout* path, which needs a sheet of tags -
+begins. The dialog's sentences come from `:core`'s `MarkerStatusLine.of(state)`, which decides the
+four cases - off, watching, measured, outside the window - and carries the evidence with the
+factor: the pairs that agreed, the pairs the deviation filter threw out and the baseline they span,
+so a factor from one 20 cm pair cannot be printed to look like a factor from six pairs over three
+metres (finding 237). It asks `ReferenceCalibration.accepted` again rather than trusting the
+proposal's own flag, so the two dialogs cannot disagree about the window. `estimateScaleFromTagSightings` - the printed *layout* path, which needs a sheet of tags -
 is still reached from nowhere, and no stored metre depends on a marker today.
 
 **Pose graph** (`slam/pose_graph.cpp`). Gauss–Newton on SE(3) with central-difference Jacobians,

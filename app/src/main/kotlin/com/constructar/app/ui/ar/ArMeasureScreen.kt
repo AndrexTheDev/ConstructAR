@@ -110,7 +110,7 @@ import com.google.ar.core.Config
 import com.constructar.core.calib.CalibrationOutcome
 import com.constructar.core.calib.CalibrationReference
 import com.constructar.core.calib.CalibrationSweep
-import com.constructar.core.calib.MarkerSweepState
+import com.constructar.core.calib.MarkerStatusLine
 import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.model.ConduitPresets
 import com.constructar.core.model.ConduitSpec
@@ -945,7 +945,7 @@ fun ArMeasureScreen(
 
             if (markerOpen) {
                 val state = markerState
-                val proposal = (state as? MarkerSweepState.Ready)?.proposal
+                val line = MarkerStatusLine.of(state)
                 AlertDialog(
                     onDismissRequest = {
                         controller.stopMarkerProbe()
@@ -958,11 +958,26 @@ fun ArMeasureScreen(
                                 text = stringResource(R.string.marker_hint),
                                 style = MaterialTheme.typography.bodyMedium,
                             )
-                            when {
-                                proposal != null && proposal.accepted -> Text(
+                            // One mapping, in `:core`, decides what the dialog may say; the words
+                            // are here. A factor without its evidence is a number the operator
+                            // cannot judge (finding 237).
+                            when (line) {
+                                MarkerStatusLine.Off -> Unit
+                                is MarkerStatusLine.Watching -> Text(
                                     text = stringResource(
-                                        R.string.marker_ready,
-                                        ReferenceCalibration.formatScale(proposal.factor),
+                                        R.string.marker_watching,
+                                        line.sightings,
+                                        line.markerIds,
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                                )
+                                is MarkerStatusLine.Measured -> Text(
+                                    text = stringResource(
+                                        R.string.marker_measured,
+                                        ReferenceCalibration.formatScale(line.factor),
+                                        line.pairs,
+                                        shownLengthWithUnit(line.baselineMetres),
                                     ),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = Jamaica.Lime,
@@ -971,36 +986,29 @@ fun ArMeasureScreen(
                                     // the answer.
                                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                                 )
-                                proposal != null -> Text(
+                                is MarkerStatusLine.OutOfWindow -> Text(
                                     text = stringResource(
                                         R.string.calib_rejected_toast,
-                                        ReferenceCalibration.formatScale(proposal.factor),
-                                        ReferenceCalibration.formatScale(ReferenceCalibration.MIN_SCALE),
-                                        ReferenceCalibration.formatScale(ReferenceCalibration.MAX_SCALE),
+                                        ReferenceCalibration.formatScale(line.factor),
+                                        ReferenceCalibration.formatScale(line.minScale),
+                                        ReferenceCalibration.formatScale(line.maxScale),
                                     ),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = SiteColors.danger,
-                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                                )
-                                // Watching: "not enough evidence" is an answer, and it must not
-                                // borrow the words of a measurement.
-                                else -> Text(
-                                    text = stringResource(
-                                        R.string.marker_watching,
-                                        (state as? MarkerSweepState.Watching)?.sightings ?: 0,
-                                        (state as? MarkerSweepState.Watching)?.markerIds ?: 0,
-                                    ),
-                                    style = MaterialTheme.typography.bodyMedium,
                                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                                 )
                             }
                         }
                     },
                     confirmButton = {
+                        // Only a factor the window takes may be applied - the same window the
+                        // two-tap sweep beside it uses, asked again here rather than trusted from
+                        // the proposal's own flag.
+                        val applied = (line as? MarkerStatusLine.Measured)?.factor
                         TextButton(
-                            enabled = proposal?.accepted == true,
+                            enabled = applied != null,
                             onClick = {
-                                proposal?.let { onCalibration(it.factor) }
+                                applied?.let { onCalibration(it) }
                                 controller.stopMarkerProbe()
                                 markerOpen = false
                             },

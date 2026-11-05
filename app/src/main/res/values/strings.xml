@@ -74,7 +74,7 @@
     <string name="marker_title">Marker check</string>
     <string name="marker_hint">Aim at a printed tag and walk a metre while it stays in view.</string>
     <string name="marker_watching">Not enough evidence yet: %1$d sightings of %2$d tags.</string>
-    <string name="marker_ready">Measured: factor %1$s.</string>
+    <string name="marker_measured">Measured: factor %1$s from %2$d pairs over %3$s.</string>
     <string name="ar_add_point">Add point at centre</string>
     <string name="ar_undo">Undo</string>
     <string name="ar_close_loop">Close loop</string>
