@@ -30,7 +30,10 @@ Everything here is a gate before an APK reaches a site, in the order it should b
 
 ## 2. Licensing
 
-- [ ] `LicencePublicKey.PUBLIC_KEY_BASE64` is the **production** key, not `DEMO_KEY_BASE64`.
+- [ ] `CONSTRUCTAR_PROD_PUBLIC_KEY` is exported for the release build and holds the **production**
+  key: `gradle :app:assembleRelease` now refuses to run without it (`verifyLicenceKey`), and the
+  build log's one line says `verifyLicenceKey: production licence key in build`. A build that
+  passes `-Pconstructar.sizeCheckOnly=true` is a size check, never a release.
       With the placeholder in place the app verifies licences no real signer ever produced, and
       the Help screen shows the developer note. `python3 scripts/verify_sources.py` prints the
       reminder on every run

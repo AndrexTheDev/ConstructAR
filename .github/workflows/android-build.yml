@@ -252,7 +252,12 @@ jobs:
         # library translations outside the six shipped locales.
         run: |
           set +e
-          gradle --no-daemon --console=plain --stacktrace --continue assembleRelease > /tmp/step.log 2>&1
+          # `-Pconstructar.sizeCheckOnly=true` is not a convenience: this job measures the
+          # release APK, it does not produce a shippable one (no signing config, no production
+          # licence key). Without the flag `verifyLicenceKey` refuses the build, which is exactly
+          # what it must do for anyone cutting a release from a checkout that never had the key.
+          gradle --no-daemon --console=plain --stacktrace --continue \
+            -Pconstructar.sizeCheckOnly=true assembleRelease > /tmp/step.log 2>&1
           code=$?
           bash scripts/ci_annotate.sh /tmp/step.log "release build failed" "$code"
 

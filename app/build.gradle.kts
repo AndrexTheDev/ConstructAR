@@ -11,6 +11,33 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+/**
+ * The public half of the licence key, and the one build input that is not in the repository.
+ *
+ * Until finding 240 the key was a Kotlin constant in `LicencePublicKey.kt` with a demo value and a
+ * comment asking a human to swap it before the first sale. Nothing enforced that: a release cut
+ * from a checkout that never ran `mint_licence.py --init` verified licences nobody could have
+ * signed, and it looked exactly like a working build - the paywall simply did not open. A key that
+ * ships is a build *input*, so it is read here, where a build can refuse it:
+ *
+ *   * `CONSTRUCTAR_PROD_PUBLIC_KEY` (environment, base64url of the DER SPKI) - what a release
+ *     machine sets, and what `tools/mint_licence.py --init` now prints;
+ *   * `-Pconstructar.prodPublicKey=...` - the same value for a local Gradle run;
+ *   * otherwise the demo key, which verifies nothing and makes `verifyLicenceKey` fail a release.
+ */
+val demoLicenceKey =
+    "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEX9y2jKeTryNpA0TJz9C-Ghm8Lxd8ysDaV5EwL3tsc1vv" +
+        "G3Xf3sAdjHzWZ7ezf0hOafsBNLYikpXmIhSQFZXusg"
+
+val licenceKey: String =
+    (providers.environmentVariable("CONSTRUCTAR_PROD_PUBLIC_KEY").orNull
+        ?: providers.gradleProperty("constructar.prodPublicKey").orNull)
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?: demoLicenceKey
+
+val licenceKeyIsDemo = licenceKey == demoLicenceKey
+
 android {
     namespace = "com.constructar.app"
     compileSdk = 37
@@ -32,6 +59,12 @@ android {
         buildConfigField("String", "DEVELOPER_NAME", "\"AndrexTheDev\"")
         buildConfigField("String", "DEVELOPER_EMAIL", "\"hippie.highho@gmail.com\"")
         buildConfigField("String", "PROJECT_URL", "\"https://github.com/AndrexTheDev/ConstructAR\"")
+
+        // The licence key is a build input, not a source file (finding 240). Both fields come from
+        // the same expression, so "is this the demo key" cannot disagree with "which key is in the
+        // APK": the boolean is derived, never typed.
+        buildConfigField("String", "LICENCE_PUBLIC_KEY", "\"$licenceKey\"")
+        buildConfigField("boolean", "LICENCE_KEY_IS_DEMO", licenceKeyIsDemo.toString())
     }
 
     /**
@@ -153,4 +186,44 @@ dependencies {
     // provides `ApplicationProvider` for them.
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.junit)
+}
+
+/**
+ * A release build carrying the demo key verifies nothing, and looks like a working build.
+ *
+ * `assembleRelease` depends on this check, so the failure happens before an APK exists and names
+ * the environment variable to set. The one escape hatch is `-Pconstructar.sizeCheckOnly=true`,
+ * which CI passes for the job that measures the release APK: that build has no signing config, is
+ * never uploaded as an artifact anybody could install, and prints its own warning. A shippable
+ * release passes neither.
+ */
+val verifyLicenceKey = tasks.register("verifyLicenceKey") {
+    group = "verification"
+    description = "Refuses a release build that still carries the demo licence key."
+    val isDemo = licenceKeyIsDemo
+    val sizeCheckOnly = providers.gradleProperty("constructar.sizeCheckOnly").isPresent
+    doLast {
+        if (!isDemo) {
+            logger.lifecycle("verifyLicenceKey: production licence key in build")
+            return@doLast
+        }
+        if (sizeCheckOnly) {
+            logger.warn(
+                "verifyLicenceKey: DEMO licence key in a size-check-only release build - this APK " +
+                    "is not shippable (see docs/RELEASE_CHECKLIST.md section 2)",
+            )
+            return@doLast
+        }
+        throw GradleException(
+            "release build carries the DEMO licence key, so every licence minted with the real " +
+                "private key would be rejected. Set CONSTRUCTAR_PROD_PUBLIC_KEY (or " +
+                "-Pconstructar.prodPublicKey=<base64url SPKI>) before building a release, or pass " +
+                "-Pconstructar.sizeCheckOnly=true for a build that only measures APK size. " +
+                "See docs/BILLING.md.",
+        )
+    }
+}
+
+tasks.matching { it.name == "assembleRelease" || it.name == "bundleRelease" }.configureEach {
+    dependsOn(verifyLicenceKey)
 }

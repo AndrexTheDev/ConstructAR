@@ -27,8 +27,8 @@ First-time setup
 ----------------
     python3 tools/mint_licence.py --init
 
-writes ``tools/private/licence_signing_key.pem`` and prints the Kotlin constant to paste into
-``LicencePublicKey.kt``. **Do this once, before the first sale, and back the key up**: a lost
+writes ``tools/private/licence_signing_key.pem`` and prints the value to export as
+``CONSTRUCTAR_PROD_PUBLIC_KEY``. **Do this once, before the first sale, and back the key up**: a lost
 private key means every licence you ever sold must be re-minted with a new key and a new build.
 The key that ships in the repository is a demo key whose private half was discarded on purpose
 so that nobody — including anyone who forks this repo — can mint a working licence.
@@ -92,9 +92,12 @@ def init_key() -> None:
     public_der = run_openssl(["openssl", "pkey", "-in", str(PRIVATE_KEY), "-pubout", "-outform", "DER"])
     public_b64 = b64url_encode(public_der)
     print(f"private key written to {PRIVATE_KEY.relative_to(ROOT)} (git-ignored, back it up)\n")
-    print("Paste this into app/src/main/kotlin/com/constructar/app/billing/LicencePublicKey.kt:\n")
-    print('    const val DEMO_PUBLIC_KEY_BASE64: String =')
-    print(f'        "{public_b64}"')
+    print(
+        "Export this as the release build's licence key (finding 240 - it is a build input, not a\n"
+        "source constant, and `gradle :app:assembleRelease` refuses the demo key without it):\n"
+    )
+    print(f'    export CONSTRUCTAR_PROD_PUBLIC_KEY="{public_b64}"')
+    print('    # or, for a local build:  gradle -Pconstructar.prodPublicKey="<the same value>" ...')
     print(
         "\nThen rebuild and ship that build: an APK built with the old key will reject every\n"
         "licence minted with the new one."

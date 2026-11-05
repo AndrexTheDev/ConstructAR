@@ -50,8 +50,12 @@ The payload is `{"plan":"MONTHLY|YEARLY|LIFETIME","device":"ABCDEF123456","issue
 `CAR1.<payload>` — the exact text that travels — so no JSON canonicalisation can invalidate a
 valid key.
 
-The APK ships only the **public** key
-(`app/src/main/kotlin/com/constructar/app/billing/LicencePublicKey.kt`). Verification happens on
+The APK ships only the **public** key, and since finding 240 not even as a source constant: it is
+a build field, `BuildConfig.LICENCE_PUBLIC_KEY`, derived in `app/build.gradle.kts` from
+`CONSTRUCTAR_PROD_PUBLIC_KEY` (or `-Pconstructar.prodPublicKey=`). `LicencePublicKey.kt` holds the
+API and no key material; `gradle :app:assembleRelease` fails while the demo key is in play, unless
+the build is explicitly a size check (`-Pconstructar.sizeCheckOnly=true`, which CI passes for the
+job that only measures the APK). Verification happens on
 the phone, offline, in `LicenceVerifier` (`:core`, 13 unit tests). The result is a specific
 verdict, never a generic "invalid": malformed, wrong signature, bound to another device, or
 expired.
@@ -74,14 +78,18 @@ python3 tools/mint_licence.py --init
 ```
 
 This writes `tools/private/licence_signing_key.pem` (git-ignored, `chmod 600`) and prints the
-Kotlin constant to paste into `LicencePublicKey.kt`. **Back the private key up.** Losing it means
+public key as an `export CONSTRUCTAR_PROD_PUBLIC_KEY="..."` line. Put that in the release
+environment (or in `~/.gradle/gradle.properties` as `constructar.prodPublicKey=...` for local
+builds); **do not** put it in a source file - there is no constant to paste it into any more, and
+`assembleRelease` refuses to run without it. **Back the private key up.** Losing it means
 every licence ever sold has to be re-minted against a new key and a new build; leaking it means
 anyone can mint valid licences.
 
-The key committed to this repository is a **demo key whose private half was destroyed**. That is
-intentional: nobody — including anyone who forks this repo — can produce a licence that a build
-of it accepts. `LicencePublicKey.isDemoKey` is true while that is the case, so a release build
-can refuse to be shipped with it (see the release checklist).
+The **fallback** key in `app/build.gradle.kts` is a demo key whose private half was destroyed.
+That is intentional: nobody — including anyone who forks this repo — can produce a licence that a
+build of it accepts, and `BuildConfig.LICENCE_KEY_IS_DEMO` (hence `LicencePublicKey.isDemoKey`)
+is true while it is in play, so the Help screen says so and `assembleRelease` refuses to cut a
+shipping build with it (finding 240; see the release checklist).
 
 Per sale:
 

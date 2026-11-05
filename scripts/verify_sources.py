@@ -1183,30 +1183,94 @@ def check_resource_xml() -> None:
 
 
 def check_licence_key() -> None:
-    """Not a failure, a reminder: the tree ships a demo key and only a human can swap it.
+    """The licence key is a build input now, and the build refuses the demo one (finding 240).
 
-    `LicencePublicKey.isDemoKey` is what shows the developer note on the Help screen, so the
-    placeholder is deliberate and visible. But a release cut with it in place would verify
-    licences that no real signer ever produced - so the release checklist asks for the swap, and
-    every verify run repeats it, because the CI log is where a release actually gets cut from.
+    This used to be a *reminder*: the tree carried a demo key as a Kotlin constant, and every
+    verify run printed "replace it before publishing a release" into the CI log. A reminder is not
+    a gate - the release checklist asked a human, the constant asked a human, and nothing else
+    asked anybody. What replaces it is a chain in four links, and every link is checked here
+    because a leak in any one of them silently restores the old behaviour:
+
+    1. `LicencePublicKey.kt` holds **no key material** and reads `BuildConfig.LICENCE_PUBLIC_KEY`;
+    2. `app/build.gradle.kts` derives that field from `CONSTRUCTAR_PROD_PUBLIC_KEY` (or the
+       `-Pconstructar.prodPublicKey` property) and derives the "is demo" flag from the same
+       expression, so the two cannot disagree;
+    3. a `verifyLicenceKey` task fails `assembleRelease` / `bundleRelease` while the demo key is in
+       play, with one documented escape hatch for a build that only measures APK size;
+    4. CI uses that escape hatch on the size job and nowhere else, so the flag cannot quietly
+       become the normal path.
+
+    The old notice survives in one form: while the Gradle fallback is still the demo key, the run
+    says so - the fallback is legitimate in a repository build, it is only a release that may not
+    ship it.
     """
     key_file = (
         ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "billing"
         / "LicencePublicKey.kt"
     )
+    gradle = ROOT / "app" / "build.gradle.kts"
+    workflow = ROOT / ".github" / "workflows" / "android-build.yml"
     if not key_file.exists():
+        add(key_file, "the licence key object is gone - the paywall has nothing to verify against")
         return
+
     text = key_file.read_text(encoding="utf-8")
+    if "BuildConfig.LICENCE_PUBLIC_KEY" not in text:
+        add(key_file, "the key is not read from `BuildConfig.LICENCE_PUBLIC_KEY`, so a release "
+                      "cannot refuse a demo key the source file was committed with")
+    if "BuildConfig.LICENCE_KEY_IS_DEMO" not in text:
+        add(key_file, "the demo flag is not the build's, so it can disagree with the key that "
+                      "actually shipped")
+    # Base64url of an SPKI is long and starts with the DER prefix; any such literal here is key
+    # material in the source, which is the state this rule exists to end.
+    if re.search(r"\"MF[a-zA-Z0-9_-]{20,}", text):
+        add(key_file, "the file still carries key material as a literal - the key belongs to the "
+                      "build (finding 240), not to a source file a human has to remember to edit")
 
-    def literal(name: str) -> str:
-        """The concatenated string literal assigned to `name`, or "" when there is none."""
-        match = re.search(rf"{name}\s*(?::\s*String\s*)?=\s*((?:\s*\"[^\"]*\"\s*\+?)+)", text)
-        return "".join(re.findall(r'"([^"]*)"', match.group(1))) if match else ""
+    if not gradle.exists():
+        return
+    build = gradle.read_text(encoding="utf-8")
+    for needed, why in (
+        ("CONSTRUCTAR_PROD_PUBLIC_KEY", "the environment variable a release machine sets"),
+        ('buildConfigField("String", "LICENCE_PUBLIC_KEY"', "the build field the app reads"),
+        ('buildConfigField("boolean", "LICENCE_KEY_IS_DEMO"', "the derived demo flag"),
+        ("verifyLicenceKey", "the task that refuses a release build"),
+        ("GradleException", "the failure itself"),
+        ("constructar.sizeCheckOnly", "the one documented escape hatch"),
+    ):
+        if needed not in build:
+            add(gradle, f"`{why}` is missing from the build script")
 
-    shipped = literal("PUBLIC_KEY_BASE64")
-    if shipped and shipped == literal("DEMO_KEY_BASE64"):
+    if not workflow.exists():
+        return
+    ci = workflow.read_text(encoding="utf-8")
+    # The flag has to be on the *invocation*, not merely somewhere in the file: a comment that
+    # mentions it kept this rule green after the command lost it, which is how a gate becomes
+    # decoration (found by mutating this rule, not by reading it).
+    # Shell continuations split one command over several lines, so join them first: looking for
+    # "gradle" and "assembleRelease" on the same physical line found nothing at all, and a rule
+    # that finds nothing is a rule that cannot fail (both mistakes were found by mutating it).
+    joined = re.sub(r"\\\s*\n\s*", " ", ci)
+    release_lines = [
+        line for line in joined.splitlines() if "gradle " in line and "assembleRelease" in line
+    ]
+    if not release_lines:
+        add(workflow, "no Gradle invocation builds a release APK, so this rule cannot check the "
+                      "one thing it exists for")
+    elif not any("constructar.sizeCheckOnly=true" in line for line in release_lines):
+        add(workflow, "the release-size invocation calls `assembleRelease` without "
+                      "`-Pconstructar.sizeCheckOnly=true`: either `verifyLicenceKey` is about to "
+                      "refuse it or the guard was removed to make it pass, and both mean the "
+                      "build and the promise have diverged")
+    elif "not a convenience" not in ci and "not shippable" not in ci:
+        add(workflow, "the size-check flag is passed with no explanation, which is how it "
+                      "becomes the normal path for every release build")
+
+    fallback = re.search(r"val demoLicenceKey\s*=\s*((?:\s*\"[^\"]*\"\s*\+?)+)", build)
+    if fallback:
         notices.append(
-            "the licence key is still DEMO_KEY_BASE64 - replace it before publishing a release"
+            "the fallback licence key is still the demo key - correct in a repository build, "
+            "refused by `assembleRelease` (set CONSTRUCTAR_PROD_PUBLIC_KEY before shipping)"
         )
 
 
@@ -4548,12 +4612,56 @@ def check_the_docs_do_not_call_a_live_path_dead() -> None:
                              f"and both are findings")
 
 
+
+def check_the_readme_states_the_locale_counts() -> None:
+    """The README's language table states a count, and nothing counted it (finding 239).
+
+    The table said "81 strings + 2 plurals" for the default locale and "parity enforced" for the
+    other five. The real table holds 470 strings and 13 plurals in every locale, and has for many
+    rounds: parity *was* enforced (that is `check_locales`), but the number a reader uses to judge
+    the size of the translation job was not, because nothing compared it with anything. Three
+    hundred and eighty-nine strings of drift, in the section a translator reads first.
+
+    Two rules, because the table makes two claims. Every row carries the count - a row that says
+    "parity enforced" asks the reader to take the number on faith, and that is exactly the row that
+    drifted - and the six tables must actually agree, or the one number the README now prints for
+    all of them would be a lie in five of the six rows.
+    """
+    counts = {}
+    for folder in LOCALES:
+        strings, plurals = load_locale(folder)
+        counts[folder] = (len(strings), len(plurals))
+    reference = counts[LOCALES[0]]
+    for folder in LOCALES[1:]:
+        if counts[folder] != reference:
+            add(
+                RES_DIR / folder / "strings.xml",
+                f"this table holds {counts[folder][0]} strings and {counts[folder][1]} plurals, "
+                f"the default holds {reference[0]} and {reference[1]} - the README prints one "
+                f"count for all six, so a locale that falls behind makes that count a lie",
+            )
+    readme = ROOT / "README.md"
+    if not readme.exists():
+        return
+    text = readme.read_text(encoding="utf-8")
+    claim = f"{reference[0]} strings + {reference[1]} plurals"
+    stated = text.count(claim)
+    if stated != len(LOCALES):
+        add(
+            readme,
+            f"the language table states '{claim}' {stated} times for {len(LOCALES)} locales - "
+            f"every row states the count it ships, because the row that said 'parity enforced' "
+            f"was the row that drifted by 389 strings (finding 239)",
+        )
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
     check_reflection()
     check_app_hardcoded_text()
     strings, plurals = check_locales()
+    check_the_readme_states_the_locale_counts()
     check_references(strings, plurals)
     check_offline_guarantees()
     check_cached_clock()
