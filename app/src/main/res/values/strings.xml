@@ -26,6 +26,8 @@
     <string name="card_close_body">The scan never closed this room\'s outline — a doorway or a glass wall. Counting that gap as a wall gives the room an area, a perimeter and a picture. The closing wall is marked as drawn by hand.</string>
     <string name="card_close_confirm">Count it as a wall</string>
     <string name="card_closed_by_hand">wall by hand</string>
+    <string name="pdf_floorplan_title">Room plan</string>
+    <string name="pdf_floorplan_by_hand">The closing wall was drawn by hand, not measured.</string>
     <string name="card_area">%1$s m²</string>
     <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Export</string>

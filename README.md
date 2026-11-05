@@ -129,6 +129,21 @@ perimeter, a picture and an exported SVG, and `Closure.DrawnByHand` records that
 asserted rather than measured, so a protocol that prints an accuracy never counts it as measured.
 Nothing is decided on the operator's behalf: a doorway is a doorway until he says otherwise.
 
+**The protocol carries the plan, not only its numbers.** The document a customer signs had an area,
+a bill and a signature line, and no picture of the room those numbers describe — the one page he
+keeps looked the same for a 4 m bathroom and a hall. It now has a plan page of its own, printed
+before the signature and built from exactly the ring the card draws: `FloorplanSection` carries the
+corners and the words, `FloorplanLayout` fits them into the printable box (one scale for both axes,
+the longer extent setting it, world `z` down the page, a 10 cm wall that is clamped to the printable
+range of 0.75 to 6 points so a hall's wall is not a hairline and a bathroom's is not a blot), and
+`ProtocolPdfWriter` draws a closed path with that stroke, the caption and the note underneath. The
+caption is the two numbers the card shows, formatted once by `RoomSizeText`; the note says that the
+closing wall was drawn by hand when it was. Both are resources in six languages — `:export` receives
+them, never composes a sentence (finding 100's rule). A room without a closed ring gets no plan page
+at all, because a plan of a walk that never came back to its first corner is not the room. The
+geometry is a class with no `PdfDocument` in it, so the scale, the orientation, the clamped wall and
+the refusals are tested on the JVM — the same reason `PageFlow` exists.
+
 The same outline states the room's **size**. Under the card's name sit two badges — the area from
 `PolygonMath.area` and the perimeter of the ring, closing edge included (a 4 × 3 m room is 12.0 m²
 and 14.00 m, not 11 m: the walk back to the first corner is a wall, and it is what skirting and
@@ -688,7 +703,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 870 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 882 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 287 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 287 checks, 0 failures, no data race reported |

@@ -26,6 +26,8 @@
     <string name="card_close_body">Le scan n’a pas fermé le contour de cette pièce : une porte ou une cloison vitrée. En comptant l’ouverture comme un mur, la pièce obtient une surface, un périmètre et une image. Le mur de fermeture est marqué comme tracé à la main.</string>
     <string name="card_close_confirm">Compter comme mur</string>
     <string name="card_closed_by_hand">mur à la main</string>
+    <string name="pdf_floorplan_title">Plan de la pièce</string>
+    <string name="pdf_floorplan_by_hand">Le mur de fermeture a été tracé à la main, pas mesuré.</string>
     <string name="card_area">%1$s m²</string>
     <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Exporter</string>

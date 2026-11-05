@@ -26,6 +26,8 @@
     <string name="card_close_body">Der Scan hat den Umriss dieses Raums nicht geschlossen – eine Türöffnung oder eine Glaswand. Wird die Lücke als Wand gezählt, bekommt der Raum Fläche, Umfang und Bild. Die Schlusswand wird als von Hand gezeichnet vermerkt.</string>
     <string name="card_close_confirm">Als Wand zählen</string>
     <string name="card_closed_by_hand">Wand von Hand</string>
+    <string name="pdf_floorplan_title">Raumplan</string>
+    <string name="pdf_floorplan_by_hand">Die Schlusswand wurde von Hand gezeichnet, nicht gemessen.</string>
     <string name="card_area">%1$s m²</string>
     <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Export</string>

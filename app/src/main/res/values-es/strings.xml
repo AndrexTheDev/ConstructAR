@@ -26,6 +26,8 @@
     <string name="card_close_body">El escaneo no cerró el contorno de esta estancia: una puerta o una pared de cristal. Si el hueco cuenta como pared, la estancia obtiene superficie, perímetro e imagen. La pared de cierre se marca como trazada a mano.</string>
     <string name="card_close_confirm">Contar como pared</string>
     <string name="card_closed_by_hand">muro a mano</string>
+    <string name="pdf_floorplan_title">Plano de la estancia</string>
+    <string name="pdf_floorplan_by_hand">La pared de cierre se trazó a mano, no se midió.</string>
     <string name="card_area">%1$s m²</string>
     <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Exportar</string>

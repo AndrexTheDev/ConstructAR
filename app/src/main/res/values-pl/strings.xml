@@ -26,6 +26,8 @@
     <string name="card_close_body">Skan nie zamknął obrysu tego pomieszczenia — otwór drzwiowy albo szklana ściana. Jeśli szczelina liczy się jako ściana, pomieszczenie zyskuje powierzchnię, obwód i obraz. Ściana zamykająca jest oznaczona jako narysowana ręcznie.</string>
     <string name="card_close_confirm">Policz jako ścianę</string>
     <string name="card_closed_by_hand">ściana ręcznie</string>
+    <string name="pdf_floorplan_title">Plan pomieszczenia</string>
+    <string name="pdf_floorplan_by_hand">Ściana zamykająca została narysowana ręcznie, nie zmierzona.</string>
     <string name="card_area">%1$s m²</string>
     <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Eksport</string>

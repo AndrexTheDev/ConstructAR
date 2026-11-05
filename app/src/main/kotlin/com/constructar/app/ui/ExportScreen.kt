@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.constructar.app.BuildConfig
 import com.constructar.app.R
+import com.constructar.app.data.RoomPlanPage
+import com.constructar.app.data.RoomSizeText
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.licence.Entitlements
@@ -184,6 +186,29 @@ fun ExportScreen(
     val photoAppendix = remember(project, fieldPhotos, siteFileTexts) {
         buildPhotoAppendix(project, fieldPhotos, siteFileTexts)
     }
+    // The plan page is the room's own outline, with the words the app owns. Built here, in
+    // composition, because `stringResource` cannot be called from the launcher's callback - and
+    // because a page whose title changed with the locale must be built from the locale in force.
+    val floorplanTitle = stringResource(R.string.pdf_floorplan_title)
+    val floorplanByHandNote = stringResource(R.string.pdf_floorplan_by_hand)
+    val roomSize = remember(project.sketch) { RoomSizeText.of(project.sketch) }
+    val roomAreaText = stringResource(R.string.card_area, roomSize?.area ?: "")
+    val roomPerimeterText = stringResource(R.string.card_perimeter, roomSize?.perimeter ?: "")
+    val floorplanPage = remember(
+        project.sketch,
+        floorplanTitle,
+        roomAreaText,
+        roomPerimeterText,
+        floorplanByHandNote,
+    ) {
+        RoomPlanPage.of(
+            sketch = project.sketch,
+            title = floorplanTitle,
+            areaText = roomAreaText,
+            perimeterText = roomPerimeterText,
+            byHandNote = floorplanByHandNote,
+        )
+    }
 
     val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -240,6 +265,9 @@ fun ExportScreen(
                             signatureCaption = signatureCaption,
                             labels = pdfLabels,
                             calibrationLabel = calibrationLabel,
+                            // The room drawn from the outline the project stores, with the
+                            // note that a closing wall was drawn by hand (finding 206).
+                            floorplan = floorplanPage,
                             sections = sectionsNow(),
                             photos = photoAppendix,
                             photosTitle = siteFileTexts.photosTitle,

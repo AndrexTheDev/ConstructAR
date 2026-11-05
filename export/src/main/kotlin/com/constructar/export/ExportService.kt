@@ -112,6 +112,14 @@ class ExportService(
         val calibrationLabel: String = "",
         /** The product badge drawn on the first page. */
         val logo: Bitmap? = null,
+        /**
+         * The room's plan for the protocol page, built by the caller from the stored outline.
+         *
+         * `:app` owns the words on it (title, caption, the note that a wall was drawn by hand);
+         * this module owns the page. `null` when the project has no closed outline, and the
+         * document then has no plan page at all.
+         */
+        val floorplan: FloorplanSection? = null,
         /** Site file sections (customer, time, diary, defects, costs), localised by the caller. */
         val sections: List<PdfSection> = emptyList(),
         /** Documentation photos for the protocol appendix, with localised captions. */
@@ -170,6 +178,7 @@ class ExportService(
                             labels = request.labels,
                             calibrationLabel = request.calibrationLabel,
                             unbuildableRuns = request.routeMeshes.unbuildable,
+                            floorplan = request.floorplan,
                             sections = request.sections,
                             photos = request.photos,
                             photosTitle = request.photosTitle,

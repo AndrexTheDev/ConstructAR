@@ -312,6 +312,34 @@ which is what a screen reader reads.
 
 ---
 
+## 5b. The plan page in the protocol
+
+The protocol's floorplan page is a page of its own, printed before the signature: a closed path
+through the stored ring, a grey floor, a caption with the room's area and perimeter, and - when the
+ring was closed by a person rather than by the scan - the sentence that says so.
+
+The split follows the module boundaries that already existed:
+
+| Where | What it owns | Why there |
+|---|---|---|
+| `:app` `data/RoomPlanPage` | which ring, and which words | the sketch is the app's, and `:export` has no string table: it receives a title, a caption and a note, never composing a sentence (finding 100's rule) |
+| `:export` `pdf/FloorplanLayout` | the projection into the printable box | geometry that must be testable without a `PdfDocument`, exactly like `PageFlow` |
+| `:export` `pdf/ProtocolPdfWriter` | ink: path, stroke, text | the writer is the only place that knows what a page looks like |
+
+`FloorplanLayout` borrows the SVG's three rules so paper and phone cannot show different rooms: one
+scale for both axes (the longer extent sets it), world `z` running down the page, and a wall that is
+a physical 10 cm at that scale clamped to `[0.75, 6]` points. It returns `null` - and the writer then
+prints the heading with no drawing rather than an empty frame - for fewer than three corners, a
+non-finite coordinate, a box without area, or an outline with no extent at all. A caller that has no
+closed ring hands over `null` and the document simply has no plan page.
+
+`check_the_protocol_prints_the_room_plan` walks the chain - mapper, request, service, writer, and the
+two resources in six locales - because every link of it can be dropped without a compile error: a
+nullable field nobody passes, a section that is passed and never drawn, a page drawn after the
+signature is already on the paper (finding 206).
+
+---
+
 ## 6. Persistence
 
 A project is one JSON file (`filesDir/projects/<uuid>.json`) written atomically (temp file +

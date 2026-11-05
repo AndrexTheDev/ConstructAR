@@ -3451,6 +3451,90 @@ def check_glove_buttons_are_big_enough() -> None:
                       f"cannot hit a smaller one; nothing else in the tree compares the two numbers")
 
 
+def check_the_protocol_prints_the_room_plan() -> None:
+    """The signed protocol carries the room, not only its numbers (finding 206).
+
+    The app draws the room on the home card, states its area and perimeter, and can close an open
+    ring by hand - and the document a customer signs printed neither a plan nor a caption: an area,
+    a bill, a signature. The plan page exists now, and it is the same ring as the card's:
+    `:app` maps the stored `FloorplanSketch` through `RoomPlanPage`, `:export` lays it out
+    (`FloorplanLayout`: one scale, world `z` down, a physical wall), and `ProtocolPdfWriter` prints
+    it on its own page before the signature.
+
+    Every link of that chain can be dropped without a compile error - a nullable parameter nobody
+    passes, a section that is passed and never drawn, a page drawn after the signature is already
+    on the paper - so each one is asserted here, and so is the rule that the page states *why* a
+    closing wall exists when a person drew it.
+    """
+    plan_page = (ROOT / "export" / "src" / "main" / "kotlin" / "com" / "constructar" / "export" /
+                 "pdf" / "FloorplanPage.kt")
+    plan_text = plan_page.read_text(encoding="utf-8")
+    if "class FloorplanLayout" not in plan_text or "fun of(" not in plan_text:
+        add(plan_page, "the plan page has no layout - the drawing would have to be sized inside "
+                       "the writer, where no test can see it")
+    # The wall is `(WALL_METERS * scale).coerceIn(...)`: it follows the page and stays printable.
+    if "WALL_METERS" not in plan_text or "coerceIn" not in plan_text:
+        add(plan_page, "the wall no longer follows the page's scale and the printable range - "
+                       "a fixed width is a hairline on a hall and a blot on a bathroom")
+    writer = (ROOT / "export" / "src" / "main" / "kotlin" / "com" / "constructar" / "export" /
+              "pdf" / "ProtocolPdfWriter.kt")
+    writer_text = writer.read_text(encoding="utf-8")
+    if "val floorplan: FloorplanSection? = null" not in writer_text:
+        add(writer, "the protocol's content has no floorplan section, so no caller can ask for "
+                    "the page at all")
+    if "content.floorplan?.let" not in writer_text:
+        add(writer, "the protocol accepts a floorplan and never prints it")
+    if writer_text.count("companion object") > 1:
+        add(writer, "the writer has more than one companion object - Kotlin allows one per class, "
+                    "and a constant added next to the code it belongs to lands in a second one "
+                    "(finding 208)")
+    if "layout.wallWidthPoints" not in writer_text:
+        add(writer, "the plan is stroked with a width of its own instead of the layout's, so the "
+                    "clamped wall never reaches the paper")
+    draw_plan = writer_text.find("drawFloorplanPage(document")
+    draw_signature = writer_text.find("drawSignaturePage(document")
+    if draw_plan < 0:
+        add(writer, "nothing calls drawFloorplanPage - the section is passed and thrown away")
+    elif draw_signature >= 0 and draw_plan > draw_signature:
+        add(writer, "the plan page is drawn after the signature page; the plan belongs in the "
+                    "document, before the page the customer signs - not in an annex")
+    service = (ROOT / "export" / "src" / "main" / "kotlin" / "com" / "constructar" / "export" /
+               "ExportService.kt")
+    service_text = service.read_text(encoding="utf-8")
+    if "val floorplan: FloorplanSection? = null" not in service_text:
+        add(service, "the export request has no floorplan, so the screen cannot hand one over")
+    if "floorplan = request.floorplan" not in service_text:
+        add(service, "the export service accepts the plan and never passes it to the writer")
+    mapper = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "data" /
+              "RoomPlanPage.kt")
+    mapper_text = mapper.read_text(encoding="utf-8")
+    if "point.xMeters" not in mapper_text or "point.zMeters" not in mapper_text:
+        add(mapper, "the page's corners are not the stored ring's metres - a plan built from "
+                    "anything else is a second description of the room")
+    if "Closure.DrawnByHand" not in mapper_text:
+        add(mapper, "a wall the operator drew by hand is no longer stated on the page, so the "
+                    "customer reads a closed room as a measured one")
+    screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+              "ExportScreen.kt")
+    screen_text = screen.read_text(encoding="utf-8")
+    if "floorplan = floorplanPage" not in screen_text:
+        add(screen, "the export screen builds no floorplan for the request - the document would "
+                    "print the room's numbers without the room")
+    if "RoomPlanPage.of(" not in screen_text:
+        add(screen, "the screen no longer uses RoomPlanPage, so the page's words and its corners "
+                    "are assembled somewhere the app's tests cannot reach")
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if not path.exists():
+            continue
+        strings, _ = load_locale(folder)
+        if not (strings.get("pdf_floorplan_title") or "").strip():
+            add(path, "missing string 'pdf_floorplan_title' - the plan page would have no heading")
+        if not (strings.get("pdf_floorplan_by_hand") or "").strip():
+            add(path, "missing string 'pdf_floorplan_by_hand' - a hand-closed room would be "
+                      "printed as if every wall had been measured")
+
+
 def check_a_contract_assertion_is_believed() -> None:
     """An asserted value read with `?.` is a warning, and CI is `-Werror` (finding 199).
 
@@ -3581,6 +3665,7 @@ def main() -> int:
     check_a_stable_value_is_asserted_once()
     check_a_contract_assertion_is_believed()
     check_glove_buttons_are_big_enough()
+    check_the_protocol_prints_the_room_plan()
     check_the_reticle_snap_stays_wired()
     check_exported_numbers_use_the_c_locale()
     check_project_imports_are_used()
