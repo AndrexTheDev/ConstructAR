@@ -350,6 +350,17 @@ into `ProjectRecord.sketch: FloorplanSketch?` — a list of `{xMeters, zMeters}`
 world `z` down) because the card and the exported picture are the same room; the two are pinned to
 each other by a test, not by a comment.
 
+**The open ring is data, not a failure.** A scan of a room with a doorway in it traces a ring that
+never closes; round 94 stored nothing at all for it, and the payload those corners lived in is freed
+when the run is committed - so the only recovery was re-walking the room. The sketch is now stored
+whatever its closure says, `FloorplanSketch.Closure` is the three-way answer (`Open`, `Measured`,
+`DrawnByHand`), and `closeRoomByHand` performs the one gesture that turns an open ring into a room:
+`ProjectViewModel.closeRoomByHand` loads the room, takes `closedByHand()`, saves it through the same
+atomic write, writes the SVG from the sketch (`RoomThumbnail.svg(sketch)`, the same renderer the
+payload path uses), and refreshes the list. The card's chip asks before it acts, and the row shows
+that the wall was drawn. Nothing here guesses: a doorway stays a doorway until a person says
+otherwise.
+
 The same outline is read a third time for the card's **size** badges: `RoomSizeText.of(sketch)`
 turns the ring into the digits of its area (`PolygonMath.area`) and its perimeter (the closed walk,
 last corner back to the first) and returns `null` for anything the picture would refuse — the two

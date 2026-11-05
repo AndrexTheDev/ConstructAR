@@ -3286,6 +3286,58 @@ CARD_SIZE_CHAIN = (
 )
 
 
+HAND_CLOSED_ROOM_CHAIN = (
+    ("core/src/main/kotlin/com/constructar/core/model/FloorplanSketch.kt",
+     "enum class Closure {",
+     "the outline no longer distinguishes an open ring from a measured one"),
+    ("core/src/main/kotlin/com/constructar/core/model/FloorplanSketch.kt",
+     "fun closedByHand(): FloorplanSketch =",
+     "nothing can assert that a gap is a wall"),
+    ("app/src/main/kotlin/com/constructar/app/data/RoomThumbnail.kt",
+     "val closure = if (best.closed) FloorplanSketch.Closure.Measured else FloorplanSketch.Closure.Open",
+     "the derivation stops recording whether the scan closed the ring"),
+    ("app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt",
+     "CloseRoomChip(onCloseRoom)",
+     "the card stops offering to close an open room"),
+    ("app/src/main/kotlin/com/constructar/app/ui/AppRoot.kt",
+     "onCloseRoom = viewModel::closeRoomByHand,",
+     "the chip's tap never reaches the view model"),
+    ("app/src/main/kotlin/com/constructar/app/ProjectViewModel.kt",
+     "val updated = project.copy(sketch = open)",
+     "the view model no longer writes the hand-closed ring onto the room"),
+)
+
+
+def check_an_open_room_can_be_closed_by_hand() -> None:
+    """An open ring has to survive the commit, or the only recovery is walking the room again (finding 203).
+
+    Round 94 stored the outline only when the scan closed it - the derivation returned null for an
+    open loop and the commit path returned with it. That is honest about the *picture* and wrong
+    about the *data*: the corners of a room with a doorway in it are exactly what somebody would
+    need to close it by hand later, and the payload they lived in is freed the moment the run is
+    committed. The operator's only recovery became re-walking the whole room, which is the one thing
+    a measuring tool must never ask for.
+
+    So the ring is stored whatever its closure says, and one explicit gesture turns an open ring
+    into a room. The chain below names every joint of that gesture, because each of them is silent
+    when removed: the chip stops appearing, the tap goes nowhere, or the sketch is stored open and
+    the card keeps its icon. The negative check is the specific regression this round fixed - the
+    commit path may not return early when no SVG can be drawn.
+    """
+    for relative, marker, complaint in HAND_CLOSED_ROOM_CHAIN:
+        path = ROOT / relative
+        if not path.exists():
+            continue  # a missing file is already a finding above
+        if marker in path.read_text(encoding="utf-8"):
+            continue
+        add(path, f"{complaint} - an open room then stays unclosable, and no test can reach across "
+                  f"the screen to say so")
+    view_model = ROOT / "app/src/main/kotlin/com/constructar/app/ProjectViewModel.kt"
+    if view_model.exists() and "RoomThumbnail.svg(plan) ?: return" in view_model.read_text(encoding="utf-8"):
+        add(view_model, "the commit path returns early when the plan draws no SVG - that is exactly "
+                        "the open ring, whose corners would then be thrown away (finding 203)")
+
+
 def check_the_card_states_the_room_size() -> None:
     """The size on the card is a third reader of one outline, and silence is its failure mode (finding 201).
 
@@ -3457,6 +3509,7 @@ def main() -> int:
     check_the_card_picture_has_a_writer()
     check_the_card_draws_from_the_project_file()
     check_the_card_states_the_room_size()
+    check_an_open_room_can_be_closed_by_hand()
     check_every_external_function_has_a_symbol()
     check_the_floorplan_payload_header_matches()
     check_kotlin_structure()

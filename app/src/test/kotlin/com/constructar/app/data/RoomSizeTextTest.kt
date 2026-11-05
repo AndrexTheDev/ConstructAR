@@ -80,6 +80,20 @@ class RoomSizeTextTest {
     }
 
     @Test
+    fun `an open ring states nothing and a hand-closed one states its numbers`() {
+        val doorway = FloorplanSketch(room().points, FloorplanSketch.Closure.Open)
+
+        assertNull(RoomSizeText.of(doorway))
+
+        val closed = doorway.closedByHand()
+        val size = RoomSizeText.of(closed)
+
+        assertEquals("12.0", size?.area)
+        // Closing the gap adds the missing 3 m wall: 11.00 would be the open walk.
+        assertEquals("14.00", size?.perimeter)
+    }
+
+    @Test
     fun `a coordinate that is not a number states nothing`() {
         val broken = FloorplanSketch(
             listOf(SketchPoint(0f, 0f), SketchPoint(Float.NaN, 0f), SketchPoint(1f, 1f)),

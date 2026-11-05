@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -89,6 +90,14 @@ fun HomeScreen(
     onCreate: (String) -> Unit,
     onUpgrade: () -> Unit,
     onHelp: () -> Unit,
+    /**
+     * Closes the open ring of a room by hand, by project id.
+     *
+     * A scan that never closed its ring (a doorway, a glass wall) leaves the card with an icon and
+     * no size. The corners are stored, so the operator can say "this gap is a wall" instead of
+     * re-walking the room - and the sketch records that the closing wall was drawn, not measured.
+     */
+    onCloseRoom: (String) -> Unit = {},
     /**
      * Project files in the app's folder that could not be read. They are kept - nothing here
      * deletes a room it does not understand - so the list has to say they exist, or a damaged
@@ -202,7 +211,11 @@ fun HomeScreen(
                     }
                 } else {
                     items(filtered, key = { it.id }) { project ->
-                        ProjectRow(project = project, onClick = { onOpen(project.id) })
+                        ProjectRow(
+                            project = project,
+                            onClick = { onOpen(project.id) },
+                            onCloseRoom = { onCloseRoom(project.id) },
+                        )
                     }
                 }
             } else {
@@ -504,7 +517,11 @@ private fun ContinueCard(
 }
 
 @Composable
-private fun ProjectRow(project: ProjectRepository.ProjectSummary, onClick: () -> Unit) {
+private fun ProjectRow(
+    project: ProjectRepository.ProjectSummary,
+    onClick: () -> Unit,
+    onCloseRoom: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -522,7 +539,7 @@ private fun ProjectRow(project: ProjectRepository.ProjectSummary, onClick: () ->
                 overflow = TextOverflow.Ellipsis,
             )
             ProjectMetaLine(project)
-            RoomSizeBadges(project.sketch)
+            RoomSizeBadges(project.sketch, onCloseRoom)
         }
         Text(
             LengthFormatter.format(project.totalLengthMeters),
@@ -584,11 +601,68 @@ private fun RoomPicture(sketch: FloorplanSketch?) {
  * literal: `:app` owns every word a screen shows, in all six locales.
  */
 @Composable
-private fun RoomSizeBadges(sketch: FloorplanSketch?) {
+private fun RoomSizeBadges(sketch: FloorplanSketch?, onCloseRoom: () -> Unit) {
+    if (sketch == null) return
+    if (sketch.closure == FloorplanSketch.Closure.Open) {
+        // The scan walked the room but never closed the ring - a doorway, a glazed partition. The
+        // corners are stored, so one tap can state that the gap is a wall; the card then has a
+        // picture and a size, and the sketch remembers the wall was drawn rather than measured.
+        CloseRoomChip(onCloseRoom)
+        return
+    }
     val size = RoomSizeText.of(sketch) ?: return
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 3.dp)) {
         SizeBadge(stringResource(R.string.card_area, size.area))
         SizeBadge(stringResource(R.string.card_perimeter, size.perimeter))
+        if (sketch.closure == FloorplanSketch.Closure.DrawnByHand) {
+            SizeBadge(stringResource(R.string.card_closed_by_hand))
+        }
+    }
+}
+
+/**
+ * The one action an open ring offers: say the gap is a wall.
+ *
+ * A full `gloveTouchTarget` tall, because the operator is standing in the room with gloves on when
+ * he decides this - and because it sits inside a row that is itself clickable, so a miss would open
+ * the room instead of closing it.
+ */
+@Composable
+private fun CloseRoomChip(onCloseRoom: () -> Unit) {
+    var asking by remember { mutableStateOf(false) }
+    TextButton(
+        onClick = { asking = true },
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+        modifier = Modifier.heightIn(min = SiteColors.gloveTouchTarget),
+    ) {
+        Text(
+            stringResource(R.string.card_close_room),
+            style = MaterialTheme.typography.labelLarge,
+            color = SiteColors.accent,
+        )
+    }
+    // One tap must not rewrite a room: the question says what the gap is, what counting it changes
+    // and that the closing wall is marked as drawn rather than measured. The chip sits inside a
+    // clickable row, so the dialog is also what keeps a mis-tap from opening the room instead.
+    if (asking) {
+        AlertDialog(
+            onDismissRequest = { asking = false },
+            title = { Text(stringResource(R.string.card_close_title)) },
+            text = { Text(stringResource(R.string.card_close_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        asking = false
+                        onCloseRoom()
+                    },
+                ) { Text(stringResource(R.string.card_close_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { asking = false }) {
+                    Text(stringResource(R.string.home_cancel))
+                }
+            },
+        )
     }
 }
 

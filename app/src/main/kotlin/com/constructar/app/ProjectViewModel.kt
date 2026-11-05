@@ -715,33 +715,65 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
      * rather than whatever the last frame happened to contain.
      */
     /**
-     * Stores the room's card picture, derived from the plan the AR screen took at commit time.
+     * Stores the room's outline, derived from the plan the AR screen took at commit time.
      *
-     * Nothing happens when the plan has no closed room in it: a doorway leaves the ring open, and
-     * drawing a wall across it would put a picture of a smaller room on the card. The card falls
-     * back to its placeholder, which is the truth - nobody has measured a closed room yet.
+     * The outline is stored even when the ring did **not** close: a doorway leaves it open, and an
+     * open ring is not a picture and not a size - but it is the only record of the corners the scan
+     * saw, and the only thing an operator could later close by hand (finding 203). What is *not*
+     * stored is a wall nobody measured: an open ring keeps `Closure.Open` and the card keeps its
+     * placeholder until a person says the gap is a wall.
      *
-     * No state change: the picture is a file next to the project, and the card that reads it belongs
-     * to a later step. The write is the repository's atomic path, and its result is not surfaced -
-     * a thumbnail is a convenience, and the run it pictures is already saved.
+     * The SVG is written only for a drawable ring, and its refusal is not an error: a room under
+     * 10 cm produces neither a picture nor a size.
+     *
+     * A failed save is reported like any other: a card that silently stays an icon is a room whose
+     * picture the operator will look for and not find.
      */
     fun saveFloorplanThumbnail(plan: com.constructar.nativebridge.FloorplanPayload) {
         val project = mutableState.value.openProject ?: return
         val sketch = RoomThumbnail.sketch(plan) ?: return
-        val svg = RoomThumbnail.svg(plan) ?: return
         // The outline goes into the project file as well as the exported SVG: the card draws from
         // the JSON (Android has no SVG renderer and this app has no third-party libraries), and a
         // restored project keeps its picture without the file system having to keep a cache.
         val updated = project.copy(sketch = sketch)
         mutableState.value = mutableState.value.copy(openProject = updated)
         viewModelScope.launch {
-            // The outline is part of the room, so a failed save is reported like any other: a card
-            // that silently stays an icon is a room whose picture he will look for and not find.
             val written = repository.save(updated)
             if (!written) {
                 mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_SAVE_FAILED)
             }
-            repository.saveThumbnail(project.id, svg)
+            val svg = RoomThumbnail.svg(sketch)
+            if (svg != null) repository.saveThumbnail(project.id, svg)
+            refresh()
+        }
+    }
+
+    /**
+     * Closes the open ring of a room by hand: the operator walked the gap and says it is a wall.
+     *
+     * This is the only way an open plan becomes a room, and it is deliberately a separate, explicit
+     * action - nothing here guesses that a doorway should be boarded. The corners stay exactly as
+     * the scan recorded them; the closing wall is a statement about the gap between the last and the
+     * first, and the sketch records that it was drawn and not measured, so a protocol that prints
+     * an accuracy never silently includes it as a measured wall.
+     *
+     * Idempotent by construction: a measured ring, or one already closed by hand, is left alone.
+     */
+    fun closeRoomByHand(projectId: String) {
+        viewModelScope.launch {
+            val project = repository.load(projectId) ?: return@launch
+            val open = project.sketch?.closedByHand() ?: return@launch
+            if (open.closure == project.sketch?.closure) return@launch
+            val updated = project.copy(sketch = open)
+            val written = repository.save(updated)
+            if (!written) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_SAVE_FAILED)
+            }
+            val svg = RoomThumbnail.svg(open)
+            if (svg != null) repository.saveThumbnail(projectId, svg)
+            if (mutableState.value.openProject?.id == projectId) {
+                mutableState.value = mutableState.value.copy(openProject = updated)
+            }
             refresh()
         }
     }

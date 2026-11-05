@@ -21,6 +21,11 @@
     <string name="home_cancel">Cancelar</string>
     <string name="home_empty">Aún no hay estancias. Crea una para empezar a medir.</string>
     <string name="home_offline_note">Funciona totalmente sin conexión. Nada sale de este teléfono.</string>
+    <string name="card_close_room">Cerrar la estancia</string>
+    <string name="card_close_title">¿Cerrar la estancia?</string>
+    <string name="card_close_body">El escaneo no cerró el contorno de esta estancia: una puerta o una pared de cristal. Si el hueco cuenta como pared, la estancia obtiene superficie, perímetro e imagen. La pared de cierre se marca como trazada a mano.</string>
+    <string name="card_close_confirm">Contar como pared</string>
+    <string name="card_closed_by_hand">muro a mano</string>
     <string name="card_area">%1$s m²</string>
     <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Exportar</string>

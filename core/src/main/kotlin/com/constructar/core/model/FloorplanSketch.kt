@@ -30,22 +30,55 @@ data class SketchPoint(val xMeters: Float, val zMeters: Float)
  * "largest closed loop" rule, so they cannot disagree about which room they show.
  *
  * A sketch that is not [isDrawable] is a plan in which no loop closed (a doorway leaves the ring
- * open) - the card falls back to its icon rather than inventing a wall across the door.
+ * open) - the card falls back to its icon rather than inventing a wall across the door. It is still
+ * stored: the corners are what the scan saw, and [closedByHand] is the one way a person may say the
+ * gap is a wall.
  */
 @Serializable
 data class FloorplanSketch(
     val points: List<SketchPoint> = emptyList(),
+    /**
+     * Whether the ring is closed, and by what.
+     *
+     * A scan of a room with a doorway in it traces a ring that never closes, and that is worth
+     * *keeping*: it is the only record of where the walls were, and the only thing an operator
+     * could later close by hand. So an open ring is stored with [Closure.Open] - not drawn, not
+     * measured, not priced - and the card offers to close it. Defaults to [Closure.Measured],
+     * because every sketch written before this field existed came from a closed loop.
+     */
+    val closure: Closure = Closure.Measured,
 ) {
 
-    /** Three corners are the least that can enclose anything. */
-    val isDrawable: Boolean get() = points.size >= 3 && points.size <= MAX_POINTS
+    /** How the ring's last wall came to be there. */
+    @Serializable
+    enum class Closure {
+        /** The scan never closed the ring - a doorway, a glass wall, a room left half walked. */
+        Open,
+
+        /** The ring closed in the scan itself; the closing wall was measured like the others. */
+        Measured,
+
+        /**
+         * The operator asserted the gap is a wall - a doorway to be boarded, a glazed partition.
+         *
+         * It counts everywhere a measured wall counts (area, perimeter, the card, the exported
+         * SVG), because the operator walked the room and said so. What it may not do is pretend it
+         * was measured: a reader of the file can tell the two apart, which is what a protocol that
+         * states its accuracy needs.
+         */
+        DrawnByHand,
+    }
+
+    /** Three corners are the least that can enclose anything, and an open ring encloses nothing. */
+    val isDrawable: Boolean
+        get() = points.size >= 3 && points.size <= MAX_POINTS && closure != Closure.Open
 
     /**
      * Enclosed area, square metres, from the same `PolygonMath.area` the protocol prints - so the
      * picture and the printed area describe one shape.
      */
     val areaSquareMeters: Float
-        get() = if (points.size < 3) 0f else PolygonMath.area(toFloorPolygon())
+        get() = if (!isDrawable) 0f else PolygonMath.area(toFloorPolygon())
 
     /**
      * The room's perimeter in metres: the ring's length, closing edge included.
@@ -61,7 +94,7 @@ data class FloorplanSketch(
      */
     val perimeterMeters: Float
         get() {
-            if (points.size < 3) return 0f
+            if (!isDrawable) return 0f
             var total = 0f
             for (index in points.indices) {
                 val current = points[index]
@@ -73,6 +106,16 @@ data class FloorplanSketch(
             }
             return if (total.isFinite()) total else 0f
         }
+
+    /**
+     * This room with its gap closed by hand, or unchanged when there is no gap to close.
+     *
+     * Only an [Closure.Open] ring can be closed this way: a measured ring is already closed, and a
+     * ring the operator already closed does not need a second assertion. The result keeps every
+     * corner as scanned - closing a doorway adds a wall, it does not move one.
+     */
+    fun closedByHand(): FloorplanSketch =
+        if (closure == Closure.Open) copy(closure = Closure.DrawnByHand) else this
 
     fun toFloorPolygon(): List<Vec3> = points.map { Vec3(it.xMeters, 0f, it.zMeters) }
 

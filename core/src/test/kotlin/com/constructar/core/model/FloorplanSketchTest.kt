@@ -97,6 +97,50 @@ class FloorplanSketchTest {
     }
 
     @Test
+    fun `an open ring is stored but is not a room`() {
+        val doorway = FloorplanSketch(room().points, FloorplanSketch.Closure.Open)
+
+        assertFalse(doorway.isDrawable)
+        assertEquals(0f, doorway.areaSquareMeters, 1e-6f)
+        assertEquals(0f, doorway.perimeterMeters, 1e-6f)
+    }
+
+    @Test
+    fun `closing a gap by hand makes the room measurable and says so`() {
+        val doorway = FloorplanSketch(room().points, FloorplanSketch.Closure.Open)
+
+        val closed = doorway.closedByHand()
+
+        assertEquals(FloorplanSketch.Closure.DrawnByHand, closed.closure)
+        assertTrue(closed.isDrawable)
+        assertEquals(12f, closed.areaSquareMeters, 1e-4f)
+        assertEquals(14f, closed.perimeterMeters, 1e-4f)
+        // The corners are not moved by the assertion: closing a doorway adds a wall.
+        assertEquals(doorway.points, closed.points)
+    }
+
+    @Test
+    fun `closing a room that is already closed changes nothing`() {
+        val measured = room()
+
+        assertEquals(measured, measured.closedByHand())
+        // A measured ring keeps its own word: it was not drawn by hand.
+        assertEquals(FloorplanSketch.Closure.Measured, measured.closedByHand().closure)
+    }
+
+    @Test
+    fun `a project file written before closure existed decodes as measured`() {
+        // Round 94 wrote `{"points":[…]}` and only ever for a closed loop: the default has to keep
+        // every one of those rooms a room.
+        val legacy = """{"points":[{"xMeters":0.0,"zMeters":0.0},{"xMeters":4.0,"zMeters":0.0},{"xMeters":4.0,"zMeters":3.0},{"xMeters":0.0,"zMeters":3.0}]}"""
+
+        val decoded = Json.decodeFromString(FloorplanSketch.serializer(), legacy)
+
+        assertEquals(FloorplanSketch.Closure.Measured, decoded.closure)
+        assertEquals(12f, decoded.areaSquareMeters, 1e-4f)
+    }
+
+    @Test
     fun `a sketch survives the project file's own serializer`() {
         val encoded = Json.encodeToString(FloorplanSketch.serializer(), room())
         val decoded = Json.decodeFromString(FloorplanSketch.serializer(), encoded)

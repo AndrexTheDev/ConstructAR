@@ -167,6 +167,9 @@ fun AppRoot(viewModel: ProjectViewModel) {
                         },
                         onUpgrade = { navController.navigate(Routes.PAYWALL) },
                         onHelp = { navController.navigate(Routes.HELP) },
+                        // A room whose scan never closed its ring: the operator says the gap is a
+                        // wall, and the card gets a picture and a size (finding 203).
+                        onCloseRoom = viewModel::closeRoomByHand,
                     )
                 }
 

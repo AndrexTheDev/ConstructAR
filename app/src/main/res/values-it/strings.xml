@@ -21,6 +21,11 @@
     <string name="home_cancel">Annulla</string>
     <string name="home_empty">Nessun locale. Creane uno per iniziare a misurare.</string>
     <string name="home_offline_note">Funziona completamente offline. Nulla esce da questo telefono.</string>
+    <string name="card_close_room">Chiudi la stanza</string>
+    <string name="card_close_title">Chiudere la stanza?</string>
+    <string name="card_close_body">La scansione non ha chiuso il contorno di questa stanza: una porta o una parete di vetro. Se il varco conta come parete, la stanza ottiene superficie, perimetro e immagine. La parete di chiusura è contrassegnata come tracciata a mano.</string>
+    <string name="card_close_confirm">Conta come parete</string>
+    <string name="card_closed_by_hand">muro a mano</string>
     <string name="card_area">%1$s m²</string>
     <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Esporta</string>

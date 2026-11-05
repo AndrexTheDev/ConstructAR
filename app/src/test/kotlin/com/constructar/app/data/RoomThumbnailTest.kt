@@ -130,11 +130,41 @@ class RoomThumbnailTest {
     }
 
     @Test
-    fun `an open plan produces no sketch and no file`() {
+    fun `an open plan is kept as an open sketch and produces no file`() {
         val doorway = loop(listOf(0f to 0f, 4f to 0f, 4f to 3f, 0f to 3f), closed = false)
 
-        assertNull(RoomThumbnail.sketch(payload(listOf(doorway))))
+        val sketch = RoomThumbnail.sketch(payload(listOf(doorway)))
+
+        // Kept: the corners are the only record of the walls, and the only thing the operator can
+        // close by hand later. Not a picture, not a size (finding 203).
+        assertNotNull("an open ring is stored", sketch)
+        assertEquals(FloorplanSketch.Closure.Open, sketch?.closure)
+        assertEquals(4, sketch?.points?.size)
+        assertFalse("an open ring is not drawable", sketch!!.isDrawable)
         assertNull(RoomThumbnail.svg(payload(listOf(doorway))))
+        assertNull(RoomThumbnail.svg(sketch))
+    }
+
+    @Test
+    fun `a closed plan's sketch is marked measured, and exports the same picture`() {
+        val payload = payload(listOf(room))
+
+        val sketch = requireNotNull(RoomThumbnail.sketch(payload))
+
+        assertEquals(FloorplanSketch.Closure.Measured, sketch.closure)
+        // One ring, two artefacts: the sketch's SVG is the payload's, byte for byte.
+        assertEquals(RoomThumbnail.svg(payload), RoomThumbnail.svg(sketch))
+    }
+
+    @Test
+    fun `a room closed by hand draws and exports like a measured one`() {
+        val doorway = loop(listOf(0f to 0f, 4f to 0f, 4f to 3f, 0f to 3f), closed = false)
+        val sketch = requireNotNull(RoomThumbnail.sketch(payload(listOf(doorway)))).closedByHand()
+
+        assertEquals(FloorplanSketch.Closure.DrawnByHand, sketch.closure)
+        assertTrue(sketch.isDrawable)
+        assertNotNull("a hand-closed room is a picture", RoomThumbnail.svg(sketch))
+        assertEquals(4, RoomThumbnail.pathPoints(sketch, sizePx = 320f, paddingPx = 16f).size)
     }
 
     @Test

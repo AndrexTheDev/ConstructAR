@@ -71,7 +71,26 @@ object RoomThumbnail {
         val best = largestClosedLoop(payload.loops) ?: return null
         if (best.points.size < 3 || best.points.size > FloorplanSketch.MAX_POINTS) return null
         val points = best.points.map { SketchPoint(it.xMeters, it.zMeters) }
-        return FloorplanSketch(points)
+        // An open ring is kept, marked as open: it is not a picture and not a size, but it is the
+        // only record of where the walls were, and the only thing the operator can close by hand
+        // later (finding 203). Nothing is invented here - `closed` is the vectoriser's own word.
+        val closure = if (best.closed) FloorplanSketch.Closure.Measured else FloorplanSketch.Closure.Open
+        return FloorplanSketch(points, closure)
+    }
+
+    /**
+     * The SVG for a stored outline - the same ring the card draws, for the world outside the phone.
+     *
+     * Takes the sketch rather than the payload because a ring the operator closed by hand exists as
+     * a sketch and has no payload any more: the volume is gone by then. One ring, two artefacts.
+     */
+    fun svg(sketch: FloorplanSketch, options: FloorplanSvg.Options = FloorplanSvg.Options()): String? {
+        if (!sketch.isDrawable) return null
+        val corners = sketch.points.map { FloorplanSvg.Corner(it.xMeters, it.zMeters) }
+        return when (val rendered = FloorplanSvg.render(corners, options)) {
+            is FloorplanSvg.Output.Drawn -> rendered.drawing.svg
+            is FloorplanSvg.Output.Refused -> null
+        }
     }
 
     /**
