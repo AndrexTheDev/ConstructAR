@@ -89,6 +89,7 @@
     <string name="ar_closed_loop">zamknięta</string>
     <string name="ar_confidence_weak">Najsłabszy punkt %1$d %% - dotknij go ponownie, aby poprawić trasę</string>
     <string name="ar_no_surface">Nie znaleziono powierzchni. Wyceluj w ścianę lub podłogę.</string>
+    <string name="ar_floor_uncertain">Wysokość podłogi niepewna: coś może zasłaniać podłogę. Skieruj kamerę na podłogę i obejdź pomieszczenie.</string>
     <string name="ar_scan_progress">Detal %1$d %% · %2$d tys. trójkątów</string>
     <string name="ar_scan_full">Osiągnięto limit skanowania - zeskanowano tylko część pomieszczenia. Trasy nadal się liczą.</string>
     <string name="ar_scan_behind">Telefon nie nadąża: %1$d %% klatek niezeskanowanych. Idź wolniej.</string>
@@ -317,6 +318,9 @@
     <string name="wall_zones_ceiling_unavailable">Pokój jest za niski na wyjście sufitowe.</string>
     <string name="wall_zones_hint">Gniazda na 30 cm, wyłączniki na 105 cm, wyjścia sufitowe 15 cm pod sufitem.</string>
     <string name="wall_zones_no_floor">W tym pokoju nie wykryto jeszcze podłogi, więc nie ma od czego mierzyć wysokości. Przejdź pokój raz w AR, a strefy się pojawią.</string>
+    <string name="wall_zones_foreign">Punkty zmierzone w innej sesji AR: %1$d. Wysokość ma sens tylko w obrębie jednej sesji, więc nie przypisano im strefy.</string>
+    <string name="wall_zones_no_floor_points">Punkty zmierzone, zanim wykryto podłogę: %1$d. Nie przypisano im strefy.</string>
+    <string name="wall_zones_partial">Te liczby stref obejmują %1$d z %2$d punktów.</string>
     <string name="materials_net">%1$s netto</string>
     <string name="materials_waste">plus %1$d %% zapasu</string>
     <string name="materials_bend_deduction">Odliczenie na zagięcia %1$s</string>

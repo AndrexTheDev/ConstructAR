@@ -30,12 +30,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.constructar.app.R
-import com.constructar.app.data.WallPlan
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.units.LengthFormatter
 import com.constructar.core.units.LengthUnit
 import com.constructar.core.units.PercentText
 import com.constructar.core.wall.DrywallSpec
+import com.constructar.core.wall.WallPlan
 
 /**
  * The room's paperwork: wall area, drywall purchase and the DIN 18015 zones.
@@ -196,6 +196,13 @@ fun WallScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (plan.noFloorPoints > 0) {
+                    Text(
+                        stringResource(R.string.wall_zones_no_floor_points, plan.noFloorPoints),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             } else {
                 WallRow(
                     stringResource(R.string.wall_zones_points),
@@ -222,6 +229,37 @@ fun WallScreen(
                 if (!installations.ceilingZoneAvailable) {
                     Text(
                         stringResource(R.string.wall_zones_ceiling_unavailable),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (plan.foreignSessionPoints > 0) {
+                    // A height is the distance between two points in *one* ARCore world, and a
+                    // new session is a new world. These points are in the room and in the totals;
+                    // what they cannot have is a mounting height measured from this floor
+                    // (finding 217), so the count is printed instead of a zone that would be a
+                    // guess dressed as a measurement.
+                    Text(
+                        stringResource(R.string.wall_zones_foreign, plan.foreignSessionPoints),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                if (plan.noFloorPoints > 0) {
+                    Text(
+                        stringResource(R.string.wall_zones_no_floor_points, plan.noFloorPoints),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (!plan.zonesCoverEveryPoint && plan.pointCount > 0) {
+                    Text(
+                        stringResource(
+                            R.string.wall_zones_partial,
+                            plan.pointCount,
+                            plan.pointCount + plan.foreignSessionPoints + plan.noFloorPoints +
+                                plan.invalidPoints,
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

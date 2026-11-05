@@ -32,10 +32,10 @@ import androidx.navigation.compose.rememberNavController
 import com.constructar.app.BuildConfig
 import com.constructar.app.ProjectViewModel
 import com.constructar.app.R
-import com.constructar.app.data.WallPlanBuilder
 import com.constructar.app.UiMessage
 import com.constructar.app.ui.ar.ArMeasureScreen
 import com.constructar.app.ui.theme.SiteColors
+import com.constructar.core.wall.wallPlan
 
 private object Routes {
     const val ONBOARDING = "onboarding"
@@ -246,7 +246,9 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             // The factor lands on the project, which is what the protocol, the
                             // bill of materials and the room screen read (calibration, tier 3).
                             onCalibration = { scale -> viewModel.setCalibration(scale) },
-                            onFloorHeight = { height -> viewModel.setFloorHeight(height) },
+                            onFloorHeight = { sessionId, height ->
+                                viewModel.setFloorHeight(sessionId, height)
+                            },
                         )
                     }
                 }
@@ -299,7 +301,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                         // The plan is rebuilt on the project's own fields, so a calibration or a
                         // hand-closed ring changes these numbers in the same recomposition they
                         // change the card, the export and the bill of materials.
-                        val plan = remember(project) { WallPlanBuilder.build(project) }
+                        val plan = remember(project) { wallPlan(project) }
                         WallScreen(
                             projectName = project.name,
                             plan = plan,

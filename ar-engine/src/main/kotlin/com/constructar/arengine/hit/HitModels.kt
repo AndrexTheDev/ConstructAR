@@ -89,7 +89,18 @@ data class SurfaceHit(
     /** Set when [ReticleSnap] moved this point onto an architectural corner or edge. */
     val snap: SnapInfo? = null,
 ) {
-    fun toRouteNode(id: String, anchorId: String? = null): RouteNodeRecord = RouteNodeRecord(
+    /**
+     * @param sessionId the AR session this point is being placed in
+     *   (`RouteSession.sessionId`). It travels with the node because every later question about a
+     *   *height* is a question about one coordinate system, and ARCore starts a new one per
+     *   session (finding 217); a length does not care, which is why the field was missed for so
+     *   long.
+     */
+    fun toRouteNode(
+        id: String,
+        anchorId: String? = null,
+        sessionId: String = "",
+    ): RouteNodeRecord = RouteNodeRecord(
         id = id,
         position = point,
         normal = normal,
@@ -97,6 +108,7 @@ data class SurfaceHit(
         hitSource = source,
         anchorId = anchorId,
         confidence = confidence,
+        sessionId = sessionId,
     )
 }
 
@@ -115,14 +127,18 @@ data class HitResolution(
     /** Metres between the accepted point and the previous route node, when known. */
     val distanceFromPreviousMeters: Float? = null,
     /**
-     * The floor's height in the session's coordinates, when a tracked plane could be it.
+     * What the app decided about the floor, on this frame's planes.
      *
      * Carried on the resolution because the planes it comes from are only alive inside the hit
-     * source: nothing above this layer sees a `PlaneCandidate`. `null` means no floor was seen,
-     * and the installation zones stay unassigned rather than measured from an imaginary zero.
+     * source: nothing above this layer sees a `PlaneCandidate`. The *decision* travels, not just
+     * the number, because a mounting height built on an uncertain guess is exactly what this app
+     * may not print (finding 218).
      */
-    val floorHeightM: Float? = null,
+    val floor: FloorDecision? = null,
 ) {
+    /** The floor height alone, for the callers that only need a number. */
+    val floorHeightM: Float? get() = floor?.heightM
+
     val accepted: Boolean get() = hit != null
 
     companion object {

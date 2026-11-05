@@ -89,6 +89,7 @@
     <string name="ar_closed_loop">cerrado</string>
     <string name="ar_confidence_weak">Punto más débil %1$d %%: vuelve a tocarlo para mejorar el tramo</string>
     <string name="ar_no_surface">No se ha encontrado superficie. Apunta a una pared o al suelo.</string>
+    <string name="ar_floor_uncertain">Altura del suelo insegura: puede haber una mesa en medio. Apunta la cámara al suelo y recorre la sala.</string>
     <string name="ar_scan_progress">Detalle %1$d %% · %2$d k triángulos</string>
     <string name="ar_scan_full">Límite de escaneo alcanzado: solo se ha captado parte de la sala. Tus tiradas cuentan igual.</string>
     <string name="ar_scan_behind">El teléfono va justo: %1$d %% de fotogramas sin escanear. Ve más despacio.</string>
@@ -311,6 +312,9 @@
     <string name="wall_zones_ceiling_unavailable">El cuarto es demasiado bajo para una salida de techo.</string>
     <string name="wall_zones_hint">Enchufes a 30 cm, interruptores a 105 cm, salidas de techo a 15 cm del techo.</string>
     <string name="wall_zones_no_floor">Todavía no se ha detectado el suelo en este cuarto, así que no hay desde dónde medir una altura. Recorre el cuarto en RA una vez y aparecerán las zonas.</string>
+    <string name="wall_zones_foreign">Puntos medidos en otra sesión de RA: %1$d. Una altura solo vale dentro de una sesión, así que no se les asigna zona.</string>
+    <string name="wall_zones_no_floor_points">Puntos medidos antes de detectar el suelo: %1$d. No se les asigna zona.</string>
+    <string name="wall_zones_partial">Estos recuentos de zonas cubren %1$d de %2$d puntos.</string>
     <string name="materials_net">%1$s neto</string>
     <string name="materials_waste">más %1$d %% de reserva</string>
     <string name="materials_bend_deduction">Descuento por curva %1$s</string>

@@ -89,6 +89,7 @@
     <string name="ar_closed_loop">closed loop</string>
     <string name="ar_confidence_weak">Weakest point %1$d %% - tap it again to improve the run</string>
     <string name="ar_no_surface">No surface found. Aim at a wall or the floor.</string>
+    <string name="ar_floor_uncertain">Floor height uncertain: a table or a shelf may be in the way. Point the camera at the floor and walk the room.</string>
     <string name="ar_scan_progress">Detail %1$d %% · %2$d k triangles</string>
     <string name="ar_scan_full">Scan limit reached - only part of the room is captured. Your runs still count.</string>
     <string name="ar_scan_behind">The phone is behind: %1$d %% of frames not scanned. Walk slower.</string>
@@ -311,6 +312,9 @@
     <string name="wall_zones_ceiling_unavailable">The room is too low for a ceiling outlet.</string>
     <string name="wall_zones_hint">Sockets at 30 cm, switches at 105 cm, ceiling outlets 15 cm under the ceiling.</string>
     <string name="wall_zones_no_floor">No floor has been tracked in this room yet, so no height can be measured from it. Walk the room in AR once and the zones appear.</string>
+    <string name="wall_zones_foreign">Points measured in another AR session: %1$d. A height only means something inside one session, so they are not assigned a zone.</string>
+    <string name="wall_zones_no_floor_points">Points measured before this room’s floor was tracked: %1$d. They are not assigned a zone.</string>
+    <string name="wall_zones_partial">These zone counts cover %1$d of %2$d points.</string>
     <string name="materials_net">%1$s net</string>
     <string name="materials_waste">plus %1$d %% waste</string>
     <string name="materials_bend_deduction">Bend deduction %1$s</string>

@@ -121,6 +121,15 @@ class RouteSession(
     private val anchorFactory: AnchorFactory,
     private val options: RouteGeometryOptions = RouteGeometryOptions(),
     private val clock: () -> Long = { System.currentTimeMillis() },
+    /**
+     * The AR session every node of this run is placed in.
+     *
+     * Stamped on each node so a later height question can ask "was this measured in the same
+     * coordinate system as the floor?" (finding 217). It is deliberately *not* derived from the
+     * clock or the process: a session is a lifetime, and two sessions in one process are two
+     * different frames.
+     */
+    val sessionId: String = "",
 ) {
     data class State(
         val spec: ConduitSpec,
@@ -182,7 +191,7 @@ class RouteSession(
         // The reticle snaps to an existing corner exactly like a tap does, so the length under
         // the crosshair is the length that will be committed and the preview line ends on the
         // corner the operator is aiming at - he sees the snap before he commits it.
-        val raw = hit?.toRouteNode(id = LIVE_NODE_ID)
+        val raw = hit?.toRouteNode(id = LIVE_NODE_ID, sessionId = sessionId)
         val target = raw?.let { cornerNear(mutableState.value.nodes, it.position) }
         val node = when {
             raw == null -> null
@@ -240,7 +249,11 @@ class RouteSession(
             return false
         }
         anchors[anchor.id] = anchor
-        val node = placed.toRouteNode(id = "node-${UUID.randomUUID()}", anchorId = anchor.id)
+        val node = placed.toRouteNode(
+            id = "node-${UUID.randomUUID()}",
+            anchorId = anchor.id,
+            sessionId = sessionId,
+        )
         previewDirty = true
         // The segment under the reticle is now measured from *this* node, not the previous one.
         val liveDistance = livePoint?.position?.let { node.position.distanceTo(it) } ?: 0f

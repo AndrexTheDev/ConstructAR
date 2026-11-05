@@ -95,6 +95,7 @@ import com.constructar.app.ui.snapMovedRes
 import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.app.ui.tierLabel
+import com.constructar.arengine.hit.FloorReferenceStatus
 import com.constructar.arengine.render.ArScene
 import com.constructar.arengine.session.ArReadiness
 import com.constructar.arengine.tracking.TrackingQuality
@@ -160,14 +161,19 @@ fun ArMeasureScreen(
      */
     onCalibration: (Double) -> Unit = {},
     /**
-     * Stores the floor's height in the session's coordinates, once a tracked plane is one.
+     * Stores the floor's height, **with the session that measured it**, once a tracked plane is one.
      *
      * The reference every mounting height in the trade is measured from cannot be assumed: ARCore's
      * origin is wherever the session started, so DIN 18015's 30 cm socket would be printed at
      * whatever height the phone happened to be held. The planes only exist inside the hit source,
      * so this screen is the last place that can see one; the project keeps it (finding 214).
+     *
+     * The session id travels with the height because a floor is only a reference for nodes in
+     * *its own* coordinate system. A room measured over two sessions has two origins and two
+     * floors, and a project that stored only the last one would print yesterday's socket as if it
+     * had been measured from today's floor (finding 217).
      */
-    onFloorHeight: (Float) -> Unit = {},
+    onFloorHeight: (String, Float) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -263,10 +269,16 @@ fun ArMeasureScreen(
     val lastHit by controller.lastHit.collectAsStateWithLifecycle()
     val stability by controller.stability.collectAsStateWithLifecycle()
     val floorHeight by controller.floorHeight.collectAsStateWithLifecycle()
+    val floorDecision by controller.floor.collectAsStateWithLifecycle()
+    // A table top is upward-facing, below the phone and higher than the floor: the one case
+    // "highest plane wins" got wrong (finding 218). When the evaluator is not sure, the HUD says
+    // so instead of the app quietly recording a floor it will later print mounting heights from.
+    val floorUncertain = floorDecision?.status == FloorReferenceStatus.UNCERTAIN
     // Handed to the caller as soon as a floor is seen, and not again for the same plane: the
-    // project's write path ignores a repeat within a centimetre (finding 214).
+    // project's write path ignores a repeat within a centimetre and coalesces the burst
+    // (findings 214 and 219).
     LaunchedEffect(floorHeight) {
-        floorHeight?.let { if (it.isFinite()) onFloorHeight(it) }
+        floorHeight?.let { if (it.isFinite()) onFloorHeight(controller.sessionId, it) }
     }
 
     var spec by remember { mutableStateOf(ConduitPresets.all.first()) }
@@ -689,6 +701,13 @@ fun ArMeasureScreen(
                             tracking.quality == TrackingQuality.NOT_TRACKING -> SiteColors.danger
                             else -> HudStyle.text
                         },
+                    )
+                }
+                if (floorUncertain) {
+                    Text(
+                        text = stringResource(R.string.ar_floor_uncertain),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SiteColors.warning,
                     )
                 }
                 warningText?.let {

@@ -89,6 +89,7 @@
     <string name="ar_closed_loop">fermé</string>
     <string name="ar_confidence_weak">Point le plus faible %1$d %% : retouche-le pour améliorer le tracé</string>
     <string name="ar_no_surface">Aucune surface trouvée. Vise un mur ou le sol.</string>
+    <string name="ar_floor_uncertain">Hauteur du sol incertaine : une table gêne peut-être. Vise le sol avec la caméra et fais le tour de la pièce.</string>
     <string name="ar_scan_progress">Détail %1$d %% · %2$d k triangles</string>
     <string name="ar_scan_full">Limite de scan atteinte : seule une partie de la pièce est capturée. Les tracés comptent quand même.</string>
     <string name="ar_scan_behind">Le téléphone est à la traîne : %1$d %% des images non scannées. Avance plus lentement.</string>
@@ -311,6 +312,9 @@
     <string name="wall_zones_ceiling_unavailable">La pièce est trop basse pour une sortie de plafond.</string>
     <string name="wall_zones_hint">Prises à 30 cm, interrupteurs à 105 cm, sorties de plafond à 15 cm sous le plafond.</string>
     <string name="wall_zones_no_floor">Aucun sol n’a encore été détecté dans cette pièce : aucune hauteur ne peut y être mesurée. Parcourez la pièce en RA une fois et les zones apparaîtront.</string>
+    <string name="wall_zones_foreign">Points mesurés dans une autre session de RA : %1$d. Une hauteur n’a de sens que dans une session : ils ne sont donc pas classés.</string>
+    <string name="wall_zones_no_floor_points">Points mesurés avant la détection du sol : %1$d. Ils ne sont pas classés.</string>
+    <string name="wall_zones_partial">Ces comptes de zones couvrent %1$d points sur %2$d.</string>
     <string name="materials_net">%1$s net</string>
     <string name="materials_waste">plus %1$d %% de réserve</string>
     <string name="materials_bend_deduction">Déduction de cintrage %1$s</string>

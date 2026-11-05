@@ -72,7 +72,16 @@ class ArMeasureController(private val context: Context) {
     private val sessionRouteIds = LinkedHashSet<String>()
     private val sessionController = ArSessionController(context)
     private val anchors = DelegatingAnchorFactory()
-    val routeSession = RouteSession(anchors)
+
+    /**
+     * The id of *this* AR session - the coordinate system its nodes live in.
+     *
+     * ARCore starts a new world origin every time a session begins, and the app keeps the floor it
+     * measured against that origin. A node is only comparable to a floor from the same id; a fresh
+     * uuid per controller is what makes that checkable instead of assumed (finding 217).
+     */
+    val sessionId: String = java.util.UUID.randomUUID().toString()
+    val routeSession = RouteSession(anchors, sessionId = sessionId)
 
     private var interaction: ArInteraction? = null
     private var renderer: SceneMeshRenderer? = null
@@ -100,11 +109,15 @@ class ArMeasureController(private val context: Context) {
     val lastHit: MutableStateFlow<HitResolution?> = MutableStateFlow(null)
 
     /**
-     * The floor the session has seen, in its own coordinates, or `null` while none has been.
+     * What the session has decided about the floor on the latest resolution.
      *
-     * A tap into a doorway is not evidence that the floor went away, so the last height that a
-     * tracked plane produced is kept; the screen stores it on the project (finding 214).
+     * A tap into a doorway is not evidence that the floor went away, so the last *decision* is
+     * kept; the status travels with the height because an uncertain floor may not be used to
+     * state a mounting height (findings 214 and 218).
      */
+    val floor: MutableStateFlow<com.constructar.arengine.hit.FloorDecision?> = MutableStateFlow(null)
+
+    /** The floor's height, for callers that only need a number. */
     val floorHeight: MutableStateFlow<Float?> = MutableStateFlow(null)
 
     /**
@@ -314,7 +327,10 @@ class ArMeasureController(private val context: Context) {
         val resolution = mutableHitEvents.value ?: return null
         mutableHitEvents.value = null
         lastHit.value = resolution
-        resolution.floorHeightM?.let { height -> floorHeight.value = height }
+        resolution.floor?.let { decision ->
+            floor.value = decision
+            decision.heightM?.let { height -> floorHeight.value = height }
+        }
         val hit = resolution.hit
         if (hit == null) {
             // Tap into nothing: the window is stale, and keeping it would let a later tap

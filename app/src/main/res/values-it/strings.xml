@@ -89,6 +89,7 @@
     <string name="ar_closed_loop">chiuso</string>
     <string name="ar_confidence_weak">Punto più debole %1$d %%: toccalo di nuovo per migliorare la tratta</string>
     <string name="ar_no_surface">Nessuna superficie trovata. Inquadra una parete o il pavimento.</string>
+    <string name="ar_floor_uncertain">Altezza del pavimento incerta: forse c’è un tavolo in mezzo. Inquadra il pavimento e percorri la stanza.</string>
     <string name="ar_scan_progress">Dettaglio %1$d %% · %2$d k triangoli</string>
     <string name="ar_scan_full">Limite di scansione raggiunto: è stata catturata solo una parte della stanza. Le tratte contano comunque.</string>
     <string name="ar_scan_behind">Il telefono è in ritardo: %1$d %% dei fotogrammi non scansionati. Vai più piano.</string>
@@ -311,6 +312,9 @@
     <string name="wall_zones_ceiling_unavailable">La stanza è troppo bassa per un’uscita a soffitto.</string>
     <string name="wall_zones_hint">Prese a 30 cm, interruttori a 105 cm, uscite a soffitto 15 cm sotto il soffitto.</string>
     <string name="wall_zones_no_floor">In questa stanza non è ancora stato rilevato il pavimento, quindi nessuna altezza può essere misurata da lì. Percorri la stanza in AR una volta e le zone compariranno.</string>
+    <string name="wall_zones_foreign">Punti misurati in un’altra sessione AR: %1$d. Un’altezza vale solo dentro una sessione, quindi non ricevono una zona.</string>
+    <string name="wall_zones_no_floor_points">Punti misurati prima del rilevamento del pavimento: %1$d. Non ricevono una zona.</string>
+    <string name="wall_zones_partial">Questi conteggi delle zone coprono %1$d punti su %2$d.</string>
     <string name="materials_net">%1$s netto</string>
     <string name="materials_waste">più %1$d %% di scorta</string>
     <string name="materials_bend_deduction">Deduzione per curva %1$s</string>

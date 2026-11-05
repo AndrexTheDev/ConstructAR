@@ -111,6 +111,31 @@ data class ProjectRecord(
      * screen says so rather than printing heights it cannot vouch for.
      */
     val floorHeightM: Float? = null,
+    /**
+     * The finished floor's height per AR session, in that session's own coordinates.
+     *
+     * The map exists because a world origin does not survive the process: a floor measured in
+     * today's session says nothing about a node measured yesterday (see
+     * `RouteNodeRecord.sessionId`). A mounting height is only computable where the node's session
+     * and the floor's session are the same one, and `:core`'s `relativeNodes` refuses every other
+     * combination rather than subtracting two numbers from different coordinate systems
+     * (finding 217).
+     *
+     * [floorHeightM] stays as the *most recent* session's floor, because it is what an older file
+     * carries and what the AR screen still reports; a project measured before this map existed has
+     * one entry worth of information and is read through the legacy rule in `relativeNodes`.
+     */
+    val sessionFloorHeights: Map<String, Float> = emptyMap(),
+    /**
+     * Doors, windows and passages the operator placed on the room's walls.
+     *
+     * Without them the drywall take-off deducts nothing: a door is 1.78 m² of wall that does not
+     * get boarded, and a 35 m² room with one door over-orders by more than half a board - on
+     * every job, forever, in the direction that costs the fitter money (finding 218). Empty for
+     * every project written before the field existed, which reads correctly: no opening recorded
+     * means nothing deducted, and the screen says so instead of printing a silent zero.
+     */
+    val openings: List<com.constructar.core.wall.PlacedOpening> = emptyList(),
     val schemaVersion: Int = SCHEMA_VERSION,
 ) {
     /** Defects still to be fixed — the number the project screen shows in red. */

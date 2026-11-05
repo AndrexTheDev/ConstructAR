@@ -3831,31 +3831,54 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
             "would have no numbers to show")
         return
 
-    plan = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "data" / "WallPlan.kt"
+    # The assembly lives in `:core`, not in `:app` (finding 217). `:app` may not decide a
+    # geometric question - and "which wall does this opening sit on", "how tall is this point above
+    # the floor of *its own* session" are exactly that. A screen that assembles its own plan is a
+    # screen whose numbers cannot be tested without Android.
+    plan = core / "wall" / "WallPlan.kt"
     if not plan.exists():
         add(plan, "there is no assembly of the room's walls, take-off and zones - the three "
                   "engines would stay unwired")
         return
     plan_text = plan.read_text(encoding="utf-8")
-    for call in ("wallSurface(", "estimateDrywall(", "classifyInstallations("):
+    for call in ("wallSurface(", "estimateDrywall(", "classifyInstallations(", "relativeNodes("):
         if call not in plan_text:
             add(plan, f"the plan never calls `{call}`, so that engine still reaches no screen")
     # The closing wall is a wall: a 4 x 3 m room is 14 m, not 11 m, and 3 m of missing wall is a
-    # board and a half on the purchase order.
-    if "% points.size" not in plan_text:
-        add(plan, "the ring is not closed - the edge from the last corner back to the first is a "
-                  "wall like every other one and it would be missing from the take-off")
+    # board and a half on the purchase order. It is built in `WallRing`, which is where the ring
+    # is, so that is where the closing edge is checked.
+    ring = core / "wall" / "WallRing.kt"
+    if not ring.exists():
+        add(ring, "there is no ring builder - the plan would have no walls to measure")
+    else:
+        ring_text = ring.read_text(encoding="utf-8")
+        if "% points.size" not in ring_text:
+            add(ring, "the ring is not closed - the edge from the last corner back to the first is "
+                      "a wall like every other one and it would be missing from the take-off")
+        # A wall height is an assumption, not a measurement: scaling it would price a room that
+        # does not exist, so the factor belongs to the run and to the nodes - and to nothing else.
+        if "heightM * metresScale" in ring_text or "heightM = heightM *" in ring_text:
+            add(ring, "the calibration factor is applied to the wall height, which was never "
+                      "measured by the session - only a measured length may be scaled")
     if "calibrationScale" not in plan_text:
         add(plan, "the plan ignores the project's calibration factor, so its metres would be the "
                   "uncorrected ones while the bill of materials bills the corrected ones")
-    # A wall height is an assumption, not a measurement: scaling it would price a room that does
-    # not exist, so the factor belongs to the run and to the nodes - and to nothing else.
     if "heightM * metresScale" in plan_text or "heightM = heightM *" in plan_text:
         add(plan, "the calibration factor is applied to the wall height, which was never measured "
                   "by the session - only a measured length may be scaled")
+    if "sessionFloorHeights" not in plan_text:
+        add(plan, "the zones are resolved against a single floor, so a node measured in another AR "
+                  "session would be given a mounting height from this one (finding 217)")
     if "floorHeightM" not in plan_text:
         add(plan, "the zones are computed from a height that is not relative to the finished "
                   "floor, which is the one thing ARCore cannot supply on its own")
+    # And the screen may not rebuild it: the deleted `app/data/WallPlan.kt` is the regression this
+    # guards, because a plan assembled on the screen is one no test can import.
+    app_plan = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" /
+                "data" / "WallPlan.kt")
+    if app_plan.exists():
+        add(app_plan, "the plan is assembled in `:app` again - geometry belongs in `:core`, where "
+                      "it can be tested without a device")
 
     project = core / "model" / "Project.kt"
     project_text = project.read_text(encoding="utf-8")
@@ -3869,23 +3892,33 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
         add(floor_ref, "nothing decides which tracked plane is the floor - the reference every "
                        "mounting height is measured from would be the session origin again")
     hit_models = floor_ref.parent / "HitModels.kt"
-    if "val floorHeightM: Float? = null" not in hit_models.read_text(encoding="utf-8"):
-        add(hit_models, "a resolution cannot carry the floor out of the hit source, so no screen "
-                        "can ever see it")
+    if "FloorDecision" not in hit_models.read_text(encoding="utf-8"):
+        add(hit_models, "a resolution carries only a number for the floor - a screen cannot tell a "
+                        "tracked plane from a guess, and a mounting height built on a guess is "
+                        "what finding 218 forbids")
     hit_source = floor_ref.parent / "ArHitSource.kt"
-    if "FloorReference.heightFrom(" not in hit_source.read_text(encoding="utf-8"):
+    if "FloorReference.decide(" not in hit_source.read_text(encoding="utf-8"):
         add(hit_source, "the hit source holds the only live planes and does not look for a floor "
                         "among them - the reference would be lost at the one place it exists")
     measure = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
                "ar" / "ArMeasureScreen.kt")
-    if "onFloorHeight(" not in measure.read_text(encoding="utf-8"):
+    measure_text = measure.read_text(encoding="utf-8")
+    if "onFloorHeight(" not in measure_text:
         add(measure, "the AR screen never hands the floor it has seen to the caller, so the "
                      "project keeps none")
+    if "onFloorHeight(controller.sessionId" not in measure_text:
+        add(measure, "the floor is handed over without the session that measured it, so the "
+                     "project cannot tell two ARCore origins apart (finding 217)")
     root_screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
                    "AppRoot.kt")
     root_text = root_screen.read_text(encoding="utf-8")
     if "setFloorHeight(" not in root_text:
         add(root_screen, "the floor the session measured is not written to the project")
+    if "wallPlan(" not in root_text:
+        add(root_screen, "the wall route does not ask `:core` for the plan, so the screen would "
+                         "have to assemble the numbers it draws")
+    if "com.constructar.app.data.WallPlan" in root_text:
+        add(root_screen, "the wall route still imports the deleted app-side plan")
     if "composable(Routes.WALLS)" not in root_text:
         add(root_screen, "the wall screen has no route, so nothing reaches it")
     if "onWalls = " not in root_text:
@@ -3910,6 +3943,14 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
     if "R.string.wall_zones_no_floor" not in screen_text:
         add(screen, "the zone card has no state for a room whose floor was never tracked - it "
                     "would have to print a height it cannot vouch for, or nothing at all")
+    # The session-origin bug is only fixed if the screen says so: a room measured over two
+    # sessions has points that cannot be classified, and a zone count that quietly covers half of
+    # them is the same lie in a nicer font (finding 217).
+    if "plan.foreignSessionPoints" not in screen_text:
+        add(screen, "the zone card does not mention the points from another AR session - their "
+                    "absence from the counts would be invisible")
+    if "com.constructar.app.data.WallPlan" in screen_text:
+        add(screen, "the screen still imports the deleted app-side plan")
     if "R.string.wall_openings_none" not in screen_text:
         add(screen, "the screen deducts nothing without saying why - `0.00 m² openings` beside a "
                     "room with a door reads as a measured zero")
@@ -3939,6 +3980,9 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
         "wall_assumptions": ("%1$s", "%2$s", "%3$s", "%4$d"),
         "wall_zones_no_floor": (),
         "wall_openings_none": (),
+        "wall_zones_foreign": ("%1$d",),
+        "wall_zones_no_floor_points": ("%1$d",),
+        "wall_zones_partial": ("%1$d", "%2$d"),
     }
     for folder in LOCALES:
         path = RES_DIR / folder / "strings.xml"

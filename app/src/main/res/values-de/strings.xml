@@ -89,6 +89,7 @@
     <string name="ar_closed_loop">geschlossen</string>
     <string name="ar_confidence_weak">Schwächster Punkt %1$d %% - tippe ihn erneut an, um die Messung zu verbessern</string>
     <string name="ar_no_surface">Keine Fläche gefunden. Ziele auf Wand oder Boden.</string>
+    <string name="ar_floor_uncertain">Fußbodenhöhe unsicher: Vielleicht steht ein Tisch im Weg. Richte die Kamera auf den Boden und gehe den Raum ab.</string>
     <string name="ar_scan_progress">Detail %1$d %% · %2$d k Dreiecke</string>
     <string name="ar_scan_full">Scan-Limit erreicht - erfasst ist nur ein Teil des Raums. Deine Strecken zählen trotzdem.</string>
     <string name="ar_scan_behind">Das Telefon kommt nicht mit: %1$d %% der Bilder nicht gescannt. Geh langsamer.</string>
@@ -311,6 +312,9 @@
     <string name="wall_zones_ceiling_unavailable">Der Raum ist zu niedrig für einen Deckenauslass.</string>
     <string name="wall_zones_hint">Steckdosen auf 30 cm, Schalter auf 105 cm, Deckenauslässe 15 cm unter der Decke.</string>
     <string name="wall_zones_no_floor">In diesem Raum wurde noch kein Boden erfasst, aus dem sich eine Höhe messen ließe. Geh den Raum einmal in AR ab, dann erscheinen die Zonen.</string>
+    <string name="wall_zones_foreign">Punkte aus einer anderen AR-Sitzung: %1$d. Eine Höhe gilt nur innerhalb einer Sitzung, deshalb bekommen sie keine Zone.</string>
+    <string name="wall_zones_no_floor_points">Punkte, gemessen bevor der Fußboden erfasst war: %1$d. Dafür gibt es keine Zone.</string>
+    <string name="wall_zones_partial">Diese Zonenzahlen decken %1$d von %2$d Punkten ab.</string>
     <string name="materials_net">%1$s netto</string>
     <string name="materials_waste">plus %1$d %% Reserve</string>
     <string name="materials_bend_deduction">Biegeabzug %1$s</string>
