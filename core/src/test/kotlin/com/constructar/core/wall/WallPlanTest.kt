@@ -276,7 +276,9 @@ class WallPlanTest {
         // without a tap.
         assertEquals(0.6f, stepOpeningFraction(0.5f, 1), 1e-4f)
         assertEquals(0.4f, stepOpeningFraction(0.5f, -1), 1e-4f)
-        assertEquals(0.95f, stepOpeningFraction(0.95f, 1), 1e-4f)
+        // At the end of the wall the step stops there rather than walking past it: 0.95 + 0.1 is
+        // 1.05, and an opening anchored past the end is one `wallSurface` has to clip.
+        assertEquals(1f, stepOpeningFraction(0.95f, 1), 1e-4f)
         assertEquals(0f, stepOpeningFraction(0.05f, -3), 1e-4f)
         // Nonsense in, the middle of the wall out - the one answer that is never off the wall.
         assertEquals(0.5f, stepOpeningFraction(Float.NaN, 1), 1e-4f)
