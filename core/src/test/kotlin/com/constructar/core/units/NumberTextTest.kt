@@ -72,7 +72,9 @@ class NumberTextTest {
 
     @Test
     fun `decimals are clamped to something a length can carry`() {
-        assertEquals("1,4", NumberText.digits(1.4f, -3, ','))
+        // A negative count is not "no decimals after rounding back up": it clamps to zero, which
+        // is what `LengthFormatter` has done since it was written.
+        assertEquals("1", NumberText.digits(1.4f, -3, ','))
         assertEquals("1,400", NumberText.digits(1.4f, 9, ','))
     }
 
