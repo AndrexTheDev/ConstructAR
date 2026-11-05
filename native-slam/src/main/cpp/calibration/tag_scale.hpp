@@ -29,12 +29,14 @@
 //   * `estimateScaleFromTagSightings`, the marker-to-scale update: nominal tag spacing over
 //     measured tag spacing, robust to a tag that was mis-detected or mis-placed.
 //
-// **Vendored, not wired.** `:app` has no path that captures a luminance frame, hands it to a
-// detector and feeds `estimateScaleFromTagSightings` - the camera image never reaches the native
-// layer today. `nativeDetectAprilTagScale` is the JNI door a wiring will call, it is exercised by
-// the host suite against rendered tags, and `docs/CALIBRATION.md` says the same. The difference
-// between "the decoder exists and is proved" and "the app uses it" is the whole point of this
-// paragraph: the first is true, the second is not.
+// **Vendored, not wired.** `MarkerFrameReader` in `:ar-engine`
+// packs an ARCore camera plane (`:core`'s `LuminancePlane`) into the grey frame
+// `nativeDetectAprilTagScale` takes, and hands it the session's intrinsics and the printed size -
+// so a frame can become a distance without a phone in the room to prove it. What is still missing
+// is the last metre: no `:app` screen requests a frame, so nothing the operator does produces a
+// marker reading, and no stored number depends on one. `estimateScaleFromTagSightings` has no
+// caller at all. The difference between "the pipeline reaches the decoder" and "the app uses it" is
+// the point of this paragraph: the first is true, the second is not.
 //
 // **It proposes, it never decides.** The acceptance window and the decision to store a factor
 // belong to `:core` (`ReferenceCalibration.accepted`), exactly as they do for the bank-card

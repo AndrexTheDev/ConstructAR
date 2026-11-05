@@ -18,7 +18,7 @@ drifts.
 | Tier | Source of the scale | State |
 |---|---|---|
 | 1 | ARCore VIO + Raw Depth (+ AI depth fused into holes, when the model asset ships) | ARCore and Raw Depth path **built**; the AI fusion **is wired** (`MonocularDepthSource` runs on its own worker from `ArMeasureController`, and the model path comes from `BuildConfig.DEPTH_MODEL_ASSET`), but `app/src/main/assets/models/*.tflite` is not in the repository — so on every build shipped from this tree the model is absent, the app says so (`DepthAvailability.PLANES_ONLY` or `ARCORE_ONLY`), and it measures on ARCore's depth or on the planes it has recognised |
-| 2 | Passive marker detection (AprilTag 3 / tag36h11) in a native worker | **Decoder vendored, wiring missing.** AprilTag 3.1.0's C core (BSD-2-Clause, unmodified, one family) sits in `native-slam/src/main/cpp/third_party/apriltag/` with its notice in `NOTICE`, `licenses/BSD-2-Clause.txt` and the Help screen; `calibration/apriltag_detector.cpp` is the one file that includes it, `nativeDetectAprilTagScale` exposes it over JNI, and the host suite proves it against rendered tags at 2 m and 4 m through four rotations. The marker-to-scale arithmetic and its outlier filter are in `calibration/tag_scale.hpp`. **No app source captures a frame and calls either** - the tier measures nothing until that frame path exists |
+| 2 | Passive marker detection (AprilTag 3 / tag36h11) in a native worker | **Decoder vendored, frame path built, screen missing.** AprilTag 3.1.0's C core (BSD-2-Clause, unmodified, one family) sits in `native-slam/src/main/cpp/third_party/apriltag/` with its notice in `NOTICE`, `licenses/BSD-2-Clause.txt` and the Help screen; `calibration/apriltag_detector.cpp` is the one file that includes it, `nativeDetectAprilTagScale` exposes it over JNI, and the host suite proves it against rendered tags at 2 m and 4 m through four rotations. The marker-to-scale arithmetic and its outlier filter are in `calibration/tag_scale.hpp`. **No app source captures a frame and calls either** - the tier measures nothing until that frame path exists |
 | 3 | Active reference calibration: bank card or folding rule | **Complete in the app**: arithmetic, sweep, storage and application (`core/.../calib`, `ProjectRecord.calibrationScale`), a *Calibrate* button and dialog on the AR screen that takes the reticle point twice, six locales, and a correction notice on the room screen. The protocol header and both CSV files carry the factor as their own line, so a document showing corrected metres also shows what corrected them |
 
 ## Tier 3 — the arithmetic
@@ -153,9 +153,14 @@ types into a layer it did — `scripts/verify_sources.py` holds that door shut.
   in `:core` with the bank-card reference, and the native directory does not contain the window's
   two numbers even in a comment.
 
-The decoder is **vendored and not wired**, and it is stated rather than implied: `:app` has no path
-that captures a luminance frame, hands it to `NativeSlamEngine.detectAprilTagScale` and feeds
-`estimateScaleFromTagSightings`. The JNI door exists and is host-tested; no screen opens it, and no
+The decoder is **vendored and not wired to a screen**, and the last metre is stated rather than
+implied: `:app` has no screen
+that requests a frame. What does exist is the frame path itself: `MarkerFrameReader` (`:ar-engine`)
+packs an ARCore plane with `:core`'s `LuminancePlane` - the Y plane is *strided*, and a buffer that
+ignored the padding would shear every row and decode nothing - and calls the decoder with the
+session's intrinsics and the printed size; the composition is unit-tested with a decoder that
+records what it was handed. No screen opens it, `estimateScaleFromTagSightings` has no caller, and
+no stored number depends on a marker. The JNI door exists and is host-tested; no screen opens it, and no
 stored number depends on a marker today. What that costs is the tier's whole point — a length that
 does not rest on the operator holding a card still — and what it saves is a scale correction nobody
 could reproduce on a device.

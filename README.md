@@ -626,8 +626,14 @@ Known limitations, deliberately documented rather than hidden:
   `TagDetector`, whose `available()` is false when no camera was supplied and whose reason says
   camera rather than decoder, and the marker-to-scale arithmetic (pair ratios against the printed
   layout, a median, a deviation filter, a baseline-weighted mean) which publishes a factor and its
-  evidence and decides nothing - the window stays in `:core`. **No app source captures a luminance
-  frame and calls the decoder**; `docs/CALIBRATION.md` tier 2 states that in the same words. `tools/verify-native.sh` builds and runs all of it the way CI does;
+  evidence and decides nothing - the window stays in `:core`. The frame path exists too:
+  `MarkerFrameReader` (`:ar-engine`) packs an ARCore Y plane with `:core`'s `LuminancePlane` (the
+  plane is strided; a buffer that ignored the padding shears every row and decodes nothing) and
+  calls the decoder with the session's intrinsics and the printed size - unit-tested with a decoder
+  that records what it was handed, three answers kept apart: `null` for a broken question, an empty
+  report for "no tag in view", metres otherwise. It is **not wired to a screen**: no
+  `:app` screen requests a frame, so nothing the operator does produces a marker reading, and
+  `docs/CALIBRATION.md` tier 2 says the same. `tools/verify-native.sh` builds and runs all of it the way CI does;
   `--tsan` runs the same suite under ThreadSanitizer, which is a gate: the fusion of a voxel is a
   read-modify-write of two arrays done by several workers, and only the sanitizer can see it when
   that update escapes the shard lock (finding 181). It reports none.
@@ -783,7 +789,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 973 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 986 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 332 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 332 checks, 0 failures, no data race reported |

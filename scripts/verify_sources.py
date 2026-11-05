@@ -2859,15 +2859,28 @@ def check_the_tag_decoder_is_vendored_and_credited() -> None:
         add(TAG_SCALE_HEADER, "the header no longer marks the half that is not wired - that marker "
                               "is what a wiring deletes, and deleting it by accident is how a "
                               "decoder in a box becomes a feature on a screen")
+    marker_reader = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
+                     "arengine" / "scan" / "MarkerFrameReader.kt")
+    if not marker_reader.exists():
+        add(marker_reader, "the only thing that hands the decoder a camera frame is gone, so the "
+                           "vendored tree is unreachable from the app again and the documents "
+                           "below would be describing a pipeline that does not exist")
     for path in (CALIBRATION_DOC, ROOT / "README.md"):
-        text = path.read_text(encoding="utf-8").lower()
-        if "vendored" not in text:
+        text = path.read_text(encoding="utf-8")
+        lowered = text.lower()
+        if "vendored" not in lowered:
             add(path, "this document no longer says the decoder is vendored, so a reader would "
                       "have to infer that the repository now redistributes somebody else's code")
-        if "not wired" not in text and "no app source" not in text:
-            add(path, "this document does not say that the app never calls the decoder - the one "
-                      "sentence that keeps 'the decoder exists' from being read as 'it measures "
-                      "rooms'")
+        if "not wired" not in lowered:
+            add(path, "this document does not say that the decoder is not wired to a screen - the "
+                      "one sentence that keeps 'the decoder exists' from being read as 'it "
+                      "measures rooms'")
+        # The claim has to name the piece that exists, so "not wired" cannot quietly outlive the
+        # wiring and cannot outrun it either.
+        if "MarkerFrameReader" not in text:
+            add(path, "this document does not name `MarkerFrameReader`, the frame path that *does* "
+                      "exist - a sentence that only says what is missing goes stale the moment "
+                      "half of it arrives (finding 233)")
 
 
 def check_the_squared_wall_keeps_its_distance() -> None:
