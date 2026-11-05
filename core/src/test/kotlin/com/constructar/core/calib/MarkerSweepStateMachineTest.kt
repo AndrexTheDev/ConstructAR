@@ -58,8 +58,8 @@ class MarkerSweepStateMachineTest {
 
     @Test
     fun `a start with no sighting is aiming, not walking`() {
-        val state = MarkerSweep.start(options())!!.state
-        assertEquals(MarkerWatchingPhase.AIMING, (state as MarkerSweepState.Watching).phase)
+        val state = MarkerSweep.start(options())!!.state as MarkerSweepState.Watching
+        assertEquals(MarkerWatchingPhase.AIMING, state.phase)
         assertEquals(0, state.sightings)
         assertFalse(state.axialOnly)
     }
@@ -104,7 +104,7 @@ class MarkerSweepStateMachineTest {
             "the proposal has to know how much of the baseline was across the ray",
             ready.proposal.perpendicularMetres >= MarkerSweepOptions.DEFAULT_MIN_PERPENDICULAR_METRES,
         )
-        assertEquals(1f, ready.proposal.factor, 1e-4f)
+        assertEquals(1.0, ready.proposal.factor, 1e-4)
     }
 
     @Test
@@ -170,8 +170,8 @@ class MarkerSweepStateMachineTest {
                 phase = MarkerWatchingPhase.WALKING,
                 axialOnly = true,
             ),
-        )
-        assertTrue((axial as MarkerStatusLine.Watching).axialOnly)
+        ) as MarkerStatusLine.Watching
+        assertTrue(axial.axialOnly)
         assertEquals(MarkerWatchingPhase.WALKING, axial.phase)
     }
 }

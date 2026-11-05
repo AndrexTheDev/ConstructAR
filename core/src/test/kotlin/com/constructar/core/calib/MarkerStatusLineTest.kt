@@ -51,7 +51,18 @@ class MarkerStatusLineTest {
         val line = MarkerStatusLine.of(
             MarkerSweepState.Watching(sightings = 3, markerIds = 2, ignoredForeign = 1),
         )
-        assertEquals(MarkerStatusLine.Watching(sightings = 3, markerIds = 2, ignoredForeign = 1), line)
+        assertEquals(
+            MarkerStatusLine.Watching(
+                sightings = 3,
+                markerIds = 2,
+                ignoredForeign = 1,
+                // Three sightings is one past the first, so the sweep is walking, not aiming -
+                // derived from the count by `MarkerSweepState.Watching`, and carried through.
+                phase = MarkerWatchingPhase.WALKING,
+                axialOnly = false,
+            ),
+            line,
+        )
     }
 
     @Test
