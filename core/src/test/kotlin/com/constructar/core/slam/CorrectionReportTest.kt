@@ -61,7 +61,7 @@ class CorrectionReportTest {
 
     @Test
     fun `a broken matrix is not a movement`() {
-        val originals = listOf(poseAt(0f), Array(16) { Float.NaN })
+        val originals = listOf(poseAt(0f), FloatArray(16) { Float.NaN })
         val optimised = listOf(poseAt(0f), poseAt(5f))
         val report = CorrectionReport.of(optimised) { index -> originals.getOrNull(index) }
 
