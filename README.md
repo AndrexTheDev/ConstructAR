@@ -52,19 +52,32 @@ metric depth field, a loop-closure pose graph (built and host-tested — *not ye
 scan pipeline*, see finding 98), thermal-aware degradation, and explicit handling for every way
 AR can fail on a site.
 
-**Drywall take-off** (`core/.../wall`, arithmetic and unit tests in place — **no screen calls it
-yet**): net wall area with the openings subtracted as a *union* (two windows that overlap take
+**Drywall take-off** (`core/.../wall`, **and it is wired**: the project card's *Walls* button
+renders `WallPlan`, which builds the room's ring from the stored outline, calls `wallSurface` and
+`estimateDrywall`, and prints the board size, stud spacing and waste the numbers were computed
+under — a purchase order without its assumptions is a number to argue with): net wall area with
+the openings subtracted as a *union* (two windows that overlap take
 board off a wall once, not twice — double-subtracting is how an estimate comes out short), then
 boards at the standard 2.50 × 1.25 m, CW studs at 62.5 cm centres (a stud under every board edge),
 UW track top and bottom, 29 screws per square metre of installed board, and 10 % waste on
 everything that gets cut. An opening that does not fit its wall is clipped *and counted*, with the
 reason enumerated, rather than quietly absorbed.
 
-**DIN 18015 zones and clash detection** (`core/.../wall`, same package — **no screen calls them
-yet**): a measured height is snapped to the socket line (30 cm), the switch line (105 cm) or the
+**DIN 18015 zones** (`core/.../wall`, **and it is wired**: the same *Walls* screen classifies every
+measured point and prints the sockets, switches and ceiling outlets, and it refuses to classify
+anything until the session has tracked a floor — ARCore's origin is wherever the phone started, so
+a height taken from it would print a socket at 1.40 m; `FloorReference` names the tracked
+horizontal plane under the operator, `HitResolution` carries it out of the hit source where the
+planes live, and the project stores it in `floorHeightM`): a measured height is snapped to the
+socket line (30 cm), the switch line (105 cm) or the
 ceiling outlet (15 cm below the ceiling, so it follows the room), and refused outside a 10 cm
 tolerance with the nearest line still named — a point 25 cm off the socket line is not silently
-drawn as a socket at 30 cm. Clash detection answers the other question a run has to pass: the
+drawn as a socket at 30 cm.
+
+**Clash detection** (`core/.../wall`, arithmetic and unit tests only — **no screen calls it yet**,
+because nothing in the app constructs an `Obstacle` yet: there is no source of walls, beams and
+services as boxes, and a clearance card with nothing to check against would be a claim the app
+cannot back): answers the other question a run has to pass — the
 measured polyline against boxes standing for walls, beams and services, with a proper slab
 intersection (a segment through the *middle* of a beam touches none of its twelve edges, so an
 edge-only check calls a penetration "0.5 m clear"), exact segment-to-box distances, and the default
@@ -605,7 +618,11 @@ Known limitations, deliberately documented rather than hidden:
   computed for every text pair the UI draws and asserted at 4.5:1.
 * **JVM (`:app`)** — the printed cost block: no block without time or material, labour +
   material = net total through the same formatter the PDF uses, a running session billed to now,
-  a project rate overriding the firm's.
+  a project rate overriding the firm's. Plus the wall screen's assembly: a closed ring is four
+  walls and the closing one counts, an open ring is none, the calibration factor scales the run
+  and not the assumed wall height, a mounting height that is not relative to a tracked floor
+  produces no zones, a point below the floor is refused rather than assigned, and a project file
+  written before `floorHeightM` existed still loads.
 * **JVM (`:native-slam`)** — the pose-graph report as it crosses the JNI bridge: the
   optimiser's convergence verdict is carried across instead of being re-derived from the two
   costs, and the pose block is read past that flag rather than from it. Plus the engine's
@@ -624,7 +641,9 @@ Known limitations, deliberately documented rather than hidden:
   oversized SVG are refused, and deleting a room takes the file with it), the protocol's note for a capture that hit the scan limit, the rows of
   its summary, the order list's uncertain-hit note, the HUD's detail budget, the tracking
   monitor's steady state (a frame that changes nothing publishes nothing), the torch's refusal
-  path (a camera that says no is not asked again), and the ten rules of the reticle stabiliser (a settled median, an
+  path (a camera that says no is not asked again), which plane under the operator is *the floor*
+  (a ceiling is not, the highest floor below the phone wins, a stairwell's storey is not this
+  room), and the ten rules of the reticle stabiliser (a settled median, an
   outvoted stray frame, a moving hand that never locks, a plane or tier change that resets the
   window, a miss that clears it).
 * **JVM (`:core` licence)** — the freemium gate: a signed licence verifies, a tampered payload
@@ -730,7 +749,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 895 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 910 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 287 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 287 checks, 0 failures, no data race reported |

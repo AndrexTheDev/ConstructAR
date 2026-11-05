@@ -32,6 +32,7 @@ import androidx.navigation.compose.rememberNavController
 import com.constructar.app.BuildConfig
 import com.constructar.app.ProjectViewModel
 import com.constructar.app.R
+import com.constructar.app.data.WallPlanBuilder
 import com.constructar.app.UiMessage
 import com.constructar.app.ui.ar.ArMeasureScreen
 import com.constructar.app.ui.theme.SiteColors
@@ -43,6 +44,7 @@ private object Routes {
     const val MEASURE = "measure"
     const val EXPORT = "export"
     const val MATERIALS = "materials"
+    const val WALLS = "walls"
     const val FIELD_BOOK = "fieldbook"
     const val PAYWALL = "paywall"
     const val HELP = "help"
@@ -197,6 +199,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onSaveTechnician = { viewModel.updateTechnician(it) },
                             onRemoveRoute = { routeId -> viewModel.removeRoute(routeId) },
                             onMaterials = { navController.navigate(Routes.MATERIALS) },
+                            onWalls = { navController.navigate(Routes.WALLS) },
                             onFieldBook = { navController.navigate(Routes.FIELD_BOOK) },
                             onSaveCustomer = { name, address, phone ->
                                 viewModel.updateCustomer(name, address, phone)
@@ -243,6 +246,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             // The factor lands on the project, which is what the protocol, the
                             // bill of materials and the room screen read (calibration, tier 3).
                             onCalibration = { scale -> viewModel.setCalibration(scale) },
+                            onFloorHeight = { height -> viewModel.setFloorHeight(height) },
                         )
                     }
                 }
@@ -282,6 +286,23 @@ fun AppRoot(viewModel: ProjectViewModel) {
                             onClipSpacingChange = { viewModel.setClipSpacingOverride(it) },
                             firmHourlyRateCents = state.firmHourlyRateCents,
                             onHourlyRateChange = { viewModel.setFirmHourlyRate(it) },
+                            onBack = { navController.popBackStack() },
+                        )
+                    } else {
+                        Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())
+                    }
+                }
+
+                composable(Routes.WALLS) {
+                    val project = state.openProject
+                    if (project != null) {
+                        // The plan is rebuilt on the project's own fields, so a calibration or a
+                        // hand-closed ring changes these numbers in the same recomposition they
+                        // change the card, the export and the bill of materials.
+                        val plan = remember(project) { WallPlanBuilder.build(project) }
+                        WallScreen(
+                            projectName = project.name,
+                            plan = plan,
                             onBack = { navController.popBackStack() },
                         )
                     } else {

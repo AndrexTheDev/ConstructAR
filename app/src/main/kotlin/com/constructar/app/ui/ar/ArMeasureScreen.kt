@@ -159,6 +159,15 @@ fun ArMeasureScreen(
      * customer would be the uncorrected ones.
      */
     onCalibration: (Double) -> Unit = {},
+    /**
+     * Stores the floor's height in the session's coordinates, once a tracked plane is one.
+     *
+     * The reference every mounting height in the trade is measured from cannot be assumed: ARCore's
+     * origin is wherever the session started, so DIN 18015's 30 cm socket would be printed at
+     * whatever height the phone happened to be held. The planes only exist inside the hit source,
+     * so this screen is the last place that can see one; the project keeps it (finding 214).
+     */
+    onFloorHeight: (Float) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -253,6 +262,12 @@ fun ArMeasureScreen(
     val hudPosition by controller.hudScreenPixels.collectAsStateWithLifecycle()
     val lastHit by controller.lastHit.collectAsStateWithLifecycle()
     val stability by controller.stability.collectAsStateWithLifecycle()
+    val floorHeight by controller.floorHeight.collectAsStateWithLifecycle()
+    // Handed to the caller as soon as a floor is seen, and not again for the same plane: the
+    // project's write path ignores a repeat within a centimetre (finding 214).
+    LaunchedEffect(floorHeight) {
+        floorHeight?.let { if (it.isFinite()) onFloorHeight(it) }
+    }
 
     var spec by remember { mutableStateOf(ConduitPresets.all.first()) }
     var showScanner by remember { mutableStateOf(true) }

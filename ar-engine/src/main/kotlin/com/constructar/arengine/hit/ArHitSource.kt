@@ -131,10 +131,19 @@ class ArHitSource(
         val resolution = SurfaceHitResolver(cascade).resolve(request)
         // Plane hits are pulled onto the room's real edges and corners before they become
         // route nodes; every other tier is returned untouched. See [ReticleSnap].
-        return ReticleSnap.snap(
+        val snapped = ReticleSnap.snap(
             resolution = resolution,
             planes = request.planes,
             enabled = cascade.snapToArchitecturalFeatures,
+        )
+        // The floor is only visible here, where the frame's planes are: everything above this
+        // layer sees points, not planes. Carried on the resolution so the app can store it and
+        // later say what a node's height means (finding 214).
+        return snapped.copy(
+            floorHeightM = FloorReference.heightFrom(
+                planes = request.planes,
+                viewerHeightM = request.viewerPosition.y,
+            ),
         )
     }
 

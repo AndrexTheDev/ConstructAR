@@ -97,6 +97,20 @@ data class ProjectRecord(
      * operator measures what the phone sees, and the paperwork says what the calibration says.
      */
     val calibrationScale: Double = 1.0,
+    /**
+     * The floor plane's height in the AR session's own coordinates, or `null` when none was seen.
+     *
+     * ARCore's world origin is wherever the session started - usually the phone at chest height -
+     * so a node's `y` is *not* a height above the finished floor. Anything that talks about
+     * mounting heights (DIN 18015 sockets at 30 cm, switches at 105 cm) needs the floor as a
+     * reference, and the only honest source of it is a horizontal plane the session actually
+     * tracked: the app records the plane's height here (see `FloorReference`) instead of assuming
+     * the floor is at zero, which would put a socket at 1.4 m on every job.
+     *
+     * `null` is not a failure: it means the installation zones cannot be assigned yet, and the
+     * screen says so rather than printing heights it cannot vouch for.
+     */
+    val floorHeightM: Float? = null,
     val schemaVersion: Int = SCHEMA_VERSION,
 ) {
     /** Defects still to be fixed — the number the project screen shows in red. */

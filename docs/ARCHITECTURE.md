@@ -197,8 +197,9 @@ is 2.50 m), CW studs at 62.5 cm centres so every board edge lands on metal (a ru
 both ends - a 4 m wall is 7, not 6), UW track top and bottom, 29 screws per square metre of
 *installed* board (it is the board that is screwed, not the net wall), and 10 % waste on everything
 that is cut. A spec that cannot be built - zero spacing, zero board - returns `valid = false` with
-every number zero rather than dividing by it. Both entry points are pure and unit-tested; **nothing
-in `:app` calls them yet**, and this paragraph says so.
+every number zero rather than dividing by it. Both entry points are pure and unit-tested; since
+phase 5 they are reached from a screen — see §5e below, which is where the last link of the chain
+lives.
 
 **DIN 18015 zones and clash detection** (`core/.../wall`). Two checks that stand between a
 measured run and a drawing. A tap in AR lands where the reticle rests, not where the standard says,
@@ -215,7 +216,10 @@ non-intersecting distance is closed-form (both endpoints, then the twelve edge-t
 never sampled, because a step size that cannot miss a crossing is finer than the clearances being
 asked about; and invalid input - a non-finite point, a route of one point, an inside-out box -
 returns `valid = false` with no hits, since "clear" computed from nonsense is worse than no answer.
-Both are pure and unit-tested, and **nothing in `:app` calls them yet**.
+The zones are wired into the *Walls* screen (§5e). The clearance check is **not**: nothing in
+`:app` constructs an `Obstacle` yet — the app has no source of walls, beams and services as boxes,
+and a clearance card with nothing to check against would print a claim it cannot back, so it stays
+in `:core` with its tests until a source exists.
 
 **Manhattan-World frame** (`geometry/manhattan_world.cpp`). A room is meant to be orthogonal;
 the planes fitted from depth are not, because each carries its own noise and the pose graph's
@@ -389,6 +393,30 @@ language is smaller than the grammar it avoids.
 
 `check_the_hud_says_when_the_reticle_moved` names the five links — record, snap, sentences, digits
 with their guard, screen — and the four resources in six locales (finding 213).
+
+## 5e. The take-off, the floor it is measured from, and the screen that shows both
+
+Three `:core` engines - net wall area, the drywall estimate, the DIN 18015 zones - plus a fourth,
+the clearance check, had unit tests and no screen. The *Walls* button on the project card now opens
+`WallScreen`, and `WallPlanBuilder` is the whole of what stands between the project file and it:
+
+| Question | Answer, and why that answer |
+|---|---|
+| What is a wall? | An edge of the room's stored ring (`FloorplanSketch`), **including the closing one**: a 4 x 3 m room is 14 m of wall, not 11 m, and 3 m of missing wall is a board and a half on the order. An open ring is not a room yet and produces no walls at all - the card already offers to close it by hand. |
+| Which metres? | The project's `calibrationScale` is applied to the run and to the nodes, once, at the reporting layer - the same rule the bill of materials follows. It is **not** applied to the wall *height*: 2.50 m is the assumption the estimate is made under, not a length the session measured. |
+| Where is 30 cm? | On the finished floor - and the only honest source of that is a tracked horizontal plane. ARCore's world origin is wherever the session started, usually at chest height, so `y` alone is a height above nothing an electrician would recognise. `FloorReference` picks the highest upward-facing tracked plane at or below the viewer within 3.5 m (`null` when there is none), `HitResolution` carries it out of `ArHitSource` where the planes are alive, `ProjectRecord.floorHeightM` stores it, and without it `WallPlan.installations` is `null` and the screen says so instead of printing a socket at 1.40 m. |
+| What is not shown? | Openings: nothing in the app records a door or a window yet, so the screen prints `0.00 m²` deducted *and says why* - a silent zero beside a room with a door reads as a measurement. And the clearance check, because nothing constructs an `Obstacle` (§4). |
+
+The screen prints the assumptions under the purchase (board size, stud spacing, waste) for the same
+reason the protocol prints its expected error: a number without its conditions is an argument. Every
+digit comes from `LengthFormatter`, every word from six locales, and the retrofit is backward
+compatible — `floorHeightM` is defaulted and `null` is omitted by the repository's JSON, so a room
+recorded by the previous release loads unchanged with no zones and no complaint.
+
+`check_the_wall_screen_uses_the_core_numbers` names each link — the three calls, the closing wall,
+where the calibration factor is and is not applied, the floor's four hops from plane to screen, the
+route and the button, the four sentences a reader needs to understand an empty or refused state —
+and the eleven resources in six locales (finding 214).
 
 ---
 

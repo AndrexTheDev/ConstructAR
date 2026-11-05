@@ -114,6 +114,14 @@ data class HitResolution(
     val attempts: List<TierOutcome>,
     /** Metres between the accepted point and the previous route node, when known. */
     val distanceFromPreviousMeters: Float? = null,
+    /**
+     * The floor's height in the session's coordinates, when a tracked plane could be it.
+     *
+     * Carried on the resolution because the planes it comes from are only alive inside the hit
+     * source: nothing above this layer sees a `PlaneCandidate`. `null` means no floor was seen,
+     * and the installation zones stay unassigned rather than measured from an imaginary zero.
+     */
+    val floorHeightM: Float? = null,
 ) {
     val accepted: Boolean get() = hit != null
 

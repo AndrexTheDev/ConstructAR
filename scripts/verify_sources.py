@@ -3784,6 +3784,159 @@ def check_a_contract_assertion_is_believed() -> None:
                           f"turns it into a build failure the sandbox cannot see - read `{name}.`")
 
 
+def check_the_wall_screen_uses_the_core_numbers() -> None:
+    """Three engines, one screen, and every link in the chain can be cut silently (finding 214).
+
+    `wallSurface`, `estimateDrywall` and `classifyInstallations` were written in phase 2 and had
+    never been called from anywhere but their own tests: a take-off that exists only in a unit test
+    is a take-off the person buying the boards does not have. The chain this round closes is six
+    links long and not one of them produces a compile error when dropped - an estimator nobody
+    calls, a wall ring that forgets its closing wall, a calibration factor applied twice or not at
+    all, a floor reference that is assumed to be zero, a zone screen with no route to it, a string
+    that only one language has.
+
+    The floor is the interesting link. ARCore's origin is wherever the session started, so a
+    mounting height has to come from a *tracked* plane - `FloorReference` names it, `HitResolution`
+    carries it out of the hit source where the planes live, the project stores it, and the plan
+    refuses to assign a zone without it. Any one of those steps missing leaves the app printing
+    heights it cannot vouch for, which is exactly what this app may not do.
+    """
+    core = ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core"
+    if not (core / "wall" / "DrywallEstimator.kt").exists():
+        add(core / "wall" / "DrywallEstimator.kt", "the drywall estimator is gone - the wall screen "
+            "would have no numbers to show")
+        return
+
+    plan = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "data" / "WallPlan.kt"
+    if not plan.exists():
+        add(plan, "there is no assembly of the room's walls, take-off and zones - the three "
+                  "engines would stay unwired")
+        return
+    plan_text = plan.read_text(encoding="utf-8")
+    for call in ("wallSurface(", "estimateDrywall(", "classifyInstallations("):
+        if call not in plan_text:
+            add(plan, f"the plan never calls `{call}`, so that engine still reaches no screen")
+    # The closing wall is a wall: a 4 x 3 m room is 14 m, not 11 m, and 3 m of missing wall is a
+    # board and a half on the purchase order.
+    if "% points.size" not in plan_text:
+        add(plan, "the ring is not closed - the edge from the last corner back to the first is a "
+                  "wall like every other one and it would be missing from the take-off")
+    if "calibrationScale" not in plan_text:
+        add(plan, "the plan ignores the project's calibration factor, so its metres would be the "
+                  "uncorrected ones while the bill of materials bills the corrected ones")
+    # A wall height is an assumption, not a measurement: scaling it would price a room that does
+    # not exist, so the factor belongs to the run and to the nodes - and to nothing else.
+    if "heightM * metresScale" in plan_text or "heightM = heightM *" in plan_text:
+        add(plan, "the calibration factor is applied to the wall height, which was never measured "
+                  "by the session - only a measured length may be scaled")
+    if "floorHeightM" not in plan_text:
+        add(plan, "the zones are computed from a height that is not relative to the finished "
+                  "floor, which is the one thing ARCore cannot supply on its own")
+
+    project = core / "model" / "Project.kt"
+    project_text = project.read_text(encoding="utf-8")
+    if "val floorHeightM: Float? = null" not in project_text:
+        add(project, "the project cannot store the floor's height, so every mounting height "
+                     "would have to be assumed and none could be checked")
+
+    floor_ref = (ROOT / "ar-engine" / "src" / "main" / "kotlin" / "com" / "constructar" /
+                 "arengine" / "hit" / "FloorReference.kt")
+    if not floor_ref.exists():
+        add(floor_ref, "nothing decides which tracked plane is the floor - the reference every "
+                       "mounting height is measured from would be the session origin again")
+    hit_models = floor_ref.parent / "HitModels.kt"
+    if "val floorHeightM: Float? = null" not in hit_models.read_text(encoding="utf-8"):
+        add(hit_models, "a resolution cannot carry the floor out of the hit source, so no screen "
+                        "can ever see it")
+    hit_source = floor_ref.parent / "ArHitSource.kt"
+    if "FloorReference.heightFrom(" not in hit_source.read_text(encoding="utf-8"):
+        add(hit_source, "the hit source holds the only live planes and does not look for a floor "
+                        "among them - the reference would be lost at the one place it exists")
+    measure = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+               "ar" / "ArMeasureScreen.kt")
+    if "onFloorHeight(" not in measure.read_text(encoding="utf-8"):
+        add(measure, "the AR screen never hands the floor it has seen to the caller, so the "
+                     "project keeps none")
+    root_screen = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+                   "AppRoot.kt")
+    root_text = root_screen.read_text(encoding="utf-8")
+    if "setFloorHeight(" not in root_text:
+        add(root_screen, "the floor the session measured is not written to the project")
+    if "composable(Routes.WALLS)" not in root_text:
+        add(root_screen, "the wall screen has no route, so nothing reaches it")
+    if "onWalls = " not in root_text:
+        add(root_screen, "no button leads to the wall screen - the screen would be unreachable")
+    view_model = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" /
+                  "ProjectViewModel.kt")
+    if "fun setFloorHeight(" not in view_model.read_text(encoding="utf-8"):
+        add(view_model, "there is no write path for the floor height, so the field would stay null "
+                        "for ever and the zones would never be assigned")
+
+    screen = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" / "WallScreen.kt"
+    if not screen.exists():
+        add(screen, "the take-off has no screen - the last unwired pair of phase 5 would stay "
+                    "unwired")
+        return
+    screen_text = screen.read_text(encoding="utf-8")
+    # The assumptions behind a purchase are part of the purchase: a fitter with 60 cm stud spacing
+    # reads 63 cm as an error, one with 2.60 m ceilings reads 2.50 m as one.
+    if "R.string.wall_assumptions" not in screen_text:
+        add(screen, "the drywall card prints its numbers without the board size, stud spacing and "
+                    "waste they were computed under")
+    if "R.string.wall_zones_no_floor" not in screen_text:
+        add(screen, "the zone card has no state for a room whose floor was never tracked - it "
+                    "would have to print a height it cannot vouch for, or nothing at all")
+    if "R.string.wall_openings_none" not in screen_text:
+        add(screen, "the screen deducts nothing without saying why - `0.00 m² openings` beside a "
+                    "room with a door reads as a measured zero")
+    if "LengthFormatter" not in screen_text:
+        add(screen, "the screen formats its own numbers - the app's one formatter owns the digits "
+                    "and the decimal mark")
+    if "stringResource(" not in screen_text:
+        add(screen, "the screen does not read its words from the resources")
+
+    gloves = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+              "ProjectScreen.kt")
+    gloves_text = gloves.read_text(encoding="utf-8")
+    if "R.string.wall_open" not in gloves_text:
+        add(gloves, "the project card has no button labelled for the wall screen")
+    if "onClick = onWalls," not in gloves_text:
+        add(gloves, "the wall button is not wired to the navigation callback")
+
+    required = {
+        "wall_title": (),
+        "wall_open": (),
+        "wall_empty": (),
+        "wall_row": ("%1$d", "%2$s", "%3$s"),
+        "wall_length_m": ("%1$s",),
+        "wall_area_m2": ("%1$s",),
+        "wall_net": (),
+        "wall_boards_value": ("%1$d", "%2$d"),
+        "wall_assumptions": ("%1$s", "%2$s", "%3$s", "%4$d"),
+        "wall_zones_no_floor": (),
+        "wall_openings_none": (),
+    }
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if not path.exists():
+            continue
+        strings, _ = load_locale(folder)
+        for key, placeholders in required.items():
+            value = strings.get(key)
+            if value is None:
+                add(path, f"missing string '{key}' - the wall screen would print nothing, or "
+                          f"English, in that language")
+                continue
+            for placeholder in placeholders:
+                if placeholder not in value:
+                    add(path, f"'{key}' lost `{placeholder}` - the row would state a fact without "
+                              f"its number, or crash on a missing argument")
+        assumptions = strings.get("wall_assumptions")
+        if assumptions is not None and "%%" not in assumptions:
+            add(path, "'wall_assumptions' has an unescaped percent - aapt reads it as the start "
+                      "of a format argument and the build fails")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -3871,6 +4024,7 @@ def main() -> int:
     check_the_protocol_prints_the_room_plan()
     check_every_interactive_row_announces_itself()
     check_the_hud_says_when_the_reticle_moved()
+    check_the_wall_screen_uses_the_core_numbers()
     check_the_reticle_snap_stays_wired()
     check_exported_numbers_use_the_c_locale()
     check_project_imports_are_used()

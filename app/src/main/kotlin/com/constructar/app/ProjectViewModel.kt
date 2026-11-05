@@ -584,6 +584,24 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         return updated
     }
 
+    /**
+     * Records the floor plane's height in the session's coordinates.
+     *
+     * Written by the AR screen as soon as the hit source sees a floor (see `FloorReference`), and
+     * only when it actually changes: the session re-reports the same plane on every frame, and a
+     * JSON write per frame would be a file written thirty times a second. A centimetre of jitter
+     * around the same plane is the same floor.
+     */
+    fun setFloorHeight(heightM: Float, onSaved: (ProjectRecord?) -> Unit = {}): ProjectRecord? {
+        val project = mutableState.value.openProject ?: return null
+        if (!heightM.isFinite()) return null
+        val current = project.floorHeightM
+        if (current != null && kotlin.math.abs(current - heightM) < FLOOR_TOLERANCE_M) return project
+        val updated = project.copy(floorHeightM = heightM)
+        mutate(updated, onSaved)
+        return updated
+    }
+
     /** The rate this project bills at: its own override, or the firm's default. */
     fun hourlyRateCents(project: ProjectRecord): Int =
         project.hourlyRateCents ?: mutableState.value.firmHourlyRateCents
@@ -952,6 +970,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 }
+
+/** A floor within a centimetre of the stored one is the same floor: ARCore reports it per frame. */
+private const val FLOOR_TOLERANCE_M = 0.01f
+
 
 /**
  * Where an already-copied field photo belongs.

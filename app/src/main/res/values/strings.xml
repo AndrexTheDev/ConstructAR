@@ -281,6 +281,36 @@
     <string name="materials_button">Materials and order</string>
     <string name="materials_intro">Aggregated per type - that is how it is bought. Order quantities include the site waste factor.</string>
     <string name="materials_empty">No runs measured yet - nothing to order.</string>
+
+    <!-- Walls, drywall take-off and installation zones (finding 214). -->
+    <string name="wall_title">Walls and drywall</string>
+    <string name="wall_open">Walls</string>
+    <string name="wall_empty">No closed outline in this room yet. A take-off needs the whole ring - close the gap on the project card first.</string>
+    <string name="wall_row">Wall %1$d · %2$s · %3$s</string>
+    <string name="wall_length_m">%1$s m</string>
+    <string name="wall_area_m2">%1$s m²</string>
+    <string name="wall_surface_title">Wall surface</string>
+    <string name="wall_gross">Gross</string>
+    <string name="wall_openings">Openings deducted</string>
+    <string name="wall_net">Net area</string>
+    <string name="wall_openings_none">No doors or windows are recorded for this room yet, so nothing is deducted - the gross area is not what you will board.</string>
+    <string name="wall_drywall_title">Drywall take-off</string>
+    <string name="wall_boards">Boards to buy</string>
+    <string name="wall_boards_value">%1$d (%2$d before waste)</string>
+    <string name="wall_studs">Studs</string>
+    <string name="wall_stud_profile">Stud profile</string>
+    <string name="wall_track_profile">Track profile</string>
+    <string name="wall_screws">Screws</string>
+    <string name="wall_assumptions">Assumptions: boards %1$s × %2$s m, studs every %3$s m, waste %4$d %%.</string>
+    <string name="wall_zones_title">Installation zones (DIN 18015)</string>
+    <string name="wall_zones_points">Measured points</string>
+    <string name="wall_zones_sockets">Sockets</string>
+    <string name="wall_zones_switches">Switches</string>
+    <string name="wall_zones_ceiling">Ceiling outlets</string>
+    <string name="wall_zones_rejected">Outside every zone</string>
+    <string name="wall_zones_ceiling_unavailable">The room is too low for a ceiling outlet.</string>
+    <string name="wall_zones_hint">Sockets at 30 cm, switches at 105 cm, ceiling outlets 15 cm under the ceiling.</string>
+    <string name="wall_zones_no_floor">No floor has been tracked in this room yet, so no height can be measured from it. Walk the room in AR once and the zones appear.</string>
     <string name="materials_net">%1$s net</string>
     <string name="materials_waste">plus %1$d %% waste</string>
     <string name="materials_bend_deduction">Bend deduction %1$s</string>

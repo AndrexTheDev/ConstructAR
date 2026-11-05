@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -92,6 +93,8 @@ fun ProjectScreen(
     onSaveTechnician: (String) -> Unit,
     onRemoveRoute: (String) -> Unit,
     onMaterials: () -> Unit,
+    /** The room's walls, drywall take-off and installation zones - the other half of the numbers. */
+    onWalls: () -> Unit,
     onFieldBook: () -> Unit,
     onSaveCustomer: (name: String, address: String, phone: String) -> Unit,
     /** Effective rate for this job - the project's own, or the firm default behind it. */
@@ -475,6 +478,14 @@ fun ProjectScreen(
             tone = ActionTone.SECONDARY,
             enabled = measured,
             onClick = onMaterials,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        GloveButton(
+            label = stringResource(R.string.wall_open),
+            icon = Icons.Default.Build,
+            tone = ActionTone.SECONDARY,
+            enabled = measured,
+            onClick = onWalls,
             modifier = Modifier.fillMaxWidth(),
         )
         GloveButton(
