@@ -47,9 +47,19 @@ class ManhattanFrameReportTest {
         assertEquals(4, report?.planes)
         assertEquals(4, report?.snappedPlanes)
         assertEquals(2, report?.horizontalAxes?.size)
-        // The vertical axis is the one with the largest |y|: a wall direction is level.
-        assertTrue(report?.axes?.get(1)?.isHorizontal ?: false)
-        assertFalse(report?.axes?.get(0)?.isHorizontal ?: true)
+        // Two of the three axes are level, and the level ones are the directions a floorplan may be
+        // squared onto: `(1, 0, 0)` and `(0, 0, 1)` here, with `(0, 1, 0)` the vertical.
+        assertTrue(report?.axes?.get(0)?.isHorizontal ?: false)
+        assertFalse(report?.axes?.get(1)?.isHorizontal ?: true)
+        assertTrue(report?.axes?.get(2)?.isHorizontal ?: false)
+    }
+
+    @Test
+    fun `a room seen through one wall has no horizontal pair`() {
+        // Both walls the fit found are parallel, so it can name a direction but not a frame: one
+        // horizontal axis, and a caller that squares a plan onto it is guessing the other.
+        val report = frame(axis0 = floatArrayOf(1f, 0f, 0f), axis2 = floatArrayOf(0f, 1f, 0f))
+        assertEquals(1, report?.horizontalAxes?.size)
     }
 
     @Test
