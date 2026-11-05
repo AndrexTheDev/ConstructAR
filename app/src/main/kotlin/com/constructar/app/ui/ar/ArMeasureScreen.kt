@@ -69,9 +69,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -91,7 +89,6 @@ import com.constructar.app.ui.GloveButton
 import com.constructar.app.ui.LocalDecimalMark
 import com.constructar.app.ui.shownLength
 import com.constructar.app.ui.shownLengthWithUnit
-import com.constructar.app.ui.shownPercent
 import com.constructar.app.ui.GloveButtonRow
 import com.constructar.app.ui.formatTimeLabel
 import com.constructar.app.ui.rememberTimePattern
@@ -111,7 +108,6 @@ import com.google.ar.core.Config
 import com.constructar.core.calib.CalibrationOutcome
 import com.constructar.core.calib.CalibrationReference
 import com.constructar.core.calib.CalibrationSweep
-import com.constructar.core.calib.MarkerStatusLine
 import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.model.ConduitPresets
 import com.constructar.core.model.ConduitSpec
@@ -945,84 +941,18 @@ fun ArMeasureScreen(
             )
 
             if (markerOpen) {
-                val state = markerState
-                val line = MarkerStatusLine.of(state)
-                AlertDialog(
-                    onDismissRequest = {
+                // The dialog is its own file since finding 242: it is a small state machine
+                // (aim, walk, sideways, measured) and it owns the sentences for each phase.
+                MarkerCalibrationDialog(
+                    state = markerState,
+                    onApply = { factor ->
+                        onCalibration(factor)
                         controller.stopMarkerProbe()
                         markerOpen = false
                     },
-                    title = { Text(stringResource(R.string.marker_title)) },
-                    text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(
-                                text = stringResource(R.string.marker_hint),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            // One mapping, in `:core`, decides what the dialog may say; the words
-                            // are here. A factor without its evidence is a number the operator
-                            // cannot judge (finding 237).
-                            when (line) {
-                                MarkerStatusLine.Off -> Unit
-                                is MarkerStatusLine.Watching -> Text(
-                                    text = stringResource(
-                                        R.string.marker_watching,
-                                        line.sightings,
-                                        line.markerIds,
-                                    ),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                                )
-                                is MarkerStatusLine.Measured -> Text(
-                                    text = stringResource(
-                                        R.string.marker_measured,
-                                        ReferenceCalibration.formatScale(line.factor),
-                                        line.pairs,
-                                        shownLengthWithUnit(line.baselineMetres),
-                                        shownPercent(line.spread),
-                                    ),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Jamaica.Lime,
-                                    // The number changes while the operator walks; without a live
-                                    // region a screen reader would read the hint once and never
-                                    // the answer.
-                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                                )
-                                is MarkerStatusLine.OutOfWindow -> Text(
-                                    text = stringResource(
-                                        R.string.calib_rejected_toast,
-                                        ReferenceCalibration.formatScale(line.factor),
-                                        ReferenceCalibration.formatScale(line.minScale),
-                                        ReferenceCalibration.formatScale(line.maxScale),
-                                    ),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = SiteColors.danger,
-                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                                )
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        // Only a factor the window takes may be applied - the same window the
-                        // two-tap sweep beside it uses, asked again here rather than trusted from
-                        // the proposal's own flag.
-                        val applied = (line as? MarkerStatusLine.Measured)?.factor
-                        TextButton(
-                            enabled = applied != null,
-                            onClick = {
-                                applied?.let { onCalibration(it) }
-                                controller.stopMarkerProbe()
-                                markerOpen = false
-                            },
-                        ) { Text(stringResource(R.string.calib_apply)) }
-                    },
-                    dismissButton = {
-                        TextButton(
-                            onClick = {
-                                controller.stopMarkerProbe()
-                                markerOpen = false
-                            },
-                        ) { Text(stringResource(R.string.home_cancel)) }
+                    onDismiss = {
+                        controller.stopMarkerProbe()
+                        markerOpen = false
                     },
                 )
             }

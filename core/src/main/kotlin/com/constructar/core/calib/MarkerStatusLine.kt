@@ -38,6 +38,18 @@ sealed interface MarkerStatusLine {
          * across a re-localisation cannot pair two world origins.
          */
         val ignoredForeign: Int,
+        /**
+         * `AIMING` (nothing seen: aim at the marker) or `WALKING` (seen, but not enough
+         * parallax). The dialog has one instruction per phase, and they are different
+         * instructions - "aim" while walking is advice that cannot work (finding 242).
+         */
+        val phase: MarkerWatchingPhase,
+        /**
+         * True when the operator has walked but walked *into* the wall: enough baseline, too
+         * little of it across the sight ray. The dialog keeps the walking sentence and turns it
+         * into a warning, because "walk more" would be the wrong next step.
+         */
+        val axialOnly: Boolean,
     ) : MarkerStatusLine
 
     /** A factor, with the evidence it rests on. */
@@ -79,6 +91,8 @@ sealed interface MarkerStatusLine {
                 sightings = state.sightings,
                 markerIds = state.markerIds,
                 ignoredForeign = state.ignoredForeign,
+                phase = state.phase,
+                axialOnly = state.axialOnly,
             )
             is MarkerSweepState.Ready -> {
                 val proposal = state.proposal

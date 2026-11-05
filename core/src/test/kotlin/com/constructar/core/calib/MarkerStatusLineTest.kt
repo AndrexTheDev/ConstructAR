@@ -29,6 +29,7 @@ class MarkerStatusLineTest {
         pairs: Int = 6,
         rejectedPairs: Int = 4,
         baselineMetres: Float = 3f,
+        perpendicularMetres: Float = 3f,
         spread: Float = 0.01f,
     ) = MarkerScaleProposal(
         factor = factor,
@@ -36,6 +37,7 @@ class MarkerStatusLineTest {
         pairs = pairs,
         rejectedPairs = rejectedPairs,
         baselineMetres = baselineMetres,
+        perpendicularMetres = perpendicularMetres,
         spread = spread,
     )
 

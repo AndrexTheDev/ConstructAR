@@ -20,7 +20,47 @@ data class MarkerSweepOptions(
     val minPairs: Int = 1,
     /** Sightings kept per marker. The newest win; older ones are the ones that may have moved. */
     val maxSightingsPerId: Int = 8,
-)
+    /**
+     * Sightings needed before a factor may be published at all. `1` keeps the pair estimate's own
+     * rule; the marker screen asks for [DEFAULT_MIN_SIGHTINGS], because three views of one tag is
+     * the point where a median means something (finding 242).
+     */
+    val minSightings: Int = 1,
+    /**
+     * How much of the camera-to-camera baseline must run **across** the sight ray, in metres.
+     * `0` means "do not ask" - correct for a two-sighting estimate, wrong for a sweep that has to
+     * coach the operator, which is why the screen sets [DEFAULT_MIN_PERPENDICULAR_METRES].
+     */
+    val minPerpendicularBaselineMetres: Float = 0f,
+    /**
+     * Baseline from which a *purely axial* walk (forward/back, no sideways movement) is called
+     * out. A metre walked into the wall and back is a lot of motion and very little evidence, and
+     * a status line that says "walk more" when the operator has already walked is worse than one
+     * that says what to do (finding 242).
+     */
+    val axialBaselineMetres: Float = DEFAULT_AXIAL_BASELINE_METRES,
+) {
+
+    companion object {
+        /** What the marker dialog asks for: three views of one tag, spread across the ray. */
+        const val DEFAULT_MIN_SIGHTINGS = 3
+
+        /** 35 cm of sideways movement: comfortably above ARCore's depth noise, under a step. */
+        const val DEFAULT_MIN_PERPENDICULAR_METRES = 0.35f
+
+        /** A metre of back-and-forth before the line stops saying "walk" and says "sideways". */
+        const val DEFAULT_AXIAL_BASELINE_METRES = 0.8f
+    }
+}
+
+/** Which of the two things a running sweep is waiting for, as a value a dialog can switch on. */
+enum class MarkerWatchingPhase {
+    /** Running, not one tag seen yet: aim at the marker. */
+    AIMING,
+
+    /** Seen, but not enough parallax: move sideways while keeping it in view. */
+    WALKING,
+}
 
 /** What a sweep currently has to say, which is what a status line shows. */
 sealed interface MarkerSweepState {
@@ -28,8 +68,23 @@ sealed interface MarkerSweepState {
     /** No sweep is running. */
     data object Off : MarkerSweepState
 
-    /** Running, with sightings in hand and no factor yet. */
-    data class Watching(val sightings: Int, val markerIds: Int, val ignoredForeign: Int) : MarkerSweepState
+    /**
+     * Running, with sightings in hand and no factor yet.
+     *
+     * [phase] is derived, not stored: 0 sightings can only mean "aim", and anything else means
+     * "walk". [axialOnly] is the case the phase cannot express - the operator *has* walked, and
+     * walked into the wall: a metre of baseline and almost none of it across the sight ray, so
+     * more of the same movement cannot help. It is a warning, not a state of its own, because the
+     * sweep is doing the same thing it was doing before: waiting.
+     */
+    data class Watching(
+        val sightings: Int,
+        val markerIds: Int,
+        val ignoredForeign: Int,
+        val phase: MarkerWatchingPhase =
+            if (sightings == 0) MarkerWatchingPhase.AIMING else MarkerWatchingPhase.WALKING,
+        val axialOnly: Boolean = false,
+    ) : MarkerSweepState
 
     /** A factor is published; the screen may apply it, and the decision is on the proposal. */
     data class Ready(
@@ -93,21 +148,57 @@ class MarkerSweep private constructor(
         sightings: List<MarkerObservation>,
         foreign: Int,
     ): MarkerSweepState {
-        val proposal = MarkerBaseline.estimate(
-            observations = sightings,
-            minBaselineMetres = options.minBaselineMetres,
-            maxRelativeDeviation = options.maxRelativeDeviation,
-            minPairs = options.minPairs,
-        )
+        val proposal = if (sightings.size < options.minSightings) {
+            null
+        } else {
+            MarkerBaseline.estimate(
+                observations = sightings,
+                minBaselineMetres = options.minBaselineMetres,
+                maxRelativeDeviation = options.maxRelativeDeviation,
+                minPairs = options.minPairs,
+                minPerpendicularBaselineMetres = options.minPerpendicularBaselineMetres,
+            )
+        }
         return if (proposal != null) {
             MarkerSweepState.Ready(proposal, sightings.size, foreign)
         } else {
+            val (longest, across) = baselines(sightings)
             MarkerSweepState.Watching(
                 sightings = sightings.size,
                 markerIds = sightings.map { it.id }.toSet().size,
                 ignoredForeign = foreign,
+                axialOnly = options.minPerpendicularBaselineMetres > 0f &&
+                    longest >= options.axialBaselineMetres &&
+                    across < options.minPerpendicularBaselineMetres,
             )
         }
+    }
+
+    /**
+     * The longest baseline the sweep has walked, and how much of it ran across the sight ray.
+     *
+     * The same pair rules as [MarkerBaseline]: one marker, one session, a finite place. Both
+     * numbers describe the *best* pair seen, because that is what the operator has to be told:
+     * "you have walked a metre, and none of it was sideways" is a fact about the walk, not about
+     * the pair the estimate happened to pick.
+     */
+    private fun baselines(sightings: List<MarkerObservation>): Pair<Float, Float> {
+        var longest = 0f
+        var across = 0f
+        for (first in sightings.indices) {
+            for (second in first + 1 until sightings.size) {
+                val a = sightings[first]
+                val b = sightings[second]
+                if (a.id != b.id || a.sessionId != b.sessionId) continue
+                if (!a.isFinite || !b.isFinite) continue
+                val measured = a.cameraPose.translation.distanceTo(b.cameraPose.translation)
+                if (measured > longest) {
+                    longest = measured
+                    across = MarkerBaseline.perpendicularMetresBetween(a, b)
+                }
+            }
+        }
+        return longest to across
     }
 
     companion object {
@@ -125,6 +216,13 @@ class MarkerSweep private constructor(
             if (!(options.minBaselineMetres > 0f) || !options.minBaselineMetres.isFinite()) return null
             if (!(options.maxRelativeDeviation > 0f) || !options.maxRelativeDeviation.isFinite()) return null
             if (options.minPairs < 1 || options.maxSightingsPerId < 1) return null
+            if (options.minSightings < 1) return null
+            if (!(options.minPerpendicularBaselineMetres >= 0f) ||
+                !options.minPerpendicularBaselineMetres.isFinite()
+            ) {
+                return null
+            }
+            if (!(options.axialBaselineMetres > 0f) || !options.axialBaselineMetres.isFinite()) return null
             // A running sweep that has seen nothing is **watching**, not off. Returning `Off` here
             // would make "the probe is running and has no evidence yet" indistinguishable from
             // "the probe is not running", which is exactly the pair of states a status line exists

@@ -64,6 +64,16 @@ data class MarkerScaleProposal(
     val rejectedPairs: Int,
     /** Longest decoded baseline behind the factor: the evidence it actually rests on. */
     val baselineMetres: Float,
+    /**
+     * Longest **perpendicular** baseline behind the factor, in metres.
+     *
+     * The component of the camera-to-camera baseline at right angles to the sight ray. Walking
+     * straight at a marker doubles its apparent size but moves the *measured* baseline almost
+     * entirely along the ray, where depth noise dominates; walking sideways moves it across the
+     * ray, where the geometry is strong. Two sightings a metre apart can therefore be almost no
+     * evidence at all, and `baselineMetres` alone cannot tell the two walks apart (finding 242).
+     */
+    val perpendicularMetres: Float,
     /** Worst relative deviation among the accepted pairs. */
     val spread: Float,
 )
@@ -109,7 +119,11 @@ object MarkerBaseline {
      * `minBaselineMetres` and `maxRelativeDeviation` are the caller's knobs, in the same shape the
      * native layout path uses: a pair shorter than the floor is not evidence, and a pair further
      * from the median than the deviation is an outlier (a mis-read id, a marker that moved).
-     * `minPairs` is how much agreement there has to be before anything is published at all.
+     * `minPairs` is how much agreement there has to be before anything is published at all, and
+     * `minPerpendicularBaselineMetres` is how much of the baseline has to point *across* the sight
+     * ray - `0` means "do not ask", which is what a two-sighting estimate wants; the marker sweep
+     * sets it, because its status line has to tell the operator to walk sideways rather than into
+     * the wall (finding 242).
      *
      * Returns `null` when fewer than `minPairs` pairs survive — "not enough evidence" is not a
      * factor of 1.0, and a caller that cannot tell those apart would silently certify an
@@ -120,11 +134,15 @@ object MarkerBaseline {
         minBaselineMetres: Float,
         maxRelativeDeviation: Float,
         minPairs: Int = 1,
+        minPerpendicularBaselineMetres: Float = 0f,
     ): MarkerScaleProposal? {
         if (observations.size < 2) return null
         if (!(minBaselineMetres > 0f) || !minBaselineMetres.isFinite()) return null
         if (!(maxRelativeDeviation > 0f) || !maxRelativeDeviation.isFinite()) return null
         if (minPairs < 1) return null
+        if (!(minPerpendicularBaselineMetres >= 0f) || !minPerpendicularBaselineMetres.isFinite()) {
+            return null
+        }
 
         val ratios = ArrayList<PairRatio>()
         var rejected = 0
@@ -151,6 +169,15 @@ object MarkerBaseline {
                     rejected++
                     continue
                 }
+                // Across the sight ray or along it? A walk into the wall has a metre of baseline
+                // and almost none of it is evidence, so a caller that cares says so and the pair
+                // is refused here - as a *rejection*, because the operator has to be told to move
+                // sideways rather than be handed a factor built on depth noise.
+                val perpendicular = perpendicularBaselineMetres(a, b)
+                if (perpendicular < minPerpendicularBaselineMetres) {
+                    rejected++
+                    continue
+                }
                 val decodedVector = b.cameraPose.transformDirection(b.tagInCamera) -
                     a.cameraPose.transformDirection(a.tagInCamera)
                 val decoded = decodedVector.length
@@ -158,7 +185,11 @@ object MarkerBaseline {
                     rejected++
                     continue
                 }
-                ratios += PairRatio(ratio = decoded / measured, baseline = measured)
+                ratios += PairRatio(
+                    ratio = decoded / measured,
+                    baseline = measured,
+                    perpendicular = perpendicular,
+                )
             }
         }
         if (ratios.size < minPairs) return null
@@ -183,7 +214,9 @@ object MarkerBaseline {
         var weighted = 0.0
         var weight = 0.0
         var longest = 0f
+        var longestPerpendicular = 0f
         for (pair in accepted) {
+            if (pair.perpendicular > longestPerpendicular) longestPerpendicular = pair.perpendicular
             weighted += pair.ratio.toDouble() * pair.baseline
             weight += pair.baseline.toDouble()
             if (pair.baseline > longest) longest = pair.baseline
@@ -197,11 +230,42 @@ object MarkerBaseline {
             pairs = accepted.size,
             rejectedPairs = rejected,
             baselineMetres = longest,
+            perpendicularMetres = longestPerpendicular,
             spread = worst,
         )
     }
 
-    private data class PairRatio(val ratio: Float, val baseline: Float)
+    /**
+     * The part of the camera-to-camera baseline that runs *across* the sight ray.
+     *
+     * `b_perp = || b - (b . v) v ||` with `b` the camera-to-camera vector and `v` the unit sight
+     * ray, taken as the direction from the midpoint of the two cameras to the midpoint of the two
+     * marker estimates. Two views of one tag give that direction directly, which is why this is
+     * computed from the same two rotations the factor uses rather than from a stored normal.
+     *
+     * `0` for a pair that is not a measurement at all (a zero baseline, a tag behind the camera):
+     * the caller's floor then refuses it, which is the same answer as "no parallax".
+     */
+    fun perpendicularMetresBetween(a: MarkerObservation, b: MarkerObservation): Float =
+        perpendicularBaselineMetres(a, b)
+
+    private fun perpendicularBaselineMetres(a: MarkerObservation, b: MarkerObservation): Float {
+        val cameraA = a.cameraPose.translation
+        val cameraB = b.cameraPose.translation
+        val tagA = a.cameraPose.transform(a.tagInCamera)
+        val tagB = b.cameraPose.transform(b.tagInCamera)
+        val baseline = cameraB - cameraA
+        val ray = (tagA + tagB) * 0.5f - (cameraA + cameraB) * 0.5f
+        val length = ray.length
+        if (!(length > 1e-4f) || !length.isFinite()) return 0f
+        val unit = ray * (1f / length)
+        val along = baseline dot unit
+        val perpendicular = baseline - unit * along
+        val result = perpendicular.length
+        return if (result.isFinite()) result else 0f
+    }
+
+    private data class PairRatio(val ratio: Float, val baseline: Float, val perpendicular: Float)
 
     private fun medianOf(values: List<Float>): Float {
         val sorted = values.sorted()

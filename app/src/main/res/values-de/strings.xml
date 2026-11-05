@@ -75,6 +75,8 @@
     <string name="marker_hint">Ziele auf einen gedruckten Marker und gehe einen Meter, während er im Bild bleibt.</string>
     <string name="marker_watching">Noch nicht genug Belege: %1$d Sichtungen von %2$d Markern.</string>
     <string name="marker_measured">Gemessen: Faktor %1$s aus %2$d Paaren über %3$s, Streuung ±%4$s %%.</string>
+    <string name="marker_state_aiming">Richte die Kamera auf den gedruckten Marker, 0,5 bis 2,0 m entfernt.</string>
+    <string name="marker_state_walking">Bewege das Handy jetzt etwa einen Meter seitlich; der Marker bleibt im Bild.</string>
     <string name="ar_add_point">Punkt in der Mitte</string>
     <string name="ar_undo">Zurück</string>
     <string name="ar_close_loop">Schließen</string>
