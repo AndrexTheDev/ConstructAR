@@ -21,6 +21,8 @@
     <string name="home_cancel">Cancel</string>
     <string name="home_empty">No rooms yet. Create one to start measuring.</string>
     <string name="home_offline_note">Works fully offline. Nothing leaves this phone.</string>
+    <string name="card_area">%1$s m²</string>
+    <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Export</string>
 
     <!-- AR measuring screen -->

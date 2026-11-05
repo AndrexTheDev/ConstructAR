@@ -63,6 +63,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.constructar.app.R
 import com.constructar.app.data.ProjectRepository
+import com.constructar.app.data.RoomSizeText
 import com.constructar.app.data.RoomThumbnail
 import com.constructar.app.ui.theme.Jamaica
 import com.constructar.app.ui.theme.SiteColors
@@ -521,6 +522,7 @@ private fun ProjectRow(project: ProjectRepository.ProjectSummary, onClick: () ->
                 overflow = TextOverflow.Ellipsis,
             )
             ProjectMetaLine(project)
+            RoomSizeBadges(project.sketch)
         }
         Text(
             LengthFormatter.format(project.totalLengthMeters),
@@ -567,6 +569,40 @@ private fun RoomPicture(sketch: FloorplanSketch?) {
         // A miter joint, so a right-angled room reads as a right-angled room.
         drawPath(path = path, color = strokeColor, style = Stroke(width = 1.5.dp.toPx(), join = StrokeJoin.Miter))
     }
+}
+
+/**
+ * The room's area and perimeter, as two small badges under the row's name.
+ *
+ * Read from the outline stored in the project and from nothing else: the same ring the picture
+ * beside them draws, so the shape and the numbers cannot describe two different rooms. Both are
+ * absent together - a room without a closed plan keeps its icon and states no size, because
+ * "0.0 m²" would be a claim about the scan rather than about the room.
+ *
+ * The numbers are digits from [RoomSizeText] (the `Locale.ROOT` ones the length column of this same
+ * row prints) and the units come from the resources, which is why nothing here is a Kotlin string
+ * literal: `:app` owns every word a screen shows, in all six locales.
+ */
+@Composable
+private fun RoomSizeBadges(sketch: FloorplanSketch?) {
+    val size = RoomSizeText.of(sketch) ?: return
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 3.dp)) {
+        SizeBadge(stringResource(R.string.card_area, size.area))
+        SizeBadge(stringResource(R.string.card_perimeter, size.perimeter))
+    }
+}
+
+/** One badge. Decoration for the eye: the same numbers are in the row's text for a screen reader. */
+@Composable
+private fun SizeBadge(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp))
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    )
 }
 
 @Composable

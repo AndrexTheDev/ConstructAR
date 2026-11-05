@@ -350,6 +350,13 @@ into `ProjectRecord.sketch: FloorplanSketch?` — a list of `{xMeters, zMeters}`
 world `z` down) because the card and the exported picture are the same room; the two are pinned to
 each other by a test, not by a comment.
 
+The same outline is read a third time for the card's **size** badges: `RoomSizeText.of(sketch)`
+turns the ring into the digits of its area (`PolygonMath.area`) and its perimeter (the closed walk,
+last corner back to the first) and returns `null` for anything the picture would refuse — the two
+states cannot disagree about whether the room was measured. The units are resources
+(`card_area`, `card_perimeter`); a unit typed into a screen would ship in one language, and the
+i18n audit reads resources, not Kotlin.
+
 Two consequences worth stating. The outline is inside the project JSON, so `backupEntries()` carries
 it: a room restored on another phone still draws its plan, while the `thumbnail.svg` beside it is
 regenerated or simply absent (`explicitNulls = false` means a room that was never scanned writes no

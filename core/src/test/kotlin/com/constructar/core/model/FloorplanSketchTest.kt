@@ -65,6 +65,38 @@ class FloorplanSketchTest {
     }
 
     @Test
+    fun `the perimeter counts the closing edge`() {
+        // 4 + 3 + 4 + 3: the walk back to the first corner is a wall like any other. Leaving it out
+        // would report 11 m for this room and under-order skirting by 3 m.
+        assertEquals(14f, room().perimeterMeters, 1e-4f)
+    }
+
+    @Test
+    fun `a triangle's perimeter is the sum of its sides`() {
+        val triangle = FloorplanSketch(
+            listOf(SketchPoint(0f, 0f), SketchPoint(3f, 0f), SketchPoint(3f, 4f)),
+        )
+
+        assertEquals(12f, triangle.perimeterMeters, 1e-4f)
+        assertEquals(6f, triangle.areaSquareMeters, 1e-4f)
+    }
+
+    @Test
+    fun `a sketch without a ring has no perimeter`() {
+        assertFalse(FloorplanSketch().perimeterMeters > 0f)
+        assertFalse(FloorplanSketch(listOf(SketchPoint(0f, 0f), SketchPoint(1f, 0f))).perimeterMeters > 0f)
+    }
+
+    @Test
+    fun `a coordinate that is not a number has no perimeter`() {
+        val broken = FloorplanSketch(
+            listOf(SketchPoint(0f, 0f), SketchPoint(Float.NaN, 0f), SketchPoint(1f, 1f)),
+        )
+
+        assertEquals(0f, broken.perimeterMeters, 1e-6f)
+    }
+
+    @Test
     fun `a sketch survives the project file's own serializer`() {
         val encoded = Json.encodeToString(FloorplanSketch.serializer(), room())
         val decoded = Json.decodeFromString(FloorplanSketch.serializer(), encoded)

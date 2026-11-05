@@ -21,6 +21,8 @@
     <string name="home_cancel">Abbrechen</string>
     <string name="home_empty">Noch keine Räume. Leg einen an, um zu messen.</string>
     <string name="home_offline_note">Läuft vollständig offline. Nichts verlässt dieses Gerät.</string>
+    <string name="card_area">%1$s m²</string>
+    <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Export</string>
 
     <!-- AR measuring screen -->

@@ -9,6 +9,7 @@ package com.constructar.core.model
 import com.constructar.core.math.PolygonMath
 import com.constructar.core.math.Vec3
 import kotlinx.serialization.Serializable
+import kotlin.math.sqrt
 
 /** One corner of a room outline, in metres on the floor plane. */
 @Serializable
@@ -45,6 +46,33 @@ data class FloorplanSketch(
      */
     val areaSquareMeters: Float
         get() = if (points.size < 3) 0f else PolygonMath.area(toFloorPolygon())
+
+    /**
+     * The room's perimeter in metres: the ring's length, closing edge included.
+     *
+     * A room outline *is* a ring - the last corner is joined back to the first, which is what
+     * `FloorplanSvg` and the card both draw - so the closing edge is part of the walk. Without it a
+     * 4 x 3 m room would measure 11 m instead of 14 m, and 3 m of wall would simply be missing from
+     * the one number that prices skirting, trunking and the clips that hold them.
+     *
+     * Zero rather than a guess when there is no ring (fewer than three corners) or a coordinate is
+     * not finite: a card that prints "0.00 m" for a room it cannot measure is honest, and a caller
+     * can tell that apart from a small room.
+     */
+    val perimeterMeters: Float
+        get() {
+            if (points.size < 3) return 0f
+            var total = 0f
+            for (index in points.indices) {
+                val current = points[index]
+                val next = points[(index + 1) % points.size]
+                val dx = next.xMeters - current.xMeters
+                val dz = next.zMeters - current.zMeters
+                if (!dx.isFinite() || !dz.isFinite()) return 0f
+                total += sqrt(dx * dx + dz * dz)
+            }
+            return if (total.isFinite()) total else 0f
+        }
 
     fun toFloorPolygon(): List<Vec3> = points.map { Vec3(it.xMeters, 0f, it.zMeters) }
 

@@ -3170,6 +3170,61 @@ def _brace_depth(code: str, position: int) -> int:
     return code.count("{", 0, position) - code.count("}", 0, position)
 
 
+CARD_SIZE_CHAIN = (
+    ("core/src/main/kotlin/com/constructar/core/model/FloorplanSketch.kt",
+     "val perimeterMeters: Float",
+     "the outline no longer knows how long its ring is"),
+    ("app/src/main/kotlin/com/constructar/app/data/RoomSizeText.kt",
+     "fun of(sketch: FloorplanSketch?): RoomSizeText?",
+     "nothing turns the outline into the two numbers the card states"),
+    ("app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt",
+     "RoomSizeText.of(sketch)",
+     "the badge row stops asking for a size"),
+    ("app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt",
+     "stringResource(R.string.card_area, size.area)",
+     "the area badge stops printing the area"),
+    ("app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt",
+     "stringResource(R.string.card_perimeter, size.perimeter)",
+     "the perimeter badge stops printing the perimeter"),
+)
+
+
+def check_the_card_states_the_room_size() -> None:
+    """The size on the card is a third reader of one outline, and silence is its failure mode (finding 201).
+
+    Round 94 put the ring in the project and round 95 prints it twice more - area and perimeter -
+    from the same `FloorplanSketch`. Every joint on that route fails the same way: the row keeps its
+    picture and simply stops stating a size, which on a card looks exactly like a room nobody has
+    measured yet. Worse, there is a plausible wrong fix that compiles and passes every other test -
+    summing `totalLengthMeters` for a "perimeter", or storing an area in the summary - and then the
+    picture and the numbers describe two different rooms the first time a run is deleted.
+
+    So the route is named link by link, like the two chains above it, and the unit gets a rule of
+    its own direction: `m²` may appear in the six resources, never in the Kotlin. A unit typed into
+    the UI would ship in one language and be invisible to the i18n audit, which only reads numbers
+    and words that go through a resource.
+    """
+    for relative, marker, complaint in CARD_SIZE_CHAIN:
+        path = ROOT / relative
+        if not path.exists():
+            continue  # a missing file is already a finding above
+        if marker in path.read_text(encoding="utf-8"):
+            continue
+        add(path, f"{complaint} - nothing else reports it, and the card just looks like a room "
+                  f"that was never scanned")
+    screen = ROOT / "app/src/main/kotlin/com/constructar/app/ui/HomeScreen.kt"
+    if screen.exists():
+        for number, line in enumerate(screen.read_text(encoding="utf-8").splitlines(), start=1):
+            stripped = line.strip()
+            if stripped.startswith(("*", "//", "/*")):
+                continue  # a KDoc sentence may name a unit; a screen may not print one
+            for unit in ("m²", "m³"):
+                if unit in line:
+                    add(screen, f"line {number}: the unit '{unit}' is typed into a screen - the "
+                                f"badge's unit belongs to `card_area`/`card_perimeter`, or it "
+                                f"ships in one language only and the i18n audit cannot see it")
+
+
 def check_a_contract_assertion_is_believed() -> None:
     """An asserted value read with `?.` is a warning, and CI is `-Werror` (finding 199).
 
@@ -3304,6 +3359,7 @@ def main() -> int:
     check_project_imports_are_used()
     check_the_card_picture_has_a_writer()
     check_the_card_draws_from_the_project_file()
+    check_the_card_states_the_room_size()
     check_every_external_function_has_a_symbol()
     check_the_floorplan_payload_header_matches()
     check_kotlin_structure()

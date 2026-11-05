@@ -21,6 +21,8 @@
     <string name="home_cancel">Cancelar</string>
     <string name="home_empty">Aún no hay estancias. Crea una para empezar a medir.</string>
     <string name="home_offline_note">Funciona totalmente sin conexión. Nada sale de este teléfono.</string>
+    <string name="card_area">%1$s m²</string>
+    <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Exportar</string>
 
     <!-- AR measuring screen -->

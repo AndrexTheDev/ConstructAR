@@ -122,6 +122,15 @@ picture; the SVG stays what it always was for: the artefact that leaves the phon
 closed plan keeps the icon, because a placeholder outline would be a shape the operator never
 walked.
 
+The same outline states the room's **size**. Under the card's name sit two badges — the area from
+`PolygonMath.area` and the perimeter of the ring, closing edge included (a 4 × 3 m room is 12.0 m²
+and 14.00 m, not 11 m: the walk back to the first corner is a wall, and it is what skirting and
+trunking are priced on). Both numbers are `LengthFormatter`'s `Locale.ROOT` digits, the same ones
+the length column of that row prints, and both units live in the resources (`card_area`,
+`card_perimeter`) so six locales stay in step. They appear only when the picture does: a row that
+drew a shape but stated no size, or stated a size beside an icon, would be two answers to "was this
+room measured".
+
 **Depth fusion policy.** ARCore depth is metric but holey; the network is dense but only
 relative. `AiDepthFusion` therefore lets the network **fill holes only** — a confident ARCore
 sample is never overwritten — after `MetricDepthCalibrator` fits `1/z = s·d + t` against
@@ -661,7 +670,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 853 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 863 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 287 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 287 checks, 0 failures, no data race reported |
