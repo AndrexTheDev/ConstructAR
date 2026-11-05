@@ -83,15 +83,15 @@ class MarkerSweepStateMachineTest {
         var sweep = MarkerSweep.start(options())!!
         sweep = sweep.observe(sighting(Vec3(0f, 0f, 0f)))
         sweep = sweep.observe(sighting(Vec3(0f, 0f, 1.2f)))
-        // Read once into a value of the interface type: `sweep.state` is stable enough for the
-        // compiler to smart-cast it, and a second read would then be a cast that "can never
-        // succeed" (which `-Werror` refuses).
+        // Read once, and ask the negative question first: an `as` cast narrows the variable for
+        // everything after it, so `published as? Ready` *after* the cast to Watching is a cast the
+        // compiler can prove can never succeed - which `-Werror` refuses.
         val published = sweep.state
+        assertFalse("an axial walk is no evidence, so no factor", published is MarkerSweepState.Ready)
         val state = published as MarkerSweepState.Watching
 
         assertTrue("1.2 m of axial walk should be called out", state.axialOnly)
         assertEquals(MarkerWatchingPhase.WALKING, state.phase)
-        assertNull("an axial walk is no evidence, so no factor", published as? MarkerSweepState.Ready)
     }
 
     @Test
