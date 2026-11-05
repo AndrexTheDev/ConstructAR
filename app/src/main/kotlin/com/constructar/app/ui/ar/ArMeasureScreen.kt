@@ -18,6 +18,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,6 +68,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -507,9 +512,33 @@ fun ArMeasureScreen(
 
                 // Full-surface tap target. Sits above the AR view so SceneView's own gesture
                 // handling cannot swallow a tap, and below the controls.
+                //
+                // It is also the only way to set a point, and until now it was a camera preview
+                // with no name, no action and no state: a screen reader user could aim the phone
+                // and had nothing to double-tap. It now announces itself and offers the one
+                // action a camera view can have without a fingertip - "set the point in the
+                // middle of the screen" - which is where the reticle already is (finding 211).
+                var tapSurface by remember { mutableStateOf(IntSize.Zero) }
+                val tapHint = stringResource(R.string.a11y_ar_view)
+                val tapAction = stringResource(R.string.a11y_ar_place_point)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .onSizeChanged { tapSurface = it }
+                        .semantics {
+                            contentDescription = tapHint
+                            onClick(label = tapAction) {
+                                if (tapSurface.width > 0 && tapSurface.height > 0) {
+                                    controller.requestTap(
+                                        tapSurface.width / 2f,
+                                        tapSurface.height / 2f,
+                                        tapSurface.width,
+                                        tapSurface.height,
+                                    )
+                                }
+                                true
+                            }
+                        }
                         .pointerInput(Unit) {
                             detectTapGestures { offset ->
                                 controller.requestTap(offset.x, offset.y, size.width, size.height)
@@ -692,7 +721,12 @@ fun ArMeasureScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // One conduit spec out of five: a group of radio buttons, so TalkBack says which one
+            // is chosen instead of reading five identical-looking buttons (finding 211).
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.selectableGroup(),
+            ) {
                 ConduitPresets.all.forEach { preset ->
                     SpecChip(
                         spec = preset,
@@ -1018,10 +1052,19 @@ private fun SpecChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // A local with a name of its own: inside `semantics { }` an unqualified `selected` resolves to
+    // the receiver's own property, so writing `this.selected = selected` there would read the very
+    // property it assigns and announce nothing - the same shape as finding 204's narrower helper.
+    val chosen = selected
     Button(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
-        modifier = modifier.padding(vertical = 2.dp),
+        // The selection used to be a background colour and nothing else. `selected` makes the
+        // button announce "selected" inside its group; the colour stays what a sighted gloved
+        // hand sees (finding 211).
+        modifier = modifier
+            .padding(vertical = 2.dp)
+            .semantics { this.selected = chosen },
         colors = ButtonDefaults.buttonColors(
             // The selected chip used to be the spec colour at 90 % under *white* text - white on
             // gold measures 1.4:1, so the one chip the worker just tapped was the one he could not

@@ -34,6 +34,32 @@ class DefectToggleTest {
     }
 
     @Test
+    fun `the button says the state as well as the action`() {
+        // The action is what the tap does - "Mark resolved" on an open defect. The state is what
+        // the defect *is*, and it is the half a TalkBack user could not hear at all (finding 211).
+        assertEquals(R.string.pdf_status_open, DefectToggle.stateRes(resolved = false))
+        assertEquals(R.string.pdf_status_resolved, DefectToggle.stateRes(resolved = true))
+    }
+
+    @Test
+    fun `the state and the action are never the same sentence`() {
+        // If they were, the button would announce one word twice and the operator would learn
+        // nothing from the second.
+        assertNotEquals(
+            DefectToggle.stateRes(resolved = false),
+            DefectToggle.labelRes(DefectToggle.action(resolved = false)),
+        )
+        assertNotEquals(
+            DefectToggle.stateRes(resolved = true),
+            DefectToggle.labelRes(DefectToggle.action(resolved = true)),
+        )
+        assertNotEquals(
+            DefectToggle.stateRes(resolved = true),
+            DefectToggle.stateRes(resolved = false),
+        )
+    }
+
+    @Test
     fun `the two directions do not share a sentence`() {
         // The old string said both ("Mark resolved / open again"), which is why a screen reader
         // could not tell the operator what the tap was about to do.

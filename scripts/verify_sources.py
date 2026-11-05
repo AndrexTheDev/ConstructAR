@@ -3539,6 +3539,123 @@ def check_the_protocol_prints_the_room_plan() -> None:
                       "printed as if every wall had been measured")
 
 
+def check_every_interactive_row_announces_itself() -> None:
+    """A tap target says what it is, what it does and what it currently is (finding 211).
+
+    Every control in this app was sized for a gloved hand, and the round before this one made sure
+    of that. None of them were written for a screen reader: a row that opens the paywall was an
+    unlabelled `clickable`, a three-way severity choice was three `clickable` texts whose selection
+    lived in a background colour, a `Switch` sat beside its own label as a second node that could
+    not say *which* format it belonged to, the signature pad - a blank canvas with two pointer
+    inputs - had no name, no state and no way to clear it, and the AR screen's full-surface tap
+    target was a camera preview with nothing to double-tap. A sighted operator with gloves was
+    served; a blind one was not, in an app whose measuring screen is one enormous unlabelled Box.
+
+    So the conventions are stated once, here, because each of them is a composable modifier in one
+    file and a promise in another:
+
+      * `clickable`, `selectable` and `toggleable` carry a `role` - a row that acts is a button, a
+        choice in a group is a radio button, a setting is a switch;
+      * a `Switch` hands its tap to the row (`onCheckedChange = null`), so the label and the state
+        are one node instead of two;
+      * every `OutlinedTextField` has a `label`, which is the field's accessible name - a
+        placeholder is decoration and announces nothing;
+      * the signature pad exposes its name, its state and a clear action;
+      * the AR tap surface offers the action a camera preview can offer without a fingertip;
+      * both chooser rows are a `selectableGroup`.
+    """
+    for path in kotlin_sources("app"):
+        if "/src/main/" not in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for needle, rule_name in (
+            (".clickable(", "clickable"),
+            (".selectable(", "selectable"),
+            (".toggleable(", "toggleable"),
+        ):
+            index = 0
+            while True:
+                start = text.find(needle, index)
+                if start < 0:
+                    break
+                call = _kotlin_call(text, start + len(needle) - 1)
+                index = start + len(needle)
+                if not call:
+                    continue
+                if "role = Role." not in call:
+                    line = text[:start].count("\n") + 1
+                    add(path, f"line {line}: `{rule_name}` without a `role` - the row acts, so it "
+                              f"has to say what it is; an unlabelled clickable is announced as "
+                              f"tappable and nothing more")
+        # A Switch that keeps its own tap is a second, nameless control beside the label.
+        index = 0
+        while True:
+            start = text.find("Switch(", index)
+            if start < 0:
+                break
+            call = _kotlin_call(text, start)
+            index = start + len("Switch(")
+            if not call:
+                continue
+            if "onCheckedChange = null" not in call:
+                line = text[:start].count("\n") + 1
+                add(path, f"line {line}: a `Switch` with its own `onCheckedChange` - the tap then "
+                          f"belongs to a node that cannot name the setting it changes; hand it to "
+                          f"the row with `onCheckedChange = null` inside a `toggleable`")
+        # A field whose only hint is a placeholder has no accessible name.
+        index = 0
+        while True:
+            start = text.find("OutlinedTextField(", index)
+            if start < 0:
+                break
+            call = _kotlin_call(text, start)
+            index = start + len("OutlinedTextField(")
+            if not call:
+                continue
+            if "label = " not in call:
+                line = text[:start].count("\n") + 1
+                add(path, f"line {line}: an `OutlinedTextField` without a `label` - a placeholder "
+                          f"is not a name, so a screen reader meets an unlabelled edit box")
+    pad = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+           "SignaturePad.kt")
+    pad_text = pad.read_text(encoding="utf-8")
+    # `=` matters: the import line alone would satisfy a bare token search, which is exactly how a
+    # clause written against a word instead of an assignment reads green while announcing nothing.
+    if not re.search(r"stateDescription\s*=", pad_text):
+        add(pad, "the signature pad never says whether the page will carry a signature - a screen "
+                 "reader user has no way to know the pad is signed")
+    if not re.search(r"customActions\s*=\s*listOf\(", pad_text) or "CustomAccessibilityAction" not in pad_text:
+        add(pad, "the signature pad cannot be cleared without a fingertip: its clear action is not "
+                 "reachable as an accessibility action")
+    if "contentDescription = padLabel" not in pad_text:
+        add(pad, "the signature pad has no name, so it is announced as an unnamed canvas")
+    ar = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+          "ar" / "ArMeasureScreen.kt")
+    ar_text = ar.read_text(encoding="utf-8")
+    if "detectTapGestures" in ar_text and "onClick(label = tapAction)" not in ar_text:
+        add(ar, "the AR tap surface is a camera preview with no accessibility action - the only "
+                "way to set a point cannot be performed by a screen reader user")
+    for path, name in ((ar, "the conduit spec row"), ):
+        if "selectableGroup()" not in path.read_text(encoding="utf-8"):
+            add(path, f"{name} is not a group, so the chosen spec is announced without the fact "
+                      f"that it is chosen out of five")
+    book = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" /
+            "FieldBookScreen.kt")
+    if "selectableGroup()" not in book.read_text(encoding="utf-8"):
+        add(book, "the severity choice is not a selectable group, so the chosen severity is "
+                  "announced as three unrelated chips")
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if not path.exists():
+            continue
+        strings, _ = load_locale(folder)
+        for key in ("a11y_signature_pad", "a11y_signature_signed", "a11y_signature_empty",
+                    "a11y_signature_clear", "a11y_ar_view", "a11y_ar_place_point"):
+            if not (strings.get(key) or "").strip():
+                add(path, f"missing string '{key}' - the control it names would be announced as "
+                          f"an unnamed element")
+
+
 def check_a_contract_assertion_is_believed() -> None:
     """An asserted value read with `?.` is a warning, and CI is `-Werror` (finding 199).
 
@@ -3670,6 +3787,7 @@ def main() -> int:
     check_a_contract_assertion_is_believed()
     check_glove_buttons_are_big_enough()
     check_the_protocol_prints_the_room_plan()
+    check_every_interactive_row_announces_itself()
     check_the_reticle_snap_stays_wired()
     check_exported_numbers_use_the_c_locale()
     check_project_imports_are_used()

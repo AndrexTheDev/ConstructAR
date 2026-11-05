@@ -28,6 +28,12 @@
     <string name="card_closed_by_hand">wall by hand</string>
     <string name="pdf_floorplan_title">Room plan</string>
     <string name="pdf_floorplan_by_hand">The closing wall was drawn by hand, not measured.</string>
+    <string name="a11y_signature_pad">Signature field. Draw the customer’s signature with one finger.</string>
+    <string name="a11y_signature_signed">Signed</string>
+    <string name="a11y_signature_empty">Not signed yet</string>
+    <string name="a11y_signature_clear">Clear the signature</string>
+    <string name="a11y_ar_view">Camera view</string>
+    <string name="a11y_ar_place_point">Set the measuring point in the middle of the screen</string>
     <string name="card_area">%1$s m²</string>
     <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Export</string>

@@ -28,6 +28,12 @@
     <string name="card_closed_by_hand">Wand von Hand</string>
     <string name="pdf_floorplan_title">Raumplan</string>
     <string name="pdf_floorplan_by_hand">Die Schlusswand wurde von Hand gezeichnet, nicht gemessen.</string>
+    <string name="a11y_signature_pad">Unterschriftenfeld. Unterschrift des Kunden mit einem Finger zeichnen.</string>
+    <string name="a11y_signature_signed">Unterschrieben</string>
+    <string name="a11y_signature_empty">Noch nicht unterschrieben</string>
+    <string name="a11y_signature_clear">Unterschrift löschen</string>
+    <string name="a11y_ar_view">Kamerabild</string>
+    <string name="a11y_ar_place_point">Messpunkt in der Bildmitte setzen</string>
     <string name="card_area">%1$s m²</string>
     <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Export</string>

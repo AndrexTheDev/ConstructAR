@@ -29,8 +29,15 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.constructar.app.R
 import com.constructar.app.ui.theme.Jamaica
 
 /**
@@ -197,10 +204,33 @@ fun rememberSignaturePadState(): SignaturePadState =
  */
 @Composable
 fun SignaturePad(state: SignaturePadState, modifier: Modifier = Modifier) {
+    // Read at composition, because a semantics lambda is not composable: the four sentences the
+    // pad announces are the app's strings, in the app's language (finding 211).
+    val padLabel = stringResource(R.string.a11y_signature_pad)
+    val signedLabel = stringResource(R.string.a11y_signature_signed)
+    val emptyLabel = stringResource(R.string.a11y_signature_empty)
+    val clearLabel = stringResource(R.string.a11y_signature_clear)
+    val isEmpty = state.isEmpty
     Box(
         modifier = modifier
             .background(Jamaica.Chalk, RoundedCornerShape(14.dp))
             .onSizeChanged { state.surface = it }
+            // A surface drawn on with a finger says nothing to a screen reader: no name, no state,
+            // no way to undo. It has all three now - the field is named, it says whether the page
+            // will carry a signature, and the clear action is reachable as an accessibility
+            // action instead of only through the button beside the pad.
+            .semantics {
+                contentDescription = padLabel
+                stateDescription = if (isEmpty) emptyLabel else signedLabel
+                if (!isEmpty) {
+                    customActions = listOf(
+                        CustomAccessibilityAction(clearLabel) {
+                            state.clear()
+                            true
+                        },
+                    )
+                }
+            }
             // A tap on its own, because a drag gesture reports nothing until the finger has moved
             // past the touch slop: a hurried signature that starts with a touch and a lift was
             // silently dropped (finding 82).

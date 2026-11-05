@@ -28,6 +28,12 @@
     <string name="card_closed_by_hand">muro a mano</string>
     <string name="pdf_floorplan_title">Pianta della stanza</string>
     <string name="pdf_floorplan_by_hand">La parete di chiusura è stata tracciata a mano, non misurata.</string>
+    <string name="a11y_signature_pad">Campo firma. Traccia la firma del cliente con un dito.</string>
+    <string name="a11y_signature_signed">Firmato</string>
+    <string name="a11y_signature_empty">Non ancora firmato</string>
+    <string name="a11y_signature_clear">Cancella la firma</string>
+    <string name="a11y_ar_view">Vista della fotocamera</string>
+    <string name="a11y_ar_place_point">Imposta il punto di misura al centro dello schermo</string>
     <string name="card_area">%1$s m²</string>
     <string name="card_perimeter">%1$s m</string>
     <string name="home_export">Esporta</string>

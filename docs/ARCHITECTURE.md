@@ -340,6 +340,29 @@ signature is already on the paper (finding 206).
 
 ---
 
+## 5c. What the screen says out loud
+
+Every acting row in `:app` announces three things: what it is (`role`), what it does, and what it
+currently is (`selected`, `stateDescription`, or the value a `toggleable` carries). The conventions
+live in one place — `check_every_interactive_row_announces_itself` — because each of them is a
+modifier in one file and a promise in another:
+
+| Convention | Why it is not optional | Where it is enforced |
+|---|---|---|
+| `clickable`/`selectable`/`toggleable` carry a `role` | an unlabelled clickable is announced as tappable and nothing more | every call in `:app`, read with balanced parentheses |
+| a `Switch` hands its tap to its row (`onCheckedChange = null`) | otherwise the control is a second node that cannot name the setting it changes | every `Switch(` in `:app` |
+| every `OutlinedTextField` has a `label` | a placeholder is decoration inside the box and not the field's name; Material draws the label in the same spot when the field is empty | every field in `:app` |
+| a chooser is a `selectableGroup` | "16 mm, selected" only means something inside a group of five | the severity row and the conduit-spec row |
+| the signature pad has a name, a state and a clear action | a canvas with two pointer inputs is silence, and its clear button is across the screen from it | `SignaturePad.kt` |
+| the AR tap surface offers `onClick` | it is the only way to set a point; a camera preview with no action cannot be measured by a screen reader user | `ArMeasureScreen.kt` |
+
+The words are resources like every other word in the app: `a11y_signature_pad`, `_signed`,
+`_empty`, `_clear`, `a11y_ar_view` and `a11y_ar_place_point`, in six locales, checked by
+`tools/i18n_audit.py` and by `A11yLabelsTest` — which cannot judge a translation, but can refuse
+two sentences that must not be confused in the ear being the same string.
+
+---
+
 ## 6. Persistence
 
 A project is one JSON file (`filesDir/projects/<uuid>.json`) written atomically (temp file +

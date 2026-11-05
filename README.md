@@ -198,6 +198,20 @@ announces itself as a button to a screen reader, and the room's picture carries 
 its own — the row already prints the name, the runs, the metres, the area and the perimeter as
 text.
 
+**And every control says what it is.** Glove-sized was half of it; the other half is spoken. A row
+that opens the paywall was an unlabelled `clickable`, the three-way severity choice was three texts
+whose selection lived in a background colour, the export format switches were a nameless `Switch`
+beside a label it could not name, the conduit-spec buttons never said which one was chosen, the
+signature pad was a blank canvas with no name and no way to clear it, and the AR screen — the one
+screen a blind operator would need most — ended in a full-surface `Box` with nothing to
+double-tap. Every acting row now carries a role; choices are `selectable` groups that announce the
+chosen one; a setting's tap belongs to its row, not to a switch that cannot name it; every text
+field has a `label` rather than a placeholder, because a placeholder is decoration and not a name;
+the pad announces its field, whether it is signed, and offers *clear* as an accessibility action;
+and the camera surface offers the only action it can offer without a fingertip — set the point in
+the middle of the screen, where the reticle already is (finding 211). Six new sentences in six
+locales, and `scripts/verify_sources.py` reads the modifiers instead of trusting them.
+
 ---
 
 ## Site file — the paperwork around the measurement
@@ -703,7 +717,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 882 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 887 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 287 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 287 checks, 0 failures, no data race reported |

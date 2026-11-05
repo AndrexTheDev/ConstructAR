@@ -11,6 +11,7 @@ import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.constructar.app.BuildConfig
@@ -575,7 +577,9 @@ private fun LockedRow(label: String, description: String, onUpgrade: () -> Unit)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onUpgrade)
+            // A row that opens the paywall is a button, and says so: without the role a screen
+            // reader announces the two texts and stops before the fact that they can be tapped.
+            .clickable(role = Role.Button, onClick = onUpgrade)
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -603,8 +607,13 @@ private fun FormatRow(
     checked: Boolean,
     onChange: (Boolean) -> Unit,
 ) {
+    // The whole row toggles, and the switch is its state, not a second control: a bare `Switch`
+    // announces "off, switch" with no idea of *which* format it turns off, and the label beside it
+    // is a separate node a screen reader reaches first and cannot act on (finding 211).
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -615,7 +624,9 @@ private fun FormatRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Switch(checked = checked, onCheckedChange = onChange)
+        // `onCheckedChange = null` on purpose: Material's documented pattern for a switch that
+        // belongs to a clickable row, so the tap is reported once and the row carries the label.
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 

@@ -195,7 +195,11 @@ fun HomeScreen(
                         OutlinedTextField(
                             value = query,
                             onValueChange = { query = it },
-                            placeholder = { Text(stringResource(R.string.home_search_hint)) },
+                            // `label`, not `placeholder`: a placeholder is decoration inside the
+                            // box and is not the field's name, so a screen reader met an unnamed
+                            // edit box. Material's label sits in exactly that spot when the field
+                            // is empty, so nothing moves on screen (finding 211).
+                            label = { Text(stringResource(R.string.home_search_hint)) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -245,7 +249,8 @@ fun HomeScreen(
                         shape = RoundedCornerShape(18.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(onClick = onUpgrade),
+                            // A card that opens the paywall is a button (finding 211).
+                            .clickable(role = Role.Button, onClick = onUpgrade),
                     ) {
                         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -454,7 +459,8 @@ fun PlanChip(entitlements: Entitlements, trialDaysLeft: Long, onClick: () -> Uni
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(50))
-            .clickable(onClick = onClick)
+            // The chip is the app's plan status *and* the way to the paywall: a button.
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 4.dp),
     ) {
         if (entitlements.isPro) {

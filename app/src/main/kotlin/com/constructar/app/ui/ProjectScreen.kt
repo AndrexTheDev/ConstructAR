@@ -605,7 +605,7 @@ fun ProjectScreen(
                 OutlinedTextField(
                     value = technicianDraft,
                     onValueChange = { technicianDraft = it },
-                    placeholder = { Text(stringResource(R.string.technician_hint)) },
+                    label = { Text(stringResource(R.string.technician_hint)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -633,7 +633,7 @@ fun ProjectScreen(
                         notesDraft = it
                         notesSaved = false
                     },
-                    placeholder = { Text(stringResource(R.string.notes_hint)) },
+                    label = { Text(stringResource(R.string.notes_hint)) },
                     minLines = 2,
                     modifier = Modifier.fillMaxWidth(),
                 )
