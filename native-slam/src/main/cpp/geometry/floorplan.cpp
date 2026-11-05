@@ -284,9 +284,39 @@ std::vector<SlicePoint> projectToFloor(const std::vector<Vec3>& slicePoints) {
   return points;
 }
 
+ManhattanHint hintFromAxes(const Vec3& axisA, const Vec3& axisB, const Vec3& axisC) {
+  ManhattanHint hint;
+  const Vec3 axes[3] = {axisA, axisB, axisC};
+  // The two horizontal axes: the pair with the smallest vertical component. A wall's normal is
+  // horizontal; the floor's is not.
+  int first = -1;
+  int second = -1;
+  for (int i = 0; i < 3; ++i) {
+    if (!std::isfinite(axes[i].x) || !std::isfinite(axes[i].y) || !std::isfinite(axes[i].z)) {
+      return hint;
+    }
+    if (std::fabs(axes[i].y) > 0.30f) continue;
+    if (first < 0) {
+      first = i;
+    } else if (second < 0) {
+      second = i;
+    }
+  }
+  if (first < 0 || second < 0) return hint;
+  // Both must be directions, not near-zero vectors: `atan2(0, 0)` is an angle of zero, which would
+  // silently mean "the room is already square".
+  const Vec3& chosen = axes[first];
+  const float length = std::sqrt(chosen.x * chosen.x + chosen.z * chosen.z);
+  if (!(length > 1e-3f)) return hint;
+  hint.hasAngle = true;
+  hint.angleRadians = std::atan2(chosen.z, chosen.x);
+  return hint;
+}
+
 void snapFloorplanToManhattan(std::vector<SlicePoint>& loop, float toleranceDegrees,
-                              ManhattanFit& fit) {
+                              ManhattanFit& fit, const ManhattanHint& hint) {
   fit.applied = false;
+  fit.usedPlaneFrame = false;
   fit.residualDegrees = 0.f;
   fit.snappedSegments = 0;
   fit.movedVertices = 0;
@@ -327,7 +357,21 @@ void snapFloorplanToManhattan(std::vector<SlicePoint>& loop, float toleranceDegr
   }
   if (usableRuns < 3) return;
   if (!(cosine * cosine + sine * sine > kEpsilon)) return;
-  const double theta0 = 0.25 * std::atan2(sine, cosine);
+  const double runFrame = 0.25 * std::atan2(sine, cosine);
+
+  // The planes' frame, when the caller has one, is the better evidence - and the runs are what it
+  // has to be checked against, because a frame fitted from the wrong cloud would square a room
+  // that is already right. Anything further than 30 degrees from what the runs say is refused.
+  double normalisedHint = 0.0;
+  if (std::isfinite(hint.angleRadians) &&
+      std::fabs(std::remainder(static_cast<double>(hint.angleRadians) - runFrame, kPi / 2.0)) <=
+          kPi / 6.0) {
+    const double quarter = kPi / 2.0;
+    normalisedHint = hint.angleRadians - std::floor(static_cast<double>(hint.angleRadians) /
+                                                    quarter) * quarter;
+    fit.usedPlaneFrame = hint.hasAngle;
+  }
+  const double theta0 = fit.usedPlaneFrame ? normalisedHint : runFrame;
 
   // 2. Each run either snaps to theta0 + k * 90 degrees or keeps its measured line. The snapped
   //    line keeps the run's midpoint, so a wall stays where the room put it and only its angle
@@ -427,6 +471,12 @@ Floorplan vectoriseFloorplan(const std::vector<Vec3>& slicePoints,
 
 Floorplan vectoriseFloorplan(const std::vector<SlicePoint>& points,
                              const FloorplanOptions& options) {
+  return vectoriseFloorplan(points, options, ManhattanHint{});
+}
+
+Floorplan vectoriseFloorplan(const std::vector<SlicePoint>& points,
+                             const FloorplanOptions& options,
+                             const ManhattanHint& hint) {
   Floorplan plan;
   Grid grid = buildGrid(points, options);
   if (grid.occupied.empty()) return plan;
@@ -474,7 +524,7 @@ Floorplan vectoriseFloorplan(const std::vector<SlicePoint>& points,
   // The last simplification is the room's own axes: the runs decide the frame, the frame moves the
   // runs, and the corners follow. `plan.manhattan` says what it did, including "nothing".
   ManhattanFit fit;
-  snapFloorplanToManhattan(bestLoop, options.manhattanToleranceDegrees, fit);
+  snapFloorplanToManhattan(bestLoop, options.manhattanToleranceDegrees, fit, hint);
   plan.manhattan = fit;
 
   plan.outline = bestLoop;

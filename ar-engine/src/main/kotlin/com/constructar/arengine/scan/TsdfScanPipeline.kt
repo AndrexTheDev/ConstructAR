@@ -440,6 +440,15 @@ class TsdfScanPipeline(
      */
     fun lastManhattan(): com.constructar.nativebridge.ManhattanReport? = engine?.lastManhattan()
 
+    /**
+     * The frame the last [floorplan] was squared onto, fitted from the room's walls.
+     *
+     * Read on the same worker and straight after the plan: the native context keeps the newest
+     * frame only, and a frame from the previous room would be a true statement about another job.
+     */
+    fun manhattanFrame(): com.constructar.nativebridge.ManhattanFrameReport? =
+        engine?.alignManhattanFrame()
+
     /** Clears the volume and pose graph (new room). */
     fun reset() {
         engine?.reset()

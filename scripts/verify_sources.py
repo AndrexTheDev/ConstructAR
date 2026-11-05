@@ -3037,6 +3037,9 @@ def check_the_card_picture_has_a_writer() -> None:
             ("manhattanToleranceDegrees = manhattanToleranceDegrees",
              "the pipeline asks for a plan without a Manhattan tolerance, so the outline keeps "
              "the scan's shear and every wall length built from it (finding 229)"),
+            ("manhattanFrame()",
+             "the pipeline cannot report the frame the plan was squared onto, so a plan that "
+             "follows the room's axes and one that follows its longest run look the same"),
             ("fun lastManhattan()",
              "the pipeline cannot report what the Manhattan step did, so a squared card and a "
              "measured card look the same"),

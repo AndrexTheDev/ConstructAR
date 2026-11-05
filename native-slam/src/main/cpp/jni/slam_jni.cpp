@@ -26,6 +26,9 @@
 //   nativeLoopCandidates(handle) -> FloatArray (triples: from, to, distance)
 //   nativeFloorplan(handle, heightMetres, bandMetres, cellMetres, rdpEpsilonMetres,
 //                   minSegmentMetres, manhattanToleranceDegrees) -> FloatArray   (see below)
+//   nativeAlignManhattanFrame(handle) -> FloatArray
+//               [valid, residualDeg, planes, snappedPlanes, axis0(3), axis1(3), axis2(3)] - the
+//               frame the last floorplan was squared onto, fitted from the room's walls.
 //   nativeLastManhattan(handle) -> FloatArray  [applied, residualDeg, snappedRuns, movedCorners]
 //               What the floorplan's Manhattan step did. Separate from the payload on purpose: the
 //               payload layout is a pinned contract and appending statistics to it is how a Kotlin
@@ -60,6 +63,8 @@
 #include <vector>
 
 #include "../geometry/floorplan.hpp"
+#include "../geometry/manhattan_world.hpp"
+#include "../geometry/plane_fit.hpp"
 #include "../geometry/surface_mask.hpp"
 #include "../slam/pose_graph.hpp"
 #include "../slam/rtabmap_bridge.hpp"
@@ -102,6 +107,18 @@ struct EngineContext {
    * four floats or it is null.
    */
   constructar::ManhattanFit lastManhattan;
+  /**
+   * The frame the last floorplan was squared onto, and what produced it.
+   *
+   * Kept so `nativeAlignManhattanFrame` can answer with the frame that was *used* rather than
+   * refitting one on demand: two fits would be two answers to one question, and the plan on the
+   * card is the one that matters. Zeroed when the fit did not produce a frame.
+   */
+  struct {
+    constructar::ManhattanFrame frame;
+    int planes = 0;
+    int snappedPlanes = 0;
+  } lastFrame;
   int lastTriangleCount = 0;
   /**
    * Serialises every access to the volume: integrate, extract and reset.
@@ -574,12 +591,57 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeFloorplan(JNIEnv* env, 
         context->volume->sliceSurfacesAtHeight(heightMetres, bandMetres);
     const constructar::WallMask mask = constructar::maskVerticalSurfaces(slice);
 
+    // The room's own frame, from its own walls: three bands instead of one, because a single waist
+    // slice gives each wall a plane 10 cm tall - enough to fit a line, not enough to trust a
+    // normal. That is the difference between squaring the plan onto the room and squaring it onto
+    // whichever run of the slice happened to be longest (finding 230).
+    //
+    // Bounded, because the call has a budget (400 ms on the Kotlin side, shared with the slice and
+    // the trace) and a fit that overruns it does not produce a worse plan, it produces no plan at
+    // all: 4 800 points and 1 500 RANSAC iterations measured 24.9 ms on a desktop at -O2, which a
+    // phone multiplies several fold. Eight hundred points per band and 700 iterations measure
+    // 12.6 ms, and a plane is a plane whether it is fitted to 800 points or 4 800.
+    constexpr int kPlaneCloudPerBand = 800;
+    std::vector<constructar::Vec3> wallCloud;
+    wallCloud.reserve(3 * kPlaneCloudPerBand);
+    for (const float bandCentre : {0.40f, 1.10f, 1.90f}) {
+      const std::vector<constructar::OrientedPoint> band =
+          context->volume->sliceSurfacesAtHeight(bandCentre, bandMetres);
+      const constructar::WallMask walls = constructar::maskVerticalSurfaces(band);
+      const std::size_t stride =
+          walls.points.size() <= static_cast<std::size_t>(kPlaneCloudPerBand)
+              ? 1
+              : (walls.points.size() + kPlaneCloudPerBand - 1) / kPlaneCloudPerBand;
+      for (std::size_t index = 0; index < walls.points.size(); index += stride) {
+        const constructar::SlicePoint& point = walls.points[index];
+        wallCloud.push_back(constructar::Vec3{point.x, bandCentre, point.z});
+      }
+    }
+    constructar::PlaneFitOptions planeOptions;
+    // A room has six surfaces. A seventh plane is the fit finding a ghost, and every extra plane
+    // costs a sweep of the cloud inside the call's budget.
+    planeOptions.maxPlanes = 6;
+    planeOptions.ransacIterations = 700;
+    const std::vector<constructar::FittedPlane> planes =
+        constructar::fitPlanes(wallCloud, planeOptions);
+    const constructar::ManhattanFrame frame = constructar::solveManhattanFrame(
+        constructar::asPlaneObservations(planes));
+    int snappedPlanes = 0;
+    for (const constructar::ManhattanAxis& axis : frame.axes) snappedPlanes += axis.supportingPlanes;
+    context->lastFrame.frame = frame;
+    context->lastFrame.planes = static_cast<int>(planes.size());
+    context->lastFrame.snappedPlanes = snappedPlanes;
+
     constructar::FloorplanOptions options;
     options.cellMetres = cellMetres;
     options.rdpEpsilonMetres = rdpEpsilonMetres;
     options.minSegmentMetres = minSegmentMetres;
     options.manhattanToleranceDegrees = manhattanToleranceDegrees;
-    const constructar::Floorplan plan = constructar::vectoriseFloorplan(mask.points, options);
+    const constructar::ManhattanHint hint =
+        constructar::hintFromAxes(frame.axes[0].direction, frame.axes[1].direction,
+                                  frame.axes[2].direction);
+    const constructar::Floorplan plan =
+        constructar::vectoriseFloorplan(mask.points, options, hint);
     context->lastManhattan = plan.manhattan;
     payload = constructar::packFloorplanPayload(plan);
   }
@@ -589,6 +651,38 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativeFloorplan(JNIEnv* env, 
   jfloatArray result = env->NewFloatArray(size);
   if (result == nullptr) return nullptr;
   env->SetFloatArrayRegion(result, 0, size, payload.data());
+  return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_constructar_nativebridge_NativeSlamEngine_nativeAlignManhattanFrame(JNIEnv* env, jobject,
+                                                                            jlong handle) {
+  EngineContext* context = contextFrom(handle);
+  if (context == nullptr) return nullptr;
+  constructar::ManhattanFrame frame;
+  int planes = 0;
+  int snappedPlanes = 0;
+  {
+    std::lock_guard<std::mutex> lock(context->volumeMutex);
+    frame = context->lastFrame.frame;
+    planes = context->lastFrame.planes;
+    snappedPlanes = context->lastFrame.snappedPlanes;
+  }
+  // [valid, residualDeg, planes, snappedPlanes, then three axes of (x, y, z)] - the axes are
+  // always written, so a caller that only wants the residual does not have to parse a shorter
+  // array, and a frame that is not valid is flagged rather than zeros that look like a room.
+  const jfloat values[4 + 9] = {
+      frame.valid ? 1.f : 0.f,
+      frame.residualDegrees,
+      static_cast<jfloat>(planes),
+      static_cast<jfloat>(snappedPlanes),
+      frame.axes[0].direction.x, frame.axes[0].direction.y, frame.axes[0].direction.z,
+      frame.axes[1].direction.x, frame.axes[1].direction.y, frame.axes[1].direction.z,
+      frame.axes[2].direction.x, frame.axes[2].direction.y, frame.axes[2].direction.z,
+  };
+  jfloatArray result = env->NewFloatArray(13);
+  if (result == nullptr) return nullptr;
+  env->SetFloatArrayRegion(result, 0, 13, values);
   return result;
 }
 

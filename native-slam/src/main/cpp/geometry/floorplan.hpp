@@ -89,8 +89,38 @@ struct WallSegment {
  * loop whose area moved by more than `kMaxAreaDrift`. A caller that prints "squared to the room's
  * own axes" reads this first; the alternative is a sentence that is true of a different scan.
  */
+/**
+ * The frame the room's *planes* determined, offered to the floorplan.
+ *
+ * The runs of a waist-height slice are one kind of evidence and a thin one: a room with one long
+ * wall and three short returns weights the frame towards that wall, and a chamfer inside the
+ * tolerance pulls it further. The room's own planes are the other kind - thousands of points, the
+ * floor, the ceiling and every wall - and `manhattan_world.cpp` already recovers a frame from them.
+ * Passing that frame in means the plan is squared onto the room, not onto whichever run happened
+ * to be longest.
+ *
+ * `hasAngle == false` is the honest default: the caller has no planes, so the runs decide.
+ */
+struct ManhattanHint {
+  bool hasAngle = false;
+  /** The frame's dominant horizontal direction, radians in the x/z plane. */
+  float angleRadians = 0.f;
+};
+
+/**
+ * The floorplan hint from the three axes of a recovered Manhattan frame.
+ *
+ * A frame's axes are ordered by evidence, not by verticality, so the two *horizontal* ones are the
+ * pair whose `|y|` is smallest - the vertical axis is the one pointing up. A frame that does not
+ * have two horizontal axes is not a room frame and yields `hasAngle == false`, which makes the
+ * floorplan square itself from its own runs.
+ */
+ManhattanHint hintFromAxes(const Vec3& axisA, const Vec3& axisB, const Vec3& axisC);
+
 struct ManhattanFit {
   bool applied = false;
+  /** True when the loop was squared onto planes rather than onto its own runs. */
+  bool usedPlaneFrame = false;
   /** How far the room's dominant direction sat off the axes it was squared onto, in degrees. */
   float residualDegrees = 0.f;
   int snappedSegments = 0;
@@ -173,13 +203,24 @@ std::vector<SlicePoint> projectToFloor(const std::vector<Vec3>& slicePoints);
  * a fit, and the loop is returned exactly as it came in with `fit.applied == false`.
  */
 void snapFloorplanToManhattan(std::vector<SlicePoint>& loop, float toleranceDegrees,
-                              ManhattanFit& fit);
+                              ManhattanFit& fit, const ManhattanHint& hint = {});
 
 /** The vectorised floorplan of a waist-height slice. */
 Floorplan vectoriseFloorplan(const std::vector<Vec3>& slicePoints,
                              const FloorplanOptions& options = {});
 Floorplan vectoriseFloorplan(const std::vector<SlicePoint>& points,
                              const FloorplanOptions& options = {});
+
+/**
+ * The same, squared onto a frame somebody else determined (see [ManhattanHint]).
+ *
+ * A hint that disagrees with the runs by more than 30 degrees is not used: a frame fitted from the
+ * wrong cloud would otherwise rotate a room that is already right, and the guard costs one
+ * comparison. `ManhattanFit::usedPlaneFrame` says which evidence won.
+ */
+Floorplan vectoriseFloorplan(const std::vector<SlicePoint>& points,
+                             const FloorplanOptions& options,
+                             const ManhattanHint& hint);
 
 /**
  * Floats before the variable-length part of the JNI payload.

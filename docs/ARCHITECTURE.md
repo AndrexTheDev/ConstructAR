@@ -248,10 +248,14 @@ frame's vertical is *not* taken from the top eigenvector (finding 189): in a roo
 walls carry comparable weight the two horizontal families couple through one crooked wall and their
 rotated pair out-eigenvalues the vertical, so each eigenvector is tried as the primary and the frame
 that explains the most inliers wins; a frame also needs two of its three axes evidenced, which is
-what separates "a room" from "a floor and a ceiling". The *plane* half is
-host-tested and still waiting for a plane-fitting pass to feed it - no `PlaneObservation` reaches it
-from the app, so the 3-D solver is the engine such a pass will call, not a behaviour a user can
-observe (the same distinction finding 98 had to make about the pose graph).
+what separates "a room" from "a floor and a ceiling". The *plane* half is wired as of finding 230:
+`nativeFloorplan` builds a cloud from three bands of the volume (capped at 800 points each, six planes,
+700 RANSAC iterations, so the fit stays inside the 400 ms call), fits the room's walls with `fitPlanes`, solves the frame and hands it to the floorplan as a `ManhattanHint` - so a rotated room
+is squared onto the room rather than onto the world axes, and a room with one long wall is not
+weighted by that wall alone. A hint that disagrees with the slice's own runs by more than 30 degrees
+is refused and the runs decide, because a frame fitted from the wrong cloud would rotate a room that
+is already right. `nativeAlignManhattanFrame` returns the frame that was used (thirteen floats: the
+residual, the plane counts and three axes); nothing else consumes these planes yet.
 
 The *floorplan* half is wired and observable (finding 229): a room that is square on site comes out
 of a hand-held scan as a parallelogram - 5 degrees of shear on every corner, systematic, and

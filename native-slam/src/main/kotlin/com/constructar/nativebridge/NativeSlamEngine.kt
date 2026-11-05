@@ -259,6 +259,20 @@ class NativeSlamEngine internal constructor(
      * Read straight after [floorplan] and on the same worker: the context keeps only the newest
      * fit, so a caller that asks later is asking about a different room.
      */
+    /**
+     * The frame the last [floorplan] call was squared onto, fitted from the room's own walls.
+     *
+     * `null` when the library is unavailable or cannot say. The fitting happens inside
+     * [floorplan] - that is where the volume is sliced and locked - so this is a read, not a second
+     * fit: two fits of one room would be two answers to one question, and the plan on the card is
+     * the one that matters.
+     */
+    fun alignManhattanFrame(): ManhattanFrameReport? {
+        val active = handle
+        if (active == 0L) return null
+        return ManhattanFrameReport.from(nativeAlignManhattanFrame(active))
+    }
+
     fun lastManhattan(): ManhattanReport? {
         val active = handle
         if (active == 0L) return null
@@ -461,6 +475,8 @@ class NativeSlamEngine internal constructor(
         ): FloatArray?
 
         @JvmStatic private external fun nativeLastManhattan(handle: Long): FloatArray?
+
+        @JvmStatic private external fun nativeAlignManhattanFrame(handle: Long): FloatArray?
         @JvmStatic private external fun nativePoseGraphReset(handle: Long)
         @JvmStatic private external fun nativePoseGraphAddNode(handle: Long, pose: FloatArray, fixed: Boolean): Int
 

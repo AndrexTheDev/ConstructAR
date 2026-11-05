@@ -1656,6 +1656,101 @@ void testFloorplanManhattan() {
 }
 
 /**
+ * The floorplan squared onto the frame the room's **planes** determined (finding 230).
+ *
+ * The runs of a waist-height slice are thin evidence: one long wall and three short returns weight
+ * the frame towards that wall. The room's planes are the other kind, and `manhattan_world.cpp` was
+ * written to recover exactly that frame - but nothing ever handed a cloud to `fitPlanes`, so the
+ * chain cloud -> planes -> frame -> squared plan existed only in this suite. Now it runs in one
+ * call, and the two things that can go wrong are both asserted here: a frame fitted from the wrong
+ * cloud must not rotate a room that is already right, and a frame that *is* right must actually be
+ * the one used.
+ */
+void testFloorplanManhattanFromPlanes() {
+  section("Floorplan: squared onto the plane frame");
+
+  // A 4 x 3 m room, square, rotated by 7 degrees: the walls are not on the world axes, and a
+  // floorplan that assumed they were would report a room 3 % larger than it is.
+  const float turn = 7.f * 3.14159265358979323846f / 180.f;
+  const auto rotate = [turn](float x, float z) {
+    return SlicePoint(x * std::cos(turn) - z * std::sin(turn),
+                      x * std::sin(turn) + z * std::cos(turn));
+  };
+  const std::vector<SlicePoint> corners = {
+      rotate(0.f, 0.f), rotate(4.f, 0.f), rotate(4.f, 3.f), rotate(0.f, 3.f)};
+
+  // The cloud the room's walls would give: points on each of the four vertical planes, from 0.2 m
+  // to 2.3 m up, so `fitPlanes` sees four planes and the solver has a frame.
+  std::vector<constructar::Vec3> cloud;
+  for (size_t i = 0; i < corners.size(); ++i) {
+    const SlicePoint a = corners[i];
+    const SlicePoint b = corners[(i + 1) % corners.size()];
+    const float runLength = std::sqrt((b.x - a.x) * (b.x - a.x) + (b.z - a.z) * (b.z - a.z));
+    const int along = std::max(2, static_cast<int>(runLength / 0.05f));
+    for (int step = 0; step < along; ++step) {
+      const float t = static_cast<float>(step) / static_cast<float>(along);
+      const float x = a.x + (b.x - a.x) * t;
+      const float z = a.z + (b.z - a.z) * t;
+      for (float y = 0.2f; y <= 2.3f; y += 0.1f) cloud.push_back(constructar::Vec3{x, y, z});
+    }
+  }
+
+  const auto planes = constructar::fitPlanes(cloud);
+  check(planes.size() == 4, "the four walls are four planes (got " +
+                                std::to_string(planes.size()) + ")");
+  const auto observations = constructar::asPlaneObservations(planes);
+  const constructar::ManhattanFrame frame = constructar::solveManhattanFrame(observations);
+  check(frame.valid, "four walls determine a frame");
+
+  const constructar::ManhattanHint hint =
+      constructar::hintFromAxes(frame.axes[0].direction, frame.axes[1].direction,
+                                frame.axes[2].direction);
+  check(hint.hasAngle, "the frame has two horizontal axes, so it can hint a floorplan");
+
+  const std::vector<SlicePoint> slice = sampleWallLoop(corners);
+  constructar::FloorplanOptions options;
+  options.manhattanToleranceDegrees = 10.f;
+  const constructar::Floorplan withPlanes =
+      constructar::vectoriseFloorplan(slice, options, hint);
+  check(withPlanes.valid && withPlanes.closed, "the rotated room still vectorises");
+  check(withPlanes.manhattan.applied, "the rotated room is squared");
+  check(withPlanes.manhattan.usedPlaneFrame, "the planes' frame is the one that squared it");
+  check(withPlanes.manhattan.snappedSegments == 4,
+        "all four runs are on the frame (" +
+            std::to_string(withPlanes.manhattan.snappedSegments) + ")");
+
+  bool everyCornerIsRight = withPlanes.outline.size() == 4;
+  for (size_t i = 0; everyCornerIsRight && i < withPlanes.outline.size(); ++i) {
+    bool ok = false;
+    const float angle = interiorAngleDegrees(
+        withPlanes.outline[(i + withPlanes.outline.size() - 1) % withPlanes.outline.size()],
+        withPlanes.outline[i], withPlanes.outline[(i + 1) % withPlanes.outline.size()], &ok);
+    everyCornerIsRight = ok && std::fabs(angle - 90.f) <= 1.f;
+  }
+  check(everyCornerIsRight, "a rotated square room comes out square");
+  // Rotating a 4 x 3 m room does not change its area; a plan that squared to the *world* axes
+  // would enclose its bounding box instead, which is 3 % larger.
+  checkNear(withPlanes.areaSquareMetres, 12.0, 0.6,
+            "the area is the room's, not its bounding box (m2)");
+
+  // A frame that disagrees with the runs is not used: the hint is evidence, not an instruction.
+  constructar::ManhattanHint wrong;
+  wrong.hasAngle = true;
+  wrong.angleRadians = hint.angleRadians + 40.f * 3.14159265358979323846f / 180.f;
+  const constructar::Floorplan refused = constructar::vectoriseFloorplan(slice, options, wrong);
+  check(!refused.manhattan.usedPlaneFrame,
+        "a frame 40 degrees off the runs is refused, and the runs decide");
+  check(refused.manhattan.applied, "and the room is still squared, by its own runs");
+
+  // A frame with no horizontal axis is not a hint at all.
+  const constructar::ManhattanHint nothing =
+      constructar::hintFromAxes(constructar::Vec3{0.f, 1.f, 0.f},
+                                constructar::Vec3{0.f, 0.9f, 0.4f},
+                                constructar::Vec3{0.f, -0.4f, 0.9f});
+  check(!nothing.hasAngle, "a frame without two horizontal axes hints nothing");
+}
+
+/**
  * The JNI payload is the one place where C++ and Kotlin have to agree without either compiler
  * seeing the other. Every failure here is silent in the product: a header that is one float short
  * makes every segment read a loop length, and the room on the home screen becomes a different room
@@ -1960,6 +2055,7 @@ int main() {
   testFloorplanVectorise();
   testFloorplanPayload();
   testFloorplanManhattan();
+  testFloorplanManhattanFromPlanes();
   testObservationWeight();
   testSurfaceMask();
   testInvalidInput();
