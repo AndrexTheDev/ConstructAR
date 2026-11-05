@@ -314,9 +314,11 @@ against the engine it already owns, and `ArMeasureController` samples one frame 
 sweep is answered by a walk, not by 30 pictures a second - and drops the sweep when a new session
 begins. The dialog's sentences come from `:core`'s `MarkerStatusLine.of(state)`, which decides the
 four cases - off, watching, measured, outside the window - and carries the evidence with the
-factor: the pairs that agreed, the pairs the deviation filter threw out and the baseline they span,
-so a factor from one 20 cm pair cannot be printed to look like a factor from six pairs over three
-metres (finding 237). It asks `ReferenceCalibration.accepted` again rather than trusting the
+factor: the pairs that agreed, the pairs the deviation filter threw out, the baseline they span and
+the worst relative deviation among the accepted pairs - so a factor from one 20 cm pair cannot be
+printed to look like a factor from six pairs over three metres (finding 237), and six pairs that
+agree to within a tenth of a percent cannot look like six that only agree to within four
+(finding 238). It asks `ReferenceCalibration.accepted` again rather than trusting the
 proposal's own flag, so the two dialogs cannot disagree about the window. `estimateScaleFromTagSightings` - the printed *layout* path, which needs a sheet of tags -
 is still reached from nowhere, and no stored metre depends on a marker today.
 
@@ -627,7 +629,7 @@ Since finding 222 the two surfaces are deliberately different, and the differenc
 `LengthFormatter` stays `Locale.ROOT` - PDF, CSV, JSON, the PLY floats - because a document is a
 protocol: a German Excel reads a `,` as a column separator. A *screen* asks for the reader's mark:
 `CompositionLocalProvider(LocalDecimalMark provides rememberDecimalMark())` in `AppRoot`, and the
-screens call `shownLength`/`shownLengthWithUnit` from `ui/DecimalMark.kt`. The character itself is
+screens call `shownLength`/`shownLengthWithUnit`/`shownPercent` from `ui/DecimalMark.kt`. The character itself is
 `NumberText.decimalMark(locale)` in `:core`, guarded so a locale whose separator came back as a
 digit cannot turn `1.40` into `1140`. That is what makes six locales complete without the engines
 carrying a Context — and it keeps the engines unit-testable on the JVM.

@@ -74,7 +74,7 @@
     <string name="marker_title">Contrôle du marqueur</string>
     <string name="marker_hint">Vise une étiquette imprimée et marche un mètre en la gardant à l’écran.</string>
     <string name="marker_watching">Pas encore assez de preuves : %1$d observations de %2$d étiquettes.</string>
-    <string name="marker_measured">Mesuré : facteur %1$s sur %2$d paires en %3$s.</string>
+    <string name="marker_measured">Mesuré : facteur %1$s sur %2$d paires en %3$s, dispersion ±%4$s %%.</string>
     <string name="ar_add_point">Ajouter un point au centre</string>
     <string name="ar_undo">Annuler</string>
     <string name="ar_close_loop">Fermer</string>

@@ -52,6 +52,18 @@ fun shownLength(
     decimals: Int = unit.defaultDecimals,
 ): String = LengthFormatter.number(meters, unit, decimals, LocalDecimalMark.current)
 
+/**
+ * A fraction as a percentage with one decimal, in this screen's decimal mark: `4,5`.
+ *
+ * One decimal, not zero: a spread is the number whose *smallness* is the message - "±0,4 %" says
+ * the pairs agreed and "±4 %" says they did not, and whole percent prints both as the same-shaped
+ * number (finding 238). The percent sign is the caller's, so it stays in the resource where the
+ * translation can move it.
+ */
+@Composable
+fun shownPercent(ratio: Float, decimals: Int = 1): String =
+    NumberText.digits(if (ratio.isFinite()) ratio * 100f else Float.NaN, decimals, LocalDecimalMark.current)
+
 /** `LengthFormatter.format` (digits and unit) with this screen's decimal mark. */
 @Composable
 fun shownLengthWithUnit(

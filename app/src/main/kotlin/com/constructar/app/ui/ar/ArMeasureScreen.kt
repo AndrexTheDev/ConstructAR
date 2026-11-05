@@ -91,6 +91,7 @@ import com.constructar.app.ui.GloveButton
 import com.constructar.app.ui.LocalDecimalMark
 import com.constructar.app.ui.shownLength
 import com.constructar.app.ui.shownLengthWithUnit
+import com.constructar.app.ui.shownPercent
 import com.constructar.app.ui.GloveButtonRow
 import com.constructar.app.ui.formatTimeLabel
 import com.constructar.app.ui.rememberTimePattern
@@ -978,6 +979,7 @@ fun ArMeasureScreen(
                                         ReferenceCalibration.formatScale(line.factor),
                                         line.pairs,
                                         shownLengthWithUnit(line.baselineMetres),
+                                        shownPercent(line.spread),
                                     ),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = Jamaica.Lime,

@@ -74,7 +74,7 @@
     <string name="marker_title">Controllo del marker</string>
     <string name="marker_hint">Inquadra un marker stampato e cammina per un metro tenendolo in vista.</string>
     <string name="marker_watching">Non ci sono ancora prove sufficienti: %1$d avvistamenti di %2$d marker.</string>
-    <string name="marker_measured">Misurato: fattore %1$s da %2$d coppie su %3$s.</string>
+    <string name="marker_measured">Misurato: fattore %1$s da %2$d coppie su %3$s, dispersione ±%4$s %%.</string>
     <string name="ar_add_point">Aggiungi punto al centro</string>
     <string name="ar_undo">Annulla</string>
     <string name="ar_close_loop">Chiudi</string>

@@ -82,6 +82,59 @@ class MarkerStatusLineTest {
         assertEquals(1, measured.pairs)
         assertEquals(0, measured.rejectedPairs)
         assertEquals(1f, measured.baselineMetres, 1e-4f)
+        // One pair is perfectly in agreement with itself, and the line has to say that rather than
+        // stay silent: a spread that is only printed when it is large is a number the operator
+        // learns to read as zero.
+        assertEquals(0f, measured.spread, 1e-6f)
+    }
+
+    @Test
+    fun `the spread travels with the factor`() {
+        val line = MarkerStatusLine.of(
+            MarkerSweepState.Ready(proposal(factor = 1.02, spread = 0.033f), sightings = 3, ignoredForeign = 0),
+        )
+        val measured = line as MarkerStatusLine.Measured
+        assertEquals(1.02, measured.factor, 0.0)
+        assertEquals(0.033f, measured.spread, 1e-6f)
+    }
+
+    @Test
+    fun `three sightings that disagree print the worst disagreement`() {
+        // One metre walked twice, with the marker's own geometry saying 1.05, 1.15 and 1.10: the
+        // median ratio is 1.10, the worst accepted deviation 4.5 %, and the baseline-weighted mean
+        // is 1.10 because the two-metre pair outweighs the two one-metre pairs together.
+        val observations = listOf(
+            MarkerObservation(
+                id = 3,
+                tagInCamera = Vec3(0f, 0f, 2f),
+                cameraPose = Pose(Quat.IDENTITY, Vec3(0f, 0f, 0f)),
+            ),
+            MarkerObservation(
+                id = 3,
+                tagInCamera = Vec3(-1.05f, 0f, 2f),
+                cameraPose = Pose(Quat.IDENTITY, Vec3(1f, 0f, 0f)),
+            ),
+            MarkerObservation(
+                id = 3,
+                tagInCamera = Vec3(-2.2f, 0f, 2f),
+                cameraPose = Pose(Quat.IDENTITY, Vec3(2f, 0f, 0f)),
+            ),
+        )
+        val estimate = MarkerBaseline.estimate(
+            observations = observations,
+            minBaselineMetres = 0.2f,
+            maxRelativeDeviation = 0.10f,
+        ) ?: error("three pairs over two metres are a measurement")
+
+        val measured = MarkerStatusLine.of(
+            MarkerSweepState.Ready(estimate, sightings = 3, ignoredForeign = 0),
+        ) as MarkerStatusLine.Measured
+
+        assertEquals(1.1, measured.factor, 1e-3)
+        assertEquals(3, measured.pairs)
+        assertEquals(0, measured.rejectedPairs)
+        assertEquals(2f, measured.baselineMetres, 1e-4f)
+        assertEquals(0.0454545f, measured.spread, 1e-4f)
     }
 
     @Test

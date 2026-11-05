@@ -184,8 +184,11 @@ samples one frame in fifteen while the marker dialog is open, drops the sweep wh
 new session, and offers `Apply` only for a factor `ReferenceCalibration.accepted` would take. What
 the dialog prints is `:core`'s `MarkerStatusLine`: four cases (off, watching, measured, outside the
 window) with the evidence travelling alongside the factor - pairs that agreed, pairs the deviation
-filter rejected, and the baseline they span - because a bare "factor 1.03" cannot tell the operator
-whether it rests on one 20 cm pair or six pairs over three metres (finding 237). What is
+filter rejected, the baseline they span, and the worst deviation among the accepted pairs - because
+a bare "factor 1.03" cannot tell the operator whether it rests on one 20 cm pair or six pairs over
+three metres (finding 237), nor whether those six agreed to a tenth of a percent or to four
+(finding 238). The spread is printed with one decimal in the reader's mark: whole percent would
+print a stable sweep and a sloppy one as the same shaped number. What is
 still unproven: a real printed tag on a real device, which is the one thing no JVM test can supply.
 `estimateScaleFromTagSightings` — the printed *layout* sheet — is still reached from nowhere, and no
 stored number depends on a marker today.

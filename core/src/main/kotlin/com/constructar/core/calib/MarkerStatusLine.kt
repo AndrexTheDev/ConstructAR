@@ -46,6 +46,14 @@ sealed interface MarkerStatusLine {
         val pairs: Int,
         val rejectedPairs: Int,
         val baselineMetres: Float,
+        /**
+         * Worst relative deviation among the pairs that agreed, as a fraction (`0.045` = 4.5 %).
+         *
+         * The number that says whether a factor is stable: six pairs that agree to within a tenth
+         * of a percent and six that only agree to within four are the same factor and not the same
+         * measurement. It was carried on the proposal and rendered nowhere until finding 238.
+         */
+        val spread: Float,
     ) : MarkerStatusLine
 
     /** A measured factor the acceptance window would not take. */
@@ -80,6 +88,7 @@ sealed interface MarkerStatusLine {
                         pairs = proposal.pairs,
                         rejectedPairs = proposal.rejectedPairs,
                         baselineMetres = proposal.baselineMetres,
+                        spread = proposal.spread,
                     )
                 } else {
                     OutOfWindow(
