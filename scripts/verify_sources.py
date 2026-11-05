@@ -62,10 +62,21 @@ VERBOSE = "--verbose" in sys.argv
 LOCALES = ["values", "values-de", "values-es", "values-fr", "values-it", "values-pl"]
 RES_DIR = ROOT / "app" / "src" / "main" / "res"
 
-HEADER_MARKERS = ("AndrexTheDev",)
+# The notice itself, not the author's name. The sweep used to look for "AndrexTheDev" anywhere in a
+# file, and a GitHub link, a `meta name="author"`, or a sentence *about* copyright satisfied it - so
+# the seven published pages, the web manifest, the R8 keep rules and six documents carried no
+# notice at all and were green (finding 215). A year is required because a notice without one is a
+# claim nobody can date, and the address because that is who a reader has to write to.
+COPYRIGHT_NOTICE = re.compile(
+    r"Copyright\s+\(c\)\s+\d{4}\s+AndrexTheDev\s*<hippie\.highho@gmail\.com>"
+)
+# Every suffix the tree actually authors text in - the ones the old list omitted (`.html`,
+# `.webmanifest`, `.pro`, `.cmake`, `.css`, `.js`) are exactly where an unauthorised copy comes
+# from: a page a scraper saves, a manifest a site installer keeps, a build rule a fork reuses.
 HEADER_SUFFIXES = {
     ".kt", ".kts", ".java", ".cpp", ".cc", ".hpp", ".h", ".c",
     ".xml", ".toml", ".properties", ".yml", ".yaml", ".txt", ".py", ".sh", ".md",
+    ".html", ".css", ".js", ".pro", ".cmake", ".webmanifest",
 }
 
 REFLECTION_PATTERNS = [
@@ -171,6 +182,17 @@ UNHEADERED_LICENCE_DIRS = {"licenses"}
 
 
 def check_headers(files: list[Path]) -> None:
+    """Every authored file states who owns it, and the words have to be the notice (finding 215).
+
+    The sweep was written when the tree was Kotlin and C++ only, and it asked one question: does
+    this file contain the author's handle? Three kinds of file answered yes without a notice — the
+    published pages (a `<meta name="author">` and two GitHub links), five documents (the same links)
+    — and three kinds were never opened at all, because their suffixes were not on the list: the
+    site's 404 page, the web manifest a visitor installs, and the R8 keep rules that decide what
+    survives into the APK. A copyright sweep that reads a *name* rather than a *notice* is a
+    spelling checker, and the files it missed are the ones that travel: what a scraper saves, what
+    a fork keeps.
+    """
     for path in files:
         if path.name in {"LICENSE"}:
             continue
@@ -180,8 +202,10 @@ def check_headers(files: list[Path]) -> None:
             text = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
-        if not any(marker in text for marker in HEADER_MARKERS):
-            add(path, "missing copyright header (AndrexTheDev)")
+        if not COPYRIGHT_NOTICE.search(text):
+            add(path, "missing the copyright notice - `Copyright (c) <year> AndrexTheDev "
+                      "<hippie.highho@gmail.com>`. A link to the project, an author meta tag or the "
+                      "word \"copyright\" in prose does not name the owner of this file")
 
 
 def kotlin_sources(*modules: str) -> list[Path]:
@@ -3937,6 +3961,54 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
                       "of a format argument and the build fails")
 
 
+def check_the_generated_pages_keep_their_notice() -> None:
+    """The site is generated, so its notice has to be generated too (finding 215).
+
+    Six landing pages, one 404 page and a web manifest are written by `tools/build_site.py` on
+    every run, and all eight were published without a copyright notice: two of them (the 404 page
+    and the manifest a browser stores when the page is installed) carried the string
+    "AndrexTheDev" nowhere at all, and the six landing pages only in a `<meta name="author">` and
+    two GitHub links. Pasting a comment into `docs/` would not have fixed it - the next build
+    overwrites every page - so the notice is emitted by the generator, and this rule fails if a
+    future refactor stops emitting it, or if the checked-in pages fall out of step with the
+    generator that claims to write them.
+
+    The manifest is the exception that proves the rule: JSON has no comment syntax, so the notice
+    is a member. The web manifest spec requires clients to ignore members they do not know, so the
+    file stays valid and the notice travels with it.
+    """
+    builder = ROOT / "tools" / "build_site.py"
+    text = builder.read_text(encoding="utf-8")
+    if "NOTICE_HTML" not in text:
+        add(builder, "the site generator defines no notice, so every page it writes is published "
+                     "without one - a comment pasted into docs/ does not survive the next build")
+    emitted = text.count("NOTICE_HTML + f")
+    if emitted < 2:
+        add(builder, f"only {emitted} of the two page builders prepend the notice - the landing "
+                     f"pages and the 404 page are written by different functions, and the 404 page "
+                     f"is the one a stranger is most likely to land on")
+    if '"copyright":' not in text:
+        add(builder, "the web manifest carries no copyright member - JSON has no comments, so the "
+                     "one file a browser stores when the page is installed would name no owner")
+
+    # The site's language codes, not the app's resource folders: `values-de` is a directory name in
+    # `res/`, and `docs/values-de/index.html` has never existed.
+    site_langs = ["de", "es", "fr", "it", "pl"]
+    pages = [ROOT / "docs" / "index.html", ROOT / "docs" / "404.html"]
+    pages += [ROOT / "docs" / lang / "index.html" for lang in site_langs]
+    for page in pages:
+        if not page.exists():
+            add(page, "a generated page is missing from the tree")
+            continue
+        head = page.read_text(encoding="utf-8")[:400]
+        if not COPYRIGHT_NOTICE.search(head):
+            add(page, "the published page does not start with the copyright notice - either it was "
+                      "not regenerated, or the generator stopped emitting it")
+    manifest = ROOT / "docs" / "manifest.webmanifest"
+    if manifest.exists() and not COPYRIGHT_NOTICE.search(manifest.read_text(encoding="utf-8")):
+        add(manifest, "the published web manifest names no owner")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -4025,6 +4097,7 @@ def main() -> int:
     check_every_interactive_row_announces_itself()
     check_the_hud_says_when_the_reticle_moved()
     check_the_wall_screen_uses_the_core_numbers()
+    check_the_generated_pages_keep_their_notice()
     check_the_reticle_snap_stays_wired()
     check_exported_numbers_use_the_c_locale()
     check_project_imports_are_used()

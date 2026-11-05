@@ -1,3 +1,9 @@
+<!--
+  Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+  All rights reserved. Proprietary and confidential - see LICENSE.
+  SPDX-License-Identifier: LicenseRef-Proprietary
+-->
+
 # ConstructAR
 
 **Offline AR measuring and routing for electrical, plumbing and ventilation work.**
@@ -443,7 +449,7 @@ git clone https://github.com/AndrexTheDev/ConstructAR.git && cd ConstructAR
 gradle assembleDebug testDebugUnitTest   # the full gate: every module, warnings are errors
 gradle :app:assembleDebug                # APK in app/build/outputs/apk/debug/
 gradle :app:assembleRelease              # the shipping artifact: R8 + resource shrink
-python3 scripts/verify_sources.py        # header / reflection / i18n gates, no SDK needed
+python3 scripts/verify_sources.py        # copyright notice / reflection / i18n gates, no SDK needed
 ```
 
 **Size is a feature.** The release APK is **25 MB** — R8 with resource shrinking, six locales
@@ -665,7 +671,9 @@ Known limitations, deliberately documented rather than hidden:
   (warnings are errors), asserts `libconstructar_slam.so` is inside the arm64 APK, and uploads
   the test reports. That workflow — not a local machine — is where the "it compiles" claim is
   proven.
-* **Static gates**: `scripts/verify_sources.py` checks copyright headers, the reflection ban,
+* **Static gates**: `scripts/verify_sources.py` checks that every authored file states its owner -
+  the notice itself (`Copyright (c) <year> AndrexTheDev <hippie…>`), not merely the author's handle,
+  which a GitHub link satisfies (finding 215) - the reflection ban,
   the published test and assertion counts against the suites themselves,
   hardcoded UI text in shipped code, string-resource references, locale parity, XML
   well-formedness and the manifest hardening — without needing a JDK. One of its rules holds the
@@ -744,7 +752,7 @@ errors:
 
 | Gate | Result |
 |------|--------|
-| `scripts/verify_sources.py` (headers, reflection ban, i18n parity, no stale claim) | pass — every tracked source file |
+| `scripts/verify_sources.py` (copyright notice, reflection ban, i18n parity, no stale claim) | pass — every authored file, the eight generated site artefacts included |
 | `tools/seo_audit.py` (metadata, structured data, links, sitemap, manifest) | pass — 6 pages + 404 |
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |

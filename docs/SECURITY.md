@@ -1,3 +1,9 @@
+<!--
+  Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+  All rights reserved. Proprietary and confidential - see LICENSE.
+  SPDX-License-Identifier: LicenseRef-Proprietary
+-->
+
 # Security and licence hardening
 
 *How far an offline app can go — and where it stops.*
