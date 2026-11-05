@@ -226,14 +226,22 @@ a link, and no run of this app has done that.
   closure folds a room in half, so nothing is promoted silently);
 * `PoseGraph::optimize` redistributes a closure over the whole trajectory.
 
-**It is not yet driven from the app.** No line in `:app` or `:ar-engine` calls
-`optimizePoseGraph`, `addPoseNode`, `addPoseEdge` or `loopClosureCandidates`, and the JNI exposes
-no keyframe feed, so compiling RTAB-Map in changes nothing the operator sees: today the app
-measures on ARCore's own tracking and no closure is optimised. The loop closure is therefore
-**not yet driven by the scan pipeline** (finding 98), and `scripts/verify_sources.py` fails if
-this document claims the optimiser runs while it is still true. Wiring it is a real piece of
-work — keyframe extraction, a verified closure policy and a re-anchor of the measured nodes —
-not a build flag.
+**One half is driven now (finding 243), the other is not.** `KeyframeFeed`
+(`ar-engine/.../keyframe/`) decides on each placed frame whether the pose is worth keeping -
+0.5 m of translation, 15 degrees of rotation, tracker valid, at least 30 features, 200 ms since
+the last one - and hands accepted keyframes to `KeyframeQueue`, which the pipeline's worker
+applies through `NativePoseGraphSink` as a node plus the odometry edge to the previous one. That
+is the `addPoseNode`/`addPoseEdge` half, and it runs on the worker because `NativeSlamEngine`
+requires every pose-graph call to be serialised by it.
+
+**`optimizePoseGraph` and `loopClosureCandidates` still have no caller**, and the JNI exposes no
+keyframe *image* feed, so no closure is detected and none is optimised: the graph is a record of
+where the operator walked, and the app still measures on ARCore's own tracking. Compiling
+RTAB-Map in therefore changes nothing the operator sees. `scripts/verify_sources.py` reads this
+from the code - a non-bridge file that calls the pose graph forces this text to say the flow is
+wired, and a tree that calls nothing forces it back - so the document cannot drift from the
+implementation in either direction. What remains is a closure policy that is verified rather
+than assumed, and a re-anchor of the measured nodes, not a build flag.
 
 ---
 

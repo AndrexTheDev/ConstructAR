@@ -9,6 +9,7 @@ package com.constructar.app.ui.ar
 import android.content.Context
 import android.os.PowerManager
 import android.os.SystemClock
+import android.util.Log
 import com.constructar.arengine.hit.ArInteraction
 import com.constructar.arengine.hit.HitResolution
 import com.constructar.arengine.hit.HitStabilizer
@@ -425,6 +426,52 @@ class ArMeasureController(private val context: Context) {
     }
 
     /**
+     * Offers this frame to the keyframe policy; the pipeline queues and its worker writes.
+     *
+     * The `Frame` never leaves this call: the pose is copied into a value, the feature count into
+     * an `Int`, and nothing here touches the native graph - see `KeyframeFeed` and
+     * `TsdfScanPipeline.keyframeFeed`.
+     */
+    private fun feedKeyframe(frame: Frame) {
+        val feed = pipeline.keyframeFeed ?: return
+        feed.onFrame(
+            pose = cameraPose(frame),
+            timestampMillis = SystemClock.uptimeMillis(),
+            trackingValid = frame.camera.trackingState == TrackingState.TRACKING,
+            featurePoints = featurePoints(frame),
+        )
+    }
+
+    /**
+     * How many feature points ARCore sees, sampled at 2 Hz.
+     *
+     * The point cloud is the only ARCore source for this number, and acquiring it is a JNI round
+     * trip plus a buffer map on the render thread - so it is sampled on a timer rather than per
+     * frame. The count is evidence of the *scene*, which changes at the speed a person walks, not
+     * at 30 Hz; a stale count can only make the policy more conservative, because a scene that had
+     * features a second ago either still has them or has lost them (finding 243).
+     */
+    private fun featurePoints(frame: Frame): Int {
+        val now = SystemClock.uptimeMillis()
+        if (now - featureSampleAtMillis < FEATURE_SAMPLE_INTERVAL_MS) return featureCount
+        featureSampleAtMillis = now
+        featureCount = try {
+            val cloud = frame.acquirePointCloud()
+            try {
+                cloud.points.remaining() / FLOATS_PER_POINT
+            } finally {
+                cloud.release()
+            }
+        } catch (expected: IllegalStateException) {
+            // Point clouds are off in this session, or this frame is not tracking: no evidence,
+            // and the policy reads 0 as "too few features" instead of guessing a number.
+            Log.w(TAG, "point cloud unavailable - no keyframe evidence from this frame", expected)
+            0
+        }
+        return featureCount
+    }
+
+    /**
      * Render-thread entry point. Order matters:
      *  1. capture depth (cheap copy) and hand it to the TSDF worker;
      *  2. resolve any pending tap against the *current* frame;
@@ -453,6 +500,10 @@ class ArMeasureController(private val context: Context) {
         if (poseUsable) {
             pipeline.onFrame(frame, thermalStatus)
             probeMarker(frame)
+            // The pose graph is fed from the same placed frames, and only from them: a keyframe
+            // taken from a frame the tracker cannot place is a node at a position nobody measured
+            // (finding 243).
+            feedKeyframe(frame)
         } else {
             // A tap made now must not wait for the next live frame to be answered: the pixel it
             // names is meaningless by then, and `ArInteraction` would resolve it against whatever
@@ -704,6 +755,10 @@ class ArMeasureController(private val context: Context) {
         }.onFailure { hudScreenPixels.value = null }
     }
 
+    /** Last point count ARCore reported, and when it was asked (see [featurePoints]). */
+    private var featureCount = 0
+    private var featureSampleAtMillis = 0L
+
     private var lastHudUpdateMillis = 0L
     private val viewMatrix = FloatArray(16)
     private val projectionMatrix = FloatArray(16)
@@ -721,6 +776,12 @@ class ArMeasureController(private val context: Context) {
 
         /** HUD label refresh period (render thread → Compose state). */
         private const val HUD_INTERVAL_MS = 50L
+
+        /** How often the point cloud is asked for a feature count - see [featurePoints]. */
+        private const val FEATURE_SAMPLE_INTERVAL_MS = 500L
+
+        /** `PointCloud.points` is x, y, z, confidence per point. */
+        private const val FLOATS_PER_POINT = 4
     }
 }
 

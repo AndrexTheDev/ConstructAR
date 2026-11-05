@@ -509,11 +509,14 @@ Optional pieces (both are opt-in, the app works without them):
   Without it the app uses ARCore depth only.
 * **RTAB-Map** — set `constructar.rtabmap.dir=<path to RTAB-Map source>` in
   `gradle.properties`; the CMake build then compiles the BSD-only bridge. Note what is wired
-  today: the app measures on ARCore's own tracking. The pose graph, the proximity loop-closure
-  proposer and the bridge are built, host-tested and reachable through `NativeSlamEngine`, but
-  **nothing in `:app` or `:ar-engine` feeds them a keyframe yet**, so no closure is optimised -
-  the pose graph is *not yet driven by the scan pipeline* (finding 98), and
-  `verify_sources.py` refuses this file if it ever claims otherwise while that is still true.
+  today: the app measures on ARCore's own tracking. Since finding 243 the built-in pose graph is
+  fed - `KeyframeFeed` decides on each placed frame which pose is worth keeping (0.5 m of
+  translation, 15° of rotation, tracker valid, 30 features, 200 ms apart), and the scan worker
+  writes the node and the odometry edge between it and the previous one. What still does not
+  happen is the correction: **nothing calls `optimizePoseGraph` and no loop closure is
+  proposed**, so the graph is a record of where the operator walked and the app still measures on
+  ARCore's own tracking (finding 98). `verify_sources.py` reads this from the code and refuses
+  this file if it claims otherwise.
 
 Full step-by-step setup — including how to convert the depth model and how to build RTAB-Map
 without non-free modules — is in **[docs/SETUP.md](docs/SETUP.md)**.
@@ -811,7 +814,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1045 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1061 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 332 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 332 checks, 0 failures, no data race reported |

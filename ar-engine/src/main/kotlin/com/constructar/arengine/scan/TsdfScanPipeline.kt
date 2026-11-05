@@ -10,6 +10,10 @@ import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import com.constructar.arengine.depth.DepthFrameSnapshot
+import com.constructar.arengine.keyframe.KeyframeApplier
+import com.constructar.arengine.keyframe.KeyframeFeed
+import com.constructar.arengine.keyframe.KeyframeQueue
+import com.constructar.arengine.keyframe.NativePoseGraphSink
 import com.constructar.core.calib.MarkerSweep
 import com.constructar.core.calib.MarkerSweepOptions
 import com.constructar.nativebridge.FloorplanPayload
@@ -190,6 +194,31 @@ class TsdfScanPipeline(
     @Volatile
     private var engine: NativeSlamEngine? = null
 
+    /**
+     * Keyframes the render thread accepted, waiting for the thread that may touch the graph.
+     *
+     * `NativeSlamEngine`'s contract says integrate, extract and pose-graph calls are serialised by
+     * this pipeline's single worker; the decision to keep a keyframe is made on the frame that
+     * produced the pose. So the decision stays on the render thread and enqueues, and only an
+     * accepted keyframe crosses over (finding 243).
+     */
+    @Volatile
+    private var keyframeQueue = KeyframeQueue()
+
+    /** Applies [keyframeQueue] to the native graph. Worker thread only; null after [stop]. */
+    @Volatile
+    private var keyframeApplier: KeyframeApplier? = null
+
+    /**
+     * What the render thread offers every placed frame to, or null until the engine exists.
+     *
+     * Public because the AR screen drives it: it is the one piece of the pose graph the frame loop
+     * may touch, and it can only enqueue.
+     */
+    @Volatile
+    var keyframeFeed: KeyframeFeed? = null
+        private set
+
     private var workerJob: kotlinx.coroutines.Job? = null
 
     private val fusedDepth = java.util.concurrent.atomic.AtomicReference<FusedDepth?>(null)
@@ -222,6 +251,11 @@ class TsdfScanPipeline(
             return
         }
         mutableState.value = mutableState.value.copy(ready = true)
+        // A queue per engine: a restart after `stop()` gets a fresh queue rather than a closed one,
+        // so the second session cannot silently lose every keyframe.
+        keyframeQueue = KeyframeQueue()
+        keyframeApplier = KeyframeApplier(NativePoseGraphSink(created))
+        keyframeFeed = KeyframeFeed(keyframeQueue)
         workerJob = scope.launch(dispatcher) {
             try {
                 // Ends when the channel is closed and drained — see `stop()`.
@@ -316,6 +350,10 @@ class TsdfScanPipeline(
     }
 
     private fun integrateLocked(active: NativeSlamEngine, snapshot: DepthFrameSnapshot) {
+        // Every keyframe the render thread accepted goes in here: this is the only thread that may
+        // touch the pose graph, and a keyframe is worth less than a frame - so the drain is
+        // bounded and the rest waits for the next one.
+        drainKeyframes()
         val startedNanos = System.nanoTime()
         // Read the stride once: the render thread may update `pendingPixelStep` concurrently.
         val pixelStep = pendingPixelStep
@@ -517,6 +555,11 @@ class TsdfScanPipeline(
         latestSnapshot?.release()
         latestSnapshot = null
         frames.close()
+        // Order matters: no new keyframes, then no applier (the worker reads it per command), and
+        // the engine is closed by the worker itself - so nothing is applied to a freed context.
+        keyframeFeed = null
+        keyframeApplier = null
+        keyframeQueue.close()
         val job = workerJob
         workerJob = null
         val active = engine
@@ -536,8 +579,28 @@ class TsdfScanPipeline(
         }
     }
 
+    /**
+     * Applies what the render thread queued. Caller must be the worker: see [keyframeApplier].
+     */
+    private fun drainKeyframes() {
+        val applier = keyframeApplier ?: return
+        var drained = 0
+        while (drained < MAX_KEYFRAMES_PER_INTEGRATION) {
+            val command = keyframeQueue.poll() ?: return
+            applier.apply(command)
+            drained += 1
+        }
+    }
+
     companion object {
         private const val TAG = "TsdfScanPipeline"
+
+        /**
+         * At 30 integrated frames a second this is eight times the fastest rate the keyframe
+         * policy allows, so the queue drains in practice; the bound only exists so that a keyframe
+         * cannot delay the frame that pays for the walls.
+         */
+        private const val MAX_KEYFRAMES_PER_INTEGRATION = 8
 
         /** A fused frame older than this is stale: the camera has moved on. */
         private const val FUSION_TTL_MS = 800L
