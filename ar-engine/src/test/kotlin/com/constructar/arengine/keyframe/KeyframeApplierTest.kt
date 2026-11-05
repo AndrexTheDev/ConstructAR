@@ -25,13 +25,16 @@ import org.junit.Test
  */
 class KeyframeApplierTest {
 
-    private class RecordingSink(private val firstIndex: Int = 0) : PoseGraphSink {
+    private class RecordingSink(
+        private val firstIndex: Int = 0,
+        /** Nodes beyond this many are refused - the drain happens later, so a flag would lie. */
+        private val refuseAfter: Int = Int.MAX_VALUE,
+    ) : PoseGraphSink {
         val nodes = ArrayList<Pair<FloatArray, Boolean>>()
         val edges = ArrayList<Triple<Int, Int, FloatArray>>()
-        var refuse = false
 
         override fun addNode(poseColumnMajor: FloatArray, fixed: Boolean): Int {
-            if (refuse) return PoseGraphSink.NO_NODE
+            if (nodes.size >= refuseAfter) return PoseGraphSink.NO_NODE
             val index = firstIndex + nodes.size
             nodes += poseColumnMajor to fixed
             return index
@@ -72,12 +75,13 @@ class KeyframeApplierTest {
 
     @Test
     fun `an edge whose node was refused is dropped, not guessed`() {
-        val sink = RecordingSink()
+        // The sink takes one node and refuses the second one - refused *at drain time*, which is
+        // why the fake refuses by count and not by a flag set before the drain.
+        val sink = RecordingSink(refuseAfter = 1)
         val queue = KeyframeQueue()
         val applier = KeyframeApplier(sink)
 
         val first = queue.addNode(identity, fixed = true)
-        sink.refuse = true
         val lost = queue.addNode(identity, fixed = false)
         queue.addEdge(first, lost, identity)
 
@@ -134,8 +138,12 @@ class KeyframeApplierTest {
             applier.apply(command)
         }
 
-        assertEquals("every edge after a reset references a node that no longer exists", 1, sink.edges.size)
-        assertEquals(1, applier.droppedEdges)
+        assertEquals(
+            "the edge cannot be translated after the translation table was cleared",
+            0,
+            sink.edges.size,
+        )
+        assertEquals("so it is dropped and counted, not written against a stale index", 1, applier.droppedEdges)
     }
 
     @Test

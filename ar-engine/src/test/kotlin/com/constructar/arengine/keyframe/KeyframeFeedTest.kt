@@ -169,7 +169,7 @@ class KeyframeFeedTest {
         accepted(feed, at = Vec3(1.5f, 2f, -3f))
 
         val matrix = sink.nodes[0].first
-        assertEquals(15, matrix.size)
+        assertEquals(16, matrix.size)
         assertEquals(1.5f, matrix[12], 1e-4f)
         assertEquals(2f, matrix[13], 1e-4f)
         assertEquals(-3f, matrix[14], 1e-4f)
