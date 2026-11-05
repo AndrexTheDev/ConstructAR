@@ -115,6 +115,16 @@ class ArMeasureController(private val context: Context) {
      */
     private val aiDepthRunningState = MutableStateFlow(false)
     val aiDepthRunning: StateFlow<Boolean> = aiDepthRunningState.asStateFlow()
+
+    /**
+     * True once the model's load attempt has answered - either way.
+     *
+     * A build without the model answers immediately; one with it answers after a file read and an
+     * interpreter build, which is a second of a cold start. Until then the HUD says nothing about
+     * depth, because "no depth" is not yet a fact (finding 224).
+     */
+    private val aiDepthSettledState = MutableStateFlow(false)
+    val aiDepthSettled: StateFlow<Boolean> = aiDepthSettledState.asStateFlow()
     private var powerManager: PowerManager? = null
 
     /**
@@ -218,7 +228,10 @@ class ArMeasureController(private val context: Context) {
                 context = context,
                 config = depthConfig,
                 onFused = { depth, width, height, _ -> pipeline.submitFusedDepth(depth, width, height) },
-                onModelState = { loaded -> aiDepthRunningState.value = loaded },
+                onModelState = { loaded ->
+                    aiDepthRunningState.value = loaded
+                    aiDepthSettledState.value = true
+                },
             ).also { it.warmUp() }
         }
         // The torch is applied by SceneView through the typed `flashMode` parameter; this

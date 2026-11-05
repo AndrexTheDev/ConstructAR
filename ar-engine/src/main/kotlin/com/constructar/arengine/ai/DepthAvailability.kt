@@ -36,14 +36,26 @@ enum class DepthSourceState {
     PLANES_ONLY,
 }
 
-/** The state and the fact that explains it, so a screen can print one sentence without guessing. */
+/** The state and the facts that explain it, so a screen can print one sentence without guessing. */
 data class DepthStatus(
     val state: DepthSourceState,
     /** True when the APK carries the model file - i.e. the fallback *could* run on this build. */
     val modelBundled: Boolean,
+    /**
+     * False while the model is still being loaded.
+     *
+     * Load is a file read and an interpreter build on a worker thread - a second or two on a cold
+     * start. Until it answers, "no depth" is not a verdict, and a warning that appears and vanishes
+     * during the first second of every session on a phone without a depth sensor is worse than no
+     * warning: it teaches the operator to ignore the line that matters (finding 224).
+     */
+    val aiSettled: Boolean = modelBundled.not(),
 ) {
     /** True when the phone measures millimetres against a depth field of some kind. */
     val hasDepthField: Boolean get() = state != DepthSourceState.PLANES_ONLY
+
+    /** True when a screen may state the state: the answer is known and will not change by itself. */
+    val isFinal: Boolean get() = state != DepthSourceState.PLANES_ONLY || aiSettled
 }
 
 object DepthAvailability {
@@ -63,6 +75,7 @@ object DepthAvailability {
         modelBundled: Boolean,
         arcoreDepthSupported: Boolean,
         aiRunning: Boolean,
+        aiSettled: Boolean = true,
     ): DepthStatus = DepthStatus(
         state = when {
             aiRunning -> DepthSourceState.AI_FUSED
@@ -70,5 +83,7 @@ object DepthAvailability {
             else -> DepthSourceState.PLANES_ONLY
         },
         modelBundled = modelBundled,
+        // A build without the model has nothing to wait for: its absence *is* the answer.
+        aiSettled = aiSettled || !modelBundled || aiRunning,
     )
 }

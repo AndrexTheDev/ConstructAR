@@ -277,14 +277,21 @@ fun ArMeasureScreen(
     // so instead of the app quietly recording a floor it will later print mounting heights from.
     val floorUncertain = floorDecision?.status == FloorReferenceStatus.UNCERTAIN
     val aiDepthRunning by controller.aiDepthRunning.collectAsStateWithLifecycle()
+    val aiDepthSettled by controller.aiDepthSettled.collectAsStateWithLifecycle()
     // Which depth is actually in use. A phone with neither ARCore's depth API nor the bundled
     // model still measures - on the planes it has detected - and the operator has to know that,
     // because it changes where a tap can land (finding 221).
-    val depthStatus = remember(aiDepthRunning, tracking.depthSupported, controller.depthModelBundled) {
+    val depthStatus = remember(
+        aiDepthRunning,
+        aiDepthSettled,
+        tracking.depthSupported,
+        controller.depthModelBundled,
+    ) {
         com.constructar.arengine.ai.DepthAvailability.of(
             modelBundled = controller.depthModelBundled,
             arcoreDepthSupported = tracking.depthSupported,
             aiRunning = aiDepthRunning,
+            aiSettled = aiDepthSettled,
         )
     }
     // Handed to the caller as soon as a floor is seen, and not again for the same plane: the
@@ -716,7 +723,10 @@ fun ArMeasureScreen(
                         },
                     )
                 }
-                if (depthStatus.state == com.constructar.arengine.ai.DepthSourceState.PLANES_ONLY) {
+                // `isFinal`, not just the state: during the model's load the answer is
+                // "planes only" and it may stop being true in a second. A line that appears and
+                // vanishes on every cold start is a line the operator learns to ignore.
+                if (!depthStatus.hasDepthField && depthStatus.isFinal) {
                     Text(
                         text = stringResource(R.string.ar_depth_planes_only),
                         style = MaterialTheme.typography.bodyMedium,

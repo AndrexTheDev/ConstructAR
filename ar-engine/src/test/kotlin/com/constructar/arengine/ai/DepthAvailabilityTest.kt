@@ -63,6 +63,60 @@ class DepthAvailabilityTest {
     }
 
     @Test
+    fun `a model that is still loading is not a verdict`() {
+        // A bundled model on a phone without a depth sensor: for the first second of a cold start
+        // the only *known* answer is "planes only", and it is not final. A warning that appears
+        // and vanishes on every start is a warning nobody reads (finding 224).
+        val loading = DepthAvailability.of(
+            modelBundled = true,
+            arcoreDepthSupported = false,
+            aiRunning = false,
+            aiSettled = false,
+        )
+
+        assertEquals(DepthSourceState.PLANES_ONLY, loading.state)
+        assertFalse(loading.isFinal)
+
+        val answered = DepthAvailability.of(
+            modelBundled = true,
+            arcoreDepthSupported = false,
+            aiRunning = false,
+            aiSettled = true,
+        )
+
+        assertTrue(answered.isFinal)
+        assertFalse(answered.hasDepthField)
+    }
+
+    @Test
+    fun `a build without the model has nothing to wait for`() {
+        // No model in the APK: the absence *is* the answer, so the line may be shown at once even
+        // though no load attempt will ever report back.
+        val status = DepthAvailability.of(
+            modelBundled = false,
+            arcoreDepthSupported = false,
+            aiRunning = false,
+            aiSettled = false,
+        )
+
+        assertTrue(status.isFinal)
+        assertEquals(DepthSourceState.PLANES_ONLY, status.state)
+    }
+
+    @Test
+    fun `a running model is final whatever the loader said`() {
+        val status = DepthAvailability.of(
+            modelBundled = true,
+            arcoreDepthSupported = false,
+            aiRunning = true,
+            aiSettled = false,
+        )
+
+        assertEquals(DepthSourceState.AI_FUSED, status.state)
+        assertTrue(status.isFinal)
+    }
+
+    @Test
     fun `no depth at all is said out loud`() {
         val status = DepthAvailability.of(
             modelBundled = false,

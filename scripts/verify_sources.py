@@ -3943,6 +3943,13 @@ def check_the_depth_fallback_is_named() -> None:
     if "R.string.ar_depth_planes_only" not in screen_text:
         add(screen, "a phone with no depth at all is not told: the reticle finds nothing on a "
                     "chair's edge and the operator reads that as a fault")
+    # And the line may not flash on every cold start while the model is still loading (finding
+    # 224): a warning that comes and goes is a warning the operator learns to ignore.
+    if "isFinal" not in screen_text:
+        add(screen, "the depth line is shown before the model's load has answered, so it appears "
+                    "and vanishes during the first second of every session")
+    if "aiSettled = aiDepthSettled" not in screen_text:
+        add(screen, "the HUD decides on a depth state it never learns the loader's verdict from")
 
     for folder in LOCALES:
         path = RES_DIR / folder / "strings.xml"
