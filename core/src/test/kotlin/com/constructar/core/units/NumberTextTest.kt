@@ -30,8 +30,8 @@ class NumberTextTest {
         assertEquals(',', NumberText.decimalMark(Locale.GERMANY))
         assertEquals(',', NumberText.decimalMark(Locale.FRANCE))
         assertEquals(',', NumberText.decimalMark(Locale.ITALY))
-        assertEquals(',', NumberText.decimalMark(Locale("pl", "PL")))
-        assertEquals(',', NumberText.decimalMark(Locale("es", "ES")))
+        assertEquals(',', NumberText.decimalMark(Locale.forLanguageTag("pl-PL")))
+        assertEquals(',', NumberText.decimalMark(Locale.forLanguageTag("es-ES")))
         assertEquals('.', NumberText.decimalMark(Locale.US))
         assertEquals('.', NumberText.decimalMark(Locale.UK))
     }

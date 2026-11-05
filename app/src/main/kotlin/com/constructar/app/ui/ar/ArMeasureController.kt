@@ -41,7 +41,6 @@ import io.github.sceneview.loaders.MaterialLoader
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.StateFlow
 
 /** Anchor factory that can be created before the ARCore session exists. */
 class DelegatingAnchorFactory : AnchorFactory {
