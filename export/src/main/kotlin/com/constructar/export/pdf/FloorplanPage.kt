@@ -98,6 +98,10 @@ class FloorplanLayout private constructor(
             }
             val extentX = maxX - minX
             val extentZ = maxZ - minZ
+            // Every corner on one spot: no extent on either axis, so there is no scale to choose.
+            // Refused before the scale is computed, because two "unconstrained" axes would each
+            // report `Float.MAX_VALUE` and their minimum is a number rather than a refusal.
+            if (extentX <= 0f && extentZ <= 0f) return null
             // A room that is 4 m wide and 0 m deep has no scale of its own on one axis: that axis
             // does not constrain the fit, and `Float.MAX_VALUE` says so without a special case.
             val scaleX = if (extentX > 0f) width / extentX else Float.MAX_VALUE
