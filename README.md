@@ -208,7 +208,12 @@ Four screens, in the order of the job, and no screen that exists only to show of
    *note for the office* live here, one tap deeper. **Material & order** opens the shopping list —
    per conduit type, net metres plus the metres to order with the site's waste factor, and the
    clips, couplings and bends the runs actually need. The person who drives to the wholesaler is
-   standing in the room with this phone, not reading the PDF at a desk.
+   standing in the room with this phone, not reading the PDF at a desk. **Walls** opens the other
+   half of the same job: the room's ring as wall area (openings subtracted, the closing wall
+   counted), the drywall purchase with the board size, stud spacing and waste it was computed
+   under, and the DIN 18015 zones — sockets at 30 cm, switches at 105 cm, ceiling outlets under
+   the ceiling — assigned from the floor the AR session actually tracked, or not assigned at all
+   when it tracked none.
 4. **Measure → Export** — the AR viewfinder with its HUD, then the export screen, where the
    operator picks a folder once and gets PDF, CSV (plus an optional one-line-per-article order
    list for the wholesaler) and, with Pro, GLB/PLY. The customer can sign
@@ -582,8 +587,11 @@ Known limitations, deliberately documented rather than hidden:
   tested even though the JNI call itself cannot be. The Kotlin parser refuses anything the length
   does not prove — a truncated array read field by field yields zeros, and a room with zero-length
   walls is a plan that draws and is wrong — and a count that is fractional, negative or larger than
-  the array is a broken writer rather than a rounding. Nothing calls `floorplan()` from `:app` yet:
-  it belongs on the scan worker, not on a screen, and the caller is the next step.
+  the array is a broken writer rather than a rounding. The plan reaches the app the moment a run is
+  committed — the scan worker slices the volume while it is still alive (400 ms bound),
+  `ArMeasureController.finalFloorplan()` hands the payload on, and
+  `ProjectViewModel.saveFloorplanThumbnail` writes the room's outline and its SVG (see *Room
+  thumbnails* above and ARCHITECTURE §5b for the four links of that chain).
 * **Semantic masking and distance-weighted fusion** — two pieces the slice needs to be usable. A
   waist-height cut crosses tables, counters and workbenches as well as walls, and a horizontal
   patch drawn as a wall puts a partition through the middle of the room: `maskVerticalSurfaces`
@@ -674,7 +682,8 @@ Known limitations, deliberately documented rather than hidden:
 * **Static gates**: `scripts/verify_sources.py` checks that every authored file states its owner -
   the notice itself (`Copyright (c) <year> AndrexTheDev <hippie…>`), not merely the author's handle,
   which a GitHub link satisfies (finding 215) - the reflection ban,
-  the published test and assertion counts against the suites themselves,
+  the published test and assertion counts against the suites themselves, that no document calls a
+  shipped path dead (finding 216),
   hardcoded UI text in shipped code, string-resource references, locale parity, XML
   well-formedness and the manifest hardening — without needing a JDK. One of its rules holds the
   native layer to its four build lists at once (a `geometry/*.cpp` must be compiled by CMake, the

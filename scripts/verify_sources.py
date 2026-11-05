@@ -4009,6 +4009,62 @@ def check_the_generated_pages_keep_their_notice() -> None:
         add(manifest, "the published web manifest names no owner")
 
 
+UNWIRED_CLAIM = re.compile(
+    r"(?i)(not wired|not yet wired|nothing calls|no screen calls|nobody calls|no caller|"
+    r"has no caller|nothing in `:app` calls)"
+)
+BACKTICKED = re.compile(r"`([^`]+)`")
+
+
+def check_the_docs_do_not_call_a_live_path_dead() -> None:
+    """A document that calls a shipped path dead is wrong in the direction nobody checks (finding 216).
+
+    The README's native section still ended the floorplan paragraph with "Nothing calls
+    `floorplan()` from `:app` yet: it belongs on the scan worker, not on a screen, and the caller is
+    the next step" - eleven rounds after that caller was written
+    (`ArMeasureController.finalFloorplan` from `commitRun`, `onFloorplan`, and
+    `ProjectViewModel.saveFloorplanThumbnail`). The same README describes the finished chain three
+    hundred lines earlier, and ARCHITECTURE §5b documents it step by step, so one document gave two
+    answers to "does this work", and the wrong one was in the section a maintainer reads when
+    deciding whether a code path is live.
+
+    The rules that guard the other direction - a feature wired but never mentioned - do not catch
+    this, because nothing is missing: the sentence is simply out of date. What makes it checkable is
+    that these claims name their subject: a sentence that says *nothing calls* X, with X in
+    backticks, is a claim about `app/src/main`, and it is false the moment X appears there.
+
+    `docs/TESTING.md` is exempt: it is a log of what was true when a defect was found, and rows
+    about a path that has since been wired must keep saying what the defect was.
+    """
+    app_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (ROOT / "app" / "src" / "main").rglob("*")
+        if path.suffix in {".kt", ".xml"} and path.is_file()
+    )
+    docs = [ROOT / "README.md"] + sorted(
+        path for path in (ROOT / "docs").glob("*.md") if path.name != "TESTING.md"
+    )
+    for doc in docs:
+        if not doc.exists():
+            continue
+        text = doc.read_text(encoding="utf-8")
+        for sentence in re.split(r"(?<=[.!?])\s+", text):
+            if not UNWIRED_CLAIM.search(sentence):
+                continue
+            for symbol in BACKTICKED.findall(sentence):
+                # Paths (`core/.../wall`, `geometry/floorplan.cpp`) are places, not callables: the
+                # rule is about code the app could reach, and a path contains no claim about one.
+                if "/" in symbol:
+                    continue
+                base = symbol.rstrip("()").split(".")[-1]
+                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", base):
+                    continue
+                if base in app_text:
+                    add(doc, f"the text says nothing calls `{symbol}`, and `app/src/main` mentions "
+                             f"`{base}` - either the sentence is out of date or the code is dead, "
+                             f"and both are findings")
+
+
 def main() -> int:
     files = tracked_sources()
     check_headers(files)
@@ -4098,6 +4154,7 @@ def main() -> int:
     check_the_hud_says_when_the_reticle_moved()
     check_the_wall_screen_uses_the_core_numbers()
     check_the_generated_pages_keep_their_notice()
+    check_the_docs_do_not_call_a_live_path_dead()
     check_the_reticle_snap_stays_wired()
     check_exported_numbers_use_the_c_locale()
     check_project_imports_are_used()
