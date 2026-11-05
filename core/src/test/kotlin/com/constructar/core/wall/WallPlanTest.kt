@@ -259,7 +259,9 @@ class WallPlanTest {
         // A door on a 4 m wall tapped at three quarters: centred on the tap, so it starts at
         // 3.0 m - 0.4425 m. Tapped at the very end, it is pulled back so the whole leaf fits.
         assertEquals(2.5575f, openingOffsetForTap(0.75f, 4f, DOOR_WIDTH_M), 1e-4f)
-        assertEquals(4f - DOOR_WIDTH_M, openingOffsetForTap(1f, 4f, 1.0f), 1e-4f)
+        // Tapped at the very end: the 1 m opening is pulled back to start 3 m along, so it ends
+        // exactly on the wall's end corner instead of hanging past it.
+        assertEquals(3f, openingOffsetForTap(1f, 4f, 1.0f), 1e-4f)
         // A door wider than its wall starts at 0 and `wallSurface` reports the clip, rather than
         // the app silently moving the door somewhere it was not tapped.
         assertEquals(0f, openingOffsetForTap(0.5f, 0.6f, 0.885f), 1e-4f)
