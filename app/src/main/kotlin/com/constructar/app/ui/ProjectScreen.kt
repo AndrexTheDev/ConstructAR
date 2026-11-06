@@ -67,7 +67,9 @@ import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.model.ConduitRoute
+import com.constructar.core.model.MeasurementProvenance
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.model.ScanCaveat
 import com.constructar.core.model.WorkTime
 import com.constructar.core.price.MoneyFormatter
 import com.constructar.core.price.Pricing
@@ -388,11 +390,16 @@ fun ProjectScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // How this measurement came to be, assembled in `:core` (finding 254). The
+                // project screen used to decide for itself and got it wrong twice: it said
+                // nothing about a folded loop (the protocol prints it) and nothing about a
+                // partial capture (the export screen warns). One list, both screens.
+                val provenance = remember(project) { MeasurementProvenance.of(project) }
                 // A corrected number has to say that it is one. Every metre on this screen and in
                 // the protocol is the measured value multiplied by the operator's reference
                 // calibration, and a document that quietly reports 5.25 m for a run the phone
                 // measured as 5.00 m is a document nobody can check.
-                if (project.isCalibrated) {
+                if (provenance.isCalibrated) {
                     Text(
                         stringResource(
                             R.string.calib_success_toast,
@@ -418,7 +425,35 @@ fun ProjectScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (project.scan == null) {
+                // The loop, when there was one - with the solver's verdict, because a
+                // confirmation without a result is not a room that needed no correction
+                // (findings 247, 252).
+                provenance.closure?.let { closure ->
+                    Text(
+                        if (closure.converged) {
+                            stringResource(
+                                R.string.export_room_closure,
+                                closure.movedNodes,
+                                closure.nodes,
+                                shownLengthWithUnit(closure.maxShiftMetres),
+                            )
+                        } else {
+                            stringResource(R.string.export_room_closure_unfinished)
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SiteColors.warning,
+                    )
+                }
+                // The model covers only part of the room (finding 100): the same sentence the
+                // export screen and the protocol print.
+                if (ScanCaveat.PARTIAL_CAPTURE in provenance.caveats) {
+                    Text(
+                        stringResource(R.string.export_room_scan_limited),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SiteColors.warning,
+                    )
+                }
+                if (!provenance.scanned) {
                     Text(
                         stringResource(R.string.project_scan_missing),
                         style = MaterialTheme.typography.bodySmall,

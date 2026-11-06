@@ -343,6 +343,9 @@ the dialog said after the dialog is gone (finding 250); committing the run copie
 `ScanSummary.closures` and the protocol prints them, so the document says the geometry was folded
 back on someone's word (finding 251). Both carry the solver's verdict, so "the graph was already
 consistent" and "the optimiser gave up" stay two sentences all the way to the paper (finding 252).
+Which of those facts a screen has to mention is not a screen's decision: `MeasurementProvenance.of`
+(`:core`) assembles the caveats - partial capture, folded loop, uncorrected loop - and the project
+screen renders that list instead of deciding for itself (finding 254).
 
 **Monocular depth fusion.** Optional and strictly additive, and it names itself: the model's asset
 path comes from `BuildConfig.DEPTH_MODEL_ASSET` (one declaration, so a variant that ships a
