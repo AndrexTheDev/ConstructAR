@@ -65,6 +65,15 @@ android {
         // APK": the boolean is derived, never typed.
         buildConfigField("String", "LICENCE_PUBLIC_KEY", "\"$licenceKey\"")
         buildConfigField("boolean", "LICENCE_KEY_IS_DEMO", licenceKeyIsDemo.toString())
+
+        // The label on the launcher. A beta APK that looks exactly like the sold app is a
+        // support call waiting to happen, so the build type below overrides it.
+        manifestPlaceholders["appLabel"] = "@string/app_name"
+
+        // Whose entitlements this build reports. `false` everywhere except the `beta` build type,
+        // which compiles it to `true`: the unlock is a build input, so a release cannot carry it
+        // by accident (finding 255).
+        buildConfigField("boolean", "BETA_BUILD", "false")
     }
 
     /**
@@ -113,6 +122,35 @@ android {
         }
         debug {
             applicationIdSuffix = ".debug"
+        }
+
+        /**
+         * The build a tester installs: every paid function unlocked, and no way to mistake it for
+         * the sold one (finding 255).
+         *
+         * Three deliberate differences from `release`:
+         *
+         *  * **`BETA_BUILD = true`** - `EntitlementStore` reports the lifetime plan, so the room
+         *    limit, the PDF watermark and the 3D exports are all free. It is not a licence: no key
+         *    is minted, nothing is stored, and the flag lives in a build type that no release task
+         *    assembles.
+         *  * **`applicationIdSuffix = ".beta"` and its own label** - it installs *next to* the
+         *    release build on the same phone instead of replacing it, and the icon says which one
+         *    is being held.
+         *  * **Debuggable, unminified, signed with the debug key** - a test report with an
+         *    unreadable stack trace is a report that cannot be acted on.
+         */
+        create("beta") {
+            applicationIdSuffix = ".beta"
+            isDebuggable = true
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
+            manifestPlaceholders["appLabel"] = "ConstructAR Beta"
+            buildConfigField("boolean", "BETA_BUILD", "true")
+            // `:core`, `:ar-engine`, `:export` and `:native-slam` only know debug and release; the
+            // beta app compiles against their debug variant instead of failing dependency
+            // resolution for a "beta" variant that does not exist in the libraries.
+            matchingFallbacks += listOf("debug")
         }
     }
 

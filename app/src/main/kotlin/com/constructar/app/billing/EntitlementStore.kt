@@ -7,12 +7,14 @@
 package com.constructar.app.billing
 
 import android.content.Context
+import com.constructar.app.BuildConfig
 import com.constructar.core.licence.ClockGuard
 import com.constructar.core.licence.EntitlementRules
 import com.constructar.core.licence.Entitlements
 import com.constructar.core.licence.LicenceCheck
 import com.constructar.core.licence.LicenceSeal
 import com.constructar.core.licence.LicenceVerifier
+import com.constructar.core.licence.Plan
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -141,7 +143,15 @@ class EntitlementStore(
         // watermark rather than a timestamp.
         persistSealed(KEY_WATERMARK, KEY_WATERMARK_SEAL, installation, decision.watermarkEpochDay.toString())
 
-        mutableEntitlements.value = decision.entitlements
+        // A beta build is unlocked on purpose (finding 255). It is not a licence: no key was
+        // minted, nothing is written to the licence file, and the flag is compiled into a build
+        // type no release task assembles. Everything else in this class still runs, so a beta
+        // tester also exercises the clock guard and the integrity check.
+        mutableEntitlements.value = if (BuildConfig.BETA_BUILD) {
+            Entitlements.of(Plan.LIFETIME)
+        } else {
+            decision.entitlements
+        }
         mutableDiagnostics.value = Diagnostics(
             clockRolledBack = decision.clockRolledBack,
             integrityFailed = decision.integrityFailed,

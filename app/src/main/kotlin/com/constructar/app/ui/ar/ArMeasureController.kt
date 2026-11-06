@@ -10,6 +10,7 @@ import android.content.Context
 import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
+import com.constructar.app.diagnostics.Diagnostics
 import com.constructar.arengine.hit.ArInteraction
 import com.constructar.arengine.hit.HitResolution
 import com.constructar.arengine.hit.HitStabilizer
@@ -104,13 +105,24 @@ class ArMeasureController(private val context: Context) {
     val closureState: StateFlow<ClosureState> get() = pipeline.closureState
 
     /** Ask whether the walk has come back somewhere it has been. */
-    fun lookForClosure() = pipeline.lookForClosure()
+    fun lookForClosure() {
+        // The four closure actions are the ones a test report is about: they are the only place
+        // where a human changes the graph, so each one is written down (finding 256).
+        Diagnostics.event("closure", "look requested")
+        pipeline.lookForClosure()
+    }
 
     /** The operator said "same place": close the loop and optimise. */
-    fun confirmClosure() = pipeline.confirmClosure()
+    fun confirmClosure() {
+        Diagnostics.event("closure", "confirmed by the operator")
+        pipeline.confirmClosure()
+    }
 
     /** The operator said no. */
-    fun dismissClosure() = pipeline.dismissClosure()
+    fun dismissClosure() {
+        Diagnostics.event("closure", "refused by the operator")
+        pipeline.dismissClosure()
+    }
 
     @Volatile
     private var markerProbe: MarkerProbe? = null
@@ -706,6 +718,7 @@ class ArMeasureController(private val context: Context) {
     fun resetScan() = pipeline.reset()
 
     fun release() {
+        Diagnostics.event("scan", "session released")
         sessionRouteIds.clear()
         routeSession.release()
         (anchors.delegate as? ArCoreAnchorFactory)?.detachAll()

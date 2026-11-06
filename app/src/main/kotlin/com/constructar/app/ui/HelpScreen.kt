@@ -77,6 +77,9 @@ fun HelpScreen(
             .padding(top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        // The card a tester needs beside the phone number and the licence: what this build is,
+        // what it just did, and one button to hand it over (finding 256).
+        DiagnosticsCard()
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
                 Icon(

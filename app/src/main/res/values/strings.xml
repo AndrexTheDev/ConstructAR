@@ -224,6 +224,15 @@
     <string name="onboard_start">Start measuring</string>
     <string name="onboard_skip">Skip</string>
     <string name="help_title">Help and accuracy</string>
+    <string name="diag_title">Diagnostics</string>
+    <string name="diag_body">This build keeps what it did in files on this phone. Save them to a folder and pass that folder on when something is wrong - nothing leaves the device by itself.</string>
+    <string name="diag_empty">Nothing recorded yet.</string>
+    <string name="diag_save">Save files</string>
+    <string name="diag_saved">%1$d files saved.</string>
+    <string name="diag_copy">Copy</string>
+    <string name="diag_copied">Copied.</string>
+    <string name="diag_failed">Could not save.</string>
+    <string name="beta_banner">Beta test build: every function is unlocked. Not for sale.</string>
     <string name="help_how_title">How it works</string>
     <string name="help_how_body">Scan the room, tap the run point by point, export. Three steps, one screen each.</string>
     <string name="help_accuracy_title">How accurate is it?</string>

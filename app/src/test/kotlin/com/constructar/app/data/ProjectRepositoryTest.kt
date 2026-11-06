@@ -465,7 +465,12 @@ class ProjectRepositoryTest {
         assertFalse(repository.savePhotoAs("../../escape", android.net.Uri.EMPTY))
         assertFalse(repository.deletePhotoAs("../../projects/room-1"))
         assertNull(repository.loadPhotoAs("../../escape"))
-        assertEquals(0, context.filesDir.walkTopDown().count { it.isFile })
+        // The app writes its own diagnostics log under files/diagnostics from the application
+        // object (finding 256); that file is not a photo, so the count is of everything else.
+        assertEquals(
+            0,
+            context.filesDir.walkTopDown().count { it.isFile && !it.path.contains("/diagnostics/") },
+        )
     }
 
     @Test

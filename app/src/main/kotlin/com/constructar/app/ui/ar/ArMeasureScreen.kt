@@ -88,6 +88,7 @@ import com.constructar.app.ui.ActionTone
 import com.constructar.app.ui.GloveButton
 import com.constructar.app.ui.LocalDecimalMark
 import com.constructar.app.ui.shownLength
+import com.constructar.app.diagnostics.Diagnostics
 import com.constructar.app.ui.shownLengthWithUnit
 import com.constructar.app.ui.GloveButtonRow
 import com.constructar.app.ui.formatTimeLabel
@@ -101,6 +102,7 @@ import com.constructar.app.ui.theme.SiteColors
 import com.constructar.app.ui.tierLabel
 import com.constructar.arengine.hit.FloorHudLine
 import com.constructar.arengine.hit.floorHudLine
+import com.constructar.arengine.keyframe.ClosureState
 import com.constructar.arengine.keyframe.PoseGraphStanding
 import com.constructar.arengine.render.ArScene
 import com.constructar.arengine.session.ArReadiness
@@ -289,6 +291,29 @@ fun ArMeasureScreen(
     val floorLine = floorHudLine(floorDecision?.status)
     val graphStatus by controller.poseGraphStatus.collectAsStateWithLifecycle()
     val closureState by controller.closureState.collectAsStateWithLifecycle()
+    // What the conversation ended up doing, with the numbers, in the file the tester sends
+    // (finding 256). The dialog is gone in a second; the log keeps the sentence.
+    LaunchedEffect(closureState) {
+        when (val state = closureState) {
+            is ClosureState.Offered -> Diagnostics.event(
+                "closure",
+                "offered ${state.offer.from}->${state.offer.to} at ${state.offer.distanceMetres} m",
+            )
+            is ClosureState.Closed -> {
+                val correction = state.correction
+                Diagnostics.event(
+                    "closure",
+                    "closed: residual ${state.optimisation.initialCost} -> ${state.optimisation.finalCost}, " +
+                        "converged=${state.optimisation.converged}, " +
+                        "moved=${correction?.movedNodes ?: 0}/${correction?.nodes ?: 0} nodes, " +
+                        "max=${correction?.maxShiftMetres ?: 0f} m",
+                )
+            }
+            ClosureState.Failed -> Diagnostics.event("closure", "optimisation failed")
+            ClosureState.NothingFound -> Diagnostics.event("closure", "nothing found")
+            ClosureState.Idle -> Unit
+        }
+    }
     val aiDepthRunning by controller.aiDepthRunning.collectAsStateWithLifecycle()
     val aiDepthSettled by controller.aiDepthSettled.collectAsStateWithLifecycle()
     // Which depth is actually in use. A phone with neither ARCore's depth API nor the bundled

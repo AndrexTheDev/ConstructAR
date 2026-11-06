@@ -381,12 +381,12 @@ Six locales ship as resources, and **no user-facing text is hardcoded**: the eng
 
 | Directory | Locale | Keys |
 |-----------|--------|------|
-| `app/src/main/res/values/` | English (default) | 490 strings + 13 plurals |
-| `app/src/main/res/values-de/` | Deutsch | 490 strings + 13 plurals |
-| `app/src/main/res/values-es/` | Español | 490 strings + 13 plurals |
-| `app/src/main/res/values-fr/` | Français | 490 strings + 13 plurals |
-| `app/src/main/res/values-it/` | Italiano | 490 strings + 13 plurals |
-| `app/src/main/res/values-pl/` | Polski | 490 strings + 13 plurals (`few`/`many` included) |
+| `app/src/main/res/values/` | English (default) | 499 strings + 13 plurals |
+| `app/src/main/res/values-de/` | Deutsch | 499 strings + 13 plurals |
+| `app/src/main/res/values-es/` | Español | 499 strings + 13 plurals |
+| `app/src/main/res/values-fr/` | Français | 499 strings + 13 plurals |
+| `app/src/main/res/values-it/` | Italiano | 499 strings + 13 plurals |
+| `app/src/main/res/values-pl/` | Polski | 499 strings + 13 plurals (`few`/`many` included) |
 
 `scripts/verify_sources.py` fails on a missing key, an untranslated extra key, or a mismatched
 format placeholder — so a half-translated release cannot ship. That includes the exported
@@ -467,6 +467,25 @@ gradle :app:assembleDebug                # APK in app/build/outputs/apk/debug/
 gradle :app:assembleRelease              # the shipping artifact: R8 + resource shrink
 python3 scripts/verify_sources.py        # copyright notice / reflection / i18n gates, no SDK needed
 ```
+
+**A beta build for a first hands-on run (finding 255).** Nobody has run the AR part on a real
+phone yet, so there is a build type that removes every paywall for testing without touching the
+shipping artifact:
+
+```bash
+gradle :app:assembleBeta                 # APK in app/build/outputs/apk/beta/
+```
+
+It carries `BETA_BUILD = true` (the entitlement layer then answers "lifetime", so the
+one-project limit, the PDF watermark and the locked GLB/PLY export are gone), its own
+application id (`….beta`, so it installs next to the sold app instead of over it), the debug
+signing key, and the label *ConstructAR Beta*. It is unminified and debuggable on purpose - a
+crash report from it is readable. `.github/workflows/beta-apk.yml` builds it into the
+`constructar-beta-apk` artifact; `workflow_dispatch` needs the `actions: write` scope, so a push
+that touches that file is the fallback trigger. What it collects stays on the phone:
+`files/diagnostics/session-*.log` and `crash-*.log`, written by `Diagnostics`, plus the same
+lines on the *Hilfe* screen, where **Dateien speichern** copies them into a folder the user picks
+(finding 256). Nothing is uploaded, ever - the app has no `INTERNET` permission.
 
 **16 KB pages (Android 15+).** The NDK build spells the alignment flags out
 (`-Wl,-z,max-page-size=16384`, `-Wl,-z,common-page-size=16384`) instead of trusting the toolchain's
@@ -821,7 +840,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1118 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1123 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 332 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 332 checks, 0 failures, no data race reported |

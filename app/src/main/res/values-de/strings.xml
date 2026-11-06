@@ -224,6 +224,15 @@
     <string name="onboard_start">Jetzt messen</string>
     <string name="onboard_skip">Überspringen</string>
     <string name="help_title">Hilfe und Genauigkeit</string>
+    <string name="diag_title">Diagnose</string>
+    <string name="diag_body">Diese Testversion schreibt mit, was sie getan hat - als Dateien auf diesem Telefon. Speichere sie in einen Ordner und gib den Ordner weiter, wenn etwas nicht stimmt. Von selbst verlässt nichts das Gerät.</string>
+    <string name="diag_empty">Noch nichts aufgezeichnet.</string>
+    <string name="diag_save">Dateien speichern</string>
+    <string name="diag_saved">%1$d Dateien gespeichert.</string>
+    <string name="diag_copy">Kopieren</string>
+    <string name="diag_copied">Kopiert.</string>
+    <string name="diag_failed">Konnte nicht gespeichert werden.</string>
+    <string name="beta_banner">Beta-Testversion: alle Funktionen sind freigeschaltet. Nicht zum Verkauf.</string>
     <string name="help_how_title">So funktioniert es</string>
     <string name="help_how_body">Scanne den Raum, tippe die Strecke Punkt für Punkt an, exportiere. Drei Schritte, je ein Bildschirm.</string>
     <string name="help_accuracy_title">Wie genau ist es?</string>
