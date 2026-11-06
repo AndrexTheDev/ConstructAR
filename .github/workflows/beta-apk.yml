@@ -1,0 +1,126 @@
+# Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+# All rights reserved. Proprietary and confidential - see LICENSE.
+# SPDX-License-Identifier: LicenseRef-Proprietary
+
+name: beta-apk
+
+# The build a person can install and test with (finding 255).
+#
+# `assembleBeta` is a build type, not a flavour of `release`: it carries `BETA_BUILD = true`, its
+# own application id (`.beta`, so it installs next to the sold app instead of replacing it), the
+# debug signing key, and everything unlocked. No licence key is minted for it and nothing about it
+# reaches `assembleRelease`.
+#
+# Triggered by hand and by a push that touches this file: a beta APK is an artifact somebody asked
+# for, not something every commit produces.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/beta-apk.yml"
+
+concurrency:
+  group: beta-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GRADLE_VERSION: "9.6.0"
+  JAVA_VERSION: "21"
+  NDK_VERSION: "27.2.12479018"
+  CMAKE_VERSION: "3.22.1"
+  GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
+
+jobs:
+  beta:
+    name: assembleBeta
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Install NDK, CMake and platform licenses
+        run: |
+          set -uo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SM" ] || SM="$(command -v sdkmanager)"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+
+          yes | "$SM" --licenses > /dev/null 2>&1 || true
+
+          install() {
+            echo "--- installing $1"
+            "$SM" --install "$1" || echo "WARN: could not install $1"
+          }
+          install "platform-tools"
+          install "cmake;${CMAKE_VERSION}"
+          install "ndk;${NDK_VERSION}"
+
+          if [ ! -d "$SDK/ndk/${NDK_VERSION}" ]; then
+            ALT=$(ls "$SDK/ndk" 2>/dev/null | sort -V | tail -n 1 || true)
+            echo "WARN: NDK ${NDK_VERSION} missing; newest installed is '${ALT:-none}'"
+            if [ -n "${ALT:-}" ]; then
+              sed -i "s/ndkVersion = \"[^\"]*\"/ndkVersion = \"$ALT\"/" native-slam/build.gradle.kts
+              echo "ANDROID_NDK_HOME=$SDK/ndk/$ALT" >> "$GITHUB_ENV"
+            fi
+          else
+            echo "ANDROID_NDK_HOME=$SDK/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install Gradle ${{ env.GRADLE_VERSION }}
+        run: |
+          set -euo pipefail
+          base=https://services.gradle.org/distributions
+          code=$(curl -sSL -o /tmp/gradle.zip -w '%{http_code}' "$base/gradle-${GRADLE_VERSION}-bin.zip" || true)
+          if [ "$code" != "200" ]; then
+            latest=$(curl -sSL https://services.gradle.org/versions/current \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')
+            echo "falling back to current Gradle $latest"
+            curl -sSL -o /tmp/gradle.zip "$base/gradle-${latest}-bin.zip"
+          fi
+          rm -rf /opt/gradle && mkdir -p /opt/gradle
+          unzip -q /tmp/gradle.zip -d /opt/gradle
+          GRADLE_BIN=$(dirname "$(find /opt/gradle -maxdepth 3 -name gradle -type f | head -n 1)")
+          echo "$GRADLE_BIN" >> "$GITHUB_PATH"
+          "$GRADLE_BIN/gradle" --version
+
+      - name: Cache Gradle downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/jdks
+          key: beta-gradle-${{ env.GRADLE_VERSION }}-${{ hashFiles('gradle/libs.versions.toml', '**/build.gradle.kts') }}
+          restore-keys: beta-gradle-${{ env.GRADLE_VERSION }}-
+
+      - name: assembleBeta
+        run: |
+          set -o pipefail
+          gradle --no-daemon --stacktrace :app:assembleBeta 2>&1 | tee /tmp/beta.log | tail -n 60
+
+      - name: Name the APK after the commit it came from
+        run: |
+          set -euo pipefail
+          apk=$(find app/build/outputs/apk/beta -name '*.apk' | head -n 1)
+          test -n "$apk"
+          out="ConstructAR-beta-${GITHUB_SHA::7}.apk"
+          cp "$apk" "$out"
+          ls -l "$out"
+          echo "APK=$out" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: constructar-beta-apk
+          path: ${{ env.APK }}
+          if-no-files-found: error
+          retention-days: 30

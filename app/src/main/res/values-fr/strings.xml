@@ -224,6 +224,15 @@
     <string name="onboard_start">Commencer à mesurer</string>
     <string name="onboard_skip">Passer</string>
     <string name="help_title">Aide et précision</string>
+    <string name="diag_title">Diagnostic</string>
+    <string name="diag_body">Cette version d’essai note ce qu’elle a fait dans des fichiers sur ce téléphone. Enregistrez-les dans un dossier et transmettez-le si quelque chose ne va pas : rien ne quitte l’appareil de lui-même.</string>
+    <string name="diag_empty">Rien d’enregistré pour l’instant.</string>
+    <string name="diag_save">Enregistrer les fichiers</string>
+    <string name="diag_saved">%1$d fichiers enregistrés.</string>
+    <string name="diag_copy">Copier</string>
+    <string name="diag_copied">Copié.</string>
+    <string name="diag_failed">Enregistrement impossible.</string>
+    <string name="beta_banner">Version bêta : toutes les fonctions sont déverrouillées. Pas destinée à la vente.</string>
     <string name="help_how_title">Comment ça marche</string>
     <string name="help_how_body">Scanne, touche le tracé point par point, exporte. Trois étapes, un écran chacune.</string>
     <string name="help_accuracy_title">Quelle précision ?</string>

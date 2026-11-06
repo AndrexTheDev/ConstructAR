@@ -224,6 +224,15 @@
     <string name="onboard_start">Empezar a medir</string>
     <string name="onboard_skip">Omitir</string>
     <string name="help_title">Ayuda y precisión</string>
+    <string name="diag_title">Diagnóstico</string>
+    <string name="diag_body">Esta versión de prueba guarda lo que ha hecho en archivos de este teléfono. Guárdalos en una carpeta y pásala cuando algo no funcione: nada sale del dispositivo por sí solo.</string>
+    <string name="diag_empty">Todavía no hay nada registrado.</string>
+    <string name="diag_save">Guardar archivos</string>
+    <string name="diag_saved">%1$d archivos guardados.</string>
+    <string name="diag_copy">Copiar</string>
+    <string name="diag_copied">Copiado.</string>
+    <string name="diag_failed">No se pudo guardar.</string>
+    <string name="beta_banner">Versión beta: todas las funciones están desbloqueadas. No es para la venta.</string>
     <string name="help_how_title">Cómo funciona</string>
     <string name="help_how_body">Escanea, toca el recorrido punto por punto y exporta. Tres pasos, una pantalla cada uno.</string>
     <string name="help_accuracy_title">¿Qué precisión tiene?</string>

@@ -51,6 +51,7 @@ import androidx.documentfile.provider.DocumentFile
 import com.constructar.app.BuildConfig
 import com.constructar.app.R
 import com.constructar.app.data.RoomPlanPage
+import com.constructar.app.diagnostics.Diagnostics
 import com.constructar.app.data.RoomSizeText
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.calib.ReferenceCalibration
@@ -313,6 +314,17 @@ fun ExportScreen(
                 }
             }
             busy = false
+            // The export is the last step of a job, and the one a tester reports about: what was
+            // asked for, what landed in the folder, and what did not (finding 256).
+            outcome.onSuccess { report ->
+                Diagnostics.event(
+                    "export",
+                    "folder=${report.folder} requested=${report.requested} produced=${report.produced} " +
+                        "written=${report.written} meshSkipped=${report.meshSkipped}",
+                )
+            }.onFailure { error ->
+                Diagnostics.event("export", "failed: ${error.javaClass.name}: ${error.message}")
+            }
             status = outcome.fold(
                 onSuccess = { report ->
                     ExportStatus.of(

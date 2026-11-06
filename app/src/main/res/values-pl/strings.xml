@@ -230,6 +230,15 @@
     <string name="onboard_start">Zacznij mierzyć</string>
     <string name="onboard_skip">Pomiń</string>
     <string name="help_title">Pomoc i dokładność</string>
+    <string name="diag_title">Diagnostyka</string>
+    <string name="diag_body">Ta wersja testowa zapisuje to, co zrobiła, w plikach na tym telefonie. Zapisz je w folderze i przekaż go, gdy coś nie działa - nic nie opuszcza urządzenia samo z siebie.</string>
+    <string name="diag_empty">Nic jeszcze nie zapisano.</string>
+    <string name="diag_save">Zapisz pliki</string>
+    <string name="diag_saved">Zapisano plików: %1$d.</string>
+    <string name="diag_copy">Kopiuj</string>
+    <string name="diag_copied">Skopiowano.</string>
+    <string name="diag_failed">Nie udało się zapisać.</string>
+    <string name="beta_banner">Wersja beta: wszystkie funkcje są odblokowane. Nie na sprzedaż.</string>
     <string name="help_how_title">Jak to działa</string>
     <string name="help_how_body">Zeskanuj, dotknij trasy punkt po punkcie, wyeksportuj. Trzy kroki, po jednym ekranie.</string>
     <string name="help_accuracy_title">Jaka jest dokładność?</string>
