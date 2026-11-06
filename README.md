@@ -482,7 +482,14 @@ application id (`….beta`, so it installs next to the sold app instead of over 
 signing key, and the label *ConstructAR Beta*. It is unminified and debuggable on purpose - a
 crash report from it is readable. `.github/workflows/beta-apk.yml` builds it into the
 `constructar-beta-apk` artifact; `workflow_dispatch` needs the `actions: write` scope, so a push
-that touches that file is the fallback trigger. What it collects stays on the phone:
+that touches the app or this file is the trigger. The same run publishes the APK as the asset of
+the **`beta` release**, which is the link a phone can actually use -
+`https://github.com/AndrexTheDev/ConstructAR/releases/download/beta/ConstructAR-beta.apk` - because
+an artifact is a ZIP behind a login, and the first device report of this build was *"There was a
+problem parsing the package"* with no way to tell which bytes the phone was holding (finding 261).
+The run prints the file's byte count and SHA-256, the sdk/ABI it declares and the `apksigner`
+verdict, and fails only when the signature does not verify; the beta is also stripped of native
+debug symbols, so it is a download a 4 GB phone can take, while `release` keeps them. What it collects stays on the phone:
 `files/diagnostics/session-*.log` and `crash-*.log`, written by `Diagnostics`, plus the same
 lines on the *Hilfe* screen, where **Dateien speichern** copies them into a folder the user picks
 (finding 256). Nothing is uploaded, ever - the app has no `INTERNET` permission.

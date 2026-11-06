@@ -33,7 +33,9 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  # `write` is for one thing only: publishing the APK as a release asset, so the person holding
+  # the phone gets a direct link instead of a login-walled ZIP they have to extract (finding 261).
+  contents: write
 
 env:
   GRADLE_VERSION: "9.6.0"
@@ -172,6 +174,73 @@ jobs:
             exit 1
           fi
           echo "::notice title=packaged locales::the APK carries ${found}"
+
+      - name: Verify the APK, then publish it where a phone can fetch it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+
+          # What the file is, in numbers a report can be compared with: the first device report of
+          # this build was "There was a problem parsing the package", and neither side knew whether
+          # the phone held the file we built (finding 261).
+          bytes=$(stat -c%s "$APK")
+          sha=$(sha256sum "$APK" | cut -d' ' -f1)
+          echo "bytes=$bytes sha256=$sha"
+          echo "::notice title=APK bytes::$bytes bytes, sha256 $sha"
+
+          AAPT2=$(ls -1 "$SDK"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -n 1 || true)
+          if [ -n "${AAPT2:-}" ]; then
+            "$AAPT2" dump badging "$APK" > /tmp/badging.txt 2>&1 || true
+            badging=$(grep -E '^(package:|sdkVersion:|targetSdkVersion:|native-code:)' /tmp/badging.txt | tr '\n' ' ' | cut -c1-900)
+            echo "$badging"
+            echo "::notice title=APK badging::${badging}"
+          else
+            echo "::warning title=no aapt2::the APK's declared requirements could not be read"
+          fi
+
+          APKSIGNER=$(ls -1 "$SDK"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n 1 || true)
+          if [ -n "${APKSIGNER:-}" ]; then
+            if "$APKSIGNER" verify --verbose "$APK" > /tmp/signer.txt 2>&1; then
+              schemes=$(grep -E '^Verified using' /tmp/signer.txt | tr '\n' ' ')
+              echo "::notice title=APK signature::verified - ${schemes}"
+            else
+              # A signature that does not verify is exactly what the phone refuses to parse. This
+              # is the one condition here worth failing the build over.
+              echo "::error title=APK signature::apksigner rejected the APK: $(head -n 6 /tmp/signer.txt | tr '\n' ' ')"
+              exit 1
+            fi
+          fi
+
+          # The direct link: no ZIP, no GitHub account, one URL that always holds the newest beta.
+          cp "$APK" ConstructAR-beta.apk
+          notes=$(printf '%s\n' \
+            "ConstructAR Beta - commit ${GITHUB_SHA::7} ($(date -u +%Y-%m-%d))" \
+            "" \
+            "Install: open the .apk on the phone, allow the source, install over the previous beta." \
+            "" \
+            "Size: ${bytes} bytes" \
+            "SHA-256: ${sha}" \
+            "Build: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            "" \
+            "Diagnostics stay on the phone: Hilfe -> Dateien speichern.")
+          if ! gh release view beta >/dev/null 2>&1; then
+            gh release create beta --title "ConstructAR Beta (zum Testen)" --notes "$notes" \
+              || echo "::warning title=no release::the repository did not allow creating the 'beta' release, the artifact above is still there"
+          fi
+          if gh release view beta >/dev/null 2>&1; then
+            gh release edit beta --title "ConstructAR Beta (zum Testen)" --notes "$notes" || true
+            if gh release upload beta ConstructAR-beta.apk --clobber; then
+              url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/beta/ConstructAR-beta.apk"
+              echo "::notice title=direct download::${url}"
+              echo "\`${url}\`" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "- ${bytes} bytes, sha256 \`${sha}\`" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::warning title=upload failed::the release asset was not replaced, the artifact above is still there"
+            fi
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
