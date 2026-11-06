@@ -3090,12 +3090,28 @@ def check_the_calibration_has_one_home() -> None:
     project_model = (ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" /
                      "model" / "Project.kt")
     model_text = project_model.read_text(encoding="utf-8")
-    if "get() = (routes.sumOf { it.polylineLengthMeters.toDouble() } * calibrationScale).toFloat()" not in model_text:
-        add(project_model, "`totalLengthMeters` no longer applies `calibrationScale`, so the room "
-                           "screen and the protocol would report uncorrected metres")
-    if "fun calibratedMeters(" not in model_text:
-        add(project_model, "`calibratedMeters` is gone - a caller would multiply a route length by "
-                           "the factor itself, which is the second definition this rule exists for")
+    if "get() = reportedMeters(routes.sumOf { it.polylineLengthMeters.toDouble() }.toFloat())" not in model_text:
+        add(project_model, "`totalLengthMeters` no longer goes through `reportedMeters`, so the room "
+                           "screen and the protocol would report uncorrected metres - or correct "
+                           "the same metres twice")
+    # One multiplication, in one function (finding 277). It used to be two - the total and
+    # `calibratedMeters` - and the surfaces picked whichever they found: the project screen's rows
+    # and the protocol's runs table printed the raw measurement under a corrected sum, so a
+    # calibrated project's list read 12.80 m under a 13.44 m total, on the page the customer signs.
+    multiplications = model_text.count("* calibrationScale")
+    if multiplications != 1:
+        add(project_model, f"the calibration factor is multiplied into metres in {multiplications} "
+                           "places - `reportedMeters` has to be the only one, or a list and the sum "
+                           "above it disagree (finding 277)")
+    if "fun reportedMeters(measuredMeters: Float): Float" not in model_text:
+        add(project_model, "`reportedMeters` is gone - every surface that prints a per-run length "
+                           "would have to decide for itself whether to apply the factor, which is "
+                           "exactly how the list stopped adding up (finding 277)")
+    if "fun calibratedMeters(" not in model_text or \
+            "= reportedMeters(route.polylineLengthMeters)" not in model_text:
+        add(project_model, "`calibratedMeters` is gone or no longer delegates to `reportedMeters` - "
+                           "a caller would multiply a route length by the factor itself, which is "
+                           "the second definition this rule exists for")
     bom = (ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" / "bom" /
            "MaterialList.kt")
     if "project.calibrationScale" not in bom.read_text(encoding="utf-8"):

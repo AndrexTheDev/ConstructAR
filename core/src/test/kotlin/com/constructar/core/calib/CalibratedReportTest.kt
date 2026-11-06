@@ -83,6 +83,35 @@ class CalibratedReportTest {
     }
 
     @Test
+    fun `the rows of a calibrated project add up to its total`() {
+        // The invariant every list on the phone and in the protocol depends on (finding 277). The
+        // project screen's rows printed the raw measurement while the total above them was
+        // corrected, so a 5.00 m job read as 3.00 + 2.00 under "5.25 m" - a list the operator can
+        // see is wrong and cannot explain. Summed the way the screens sum it: printed metres.
+        val project = project(route("a", 3f), route("b", 2f), scale = 1.05)
+
+        val rows = project.routes.map { project.calibratedMeters(it) }
+        assertEquals(
+            "the rows must add up to the number above them",
+            project.totalLengthMeters,
+            rows.sum(),
+            1e-4f,
+        )
+    }
+
+    @Test
+    fun `a measured length is corrected once, in one function`() {
+        // `reportedMeters` is the only multiplication site: the total goes through it, a route goes
+        // through it, and the AR screen's running total - saved runs and the run in hand alike -
+        // goes through it. A second application would print 13.44 m as 14.11 m.
+        val project = project(route("a", 4f), scale = 1.05)
+
+        assertEquals(4.2f, project.reportedMeters(4f), 1e-4f)
+        assertEquals(4.2f, project.calibratedMeters(project.routes.first()), 1e-4f)
+        assertEquals(4.2f, project.totalLengthMeters, 1e-4f)
+    }
+
+    @Test
     fun `the bill of materials follows the same factor`() {
         val list = MaterialListBuilder.build(
             project(route("a", 3f), route("b", 2f), scale = 1.05),

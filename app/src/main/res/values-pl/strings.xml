@@ -345,7 +345,6 @@
     <string name="licences_title">Komponenty firm trzecich</string>
     <string name="licences_intro">Ta aplikacja opiera się na tych komponentach open source. Ich informacje o prawach autorskich są tu powtórzone, zgodnie z wymogami licencji.</string>
     <string name="help_licence_title">Licencja</string>
-    <string name="runs_title">Trasy</string>
     <string name="run_detail">%1$s · %2$s</string>
     <string name="run_delete">Usuń trasę</string>
     <string name="run_delete_title">Usunąć tę trasę?</string>

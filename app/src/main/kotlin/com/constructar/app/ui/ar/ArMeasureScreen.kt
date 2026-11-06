@@ -599,11 +599,13 @@ fun ArMeasureScreen(
     val closedLoopText = if (routeState.closedLoop) stringResource(R.string.ar_closed_loop) else null
     // The room, not just the run: the operator's real question on site. It reuses the export
     // screen's own "N runs · X total" line, so the number on the phone and on the protocol come
-    // from one sentence and one formatter.
+    // from one sentence and one formatter - and, since finding 277, from one *value*: every metre
+    // here is a reported metre, the saved runs and the run in hand alike. Measured metres summed
+    // under a corrected total is how the project screen's list came to disagree with its own sum.
     val roomTotals = RunSummary.of(
-        committedMeters = project.routes.map { it.polylineLengthMeters },
+        committedMeters = project.routes.map { project.calibratedMeters(it) },
         liveNodes = routeState.nodeCount,
-        liveMeters = routeState.lengthMeters,
+        liveMeters = project.reportedMeters(routeState.lengthMeters),
     )
     val roomTotalText = if (roomTotals.runs > 0) {
         stringResource(

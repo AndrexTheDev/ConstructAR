@@ -191,7 +191,7 @@
     <string name="export_nothing_selected">Wähle mindestens ein Dateiformat.</string>
     <string name="export_nothing_to_export">Noch keine 3D-Geometrie: miss zuerst eine Strecke oder scanne den Raum.</string>
     <string name="export_measurement">Aufmaß</string>
-    <string name="export_runs_total">%1$d Trassen · %2$s gesamt</string>
+    <string name="export_runs_total">%1$d Strecken · %2$s gesamt</string>
     <string name="export_order_length">Bestelllänge inkl. Verschnitt: %1$s</string>
     <string name="export_fittings">Scheiben %1$d · Kupplungen %2$d · Bögen %3$d</string>
     <string name="export_room_scan">Raumscan aufgenommen: %1$d k Dreiecke - im Protokoll; das 3D-Modell enthält die Strecken</string>
@@ -219,8 +219,8 @@
 
     <!-- Counts -->
     <plurals name="home_runs">
-        <item quantity="one">%1$d Trasse</item>
-        <item quantity="other">%1$d Trassen</item>
+        <item quantity="one">%1$d Strecke</item>
+        <item quantity="other">%1$d Strecken</item>
     </plurals>
     <plurals name="home_unreadable">
         <item quantity="one">1 Projektdatei konnte nicht gelesen werden. Die Datei wurde behalten - spiele sie aus einer Sicherung zurück oder lösche sie unten, um den Raum freizugeben.</item>
@@ -339,7 +339,6 @@
     <string name="licences_title">Komponenten von Drittanbietern</string>
     <string name="licences_intro">Diese App baut auf diesen Open-Source-Komponenten auf. Die Urheberrechtshinweise stehen hier, wie die Lizenzen es verlangen.</string>
     <string name="help_licence_title">Lizenz</string>
-    <string name="runs_title">Strecken</string>
     <string name="run_detail">%1$s · %2$s</string>
     <string name="run_delete">Strecke löschen</string>
     <string name="run_delete_title">Diese Strecke löschen?</string>

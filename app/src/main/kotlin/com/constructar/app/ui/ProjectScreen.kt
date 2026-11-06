@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -380,15 +381,14 @@ fun ProjectScreen(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // The total, printed once. This card used to follow it with "4 Trassen · 12,80 m
+                // gesamt": the same number again in body type, the run count buried in the
+                // sentence, and under a list titled "Strecken" (finding 277). The count heads the
+                // list it counts now, and no screen states this total twice.
                 Text(
                     shownLengthWithUnit(project.totalLengthMeters),
                     style = MaterialTheme.typography.displaySmall,
                     color = SiteColors.accent,
-                )
-                Text(
-                    stringResource(R.string.export_runs_total, project.routes.size, shownLengthWithUnit(project.totalLengthMeters)),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 // How this measurement came to be, assembled in `:core` (finding 254). The
                 // project screen used to decide for itself and got it wrong twice: it said
@@ -464,10 +464,13 @@ fun ProjectScreen(
         }
 
         // ── The runs, individually ──────────────────────────────────────────────────
+        // Headed by the number of runs rather than by the word "Strecken" alone: the count was the
+        // only new fact on the card above and it was inside a sentence that repeated the total
+        // (finding 277). Here it labels the list it counts, so header and rows are one statement.
         if (project.routes.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    stringResource(R.string.runs_title),
+                    pluralStringResource(R.plurals.home_runs, project.routes.size, project.routes.size),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp),
@@ -480,7 +483,11 @@ fun ProjectScreen(
                             route.spec.label,
                             route.spec.sizeLabel,
                         ),
-                        length = shownLengthWithUnit(route.polylineLengthMeters),
+                        // The reported metres, not the measured ones: this row sits under the
+                        // project's total, which is corrected by the calibration, and a list that
+                        // does not add up to its own sum is a number the operator can see is wrong
+                        // (finding 277).
+                        length = shownLengthWithUnit(project.calibratedMeters(route)),
                         // A run recovered after an interruption counts in every length and every
                         // fitting, but its 3D geometry is not in the model. Saying so is the
                         // difference between a documented limitation and a surprise in a viewer.
@@ -763,7 +770,8 @@ fun ProjectScreen(
                     stringResource(
                         R.string.run_delete_body,
                         stringResource(R.string.run_detail, run.spec.label, run.spec.sizeLabel),
-                        shownLengthWithUnit(run.polylineLengthMeters),
+                        // The same metres the row above it shows and the total counts (finding 277).
+                        shownLengthWithUnit(project.calibratedMeters(run)),
                     ),
                 )
             },

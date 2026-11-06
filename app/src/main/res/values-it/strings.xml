@@ -133,7 +133,7 @@
     <string name="undo_nothing_to_remove">Nessun punto impostato - non c’è niente da eliminare.</string>
     <string name="ar_close_loop">Chiudi ad anello</string>
     <string name="ar_finish">Salva la tratta</string>
-    <string name="ar_leave_title">Uscire dal tracciato?</string>
+    <string name="ar_leave_title">Uscire dalla tratta?</string>
     <string name="ar_leave_body">%1$s misurati. Salvarlo come tratta o scartarlo?</string>
     <string name="ar_leave_save">Salva come tratta</string>
     <string name="ar_leave_discard">Scarta</string>
@@ -191,7 +191,7 @@
     <string name="export_nothing_selected">Scegli almeno un formato di file.</string>
     <string name="export_nothing_to_export">Ancora nessuna geometria 3D: misura prima una tratta o scansiona la stanza.</string>
     <string name="export_measurement">Rilievo</string>
-    <string name="export_runs_total">%1$d tracciati · %2$s in totale</string>
+    <string name="export_runs_total">%1$d percorsi · %2$s in totale</string>
     <string name="export_order_length">Lunghezza di ordine con sfrido: %1$s</string>
     <string name="export_fittings">Fissaggi %1$d · manicotti %2$d · curve %3$d</string>
     <string name="export_room_scan">Scansione della stanza registrata: %1$d k triangoli - va nel protocollo; il modello 3D contiene le tratte</string>
@@ -219,8 +219,8 @@
 
     <!-- Counts -->
     <plurals name="home_runs">
-        <item quantity="one">%1$d tracciato</item>
-        <item quantity="other">%1$d tracciati</item>
+        <item quantity="one">%1$d percorso</item>
+        <item quantity="other">%1$d percorsi</item>
     </plurals>
     <plurals name="home_unreadable">
         <item quantity="one">1 file di progetto non è stato letto. È stato conservato: ripristinalo da un backup o eliminalo qui sotto per liberare la stanza.</item>
@@ -339,7 +339,6 @@
     <string name="licences_title">Componenti di terze parti</string>
     <string name="licences_intro">Questa app si basa su questi componenti open source. Le loro note di copyright sono riprodotte qui, come richiedono le licenze.</string>
     <string name="help_licence_title">Licenza</string>
-    <string name="runs_title">Percorsi</string>
     <string name="run_detail">%1$s · %2$s</string>
     <string name="run_delete">Elimina percorso</string>
     <string name="run_delete_title">Eliminare questo percorso?</string>

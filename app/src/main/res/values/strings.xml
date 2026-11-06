@@ -339,7 +339,6 @@
     <string name="licences_title">Third-party components</string>
     <string name="licences_intro">This app is built on these open-source components. Their copyright notices are reproduced here, as their licences require.</string>
     <string name="help_licence_title">Licence</string>
-    <string name="runs_title">Runs</string>
     <string name="run_detail">%1$s · %2$s</string>
     <string name="run_delete">Delete run</string>
     <string name="run_delete_title">Delete this run?</string>

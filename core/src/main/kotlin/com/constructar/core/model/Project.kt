@@ -240,11 +240,28 @@ data class ProjectRecord(
      * default factor of 1.0 this is exactly the sum of the runs, which is what it always was.
      */
     val totalLengthMeters: Float
-        get() = (routes.sumOf { it.polylineLengthMeters.toDouble() } * calibrationScale).toFloat()
+        get() = reportedMeters(routes.sumOf { it.polylineLengthMeters.toDouble() }.toFloat())
+
+    /**
+     * One measured length as it is reported: the phone's rows, the AR screen's running total, the
+     * protocol's table and its summary, the bill of materials (finding 277).
+     *
+     * This was two multiplications - here and in [calibratedMeters] - and every surface picked
+     * whichever one it happened to find. The project screen's rows and the protocol's runs table
+     * printed the raw `polylineLengthMeters` while the total *above them* was corrected, so a
+     * calibrated project's list added up to 12.80 m under a 13.44 m sum, and the page the customer
+     * signs carried the same 64 cm tear between its table and its summary. A list that does not add
+     * up to its own total is worse than no list: it is a number the operator can see is wrong and
+     * cannot explain.
+     *
+     * With one function there is no "which metres" decision left for a screen to get wrong, and the
+     * rows add up by construction.
+     */
+    fun reportedMeters(measuredMeters: Float): Float =
+        (measuredMeters.toDouble() * calibrationScale).toFloat()
 
     /** One run's length as it is reported: measured by the phone, corrected by the calibration. */
-    fun calibratedMeters(route: ConduitRoute): Float =
-        (route.polylineLengthMeters.toDouble() * calibrationScale).toFloat()
+    fun calibratedMeters(route: ConduitRoute): Float = reportedMeters(route.polylineLengthMeters)
 
     /** True when a reference calibration has been applied to this project. */
     val isCalibrated: Boolean

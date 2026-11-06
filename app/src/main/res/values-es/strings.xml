@@ -133,7 +133,7 @@
     <string name="undo_nothing_to_remove">Todavía no hay ningún punto - no hay nada que borrar.</string>
     <string name="ar_close_loop">Cerrar en anillo</string>
     <string name="ar_finish">Guardar el tramo</string>
-    <string name="ar_leave_title">¿Salir del trazado?</string>
+    <string name="ar_leave_title">¿Salir del tramo?</string>
     <string name="ar_leave_body">%1$s medidos. ¿Guardarlo como tramo o descartarlo?</string>
     <string name="ar_leave_save">Guardar como tramo</string>
     <string name="ar_leave_discard">Descartar</string>
@@ -191,7 +191,7 @@
     <string name="export_nothing_selected">Elige al menos un formato de archivo.</string>
     <string name="export_nothing_to_export">Aún no hay geometría 3D: mide un tramo o escanea la sala primero.</string>
     <string name="export_measurement">Medición</string>
-    <string name="export_runs_total">%1$d trazados · %2$s en total</string>
+    <string name="export_runs_total">%1$d recorridos · %2$s en total</string>
     <string name="export_order_length">Longitud de pedido con merma: %1$s</string>
     <string name="export_fittings">Abrazaderas %1$d · manguitos %2$d · curvas %3$d</string>
     <string name="export_room_scan">Escáner de sala registrado: %1$d k triángulos - va en el protocolo; el modelo 3D contiene las tiradas</string>
@@ -219,8 +219,8 @@
 
     <!-- Counts -->
     <plurals name="home_runs">
-        <item quantity="one">%1$d trazado</item>
-        <item quantity="other">%1$d trazados</item>
+        <item quantity="one">%1$d recorrido</item>
+        <item quantity="other">%1$d recorridos</item>
     </plurals>
     <plurals name="home_unreadable">
         <item quantity="one">1 archivo de proyecto no se pudo leer. Se conservó: restáuralo desde una copia de seguridad o elimínalo abajo para liberar el cuarto.</item>
@@ -339,7 +339,6 @@
     <string name="licences_title">Componentes de terceros</string>
     <string name="licences_intro">Esta aplicación se apoya en estos componentes de código abierto. Sus avisos de copyright se reproducen aquí, como exigen sus licencias.</string>
     <string name="help_licence_title">Licencia</string>
-    <string name="runs_title">Recorridos</string>
     <string name="run_detail">%1$s · %2$s</string>
     <string name="run_delete">Borrar recorrido</string>
     <string name="run_delete_title">¿Borrar este recorrido?</string>
