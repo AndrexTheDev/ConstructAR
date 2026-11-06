@@ -64,5 +64,5 @@ internal object ModeStyle {
     const val CAPTURE_ARGB: Int = 0xFFA25BFF.toInt()
 
     /** The room overlay as it is drawn over the camera: the same hue at half opacity. */
-    const val CAPTURE_OVERLAY_ARGB: Int = 0x88A25BFF.toInt()
+    const val CAPTURE_OVERLAY_ARGB: Int = 0x99A25BFF.toInt()
 }
