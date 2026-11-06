@@ -37,11 +37,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Straighten
@@ -74,10 +76,13 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -200,7 +205,6 @@ fun ArMeasureScreen(
     val fontScale = configuration.fontScale
     val statusMaxHeight = HudLayout.statusMaxHeightDp(screenHeightDp, fontScale).dp
     val sheetMaxHeight = HudLayout.sheetMaxHeightDp(screenHeightDp, fontScale).dp
-    val actionColumns = HudLayout.columns(screenWidthDp, 3, fontScale)
     val pairColumns = HudLayout.columns(screenWidthDp, 2, fontScale)
     val controller = remember { ArMeasureController(context) }
     val activity = remember(context) { context.findActivity() }
@@ -364,6 +368,23 @@ fun ArMeasureScreen(
     // Which of the two jobs this screen is doing (finding 267). Measuring points is the default:
     // it is what the app is bought for, and a walkthrough is an errand the operator decides on.
     var mode by rememberSaveable { mutableStateOf(MeasureMode.MEASURE) }
+    // Two disclosures, both closed on entry (finding 268): "the tools" and "the numbers a person
+    // can act on". Everything rare lives behind them, so the screen states one job at a time.
+    var toolsOpen by rememberSaveable { mutableStateOf(SheetPlan.TOOLS_OPEN_ON_ENTRY) }
+    var diagnosticsOpen by rememberSaveable { mutableStateOf(false) }
+    var specOpen by rememberSaveable { mutableStateOf(false) }
+    /**
+     * The run that was just saved, until the next one starts.
+     *
+     * Saving used to be silent: the sheet went back to "no points" and the only proof the tap had
+     * done anything was a number in the header and a line in the project list. This is the sentence
+     * that answers "what did I just do", and it stays until the operator taps the next point - a
+     * toast that vanishes after three seconds would be missed while the cable is still in his hand.
+     */
+    var savedRun by remember { mutableStateOf<Pair<String, Float>?>(null) }
+    LaunchedEffect(routeState.nodeCount) {
+        if (routeState.nodeCount > 0) savedRun = null
+    }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
 
     /**
@@ -408,11 +429,23 @@ fun ArMeasureScreen(
             draftWritten = false
         }
     }
+    val addPoint: () -> Unit = {
+        // Logged, because "nothing happens" was the whole report: the log now says whether the tap
+        // arrived and what the hit test made of it (finding 256).
+        Diagnostics.event("tap", "add point at reticle ${viewSize.width}x${viewSize.height}")
+        controller.requestTap(
+            viewSize.width / 2f,
+            viewSize.height / 2f,
+            viewSize.width,
+            viewSize.height,
+        )
+    }
     val commitRun: () -> Unit = {
         // Persisted label: locale-independent and stable across devices, so a run reads the same
         // in the CSV, the PDF and the project file. One implementation, in `RouteLabels`.
         val runLabel = RouteLabels.next(spec, project.routes.map { it.label })
         controller.finish(label = runLabel)?.let { route ->
+            savedRun = runLabel to route.polylineLengthMeters
             onRouteFinished(route)
             // Snapshot the scan statistics with the first finished run: the protocol header must
             // describe the room as it was measured.
@@ -560,8 +593,8 @@ fun ArMeasureScreen(
     val distanceText = stringResource(R.string.ar_guide_distance, lengthText)
     val ringText = stringResource(R.string.ar_guide_ring, lengthText)
     val captureWalkText = stringResource(R.string.capture_walk)
+    val changeCableText = stringResource(R.string.spec_change)
     val blockRunText = stringResource(R.string.ar_hint_run_needs, routeState.nodeCount)
-    val blockRingText = stringResource(R.string.ar_hint_ring_needs, routeState.nodeCount)
     val guideRows = MeasureGuide.lines(guideState).mapNotNull { line ->
         val text = when (line) {
             GuideLine.COACHING -> guidanceText
@@ -576,17 +609,12 @@ fun ArMeasureScreen(
             GuideLine.RING -> ringText
             GuideLine.CAPTURE_WALK -> captureWalkText
             GuideLine.BLOCK_RUN -> blockRunText
-            GuideLine.BLOCK_RING -> blockRingText
         }
         text?.let { line to it }
     }
-    // The two refusals stay under the buttons they belong to; everything else is the status block.
-    val blockRow = guideRows.firstOrNull { (line, _) ->
-        line == GuideLine.BLOCK_RUN || line == GuideLine.BLOCK_RING
-    }
-    val statusRows = guideRows.filterNot { (line, _) ->
-        line == GuideLine.BLOCK_RUN || line == GuideLine.BLOCK_RING
-    }
+    // The refusal stays under the button it belongs to; everything else is the status block.
+    val blockRow = guideRows.firstOrNull { (line, _) -> line == GuideLine.BLOCK_RUN }
+    val statusRows = guideRows.filterNot { (line, _) -> line == GuideLine.BLOCK_RUN }
 
     Box(
         modifier = Modifier
@@ -874,7 +902,7 @@ fun ArMeasureScreen(
                     // `isFinal`, not just the state: during the model's load the answer is
                     // "planes only" and it may stop being true in a second. A line that appears and
                     // vanishes on every cold start is a line the operator learns to ignore.
-                    if (!depthStatus.hasDepthField && depthStatus.isFinal) {
+                    if (diagnosticsOpen && !depthStatus.hasDepthField && depthStatus.isFinal) {
                         Text(
                             text = stringResource(R.string.ar_depth_planes_only),
                             style = MaterialTheme.typography.bodyMedium,
@@ -899,15 +927,30 @@ fun ArMeasureScreen(
                     }
                     // The weakest point of the run, not the last one: one guessed point makes the
                     // whole length a guess, and this is the only moment it can still be re-tapped.
-                    weakPointText?.let {
-                        Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
+                    if (diagnosticsOpen) {
+                        weakPointText?.let {
+                            Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
+                        }
                     }
                     roomTotalText?.let {
                         Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.accent)
                     }
+                    // The line a worker needs stays; the lines only a developer can use go behind
+                    // one tap (finding 268). Pose graph, depth field, last hit and its snap are real
+                    // measurements - eight lines of them over a camera image is how a working
+                    // screen becomes unreadable, which is what "das macht alles keinen Sinn" meant.
+                    TextButton(onClick = { diagnosticsOpen = !diagnosticsOpen }) {
+                        Text(
+                            text = stringResource(
+                                if (diagnosticsOpen) R.string.diag_hide else R.string.diag_show,
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = HudStyle.hint,
+                        )
+                    }
                     // Whether the point under the crosshair has settled. Until it has, a tap would
                     // commit one noisy frame; the stabiliser says when it is worth tapping.
-                    stability?.let { reading ->
+                    if (diagnosticsOpen) stability?.let { reading ->
                         if (reading.hasPoint) {
                             Text(
                                 text = stringResource(
@@ -927,7 +970,7 @@ fun ArMeasureScreen(
                     // What the pose graph took and what it lost (finding 244). Hidden until there is
                     // something to say: a line reading "nodes: 0" over a wall that is being measured
                     // fine would read as a fault.
-                    if (graphStatus.standing != PoseGraphStanding.EMPTY) {
+                    if (diagnosticsOpen && graphStatus.standing != PoseGraphStanding.EMPTY) {
                         Text(
                             text = stringResource(R.string.ar_pose_graph, graphStatus.nodes, graphStatus.edges),
                             style = MaterialTheme.typography.bodyMedium,
@@ -976,7 +1019,7 @@ fun ArMeasureScreen(
                             }
                         }
                     }
-                    lastHit?.let { resolution ->
+                    if (diagnosticsOpen) lastHit?.let { resolution ->
                         val hit = resolution.hit
                         Text(
                             text = if (hit != null) {
@@ -1018,6 +1061,38 @@ fun ArMeasureScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            // What the last tap did, first in the sheet and until the next point (finding 268):
+            // saving used to be silent, and "did that work?" is the question a worker asks after
+            // every tap that ends something. It reads like the number he will carry to the van.
+            savedRun?.let { (label, meters) ->
+                if (SheetPlan.showsSavedRun(routeState.nodeCount, label)) {
+                    // Resolved outside `semantics`: a `Modifier.semantics { }` lambda is not
+                    // composable and `stringResource` may not be called inside it.
+                    val savedText = stringResource(
+                        R.string.run_saved,
+                        label,
+                        shownLengthWithUnit(meters),
+                    )
+                    Surface(
+                        color = HudStyle.panel,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            // A card that appears by itself is a change a screen reader has to be
+                            // told about; the visible text is the announcement.
+                            .semantics(mergeDescendants = true) {
+                                liveRegion = LiveRegionMode.Polite
+                            },
+                    ) {
+                        Text(
+                            text = savedText,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Jamaica.Lime,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            }
             // Which job this is, before any of the controls that belong to one of them (finding
             // 267). It has to be the first thing in the sheet: every button below it means
             // something different depending on the answer.
@@ -1030,13 +1105,10 @@ fun ArMeasureScreen(
                     }
                 },
             )
-            Text(
-                text = stringResource(
-                    if (mode.setsPoints) R.string.mode_measure_hint else R.string.mode_capture_hint,
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = HudStyle.hint,
-            )
+            // In measuring mode the two chips and the button that follows already say what the
+            // screen does; a third sentence about the same thing was the copy that made the sheet
+            // feel like a manual (finding 268). A walkthrough does need one line, because its point
+            // button is missing.
             if (!mode.setsPoints) {
                 // A walkthrough has no point button, and the sentence says where the points went
                 // instead of leaving the operator to discover that tapping does nothing.
@@ -1047,60 +1119,64 @@ fun ArMeasureScreen(
                 )
             }
 
-            // The one action the operator presses most, first and above the fold (finding 257):
-            // with a gloved hand a precise tap in the middle of the screen is not a given, and on
-            // the device this button was the only one whose touch ever reached the controller.
-            // It exists in measuring mode only: in a walkthrough the operator walks (finding 267).
-            if (mode.setsPoints) {
-                GloveButton(
-                    label = stringResource(R.string.ar_add_point),
+            // ── The one thing to do next (finding 268) ─────────────────────────────────────
+            // One primary action, and it is always the operator's next step: the first point,
+            // every further point, or - in a walkthrough - the way back to measuring. Nothing else
+            // on this screen is allowed to be a second "thing to do" at the same time.
+            when (SheetPlan.primary(mode, routeState.nodeCount)) {
+                SheetPlan.Primary.FIRST_POINT -> GloveButton(
+                    label = stringResource(R.string.ar_add_first_point),
                     icon = Icons.Default.Add,
-                    onClick = {
-                        // Logged, because "nothing happens" was the whole report: the log now says
-                        // whether the tap arrived and what the hit test made of it (finding 256).
-                        Diagnostics.event("tap", "add point at reticle ${viewSize.width}x${viewSize.height}")
-                        controller.requestTap(
-                            viewSize.width / 2f,
-                            viewSize.height / 2f,
-                            viewSize.width,
-                            viewSize.height,
-                        )
-                    },
+                    onClick = addPoint,
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                val closeLoopLabel = stringResource(R.string.ar_close_loop)
-                val finishLabel = stringResource(R.string.ar_finish)
-                ArActionRow(
-                    columns = pairColumns,
-                    actions = listOf(
-                        ArAction(
-                            label = closeLoopLabel,
-                            icon = Icons.Default.Loop,
-                            enabled = routeState.nodeCount >= ActionGating.NODES_FOR_A_LOOP,
-                            onClick = { controller.routeSession.closeLoop() },
-                        ),
-                        ArAction(
-                            label = finishLabel,
-                            icon = Icons.Default.Save,
-                            tone = ActionTone.PRIMARY,
-                            enabled = routeState.canFinish,
-                            onClick = commitRun,
-                        ),
-                    ),
+                SheetPlan.Primary.POINT -> GloveButton(
+                    label = stringResource(R.string.ar_add_point),
+                    icon = Icons.Default.Add,
+                    onClick = addPoint,
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                // A greyed-out button that says nothing reads as a broken button - that is exactly how
-                // the first device run reported it (finding 258). One sentence, about the button the
-                // operator is reaching for, with the count in it: "Needs 3 points" without a "you have
-                // 2" is a riddle he cannot answer from the glass (finding 265).
-                blockRow?.let { (_, text) ->
-                    Text(
-                        text = text,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = HudStyle.hint,
-                    )
+
+                // A walkthrough has nothing to tap, so its primary action is the honest exit and
+                // not a dead point button (finding 267). Outlined rather than filled: it ends the
+                // errand, it does not advance it.
+                SheetPlan.Primary.END_CAPTURE -> GloveButton(
+                    label = stringResource(R.string.capture_end),
+                    icon = Icons.Default.Check,
+                    tone = ActionTone.SECONDARY,
+                    onClick = {
+                        Diagnostics.event("ui", "walkthrough ended")
+                        mode = MeasureMode.MEASURE
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            if (SheetPlan.showsRunActions(mode)) {
+                // Full width and second in the hierarchy: saving is what turns a walk into a
+                // number, and the sentence underneath says what it is still waiting for.
+                GloveButton(
+                    label = stringResource(R.string.ar_finish),
+                    icon = Icons.Default.Save,
+                    tone = ActionTone.SECONDARY,
+                    enabled = routeState.canFinish,
+                    onClick = commitRun,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                // A greyed-out button that says nothing reads as a broken button - that is exactly
+                // how the first device run reported it (finding 258). One sentence, about the
+                // button the operator is reaching for, with the count in it (finding 265).
+                blockRow?.let { (line, text) ->
+                    if (line == GuideLine.BLOCK_RUN) {
+                        Text(
+                            text = text,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = HudStyle.hint,
+                        )
+                    }
                 }
-                }
+            }
 
             val undoLabel = stringResource(R.string.ar_undo)
             val torchLabel = stringResource(R.string.ar_torch)
@@ -1123,63 +1199,147 @@ fun ArMeasureScreen(
                     onClick = { controller.toggleTorch() },
                 )
             }
-            ArActionRow(columns = actionColumns, actions = toolActions)
+            ArActionRow(columns = pairColumns, actions = toolActions)
 
-            // One conduit spec out of five: a group of radio buttons, so TalkBack says which one
-            // is chosen instead of reading five identical-looking buttons (finding 211). Lower down
-            // than the two measurements buttons, because the spec is chosen once per run and the
-            // point is tapped every metre. Measuring mode only: a cable preset means nothing in a
-            // walkthrough, and a control that means nothing is a control that confuses (finding 267).
-            if (mode.setsPoints) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.selectableGroup(),
-                ) {
-                    ConduitPresets.all.forEach { preset ->
-                        SpecChip(
-                            spec = preset,
-                            selected = preset == spec,
-                            onClick = {
-                                spec = preset
-                                controller.setSpec(preset)
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
+            // One setting, one chip (finding 268). Six chips at once were five buttons nobody
+            // pressed plus one they could not find; the chip names the cable the run is built
+            // with and hands the choice to a full-size dialog where every option is glove-sized
+            // and the current one is marked.
+            if (SheetPlan.showsCableChip(mode)) {
+                GloveButton(
+                    label = spec.label,
+                    icon = Icons.Default.Settings,
+                    tone = ActionTone.SECONDARY,
+                    onClick = { specOpen = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { stateDescription = changeCableText },
+                )
             }
 
-            // ── Reference calibration ────────────────────────────────────────────────
-            // ARCore's metre is metric on its own; this is the operator's check of it against an
-            // object of known size, and the factor it produces is applied to the metres that are
-            // reported (`.//docs/CALIBRATION.md`), never to the geometry.
-            GloveButton(
-                label = stringResource(R.string.calib_title),
-                icon = Icons.Default.Straighten,
-                tone = ActionTone.SECONDARY,
-                onClick = {
-                    calibrationSweep = CalibrationSweep.Idle
-                    calibrationOpen = true
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (specOpen) {
+                AlertDialog(
+                    onDismissRequest = { specOpen = false },
+                    title = { Text(stringResource(R.string.spec_dialog_title)) },
+                    text = {
+                        Column(
+                            // A group of choices, not five unrelated buttons: the selected cable
+                            // is announced as "chosen out of six" (the rule `SpecChip` followed
+                            // when the six chips were still on the sheet itself).
+                            modifier = Modifier
+                                .selectableGroup()
+                                .semantics { liveRegion = LiveRegionMode.Polite },
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            ConduitPresets.all.forEach { preset ->
+                                GloveButton(
+                                    label = preset.label,
+                                    icon = Icons.Default.Check,
+                                    tone = if (preset == spec) ActionTone.PRIMARY else ActionTone.SECONDARY,
+                                    selected = preset == spec,
+                                    onClick = {
+                                        spec = preset
+                                        controller.setSpec(preset)
+                                        Diagnostics.event("ui", "cable ${preset.label}")
+                                        specOpen = false
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { specOpen = false }) {
+                            Text(stringResource(R.string.export_back))
+                        }
+                    },
+                )
+            }
 
-            // ── Loop closure ────────────────────────────────────────────────────────
-            // The one write in the SLAM path that needs a person: two visits half a metre apart
-            // can be the same doorway or two different corners, and a wrong closure folds the
-            // room without anything looking wrong. Enabled once the graph holds nodes at all;
-            // the policy's own floor decides whether there is anything to ask about.
-            GloveButton(
-                label = stringResource(R.string.loop_check),
-                icon = Icons.Default.Loop,
-                tone = ActionTone.SECONDARY,
-                enabled = graphStatus.nodes > 0,
-                onClick = {
-                    closureOpen = true
-                    controller.lookForClosure()
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            // ── Everything rare, behind one disclosure (finding 268) ─────────────────
+            // Ring closure, calibration, loop check and marker check are used once a week at
+            // most, and each of them was a glove-sized rectangle taken from the two actions
+            // used every metre. Closed by default, and the button says which way it goes.
+            TextButton(onClick = { toolsOpen = !toolsOpen }) {
+                Text(
+                    text = stringResource(if (toolsOpen) R.string.tools_hide else R.string.tools_show),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = HudStyle.hint,
+                )
+            }
+
+            if (toolsOpen) {
+                    // The ring lives here rather than next to Save: it is the rare half of the same
+                    // decision, and the sentence under it says how many points it still needs.
+                    if (mode.setsPoints) {
+                        GloveButton(
+                            label = stringResource(R.string.ar_close_loop),
+                            icon = Icons.Default.Loop,
+                            tone = ActionTone.SECONDARY,
+                            enabled = routeState.nodeCount >= ActionGating.NODES_FOR_A_LOOP,
+                            onClick = { controller.routeSession.closeLoop() },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        if (routeState.nodeCount < ActionGating.NODES_FOR_A_LOOP) {
+                            Text(
+                                text = stringResource(
+                                    R.string.ar_hint_ring_needs,
+                                    routeState.nodeCount,
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = HudStyle.hint,
+                            )
+                        }
+                    }
+                // ── Reference calibration ────────────────────────────────────────────────
+                // ARCore's metre is metric on its own; this is the operator's check of it against an
+                // object of known size, and the factor it produces is applied to the metres that are
+                // reported (`.//docs/CALIBRATION.md`), never to the geometry.
+                GloveButton(
+                    label = stringResource(R.string.calib_title),
+                    icon = Icons.Default.Straighten,
+                    tone = ActionTone.SECONDARY,
+                    onClick = {
+                        calibrationSweep = CalibrationSweep.Idle
+                        calibrationOpen = true
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                // ── Loop closure ────────────────────────────────────────────────────────
+                // The one write in the SLAM path that needs a person: two visits half a metre apart
+                // can be the same doorway or two different corners, and a wrong closure folds the
+                // room without anything looking wrong. Enabled once the graph holds nodes at all;
+                // the policy's own floor decides whether there is anything to ask about.
+                GloveButton(
+                    label = stringResource(R.string.loop_check),
+                    icon = Icons.Default.Loop,
+                    tone = ActionTone.SECONDARY,
+                    enabled = graphStatus.nodes > 0,
+                    onClick = {
+                        closureOpen = true
+                        controller.lookForClosure()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                // ── Marker check ────────────────────────────────────────────────────────
+                // A printed tag of known size, measured through the camera: the second tier of
+                // `docs/CALIBRATION.md`, and the only one that needs no tap - the operator aims and
+                // walks, and the sweep counts the sightings. It publishes a factor, never a scale
+                // stored behind the operator's back; `Apply` is the same reporting-layer write the
+                // two-tap sweep uses.
+                GloveButton(
+                    label = stringResource(R.string.marker_title),
+                    icon = Icons.Default.QrCodeScanner,
+                    tone = ActionTone.SECONDARY,
+                    enabled = markerAvailable,
+                    onClick = {
+                        if (controller.startMarkerProbe()) markerOpen = true
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
             if (closureOpen) {
                 LoopClosureDialog(
@@ -1195,23 +1355,6 @@ fun ArMeasureScreen(
                     onClose = { closureOpen = false },
                 )
             }
-
-            // ── Marker check ────────────────────────────────────────────────────────
-            // A printed tag of known size, measured through the camera: the second tier of
-            // `docs/CALIBRATION.md`, and the only one that needs no tap - the operator aims and
-            // walks, and the sweep counts the sightings. It publishes a factor, never a scale
-            // stored behind the operator's back; `Apply` is the same reporting-layer write the
-            // two-tap sweep uses.
-            GloveButton(
-                label = stringResource(R.string.marker_title),
-                icon = Icons.Default.QrCodeScanner,
-                tone = ActionTone.SECONDARY,
-                enabled = markerAvailable,
-                onClick = {
-                    if (controller.startMarkerProbe()) markerOpen = true
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
 
             if (markerOpen) {
                 // The dialog is its own file since finding 242: it is a small state machine

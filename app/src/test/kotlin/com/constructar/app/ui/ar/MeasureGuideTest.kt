@@ -143,7 +143,6 @@ class MeasureGuideTest {
             GuideLine.DISTANCE,
             GuideLine.RING,
             GuideLine.BLOCK_RUN,
-            GuideLine.BLOCK_RING,
         )
         listOf(0, 1, 2, 5).forEach { count ->
             listOf(false, true).forEach { finish ->
@@ -230,34 +229,32 @@ class MeasureGuideTest {
     }
 
     @Test
-    fun `two points can already be saved`() {
+    fun `two points can already be saved, and nothing is left to refuse`() {
+        // The ring moved into the tools drawer in finding 268, so the sheet owes exactly one
+        // refusal - the one about the button that is actually on the glass.
         val lines = MeasureGuide.lines(measuring(nodeCount = 2, canFinish = true))
-        assertEquals(GuideLine.DISTANCE, lines.last { it != GuideLine.BLOCK_RING })
-        assertEquals(GuideLine.BLOCK_RING, lines.last())
+        assertEquals(GuideLine.DISTANCE, lines.last())
+        assertTrue(lines.none { it == GuideLine.BLOCK_RUN })
     }
 
     @Test
     fun `a ring is described as a ring`() {
         val lines = MeasureGuide.lines(measuring(nodeCount = 4, canFinish = true, closedLoop = true))
         assertEquals(GuideLine.RING, lines.last())
-        assertTrue(lines.none { it == GuideLine.BLOCK_RING })
         assertTrue(lines.none { it == GuideLine.BLOCK_RUN })
     }
 
     @Test
-    fun `every grey button has a line, and never two at once`() {
-        val expected = mapOf(
-            0 to GuideLine.BLOCK_RUN,
-            1 to GuideLine.BLOCK_RUN,
-            2 to GuideLine.BLOCK_RING,
-        )
-        expected.forEach { (count, reason) ->
-            val blocks = MeasureGuide.lines(measuring(nodeCount = count, canFinish = count >= 2))
-                .filter { it == GuideLine.BLOCK_RUN || it == GuideLine.BLOCK_RING }
-            assertEquals("point count $count", listOf(reason), blocks)
+    fun `the grey save button is explained while it is grey, and only then`() {
+        listOf(0, 1).forEach { count ->
+            val blocks = MeasureGuide.lines(measuring(nodeCount = count, canFinish = false))
+                .filter { it == GuideLine.BLOCK_RUN }
+            assertEquals("point count $count", listOf(GuideLine.BLOCK_RUN), blocks)
         }
-        val complete = MeasureGuide.lines(measuring(nodeCount = 3, canFinish = true))
-        assertTrue(complete.none { it == GuideLine.BLOCK_RUN || it == GuideLine.BLOCK_RING })
+        listOf(2, 3).forEach { count ->
+            val lines = MeasureGuide.lines(measuring(nodeCount = count, canFinish = true))
+            assertTrue("point count $count", lines.none { it == GuideLine.BLOCK_RUN })
+        }
     }
 
     // ── The strip ──────────────────────────────────────────────────────────────────────────────
@@ -302,7 +299,6 @@ class MeasureGuideTest {
     @Test
     fun `a refusal is quieter than a warning`() {
         assertEquals(GuideTone.QUIET, MeasureGuide.tone(GuideLine.BLOCK_RUN))
-        assertEquals(GuideTone.QUIET, MeasureGuide.tone(GuideLine.BLOCK_RING))
         assertEquals(GuideTone.ATTENTION, MeasureGuide.tone(GuideLine.SCAN_FULL))
         assertEquals(GuideTone.ATTENTION, MeasureGuide.tone(GuideLine.COACHING))
         assertEquals(GuideTone.NORMAL, MeasureGuide.tone(GuideLine.SCAN_PROGRESS))

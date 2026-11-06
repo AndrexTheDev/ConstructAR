@@ -72,9 +72,8 @@ internal object MeasureGuide {
     /**
      * The lines the status block owes, in reading order, without the pinned strip and gauge.
      *
-     * [GuideLine.BLOCK_RUN] and [GuideLine.BLOCK_RING] are last on purpose: they are the answer to
-     * "why can I not tap that", and the answer belongs next to the question — the row of buttons
-     * sits immediately under the status block.
+     * [GuideLine.BLOCK_RUN] is last on purpose: it is the answer to "why can I not tap that", and
+     * the answer is printed directly under the button it is about.
      */
     fun lines(state: GuideState): List<GuideLine> = when (state.mode) {
         MeasureMode.CAPTURE -> buildList {
@@ -95,11 +94,10 @@ internal object MeasureGuide {
                     else -> GuideLine.DISTANCE
                 },
             )
-            when {
-                !state.canFinish -> add(GuideLine.BLOCK_RUN)
-                state.nodeCount < ActionGating.NODES_FOR_A_LOOP -> add(GuideLine.BLOCK_RING)
-                else -> Unit
-            }
+            // One refusal, about the button that is on the glass. The ring left the sheet in
+            // finding 268 (it lives in the tools drawer with its own sentence), so a line about it
+            // here would explain a button the operator cannot see.
+            if (!state.canFinish) add(GuideLine.BLOCK_RUN)
         }
     }
 
@@ -114,8 +112,7 @@ internal object MeasureGuide {
         GuideLine.SCAN_FULL,
         GuideLine.SCAN_BEHIND,
         GuideLine.SCAN_UNAVAILABLE -> GuideTone.ATTENTION
-        GuideLine.BLOCK_RUN,
-        GuideLine.BLOCK_RING -> GuideTone.QUIET
+        GuideLine.BLOCK_RUN -> GuideTone.QUIET
         GuideLine.SCAN_EMPTY,
         GuideLine.SCAN_PROGRESS,
         GuideLine.FIRST_POINT,
@@ -231,9 +228,6 @@ internal enum class GuideLine {
 
     /** Why "Save this run" cannot be tapped. */
     BLOCK_RUN,
-
-    /** Why "Close into a ring" cannot be tapped. */
-    BLOCK_RING,
 }
 
 /** How loudly a [GuideLine] is printed. */
