@@ -91,11 +91,13 @@ class CalibratedReportTest {
         val project = project(route("a", 3f), route("b", 2f), scale = 1.05)
 
         val rows = project.routes.map { project.calibratedMeters(it) }
+        // kotlin.test takes the message last - the JUnit order does not compile against this
+        // overload, which is the trap `verify_sources` refuses elsewhere in the tree.
         assertEquals(
-            "the rows must add up to the number above them",
             project.totalLengthMeters,
             rows.sum(),
             1e-4f,
+            "the rows must add up to the number above them",
         )
     }
 
