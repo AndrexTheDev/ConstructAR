@@ -40,6 +40,17 @@ object Diagnostics {
     private var session: File? = null
     private var previousHandler: Thread.UncaughtExceptionHandler? = null
 
+    /**
+     * The screen and the step that were on the glass, in words a report can carry (finding 266).
+     *
+     * Every crash report from the device round said "the app crashed" and nothing else. The stack
+     * trace says where the JVM was, which is not where the operator was: the same crash reads
+     * differently on the AR screen's scan step and on its save step, and the report has to name it.
+     * Volatile because the crash handler may run on any thread.
+     */
+    @Volatile
+    private var screenPlace: String? = null
+
     /** The folder the tester's files live in, or `null` before [install]. */
     val directory: File? get() = root
 
@@ -70,6 +81,18 @@ object Diagnostics {
         else -> "release"
     }
 
+    /**
+     * Records where the operator is, and logs the change.
+     *
+     * Logged only on a change: a `place` call per recomposition would write a line per frame and
+     * bury the twenty lines that answer the question.
+     */
+    fun place(where: String) {
+        if (screenPlace == where) return
+        screenPlace = where
+        event("screen", where)
+    }
+
     /** One line, in memory and on disk. Safe to call from any thread, and before [install]. */
     fun event(tag: String, message: String) {
         log.add(tag, message)
@@ -80,7 +103,9 @@ object Diagnostics {
     private fun crash(thread: Thread, error: Throwable) {
         event("crash", "${thread.name}: ${error.javaClass.name}: ${error.message}")
         error.stackTrace.take(MAX_STACK_FRAMES).forEach { frame -> event("crash", "  at $frame") }
-        val target = root?.let { File(it, "crash-" + stamp() + ".log") }
+        // A file name a person can read and a folder can hold: the readable stamp has spaces
+        // and colons in it, which is fine in a log line and wrong in a file name (finding 264).
+        val target = root?.let { File(it, "crash-" + fileNameStamp() + ".log") }
         if (target != null) runCatching { target.writeText(log.toText(header())) }
         // The system's own handler still runs: this app does not swallow crashes, it only
         // remembers them.
@@ -96,6 +121,25 @@ object Diagnostics {
     /** The whole session so far, as the text file the tester saves or pastes. */
     fun snapshot(): String = log.toText(header())
 
+    /**
+     * The newest crash report on disk, or `null` when the app has not crashed (finding 264).
+     *
+     * The tester's report was "it crashes constantly", and the app knew all about it: the handler
+     * has written a `crash-*.log` every time since finding 256. Nobody was told, and the folder
+     * with the answer was three taps deep behind a help screen they had no reason to open. The home
+     * screen asks this and offers the file.
+     */
+    fun lastCrash(): File? = runCatching {
+        root?.listFiles { file ->
+            file.isFile && file.name.startsWith("crash-") && file.name.endsWith(".log")
+        }?.maxByOrNull { it.lastModified() }
+    }.getOrNull()
+
+    /** The report has been dealt with: stop asking on every start. */
+    fun dismissCrash(report: File) {
+        runCatching { report.delete() }
+    }
+
     /** Every file a tester should send, newest first, with the live session log included. */
     fun files(): List<File> {
         val dir = root ?: return emptyList()
@@ -109,6 +153,7 @@ object Diagnostics {
         "Device: " + Build.MANUFACTURER + " " + Build.MODEL + " - Android " + Build.VERSION.RELEASE +
             " (SDK " + Build.VERSION.SDK_INT + ")",
         "Session: " + stamp(),
+        "Screen: " + (screenPlace ?: "-"),
         localeLine(),
     )
 
@@ -132,6 +177,10 @@ object Diagnostics {
 
     private fun stamp(): String =
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).format(Date())
+
+    /** The same moment as [stamp], in a form a file name can carry. */
+    private fun fileNameStamp(): String =
+        SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(Date())
 
     /** A stack trace longer than this is noise in a file a person reads. */
     private const val MAX_STACK_FRAMES = 40

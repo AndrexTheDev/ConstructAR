@@ -43,7 +43,7 @@
     <string name="home_export">Eksport</string>
 
     <!-- AR measuring screen -->
-    <string name="scan_instruction">Przesuwaj telefon powoli po ścianach i podłodze, aby zeskanować pomieszczenie.</string>
+    <string name="scan_instruction">Nic jeszcze nie zostało zeskanowane. Przesuwaj telefon powoli po jednej ścianie: wskaźnik szczegółów zacznie rosnąć, gdy pierwszy fragment zostanie przechwycony.</string>
     <string name="tracking_loss">Utracono śledzenie. Skieruj telefon na teksturowaną ścianę lub podłogę i poruszaj się powoli.</string>
     <string name="tracking_searching">Szukam punktów odniesienia. Przesuwaj telefon powoli po powierzchni.</string>
     <string name="tracking_limited">Śledzenie ograniczone. Poruszaj się wolniej.</string>
@@ -82,7 +82,7 @@
     <string name="ar_pose_graph_closures">Zamknięcie: %1$d potwierdzone</string>
     <string name="ar_pose_graph_closure_shift">Ostatnie zamknięcie: przesunięto %1$d z %2$d węzłów, do %3$s</string>
     <string name="ar_pose_graph_closure_unfinished">Ostatnie zamknięcie: brak wyniku (optymalizator zatrzymany)</string>
-    <string name="loop_check">Sprawdź powrót</string>
+    <string name="loop_check">To samo miejsce?</string>
     <string name="loop_title">Zamknij pętlę</string>
     <string name="loop_offer">Trasa jest ponownie %1$s od wcześniejszego punktu. Zamknięcie zakłada, że to to samo miejsce.</string>
     <string name="loop_confirm">To samo miejsce</string>
@@ -91,10 +91,24 @@
     <string name="loop_failed">Nie udało się zoptymalizować grafu.</string>
     <string name="loop_shift">Przesunięto %1$d z %2$d węzłów, do %3$s.</string>
     <string name="loop_unfinished">Optymalizator wykorzystał limit iteracji: krawędź jest dodana, ale nie ma wyniku. Te liczby to stan pośredni, nie korekta.</string>
-    <string name="ar_add_point">Dodaj punkt na środku</string>
-    <string name="ar_undo">Cofnij</string>
-    <string name="ar_close_loop">Zamknij</string>
-    <string name="ar_finish">Zakończ trasę</string>
+    <string name="ar_step_scan">1 Skanuj</string>
+    <string name="ar_step_points">2 Zaznacz punkty</string>
+    <string name="ar_step_finish">3 Zapisz</string>
+    <string name="step_now">teraz</string>
+    <string name="step_done">gotowe</string>
+    <string name="ar_guide_first">Dotknij „Zaznacz punkt tutaj” na pierwszym końcu odcinka.</string>
+    <string name="ar_guide_second">Pierwszy punkt zaznaczony. Przejdź na drugi koniec i dotknij ponownie - to twoja pierwsza odległość.</string>
+    <string name="ar_guide_distance">Zmierzono %1$s. Każdy kolejny punkt wydłuża odcinek; zapisz, kiedy chcesz.</string>
+    <string name="ar_guide_ring">Pętla zamknięta: %1$s obwodu. Zapisz ją teraz albo idź dalej.</string>
+    <string name="ar_hint_run_needs">Zapis wymaga 2 punktów - zaznaczono %1$d.</string>
+    <string name="ar_hint_ring_needs">Pętla wymaga 3 punktów - zaznaczono %1$d.</string>
+    <string name="crash_title">Aplikacja zamknęła się ostatnio</string>
+    <string name="crash_body">Raport jest na telefonie. Zapisz go w folderze i odeślij – jest w nim, co aplikacja robiła tuż przed zamknięciem.</string>
+    <string name="crash_dismiss">Odrzuć raport</string>
+    <string name="ar_add_point">Zaznacz punkt tutaj</string>
+    <string name="ar_undo">Usuń ostatni punkt</string>
+    <string name="ar_close_loop">Zamknij w pętlę</string>
+    <string name="ar_finish">Zapisz odcinek</string>
     <string name="ar_leave_title">Wyjść z trasy?</string>
     <string name="ar_leave_body">Zmierzono %1$s. Zapisać jako trasę czy odrzucić?</string>
     <string name="ar_leave_save">Zapisz jako trasę</string>
@@ -202,14 +216,6 @@
         <item quantity="few">%1$d punkty</item>
         <item quantity="many">%1$d punktów</item>
         <item quantity="other">%1$d punktu</item>
-    </plurals>
-    <!-- Why a greyed-out action is greyed out (finding 257): the device showed two dead
-         buttons and no word about what was missing. -->
-    <plurals name="ar_needs_points">
-        <item quantity="one">Od %1$d punktu</item>
-        <item quantity="few">Od %1$d punktów</item>
-        <item quantity="many">Od %1$d punktów</item>
-        <item quantity="other">Od %1$d punktu</item>
     </plurals>
     <string name="plan_free">Darmowa</string>
     <string name="plan_pro">Pro</string>

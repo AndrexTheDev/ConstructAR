@@ -43,7 +43,7 @@
     <string name="home_export">Exportar</string>
 
     <!-- AR measuring screen -->
-    <string name="scan_instruction">Mueve el teléfono despacio por paredes y suelo para escanear la estancia.</string>
+    <string name="scan_instruction">Aún no hay nada escaneado. Pasa el teléfono despacio por una pared: el detalle empieza a subir en cuanto se captura el primer trozo.</string>
     <string name="tracking_loss">Seguimiento perdido. Apunta a una pared con textura o al suelo y muévete despacio.</string>
     <string name="tracking_searching">Buscando referencias. Mueve el teléfono despacio sobre la superficie.</string>
     <string name="tracking_limited">Seguimiento limitado. Muévete más despacio.</string>
@@ -82,7 +82,7 @@
     <string name="ar_pose_graph_closures">Cierre: %1$d confirmado</string>
     <string name="ar_pose_graph_closure_shift">Último cierre: %1$d de %2$d nodos movidos, hasta %3$s</string>
     <string name="ar_pose_graph_closure_unfinished">Último cierre: sin resultado (optimizador detenido)</string>
-    <string name="loop_check">Comprobar regreso</string>
+    <string name="loop_check">¿Mismo sitio?</string>
     <string name="loop_title">Cerrar el bucle</string>
     <string name="loop_offer">El recorrido vuelve a estar a %1$s de un punto anterior. Cerrar supone que es el mismo lugar.</string>
     <string name="loop_confirm">El mismo lugar</string>
@@ -91,10 +91,24 @@
     <string name="loop_failed">No se pudo optimizar el grafo.</string>
     <string name="loop_shift">Movidos %1$d de %2$d nodos, hasta %3$s.</string>
     <string name="loop_unfinished">El optimizador agotó sus iteraciones: la arista está puesta, pero no hay resultado. Estas cifras son un estado intermedio, no una corrección.</string>
-    <string name="ar_add_point">Añadir punto en el centro</string>
-    <string name="ar_undo">Deshacer</string>
-    <string name="ar_close_loop">Cerrar</string>
-    <string name="ar_finish">Terminar trazado</string>
+    <string name="ar_step_scan">1 Escanear</string>
+    <string name="ar_step_points">2 Marcar puntos</string>
+    <string name="ar_step_finish">3 Guardar</string>
+    <string name="step_now">ahora</string>
+    <string name="step_done">hecho</string>
+    <string name="ar_guide_first">Toca «Marcar punto aquí» en el primer extremo de la distancia.</string>
+    <string name="ar_guide_second">Primer punto marcado. Ve al otro extremo y toca otra vez: esa es tu primera distancia.</string>
+    <string name="ar_guide_distance">%1$s medidos. Cada punto más alarga el tramo; guarda cuando quieras.</string>
+    <string name="ar_guide_ring">Anillo cerrado: %1$s de contorno. Guárdalo ahora o sigue.</string>
+    <string name="ar_hint_run_needs">Guardar necesita 2 puntos: %1$d marcados.</string>
+    <string name="ar_hint_ring_needs">El anillo necesita 3 puntos: %1$d marcados.</string>
+    <string name="crash_title">La app se cerró la última vez</string>
+    <string name="crash_body">Hay un informe en el teléfono. Guárdalo en una carpeta y envíalo: dice qué estaba haciendo la app justo antes de cerrarse.</string>
+    <string name="crash_dismiss">Descartar el informe</string>
+    <string name="ar_add_point">Marcar punto aquí</string>
+    <string name="ar_undo">Borrar el último punto</string>
+    <string name="ar_close_loop">Cerrar en anillo</string>
+    <string name="ar_finish">Guardar el tramo</string>
     <string name="ar_leave_title">¿Salir del trazado?</string>
     <string name="ar_leave_body">%1$s medidos. ¿Guardarlo como tramo o descartarlo?</string>
     <string name="ar_leave_save">Guardar como tramo</string>
@@ -196,12 +210,6 @@
     <plurals name="ar_points">
         <item quantity="one">%1$d punto</item>
         <item quantity="other">%1$d puntos</item>
-    </plurals>
-    <!-- Why a greyed-out action is greyed out (finding 257): the device showed two dead
-         buttons and no word about what was missing. -->
-    <plurals name="ar_needs_points">
-        <item quantity="one">A partir de %1$d punto</item>
-        <item quantity="other">A partir de %1$d puntos</item>
     </plurals>
     <string name="plan_free">Gratis</string>
     <string name="plan_pro">Pro</string>

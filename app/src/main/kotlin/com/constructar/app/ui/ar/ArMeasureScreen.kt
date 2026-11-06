@@ -520,13 +520,64 @@ fun ArMeasureScreen(
         R.string.ar_scan_behind,
         PercentText.of(scanState.droppedFraction),
     )
-    val hint = scanHint(
-        showScanner = showScanner,
-        ready = scanState.ready,
-        hitBlockBudget = scanState.hitBlockBudget,
+
+    // What the screen owes the operator, in order (finding 265). Everything below is resolved here
+    // at composition, never inside a `buildString`, and the ordering itself is `MeasureGuide`'s -
+    // testable without a phone, which is the only way a rule about "the gauge is never replaced by
+    // an instruction" stays true after the next edit.
+    val guideState = GuideState(
+        nodeCount = routeState.nodeCount,
+        canFinish = routeState.canFinish,
+        closedLoop = routeState.closedLoop,
+        coaching = guidanceText != null,
+        scannerOn = showScanner,
+        scanReady = scanState.ready,
         meshVersion = scanState.meshVersion,
+        hitBlockBudget = scanState.hitBlockBudget,
         droppedShare = scanState.droppedFraction,
     )
+    val guideStep = MeasureGuide.step(guideState)
+    // Where the operator is, in the report's own words (finding 266): "the app crashed" is not a
+    // bug report. One line per step change, and the crash file's header carries the last one.
+    LaunchedEffect(guideStep) {
+        Diagnostics.place(
+            when (guideStep) {
+                MeasureStep.SCAN -> "ar-measure: scanning the room"
+                MeasureStep.POINTS -> "ar-measure: setting points"
+                MeasureStep.FINISH -> "ar-measure: run ready to save"
+            },
+        )
+    }
+    val firstPointText = stringResource(R.string.ar_guide_first)
+    val secondPointText = stringResource(R.string.ar_guide_second)
+    val distanceText = stringResource(R.string.ar_guide_distance, lengthText)
+    val ringText = stringResource(R.string.ar_guide_ring, lengthText)
+    val blockRunText = stringResource(R.string.ar_hint_run_needs, routeState.nodeCount)
+    val blockRingText = stringResource(R.string.ar_hint_ring_needs, routeState.nodeCount)
+    val guideRows = MeasureGuide.lines(guideState).mapNotNull { line ->
+        val text = when (line) {
+            GuideLine.COACHING -> guidanceText
+            GuideLine.SCAN_EMPTY -> scanInstructionText
+            GuideLine.SCAN_PROGRESS -> scanProgressText
+            GuideLine.SCAN_FULL -> scanFullText
+            GuideLine.SCAN_BEHIND -> scanBehindText
+            GuideLine.SCAN_UNAVAILABLE -> scanUnavailableText
+            GuideLine.FIRST_POINT -> firstPointText
+            GuideLine.SECOND_POINT -> secondPointText
+            GuideLine.DISTANCE -> distanceText
+            GuideLine.RING -> ringText
+            GuideLine.BLOCK_RUN -> blockRunText
+            GuideLine.BLOCK_RING -> blockRingText
+        }
+        text?.let { line to it }
+    }
+    // The two refusals stay under the buttons they belong to; everything else is the status block.
+    val blockRow = guideRows.firstOrNull { (line, _) ->
+        line == GuideLine.BLOCK_RUN || line == GuideLine.BLOCK_RING
+    }
+    val statusRows = guideRows.filterNot { (line, _) ->
+        line == GuideLine.BLOCK_RUN || line == GuideLine.BLOCK_RING
+    }
 
     Box(
         modifier = Modifier
@@ -769,6 +820,14 @@ fun ArMeasureScreen(
                     }
                 }
 
+                // Which of the three steps is being asked for, always visible and directly under
+                // the numbers (finding 265): the report was that the app "made no sense", and a
+                // screen with three jobs and no statement of which one is current is exactly that.
+                StepStrip(
+                    current = guideStep,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+
                 // Every coaching line lives inside a budget of its own (finding 257): the
                 // header above stays pinned — the export and close icons live there, and they
                 // were the first casualties when this column used to grow over them — while the
@@ -778,24 +837,20 @@ fun ArMeasureScreen(
                         .heightIn(max = statusMaxHeight)
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    // Coaching: tracking verdict first, then the scan state.
-                    val statusLine = guidanceText ?: when (hint) {
-                        ScanHint.NONE -> null
-                        ScanHint.UNAVAILABLE -> scanUnavailableText
-                        ScanHint.FULL -> scanFullText
-                        ScanHint.INSTRUCTION -> scanInstructionText
-                        ScanHint.BEHIND -> scanBehindText
-                        ScanHint.PROGRESS -> scanProgressText
-                    }
-                    statusLine?.let { line ->
+                    // Coaching *and* evidence, never one instead of the other (finding 265). The
+                    // old `guidanceText ?: when (hint)` line dropped the scan gauge on every frame
+                    // where the tracking advisor had something to say - which on a Pixel 3a in a
+                    // hallway is most frames - so the operator walked and no number ever moved.
+                    statusRows.forEach { (line, text) ->
                         Text(
-                            text = line,
+                            text = text,
                             style = MaterialTheme.typography.bodyMedium,
                             color = when {
-                                warningText != null -> SiteColors.warning
-                                hint == ScanHint.FULL || hint == ScanHint.BEHIND -> SiteColors.warning
+                                warningText != null && line == GuideLine.COACHING -> SiteColors.warning
+                                MeasureGuide.tone(line) == GuideTone.QUIET -> HudStyle.hint
+                                MeasureGuide.tone(line) == GuideTone.NORMAL -> HudStyle.text
                                 tracking.quality == TrackingQuality.NOT_TRACKING -> SiteColors.danger
-                                else -> HudStyle.text
+                                else -> SiteColors.warning
                             },
                         )
                     }
@@ -987,11 +1042,12 @@ fun ArMeasureScreen(
                 ),
             )
             // A greyed-out button that says nothing reads as a broken button - that is exactly how
-            // the first device run reported it (finding 258). Say what is still missing, from the
-            // one object that repeats the thresholds the buttons are enabled with.
-            ActionGating.missingPoints(routeState.nodeCount, routeState.canFinish)?.let { needed ->
+            // the first device run reported it (finding 258). One sentence, about the button the
+            // operator is reaching for, with the count in it: "Needs 3 points" without a "you have
+            // 2" is a riddle he cannot answer from the glass (finding 265).
+            blockRow?.let { (_, text) ->
                 Text(
-                    text = pluralStringResource(R.plurals.ar_needs_points, needed, needed),
+                    text = text,
                     style = MaterialTheme.typography.bodyMedium,
                     color = HudStyle.hint,
                 )
