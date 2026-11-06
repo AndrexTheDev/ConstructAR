@@ -6,6 +6,7 @@
 
 package com.constructar.app.ui
 
+import android.os.Bundle
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -25,6 +26,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavController
+import androidx.navigation.NavDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -105,8 +108,16 @@ fun AppRoot(viewModel: ProjectViewModel) {
     // no trace at all: the last thing a report could say was "I pressed back". A destination list
     // turns that into a sequence - and a sequence that stops after `home` says the stack emptied.
     DisposableEffect(navController) {
-        val listener = NavController.OnDestinationChangedListener { _, destination, _ ->
-            Diagnostics.event("nav", "destination " + (destination.route ?: "?"))
+        // An explicit object rather than a lambda: the listener is a Kotlin interface, and only a
+        // `fun interface` takes a lambda (CI said so).
+        val listener = object : NavController.OnDestinationChangedListener {
+            override fun onDestinationChanged(
+                controller: NavController,
+                destination: NavDestination,
+                arguments: Bundle?,
+            ) {
+                Diagnostics.event("nav", "destination " + (destination.route ?: "?"))
+            }
         }
         navController.addOnDestinationChangedListener(listener)
         onDispose { navController.removeOnDestinationChangedListener(listener) }
