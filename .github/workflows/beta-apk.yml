@@ -109,11 +109,7 @@ jobs:
           if ! gradle --no-daemon --stacktrace :app:assembleBeta 2>&1 | tee /tmp/beta.log | tail -n 60; then
             # The job log of a failed run is not always reachable through the API, so the tail is
             # posted as an annotation: that one always is. Single line - a newline would end it.
-            python3 - <<'ANNOTATE'
-import json
-tail = open('/tmp/beta.log', errors='replace').read().strip().splitlines()[-70:]
-print('::error title=assembleBeta failed::' + json.dumps(' | '.join(tail))[:4000])
-ANNOTATE
+            python3 -c "import json; tail = open('/tmp/beta.log', errors='replace').read().strip().splitlines()[-70:]; print('::error title=assembleBeta failed::' + json.dumps(' | '.join(tail))[:4000])"
             exit 1
           fi
 
