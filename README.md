@@ -468,6 +468,25 @@ gradle :app:assembleRelease              # the shipping artifact: R8 + resource 
 python3 scripts/verify_sources.py        # copyright notice / reflection / i18n gates, no SDK needed
 ```
 
+**A beta build for a first hands-on run (finding 255).** Nobody has run the AR part on a real
+phone yet, so there is a build type that removes every paywall for testing without touching the
+shipping artifact:
+
+```bash
+gradle :app:assembleBeta                 # APK in app/build/outputs/apk/beta/
+```
+
+It carries `BETA_BUILD = true` (the entitlement layer then answers "lifetime", so the
+one-project limit, the PDF watermark and the locked GLB/PLY export are gone), its own
+application id (`….beta`, so it installs next to the sold app instead of over it), the debug
+signing key, and the label *ConstructAR Beta*. It is unminified and debuggable on purpose - a
+crash report from it is readable. `.github/workflows/beta-apk.yml` builds it into the
+`constructar-beta-apk` artifact; `workflow_dispatch` needs the `actions: write` scope, so a push
+that touches that file is the fallback trigger. What it collects stays on the phone:
+`files/diagnostics/session-*.log` and `crash-*.log`, written by `Diagnostics`, plus the same
+lines on the *Hilfe* screen, where **Dateien speichern** copies them into a folder the user picks
+(finding 256). Nothing is uploaded, ever - the app has no `INTERNET` permission.
+
 **16 KB pages (Android 15+).** The NDK build spells the alignment flags out
 (`-Wl,-z,max-page-size=16384`, `-Wl,-z,common-page-size=16384`) instead of trusting the toolchain's
 default, no source file in `:native-slam` assumes a 4 KB page (a gate forbids the literal and any
