@@ -102,7 +102,14 @@ class RouteSceneController(
      */
     fun syncLiveRoute(nodes: List<RouteNodeRecord>, spec: ConduitSpec, previewGeometry: MeshData?) {
         val key = LIVE_KEY
-        if (nodes.size < 2 || previewGeometry == null) {
+        // Only the *absence of geometry* means "nothing to draw" (finding 270). The old guard also
+        // refused a run of one node, on the reasoning that one node is not a run - which is true of
+        // the run and false of the preview: `RouteGeometry.buildPreview` already builds the segment
+        // from that one point to the reticle, `RouteSession` rebuilds it twelve times a second, and
+        // the HUD printed its length the whole time. So the first segment of every run - the one
+        // from the first point to the second, the only one where the operator is still deciding
+        // where to stop walking - was measured, announced as a number, and not drawn.
+        if (previewGeometry == null) {
             sink.remove(key)
             // No signature bookkeeping for this key: the live preview is tracked by `liveMesh`,
             // and the map's entry for it would be a line nobody reads.
@@ -157,6 +164,42 @@ class RouteSceneController(
             }
         }
         sink.setVisible(MARKERS_KEY, true)
+    }
+
+    /**
+     * Highlights the **current** node: the end of the run, where the next segment starts, and the
+     * point `undo` takes away (finding 270).
+     *
+     * A separate key from [syncNodeMarkers] because it is a different fact - the lime dots are the
+     * run, this one is "you are here" - and because it changes on every tap rather than only when
+     * the node set does. `null` removes it: an empty run has no current point.
+     *
+     * @param point the last node's position, or `null` when the run is empty.
+     * @param argb highlight colour; `SceneViewSupport.NODE_CURRENT_ARGB` in production.
+     */
+    fun syncCurrentMarker(
+        point: Vec3?,
+        argb: Int,
+        radius: Float = NodeMarkers.CURRENT_RADIUS_METERS,
+    ) {
+        if (point == null) {
+            if (sink.contains(CURRENT_KEY)) sink.remove(CURRENT_KEY)
+            uploadedSignatures.remove(CURRENT_KEY)
+            return
+        }
+        val signature = markersSignature(listOf(point), radius)
+        if (uploadedSignatures[CURRENT_KEY] != signature || !sink.contains(CURRENT_KEY)) {
+            val mesh = NodeMarkers.markers(listOf(point), radius)
+            if (mesh.isEmpty) {
+                if (sink.contains(CURRENT_KEY)) sink.remove(CURRENT_KEY)
+                uploadedSignatures.remove(CURRENT_KEY)
+                return
+            }
+            if (sink.upload(CURRENT_KEY, mesh, argb, unlit = true)) {
+                uploadedSignatures[CURRENT_KEY] = signature
+            }
+        }
+        sink.setVisible(CURRENT_KEY, true)
     }
 
     fun clearAll() {
@@ -214,6 +257,9 @@ class RouteSceneController(
 
         /** The measured points of the live run - see [syncNodeMarkers]. */
         const val MARKERS_KEY = "route:live:nodes"
+
+        /** The point the run is standing on - see [syncCurrentMarker]. */
+        const val CURRENT_KEY = "route:live:current"
 
     }
 }

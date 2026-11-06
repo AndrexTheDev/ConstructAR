@@ -70,4 +70,18 @@ class TapFeedbackTest {
             TapFeedback.RESULT_VISIBLE_MS <= 4_000L,
         )
     }
+
+    @Test
+    fun `the four tap answers never include a removal`() {
+        // `UNDONE` is not derived from a hit resolution - the run shrinks without one - so it must
+        // not be reachable through `echo`: a tap that hits a wall can never mean "took a point
+        // away", and the undo handler is the only thing allowed to write it (finding 270).
+        val answers = listOf(
+            TapFeedback.echo(hasSurface = false, added = false, snapped = false),
+            TapFeedback.echo(hasSurface = true, added = false, snapped = false),
+            TapFeedback.echo(hasSurface = true, added = true, snapped = false),
+            TapFeedback.echo(hasSurface = true, added = true, snapped = true),
+        )
+        assertTrue(TapEcho.UNDONE !in answers)
+    }
 }

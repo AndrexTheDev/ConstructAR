@@ -53,6 +53,7 @@ class SceneViewMaterialProvider(
         palette.forEach { create(it) }
         createUnlit(SCAN_OVERLAY_ARGB)
         createUnlit(NODE_MARKER_ARGB)
+        createUnlit(NODE_CURRENT_ARGB)
     }
 
     override fun create(argb: Int): MaterialInstance? {
@@ -118,6 +119,13 @@ class SceneViewMaterialProvider(
          * mesh is uploaded, and the material loader may only build instances on the main thread.
          */
         const val NODE_MARKER_ARGB: Int = 0xFFC8F04A.toInt()
+
+        /**
+         * The **current** node - the point the next segment starts from, and the one undo removes
+         * (finding 270). White and slightly larger than its neighbours, because white is the one
+         * colour no conduit in [palette] uses: the highlight can never be mistaken for the run.
+         */
+        const val NODE_CURRENT_ARGB: Int = 0xFFFFFFFF.toInt()
 
         /** Every colour the app can ask for, so nothing is created during a frame. */
         val palette: List<Int> = ConduitPresets.all.map { it.colorArgb }.distinct()

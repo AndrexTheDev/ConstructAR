@@ -96,6 +96,16 @@ internal enum class TapEcho {
      * carries the reason, and the slot prints its sentence.
      */
     REFUSED,
+
+    /**
+     * The operator took the last point back.
+     *
+     * Not produced by [TapFeedback.echo] - there is no hit resolution to read - but it belongs in
+     * the same slot: undo was the last action on this screen that changed a measurement and said
+     * nothing at all. The tube shrank and a dot disappeared somewhere at the near end of a wall,
+     * and on a six-point run that is easy to miss while the phone is still pointed at it.
+     */
+    UNDONE,
 }
 
 /** What the one slot under the step strip shows right now. */

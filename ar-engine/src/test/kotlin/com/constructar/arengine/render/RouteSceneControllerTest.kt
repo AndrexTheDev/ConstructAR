@@ -117,23 +117,61 @@ class RouteSceneControllerTest {
     }
 
     @Test
-    fun `a run that cannot be drawn is removed, and comes back`() {
+    fun `the first segment of a run is drawn, because it is the one being decided`() {
+        // Finding 270: `buildPreview` builds the segment from a single node to the reticle, the
+        // HUD printed its length at 12 Hz, and this guard threw the geometry away because "one
+        // node is not a run" - so the only segment where the operator is still deciding where to
+        // stop walking was measured, announced, and invisible.
+        val sink = RecordingSink()
+        val controller = RouteSceneController(sink)
+
+        controller.syncLiveRoute(listOf(node(0f)), spec, mesh(3))
+
+        assertEquals("the segment to the reticle is drawn from the first point on", 1, sink.uploads.size)
+        assertEquals("with the preview's own geometry", 3, sink.uploads[0].second.triangleCount)
+        assertEquals("and shown", true, sink.visibility["route:live"])
+    }
+
+    @Test
+    fun `a run with nothing to draw is removed, and comes back`() {
         val sink = RecordingSink()
         val controller = RouteSceneController(sink)
 
         controller.syncLiveRoute(nodes, spec, mesh(4))
         assertTrue("drawn to start with", sink.contains("route:live"))
 
-        // One node is not a run, and no preview means no geometry: either way the mesh has to go,
-        // or the finished run and the next one would share one tube.
-        controller.syncLiveRoute(listOf(node(0f)), spec, mesh(4))
-        assertFalse("a single node removes the preview", sink.contains("route:live"))
-
+        // No preview means no geometry - a finished run, or a reticle that has nothing under it -
+        // and the mesh has to go, or the finished run and the next one would share one tube.
         controller.syncLiveRoute(nodes, spec, null)
         assertFalse("no geometry, no mesh", sink.contains("route:live"))
 
         controller.syncLiveRoute(nodes, spec, mesh(4))
         assertTrue("and it comes back when there is geometry again", sink.contains("route:live"))
+    }
+
+    @Test
+    fun `the current node is highlighted, moves, and disappears with the run`() {
+        val sink = RecordingSink()
+        val controller = RouteSceneController(sink)
+        val white = 0xFFFFFFFF.toInt()
+
+        controller.syncCurrentMarker(Vec3(0f, 0f, 0f), white)
+        assertEquals("one mesh, one dot", 1, sink.uploads.size)
+        assertEquals(
+            "under its own key, so the run and the highlight change independently",
+            RouteSceneController.CURRENT_KEY,
+            sink.uploads[0].first,
+        )
+        assertEquals("and shown", true, sink.visibility[RouteSceneController.CURRENT_KEY])
+
+        controller.syncCurrentMarker(Vec3(0f, 0f, 0f), white)
+        assertEquals("a still current point costs nothing", 1, sink.uploads.size)
+
+        controller.syncCurrentMarker(Vec3(1f, 0f, 0f), white)
+        assertEquals("the highlight follows the last point", 2, sink.uploads.size)
+
+        controller.syncCurrentMarker(null, white)
+        assertFalse("an empty run has no current point", sink.contains(RouteSceneController.CURRENT_KEY))
     }
 
     @Test
@@ -222,7 +260,9 @@ class RouteSceneControllerTest {
         controller.syncNodeMarkers(nodes.map { it.position }, markerArgb)
         assertEquals("and it is re-uploaded, not remembered", 2, sink.uploads.size)
 
+        controller.syncCurrentMarker(nodes.last().position, 0xFFFFFFFF.toInt())
         controller.clearAll()
         assertFalse("a torn-down scene keeps no dots", sink.contains(RouteSceneController.MARKERS_KEY))
+        assertFalse("nor the highlight", sink.contains(RouteSceneController.CURRENT_KEY))
     }
 }

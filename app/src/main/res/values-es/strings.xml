@@ -566,6 +566,7 @@
     <string name="pdf_note_photos">Aquí se imprimen %1$d de %2$d fotos del expediente - el resto se queda en la app.</string>
     <string name="ar_hold_steady">Mantén el pulso</string>
     <string name="tap_placed">Punto marcado</string>
+    <string name="tap_undone">Punto eliminado</string>
     <string name="hud_segment">Tramo %1$.2f m</string>
     <string name="route_warning_surface_jump">Ese punto está detrás de la última superficie: comprueba la pared antes de seguir</string>
     <string name="paywall_err_untrusted">No se puede confirmar esta instalación. Instala la versión oficial desde la fuente original e inténtalo de nuevo.</string>

@@ -38,6 +38,18 @@ object NodeMarkers {
     const val RADIUS_METERS: Float = 0.025f
 
     /**
+     * Radius of the dot on the **current** node - the one the next segment starts from and the one
+     * undo takes away (finding 270).
+     *
+     * All points were the same size, so a run of six dots on one wall said nothing about which end
+     * was which: undo removed "a point", the segment that disappeared was at the *near* end of the
+     * tube, and the operator had to remember which of six identical dots that had been. A larger
+     * dot on the last node is the same information the rubber band carries - this is where the run
+     * continues - and it moves with every tap.
+     */
+    const val CURRENT_RADIUS_METERS: Float = 0.035f
+
+    /**
      * One mesh holding a sphere at every point.
      *
      * @param points node positions in ARCore world space, in the order they were measured.

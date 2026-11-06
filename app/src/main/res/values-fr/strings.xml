@@ -566,6 +566,7 @@
     <string name="pdf_note_photos">%1$d photos sur %2$d du dossier de chantier sont imprimées ici - les autres restent dans l’app.</string>
     <string name="ar_hold_steady">Reste stable</string>
     <string name="tap_placed">Point posé</string>
+    <string name="tap_undone">Point retiré</string>
     <string name="hud_segment">Tronçon %1$.2f m</string>
     <string name="route_warning_surface_jump">Ce point est derrière la dernière surface - vérifie le mur avant de continuer</string>
     <string name="paywall_err_untrusted">Cette installation ne peut pas être confirmée. Installe la version officielle depuis la source d’origine et réessaie.</string>

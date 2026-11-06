@@ -83,4 +83,17 @@ class NodeMarkersTest {
         assertTrue(NodeMarkers.markers(listOf(Vec3(0f, 0f, 0f)), radius = 0f).isEmpty)
         assertTrue(NodeMarkers.markers(listOf(Vec3(0f, 0f, 0f)), radius = Float.NaN).isEmpty)
     }
+
+    @Test
+    fun `the current point is marked larger than the run it ends`() {
+        // Finding 270: six identical dots never said which end of the run was the current one, so
+        // the size difference is asserted rather than left to the eye.
+        assertTrue(NodeMarkers.CURRENT_RADIUS_METERS > NodeMarkers.RADIUS_METERS)
+
+        val node = Vec3(2f, 1f, 0f)
+        val run = bounds(NodeMarkers.markers(listOf(node)))
+        val current = bounds(NodeMarkers.markers(listOf(node), NodeMarkers.CURRENT_RADIUS_METERS))
+        assertTrue("the highlight is visibly bigger", current.size.x > run.size.x * 1.2f)
+        assertEquals("and sits at the same point", node.x, current.center.x, 1e-4f)
+    }
 }

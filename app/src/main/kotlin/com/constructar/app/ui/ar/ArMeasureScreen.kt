@@ -439,7 +439,11 @@ fun ArMeasureScreen(
     // samples the finger - so the ring, the haptic and the sentence can never disagree about
     // whether something happened.
     var tapEcho by remember { mutableStateOf<TapEcho?>(null) }
-    var tapTick by remember { mutableIntStateOf(0) }
+    // Two counters on purpose: the ring belongs to a tap on the *wall* (it grows out of the
+    // finger that touched it), the slot belongs to any action that changed something - including
+    // undo, which is a button and must not draw a ring at the last tap's position.
+    var ringTick by remember { mutableIntStateOf(0) }
+    var slotTick by remember { mutableIntStateOf(0) }
     var tapAt by remember { mutableStateOf(Offset.Zero) }
     val haptics = LocalHapticFeedback.current
     val addPoint: (Offset?) -> Unit = { touched ->
@@ -452,7 +456,8 @@ fun ArMeasureScreen(
             val x = touched?.x ?: (viewSize.width / 2f)
             val y = touched?.y ?: (viewSize.height / 2f)
             tapAt = Offset(x, y)
-            tapTick++
+            ringTick++
+            slotTick++
             // Logged, because "nothing happens" was the whole report: the log now says whether the
             // tap arrived and what the hit test made of it (finding 256).
             Diagnostics.event(
@@ -523,8 +528,8 @@ fun ArMeasureScreen(
     }
     // The result is an event, not a state: it leaves on its own, and a new tap restarts the clock
     // instead of stacking a second line (finding 269).
-    LaunchedEffect(tapTick) {
-        if (tapTick == 0) return@LaunchedEffect
+    LaunchedEffect(slotTick) {
+        if (slotTick == 0) return@LaunchedEffect
         delay(TapFeedback.RESULT_VISIBLE_MS)
         tapEcho = null
     }
@@ -667,6 +672,7 @@ fun ArMeasureScreen(
             TapEcho.PLACED -> stringResource(R.string.tap_placed)
             TapEcho.SNAPPED -> snapEchoText
             TapEcho.MISS -> stringResource(R.string.ar_no_surface)
+            TapEcho.UNDONE -> stringResource(R.string.tap_undone)
             // The refusal prints the sentence the run already wrote - "too close to the previous
             // point", "that point could not be pinned". A generic "not possible" would hide the
             // one word that says what to do differently.
@@ -677,7 +683,7 @@ fun ArMeasureScreen(
     // a miss, a refusal, and "hold steady" are all "act before the next tap".
     val slotColor = when (tapEcho) {
         TapEcho.PLACED, TapEcho.SNAPPED -> SiteColors.accent
-        else -> SiteColors.warning
+        TapEcho.UNDONE, TapEcho.MISS, TapEcho.REFUSED, null -> SiteColors.warning
     }
     val guideRows = MeasureGuide.lines(guideState).mapNotNull { line ->
         val text = when (line) {
@@ -828,11 +834,11 @@ fun ArMeasureScreen(
                     // sits above the AR view but takes no touch - a `Canvas` with no gesture
                     // modifier leaves the tap surface underneath untouched.
                     TapEchoRing(
-                        trigger = tapTick,
+                        trigger = ringTick,
                         at = tapAt,
                         tone = when (tapEcho) {
-                            TapEcho.MISS -> SiteColors.warning
-                            else -> SiteColors.accent
+                            TapEcho.PLACED, TapEcho.SNAPPED -> SiteColors.accent
+                            TapEcho.MISS, TapEcho.REFUSED, TapEcho.UNDONE, null -> SiteColors.warning
                         },
                     )
                 }
@@ -1278,7 +1284,14 @@ fun ArMeasureScreen(
                     label = undoLabel,
                     icon = Icons.AutoMirrored.Filled.Undo,
                     enabled = routeState.nodeCount > 0,
-                    onClick = { controller.undo() },
+                    onClick = {
+                        controller.undo()
+                        // The last action on this screen that changed a measurement and said
+                        // nothing (finding 270). Undo is a tap like any other, so its result goes
+                        // in the same slot - and the restart of the timer is the same one.
+                        tapEcho = TapEcho.UNDONE
+                        slotTick++
+                    },
                 ),
             )
             // A torch button that cannot switch anything on is not a button: on a device whose

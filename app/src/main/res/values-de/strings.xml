@@ -566,6 +566,7 @@
     <string name="pdf_note_photos">%1$d von %2$d Fotos aus der Bauakte stehen hier - die übrigen bleiben in der App.</string>
     <string name="ar_hold_steady">Ruhig halten</string>
     <string name="tap_placed">Punkt gesetzt</string>
+    <string name="tap_undone">Punkt entfernt</string>
     <string name="hud_segment">Abschnitt %1$.2f m</string>
     <string name="route_warning_surface_jump">Der Punkt liegt hinter der letzten Fläche – prüfe die Wand, bevor du weitermachst</string>
     <string name="paywall_err_untrusted">Diese Installation kann nicht bestätigt werden. Installiere die offizielle Version aus der Originalquelle und versuche es erneut.</string>

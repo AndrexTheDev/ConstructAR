@@ -696,9 +696,18 @@ class ArMeasureController(private val context: Context) {
         // The points themselves, as dots on the wall (finding 269). The tube needs two nodes, so
         // until this line existed the first tap of every run - and every tap after a save - drew
         // nothing at all, and the wall the operator had just measured looked untouched.
+        //
+        // The last point gets its own marker, larger and white (finding 270): it is where the next
+        // segment starts and the one `undo` removes, and six identical dots never said which end
+        // of the run that was. So the lime set is "the run", the white one is "you are here".
+        val points = state.nodes.map { it.position }
         sceneController?.syncNodeMarkers(
-            points = state.nodes.map { it.position },
+            points = points.dropLast(1),
             argb = SceneViewMaterialProvider.NODE_MARKER_ARGB,
+        )
+        sceneController?.syncCurrentMarker(
+            point = points.lastOrNull(),
+            argb = SceneViewMaterialProvider.NODE_CURRENT_ARGB,
         )
     }
 
