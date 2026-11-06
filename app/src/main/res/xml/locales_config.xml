@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright (c) 2026 AndrexTheDev <hippie.highho@gmail.com>
+  All rights reserved. Proprietary and confidential - see LICENSE.
+  SPDX-License-Identifier: LicenseRef-Proprietary
+-->
+<!--
+  The six languages this app speaks, declared where Android can find them (finding 260).
+
+  Without this file the app follows the phone's system language and *nothing else*: on Android 13
+  and later the "App language" page in the app's info screen only exists for apps that declare
+  `android:localeConfig`, so a phone whose system language is English showed an app that has six
+  languages in English, with no way for the operator to say otherwise. The first device report was
+  exactly that sentence.
+
+  The list must be the list that is packaged - `tools/i18n_audit.py` compares it with the values-*
+  folders and `androidResources.localeFilters`, so a locale that is translated but not declared
+  here (or declared but not shipped) is a gate failure rather than a support call.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="de" />
+    <locale android:name="es" />
+    <locale android:name="fr" />
+    <locale android:name="it" />
+    <locale android:name="pl" />
+</locale-config>

@@ -8,6 +8,7 @@ package com.constructar.app.diagnostics
 
 import android.content.Context
 import android.os.Build
+import android.os.LocaleList
 import com.constructar.app.BuildConfig
 import com.constructar.core.diagnostics.DiagnosticsLog
 import java.io.File
@@ -35,6 +36,7 @@ object Diagnostics {
 
     private val log = DiagnosticsLog()
     private var root: File? = null
+    private var appContext: Context? = null
     private var session: File? = null
     private var previousHandler: Thread.UncaughtExceptionHandler? = null
 
@@ -43,6 +45,7 @@ object Diagnostics {
 
     /** Call once, from the application, before anything else can fail. */
     fun install(context: Context) {
+        appContext = context.applicationContext
         val dir = File(context.applicationContext.filesDir, "diagnostics")
         runCatching { dir.mkdirs() }
         root = dir
@@ -54,6 +57,10 @@ object Diagnostics {
 
         event("app", "started ${BuildConfig.VERSION_NAME} (${buildKind()})")
         event("device", "${Build.MANUFACTURER} ${Build.MODEL} - Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
+        // Which language the app resolved to, and which ones the phone offers (finding 260). The
+        // first report of "the app is only in English" could not be answered from the file at all:
+        // it said nothing about the one fact that decides the question.
+        event("locale", localeLine())
     }
 
     /** Which of the three builds this is; the first question of every bug report. */
@@ -102,7 +109,21 @@ object Diagnostics {
         "Device: " + Build.MANUFACTURER + " " + Build.MODEL + " - Android " + Build.VERSION.RELEASE +
             " (SDK " + Build.VERSION.SDK_INT + ")",
         "Session: " + stamp(),
+        localeLine(),
     )
+
+    /**
+     * `app=` is what the app itself resolves (the per-app language if one was chosen), `device=` is
+     * the phone's own list, first entry = the system language.
+     */
+    private fun localeLine(): String {
+        val app = appContext?.resources?.configuration?.locales?.get(0)?.toLanguageTag()
+        // Indexed rather than iterated: `LocaleList` is only an `Iterable` from API 26 in the
+        // compile stubs, and this app starts at 24 (CI said so: UNRESOLVED_REFERENCE joinToString).
+        val device = LocaleList.getDefault()
+        val tags = (0 until device.size()).map { device[it].toLanguageTag() }
+        return "Locale: app=" + (app ?: "?") + " device=" + tags.joinToString(",")
+    }
 
     private fun append(line: String) {
         val file = session ?: return

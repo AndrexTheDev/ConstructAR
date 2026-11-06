@@ -26,6 +26,7 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:label="${appLabel}"
         android:largeHeap="false"
+        android:localeConfig="@xml/locales_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.ConstructAR">
 
