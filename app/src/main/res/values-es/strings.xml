@@ -159,6 +159,7 @@
     <string name="export_fittings">Abrazaderas %1$d · manguitos %2$d · curvas %3$d</string>
     <string name="export_room_scan">Escáner de sala registrado: %1$d k triángulos - va en el protocolo; el modelo 3D contiene las tiradas</string>
     <string name="export_room_scan_limited">Solo se capturó parte de la estancia (límite de escaneo): mide lo que falta antes de entregarlo.</string>
+    <string name="export_room_closure">Cierre: %1$d de %2$d nodos movidos, hasta %3$s</string>
     <string name="export_offline_note">Los archivos se escriben en la carpeta elegida. No se sube nada; la exportación funciona en modo avión y en un sótano.</string>
     <string name="export_about">%1$s %2$s · %3$s</string>
     <string name="project_none">No hay ninguna obra abierta</string>
@@ -386,6 +387,7 @@
     <string name="pdf_procurement_note">Las longitudes de pedido incluyen la reserva de obra. Valores de nodos refinados con anclas; comprueba los tramos críticos con cinta antes de cortar.</string>
     <string name="pdf_note_accuracy">Precisión esperada: 1-2 cm en una pared plana entre 1 y 4 m, 3-6 cm donde solo hay datos de profundidad, cerca del 1 %% de la longitud en diagonal. La confianza es el punto más débil de una tirada - por debajo del %1$d %% conviene revisarla.</string>
     <string name="pdf_note_scan_limited">Límite de escaneo alcanzado: solo se capturó parte de la estancia. Las longitudes, los accesorios y los precios de este protocolo están medidos y no se ven afectados: las zonas fuera del volumen capturado no se midieron y no aparecen en este protocolo.</string>
+    <string name="pdf_note_closure">Cierre de bucle confirmado (%1$d): el último movió %2$d de %3$d nodos hasta %4$s. La geometría se plegó sobre la confirmación del operador: las longitudes de este protocolo están medidas, las posiciones corregidas.</string>
     <string name="pdf_note_recovered">Recuperado tras una interrupción: longitudes y accesorios son exactos, la posición 3D no está en el modelo: %1$s</string>
     <string name="pdf_note_unbuildable">No se pudo generar geometría 3D para estas tiradas: longitudes y accesorios siguen contando: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - generado en el dispositivo</string>

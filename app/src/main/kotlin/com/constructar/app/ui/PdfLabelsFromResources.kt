@@ -45,6 +45,7 @@ fun rememberPdfLabels(): PdfLabels = PdfLabels(
     procurementExcluded = stringResource(R.string.pdf_procurement_excluded),
     accuracyNote = stringResource(R.string.pdf_note_accuracy),
     scanLimitedNote = stringResource(R.string.pdf_note_scan_limited),
+    closureNote = stringResource(R.string.pdf_note_closure),
     recoveredNote = stringResource(R.string.pdf_note_recovered),
     unbuildableNote = stringResource(R.string.pdf_note_unbuildable),
     photosNote = stringResource(R.string.pdf_note_photos),

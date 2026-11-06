@@ -159,6 +159,7 @@
     <string name="export_fittings">Fissaggi %1$d · manicotti %2$d · curve %3$d</string>
     <string name="export_room_scan">Scansione della stanza registrata: %1$d k triangoli - va nel protocollo; il modello 3D contiene le tratte</string>
     <string name="export_room_scan_limited">È stata acquisita solo una parte della stanza (limite di scansione): misura ciò che manca prima di consegnarlo.</string>
+    <string name="export_room_closure">Chiusura: %1$d di %2$d nodi spostati, fino a %3$s</string>
     <string name="export_offline_note">I file vengono scritti nella cartella scelta. Nulla viene caricato; l’esportazione funziona in modalità aereo e in cantina.</string>
     <string name="export_about">%1$s %2$s · %3$s</string>
     <string name="project_none">Nessun cantiere aperto</string>
@@ -386,6 +387,7 @@
     <string name="pdf_procurement_note">Le lunghezze d’ordine includono la scorta di cantiere. Valori da nodi raffinati con ancore; controlla i tratti critici con il metro prima di tagliare.</string>
     <string name="pdf_note_accuracy">Precisione attesa: 1-2 cm su una parete piana tra 1 e 4 m, 3-6 cm dove ci sono solo dati di profondità, circa l’1 %% della lunghezza su una diagonale. L’affidabilità è il punto più debole di una tratta - sotto il %1$d %% va ricontrollata.</string>
     <string name="pdf_note_scan_limited">Limite di scansione raggiunto: è stata acquisita solo una parte della stanza. Le lunghezze, i raccordi e i prezzi di questo protocollo sono misurati e non interessati: le zone fuori dal volume acquisito non sono state misurate e non compaiono in questo protocollo.</string>
+    <string name="pdf_note_closure">Chiusura dell’anello confermata (%1$d): l’ultima ha spostato %2$d di %3$d nodi fino a %4$s. La geometria è stata ripiegata sulla conferma dell’operatore: le lunghezze di questo protocollo sono misurate, le posizioni corrette.</string>
     <string name="pdf_note_recovered">Recuperato dopo un’interruzione: lunghezze e raccordi esatti, la posizione 3D non è nel modello: %1$s</string>
     <string name="pdf_note_unbuildable">Non è stato possibile generare geometria 3D per queste tratte: lunghezze e raccordi contano comunque: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - generato sul dispositivo</string>

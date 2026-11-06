@@ -59,6 +59,7 @@ import com.constructar.core.bom.MaterialList
 import com.constructar.core.bom.MaterialListBuilder
 import com.constructar.core.bom.MaterialListOptions
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.units.LengthFormatter
 import com.constructar.core.price.Pricing
 import com.constructar.export.ExportService
 import com.constructar.export.pdf.PdfSection
@@ -400,6 +401,21 @@ fun ExportScreen(
                     if (scan.scanLimited) {
                         Text(
                             stringResource(R.string.export_room_scan_limited),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SiteColors.warning,
+                        )
+                    }
+                    // A folded-back room says so before the operator hands it over: the protocol
+                    // will carry the same sentence, and a correction the customer never learns
+                    // about is an inference presented as a measurement (findings 217, 251).
+                    scan.closures?.takeIf { it.closures > 0 }?.let { closure ->
+                        Text(
+                            stringResource(
+                                R.string.export_room_closure,
+                                closure.movedNodes,
+                                closure.nodes,
+                                LengthFormatter.format(closure.maxShiftMetres),
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = SiteColors.warning,
                         )

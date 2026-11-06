@@ -9,6 +9,7 @@ package com.constructar.core.model
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -37,7 +38,7 @@ class ScanSummaryTest {
         assertEquals(
             "a field here becomes a line in every project file and a possible row in the " +
                 "protocol; it has to arrive with a producer and a reader (finding 103)",
-            listOf("meshTriangleCount", "scanLimited"),
+            listOf("meshTriangleCount", "scanLimited", "closures"),
             names,
         )
     }
@@ -65,5 +66,45 @@ class ScanSummaryTest {
 
         assertTrue("the warning must come back with the room: $saved", loaded.scanLimited)
         assertTrue("the flag must be in the file, not only in memory: $saved", saved.contains("scanLimited"))
+    }
+
+    @Test
+    fun `a summary written before closures existed has none, not zero of them`() {
+        // Finding 103 removed an "accepted loop closures" counter because nothing filled it and a
+        // stored 0 read as a checked room. It comes back only as a value that can be absent
+        // (finding 251): the old file must load with no record, and nothing may be invented.
+        val legacy = Json { ignoreUnknownKeys = true }
+
+        val summary = legacy.decodeFromString(
+            ScanSummary.serializer(),
+            """{"meshTriangleCount":89000,"scanLimited":false}""",
+        )
+
+        assertEquals(89000, summary.meshTriangleCount)
+        assertNull("no closure was ever recorded, so none may be reported", summary.closures)
+    }
+
+    @Test
+    fun `a folded-back room carries the numbers that folded it`() {
+        val saved = json.encodeToString(
+            ScanSummary.serializer(),
+            ScanSummary(
+                meshTriangleCount = 89000,
+                closures = ScanClosure(
+                    closures = 1,
+                    movedNodes = 42,
+                    nodes = 380,
+                    maxShiftMetres = 0.183f,
+                ),
+            ),
+        )
+        val loaded = json.decodeFromString(ScanSummary.serializer(), saved)
+
+        val closure = loaded.closures
+        assertTrue("the record must be in the file, not only in memory: $saved", saved.contains("maxShiftMetres"))
+        assertEquals(1, closure?.closures)
+        assertEquals(42, closure?.movedNodes)
+        assertEquals(380, closure?.nodes)
+        assertEquals(0.183f, closure?.maxShiftMetres ?: 0f, 1e-4f)
     }
 }

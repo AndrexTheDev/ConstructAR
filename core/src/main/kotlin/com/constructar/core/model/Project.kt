@@ -12,7 +12,7 @@ import kotlinx.serialization.Serializable
  * What the scan pipeline (TSDF in `:native-slam`) measured, attached to a project for the
  * protocol header.
  *
- * Deliberately two fields (finding 103). Everything here is written by
+ * Deliberately three fields (findings 103, 251). Everything here is written by
  * `ArMeasureController.scanSummary()` when a run is finished and read by something that leaves
  * the phone - the protocol's summary row and its partial-capture note, and the export screen.
  * The model used to carry nine more: a vertex count, a floor area, a ceiling height, a bounding
@@ -39,6 +39,41 @@ data class ScanSummary(
      * loads (see `ScanSummaryTest`).
      */
     val scanLimited: Boolean = false,
+    /**
+     * The loop closures this scan's operator confirmed, or `null` when there were none.
+     *
+     * `null` rather than a zero-valued record on purpose. This model used to carry an "accepted
+     * loop closures" count among nine fields nothing filled, and *0 accepted loop closures* in a
+     * project the app had written read as a measurement - a room that was checked and needed no
+     * folding (finding 103). The difference matters more now than it did then: since finding 245
+     * a closure *can* be confirmed, so a zero would be ambiguous between "nothing was folded" and
+     * "the operator never asked". A missing value says which.
+     *
+     * Written by `ArMeasureController.scanSummary()` from `PoseGraphStatus`, read by the
+     * protocol's closure note and by the export screen (finding 250's numbers, persisted).
+     */
+    val closures: ScanClosure? = null,
+)
+
+/**
+ * What the pose graph's confirmed loop closures did to one scan (finding 251).
+ *
+ * The numbers the HUD shows after the dialog is gone (`PoseGraphStatus.closures` and
+ * `lastCorrection`) did not survive the run: a project file, and the protocol written from it,
+ * said nothing about the trajectory having been folded. That is the assumption the whole geometry
+ * rests on, and the one thing a customer reading the protocol would never learn - the same rule as
+ * finding 217, one level up: an inference may not be presented as a measurement, and here the
+ * inference *corrects* the measurements.
+ */
+@Serializable
+data class ScanClosure(
+    /** Confirmations in this scan. Every one added an edge to the graph, converged or not. */
+    val closures: Int = 0,
+    /** Nodes the last *converged* closure moved, and the nodes it compared (findings 246, 249). */
+    val movedNodes: Int = 0,
+    val nodes: Int = 0,
+    /** How far the last converged closure moved the worst node, in metres. */
+    val maxShiftMetres: Float = 0f,
 )
 
 /**

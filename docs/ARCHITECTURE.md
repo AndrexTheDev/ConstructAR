@@ -339,7 +339,9 @@ optimiser and the app both know, how many of them moved, the largest and the mea
 that stopped without converging has no report at all - `ClosureState.Closed.correction` is null -
 because its poses are a snapshot halfway down the cost curve (finding 247). The count of
 confirmed closures and the last report travel on `PoseGraphStatus`, so the HUD keeps saying what
-the dialog said after the dialog is gone (finding 250).
+the dialog said after the dialog is gone (finding 250); committing the run copies them into
+`ScanSummary.closures` and the protocol prints them, so the document says the geometry was folded
+back on someone's word (finding 251).
 
 **Monocular depth fusion.** Optional and strictly additive, and it names itself: the model's asset
 path comes from `BuildConfig.DEPTH_MODEL_ASSET` (one declaration, so a variant that ships a
