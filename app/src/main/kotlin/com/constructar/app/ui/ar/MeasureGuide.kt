@@ -123,6 +123,18 @@ internal object MeasureGuide {
     }
 }
 
+/** How loudly a [GuideLine] is printed: the three colours live in the screen, not here. */
+internal enum class GuideTone {
+    /** A grey button's reason: present, quiet, and never an alarm. */
+    QUIET,
+
+    /** Where the operator is and what the run currently is. */
+    NORMAL,
+
+    /** Something the operator has to act on: coaching, a spent budget, a phone that is behind. */
+    ATTENTION,
+}
+
 /** The three steps on the strip, in the order the operator does them. */
 internal enum class MeasureStep { SCAN, POINTS, FINISH }
 
