@@ -860,7 +860,9 @@ fun ArMeasureScreen(
 
         // ── Floating length label anchored to the last measured point ───────────────────
         hudPosition?.let { (x, y) ->
-            if (routeState.nodeCount > 0 && viewSize.width > 0) {
+            // Only once there is a length to print (finding 272): with one point the label said
+            // `0.00 m` in the middle of the wall the operator had just measured.
+            if (HudReadout.labelsLastPoint(routeState.nodeCount) && viewSize.width > 0) {
                 val labelWidthPx = with(density) { 190.dp.toPx() }
                 Surface(
                     color = HudStyle.panel,
@@ -897,19 +899,51 @@ fun ArMeasureScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(
-                            text = lengthText,
-                            style = MaterialTheme.typography.displaySmall,
-                            color = SiteColors.cable,
+                        // The headline is the number being decided (finding 272). Until the run
+                        // has a length - one point, and a reticle that has something under it -
+                        // that is the segment the operator is walking towards; from the second
+                        // point on it is the run itself. Before this, the largest type on the
+                        // glass carried `0.00 m` in the colour of a measured value while the
+                        // number he was actually deciding grew underneath it in body text.
+                        val headline = HudReadout.headline(
+                            nodeCount = routeState.nodeCount,
+                            hasLiveSegment = liveSegmentText != null,
                         )
-                        // Total above, the segment under the crosshair below it: while walking,
-                        // the second number is the one being decided.
-                        liveSegmentText?.let { segment ->
-                            Text(
-                                text = segment,
+                        Text(
+                            // A number, never a phrase: `displaySmall` in this column has ~184 dp
+                            // on a 360 dp phone next to two 72 dp icons, and "Abschnitt 3,20 m"
+                            // would wrap the headline onto a second line and push the whole HUD
+                            // down. The word that names the number goes underneath it.
+                            text = when (headline) {
+                                HudHeadline.SEGMENT -> stringResource(
+                                    R.string.hud_length,
+                                    shownLength(routeState.liveSegmentMeters),
+                                )
+                                HudHeadline.TOTAL -> lengthText
+                            },
+                            style = MaterialTheme.typography.displaySmall,
+                            // Gold is what a committed length looks like; the segment is still
+                            // being aimed at, so it takes the accent the screen uses for "now".
+                            color = when (HudReadout.ink(headline)) {
+                                HudInk.MEASURED -> SiteColors.cable
+                                HudInk.PROVISIONAL -> SiteColors.accent
+                            },
+                        )
+                        // The caption: under a run it is the segment being decided, with one point
+                        // it is the word that says the big number is not the run yet.
+                        when (headline) {
+                            HudHeadline.SEGMENT -> Text(
+                                text = stringResource(R.string.hud_segment_word),
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = HudStyle.text,
+                                color = SiteColors.accent,
                             )
+                            HudHeadline.TOTAL -> liveSegmentText?.let { segment ->
+                                Text(
+                                    text = segment,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = HudStyle.text,
+                                )
+                            }
                         }
                         Text(
                             text = buildString {

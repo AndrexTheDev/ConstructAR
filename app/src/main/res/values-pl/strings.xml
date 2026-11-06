@@ -582,6 +582,7 @@
     <string name="tap_placed">Punkt zaznaczony</string>
     <string name="tap_undone">Punkt usunięty</string>
     <string name="hud_segment">Odcinek %1$.2f m</string>
+    <string name="hud_segment_word">Odcinek</string>
     <string name="route_warning_surface_jump">Ten punkt jest za ostatnią powierzchnią – sprawdź ścianę, zanim przejdziesz dalej</string>
     <string name="paywall_err_untrusted">Nie można potwierdzić tej instalacji. Zainstaluj oficjalną wersję z oryginalnego źródła i spróbuj ponownie.</string>
     <string name="licence_clock_rollback">Zegar urządzenia jest opóźniony względem ostatniej daty widzianej przez aplikację. Ustaw poprawną datę i godzinę – subskrypcja i okres próbny są sprawdzane według ostatniej znanej daty.</string>

@@ -570,6 +570,7 @@
     <string name="tap_placed">Point set</string>
     <string name="tap_undone">Point removed</string>
     <string name="hud_segment">Segment %1$.2f m</string>
+    <string name="hud_segment_word">Segment</string>
     <string name="route_warning_surface_jump">That point is behind the last surface - check the wall before you continue</string>
     <string name="paywall_err_untrusted">This installation cannot be confirmed. Install the official build from the original source and try again.</string>
     <string name="licence_clock_rollback">The device clock is behind the last date this app has seen. Set date and time correctly - subscriptions and the trial are checked against the last known date.</string>

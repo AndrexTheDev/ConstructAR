@@ -570,6 +570,7 @@
     <string name="tap_placed">Punkt gesetzt</string>
     <string name="tap_undone">Punkt entfernt</string>
     <string name="hud_segment">Abschnitt %1$.2f m</string>
+    <string name="hud_segment_word">Abschnitt</string>
     <string name="route_warning_surface_jump">Der Punkt liegt hinter der letzten Fläche – prüfe die Wand, bevor du weitermachst</string>
     <string name="paywall_err_untrusted">Diese Installation kann nicht bestätigt werden. Installiere die offizielle Version aus der Originalquelle und versuche es erneut.</string>
     <string name="licence_clock_rollback">Die Uhr des Geräts steht vor dem zuletzt gesehenen Datum. Stelle Datum und Uhrzeit richtig ein – Abo und Testphase werden am zuletzt bekannten Datum geprüft.</string>

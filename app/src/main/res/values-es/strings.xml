@@ -570,6 +570,7 @@
     <string name="tap_placed">Punto marcado</string>
     <string name="tap_undone">Punto eliminado</string>
     <string name="hud_segment">Tramo %1$.2f m</string>
+    <string name="hud_segment_word">Tramo</string>
     <string name="route_warning_surface_jump">Ese punto está detrás de la última superficie: comprueba la pared antes de seguir</string>
     <string name="paywall_err_untrusted">No se puede confirmar esta instalación. Instala la versión oficial desde la fuente original e inténtalo de nuevo.</string>
     <string name="licence_clock_rollback">El reloj del dispositivo está por detrás de la última fecha vista por la app. Ajusta fecha y hora: la suscripción y la prueba se comprueban con la última fecha conocida.</string>

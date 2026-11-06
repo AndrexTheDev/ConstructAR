@@ -570,6 +570,7 @@
     <string name="tap_placed">Point posé</string>
     <string name="tap_undone">Point retiré</string>
     <string name="hud_segment">Tronçon %1$.2f m</string>
+    <string name="hud_segment_word">Tronçon</string>
     <string name="route_warning_surface_jump">Ce point est derrière la dernière surface - vérifie le mur avant de continuer</string>
     <string name="paywall_err_untrusted">Cette installation ne peut pas être confirmée. Installe la version officielle depuis la source d’origine et réessaie.</string>
     <string name="licence_clock_rollback">L’horloge de l’appareil est en retard sur la dernière date vue par l’application. Règle la date et l’heure : l’abonnement et l’essai sont vérifiés sur la dernière date connue.</string>
