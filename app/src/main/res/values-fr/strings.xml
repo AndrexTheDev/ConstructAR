@@ -197,6 +197,12 @@
         <item quantity="one">%1$d point</item>
         <item quantity="other">%1$d points</item>
     </plurals>
+    <!-- Why a greyed-out action is greyed out (finding 257): the device showed two dead
+         buttons and no word about what was missing. -->
+    <plurals name="ar_needs_points">
+        <item quantity="one">À partir de %1$d point</item>
+        <item quantity="other">À partir de %1$d points</item>
+    </plurals>
     <string name="plan_free">Gratuit</string>
     <string name="plan_pro">Pro</string>
     <string name="home_upgrade">Activer Pro</string>

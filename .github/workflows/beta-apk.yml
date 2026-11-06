@@ -19,6 +19,11 @@ on:
   push:
     paths:
       - ".github/workflows/beta-apk.yml"
+      - "app/build.gradle.kts"
+      # The measuring screen is what the beta is for: a change to it has to produce a new APK
+      # somebody can install, because the reports that matter come from a phone, not from CI
+      # (findings 257 and 258 were both found that way).
+      - "app/src/main/kotlin/com/constructar/app/ui/ar/**"
 
 concurrency:
   group: beta-apk-${{ github.ref }}
