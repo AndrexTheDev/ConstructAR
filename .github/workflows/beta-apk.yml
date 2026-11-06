@@ -114,6 +114,32 @@ jobs:
           key: beta-gradle-${{ env.GRADLE_VERSION }}-${{ hashFiles('gradle/libs.versions.toml', '**/build.gradle.kts') }}
           restore-keys: beta-gradle-${{ env.GRADLE_VERSION }}-
 
+      - name: Restore (or create) the one key this beta channel signs with
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          mkdir -p "$HOME/.constructar"
+          ks="$HOME/.constructar/beta.keystore"
+          if gh release download beta --pattern beta-keystore.jks --output "$ks" --clobber 2>/dev/null && [ -s "$ks" ]; then
+            echo "restored the beta signing key from the beta release"
+          else
+            # Every GitHub runner generates its own ~/.android/debug.keystore, so two builds were
+            # signed by two different keys and the second could not be installed over the first -
+            # Android refuses an update whose signature changed (finding 262). One throwaway key,
+            # kept as a release asset (a cache would expire), makes the beta updatable.
+            keytool -genkeypair -keystore "$ks" -storetype PKCS12 \
+              -storepass constructarbeta -keypass constructarbeta \
+              -alias constructar-beta -keyalg RSA -keysize 2048 -validity 10950 \
+              -dname "CN=ConstructAR Beta, O=AndrexTheDev, C=DE"
+            gh release view beta >/dev/null 2>&1 \
+              || gh release create beta --title "ConstructAR Beta (zum Testen)" --notes "Beta builds of ConstructAR." \
+              || echo "::warning title=no release::the beta release could not be created"
+            gh release upload beta "$ks" --clobber \
+              || echo "::warning title=key not stored::the signing key was not published, the next build will use a different one"
+          fi
+          echo "BETA_KEYSTORE=$ks" >> "$GITHUB_ENV"
+
       - name: assembleBeta
         run: |
           set -uo pipefail
@@ -241,6 +267,26 @@ jobs:
               echo "::warning title=upload failed::the release asset was not replaced, the artifact above is still there"
             fi
           fi
+
+      - name: What is packaged, for a phone that refuses to parse it
+        run: |
+          set -uo pipefail
+          # Android 11+ refuses an APK whose `resources.arsc` is compressed, and the sentence the
+          # phone shows for that is the same "There was a problem parsing the package" as for a
+          # damaged file. One line of `zipinfo` separates the two (finding 261).
+          arsc=$(zipinfo -l "$APK" | grep ' resources\.arsc$' | head -n 1 || true)
+          echo "resources.arsc: ${arsc:-<not found>}"
+          case "${arsc}" in
+            *stor*) echo "::notice title=resources.arsc::stored uncompressed, as Android 11+ requires" ;;
+            *def*)  echo "::error title=resources.arsc::compressed - Android 11+ refuses to install this APK" ; exit 1 ;;
+            "")     echo "::warning title=resources.arsc::not found in the archive listing" ;;
+            *)      echo "::warning title=resources.arsc::compression not understood: ${arsc}" ;;
+          esac
+          libs=$(unzip -l "$APK" | grep -oE 'lib/[^/]+/' | sort -u | tr '\n' ' ')
+          echo "native ABIs in the package: ${libs:-none}"
+          echo "::notice title=native ABIs::${libs:-none}"
+          entries=$(unzip -l "$APK" | tail -n 1 || true)
+          echo "entries: ${entries}"
 
       - uses: actions/upload-artifact@v4
         with:

@@ -100,6 +100,32 @@ android {
         }
     }
 
+    /**
+     * The beta channel's own signing key, if CI restored one (finding 262).
+     *
+     * The default debug key is generated *per machine*: every GitHub runner creates a fresh
+     * `~/.android/debug.keystore`, so two beta builds were signed by two different keys and the
+     * second one could not be installed over the first - Android refuses an update whose signature
+     * differs. The workflow keeps one throwaway key as an asset of the `beta` release and passes its
+     * path in `BETA_KEYSTORE`; a local build without it falls back to the debug key, which is what
+     * a developer expects.
+     */
+    val betaKeystore = System.getenv("BETA_KEYSTORE")?.let { rootProject.file(it) }?.takeIf { it.exists() }
+
+    signingConfigs {
+        if (betaKeystore != null) {
+            create("beta") {
+                storeFile = betaKeystore
+                storePassword = "constructarbeta"
+                keyAlias = "constructar-beta"
+                keyPassword = "constructarbeta"
+                // Not a secret: this key signs a test build that carries no licence and no user
+                // data. It is committed to no repository; the workflow publishes it as an asset of
+                // the `beta` release, next to the APK it signs, and restores it from there.
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -144,13 +170,21 @@ android {
             applicationIdSuffix = ".beta"
             isDebuggable = true
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
             manifestPlaceholders["appLabel"] = "ConstructAR Beta"
             buildConfigField("boolean", "BETA_BUILD", "true")
             // `:core`, `:ar-engine`, `:export` and `:native-slam` only know debug and release; the
             // beta app compiles against their debug variant instead of failing dependency
             // resolution for a "beta" variant that does not exist in the libraries.
             matchingFallbacks += listOf("debug")
+            // One ABI, like the shipping build: every ARCore phone is 64-bit ARM, and the beta
+            // was carrying Filament, ARCore and LiteRT for four ABIs - a 95 MB download for a
+            // tester on a phone with 4 GB of RAM, where the release is 25 MB (finding 261). The
+            // emulator builds stay in `debug`, which keeps every ABI on purpose.
+            ndk {
+                abiFilters += listOf("arm64-v8a")
+            }
+            // Same key on every run, so a new beta installs *over* the previous one (finding 262).
+            signingConfig = signingConfigs.findByName("beta") ?: signingConfigs.getByName("debug")
         }
     }
 
