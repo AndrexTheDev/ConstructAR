@@ -550,6 +550,21 @@ STALE_LOOP_CLAIMS = (
     ("docs/SETUP.md", "Expected: run the loop closure"),
 )
 
+# The mirror of the marker above, and the direction nothing guarded: while no driver existed these
+# sentences were *true*, so no rule had to retire them, and the day the pipeline started feeding
+# the graph nobody went looking. Three of them survived the wiring - the troubleshooting row still
+# told a fitter whose mesh had shifted after a relocalisation that "the app does not run a loop
+# closure", the bridge bullet said the optimiser call was one "the app does not make yet", and the
+# row's remedy (re-measure) was written for a build that had no way to fold the trajectory back
+# (finding 248). `check_the_docs_do_not_call_a_live_path_dead` (finding 216) could not see them:
+# it reads a sentence that names its subject in backticks, and these name none. So they are spelled
+# out, and the wiring branch below refuses each one.
+ABSENCE_CLAIMS = (
+    ("docs/SETUP.md", "the app does not run a loop closure"),
+    ("docs/SETUP.md", "Nothing folds the trajectory back yet"),
+    ("docs/SETUP.md", "which the app does not make yet"),
+)
+
 
 def check_loop_closure_claim() -> None:
     """A document may not promise a loop closure that nothing feeds (finding 98).
@@ -571,6 +586,10 @@ def check_loop_closure_claim() -> None:
     pose graph, the documents must stop carrying the marker; if nothing does, all of them must
     carry it. Either direction fails, so wiring the graph forces the docs back and unwiring it
     cannot be papered over, and the four stale sentences are named so they cannot return.
+
+    Dropping the marker is not enough, which is what finding 248 found: the sentences that said
+    the closure was *not* run were true while nothing drove it and had no rule to retire them, so
+    `ABSENCE_CLAIMS` refuses them explicitly once a driver exists.
     """
     documents = {
         "README.md": ROOT / "README.md",
@@ -593,6 +612,14 @@ def check_loop_closure_claim() -> None:
                 add(documents[name], f"'{drivers[0]}' now drives the pose graph, but this text "
                                      f"still says it is '{UNWIRED_MARKER}' - update the document "
                                      f"and this rule (finding 98)")
+        # Sentences wrap in the markdown source, so compare against the flattened text - a claim
+        # whose two halves sit on different lines is still one claim to the reader.
+        flat = {name: " ".join(text.split()) for name, text in texts.items()}
+        for name, needle in ABSENCE_CLAIMS:
+            if needle in flat[name]:
+                add(documents[name], f"still says '{needle}', but '{drivers[0]}' drives the pose "
+                                     f"graph - a document may not call a live path dead "
+                                     f"(finding 248)")
         return
 
     for name, text in texts.items():

@@ -522,7 +522,8 @@ Optional pieces (both are opt-in, the app works without them):
   into the measured runs, because a run's metres were measured with taps and an inference may not
   replace them (finding 217). Appearance verification (RTAB-Map) is still not wired, so the
   closure rests on the operator's confirmation and says so. `verify_sources.py` reads the wiring
-  from the code and refuses this file if it claims the opposite.
+  from the code and refuses this file if it claims the opposite - in either direction: no document
+  may promise a closure nothing feeds (finding 98), and none may call a live one dead (finding 248).
 
 Full step-by-step setup — including how to convert the depth model and how to build RTAB-Map
 without non-free modules — is in **[docs/SETUP.md](docs/SETUP.md)**.
