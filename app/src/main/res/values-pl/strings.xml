@@ -123,6 +123,8 @@
     <string name="ar_guide_ring">Pętla zamknięta: %1$s obwodu. Zapisz ją teraz albo idź dalej.</string>
     <string name="ar_hint_run_needs">Zapis wymaga 2 punktów - zaznaczono %1$d.</string>
     <string name="ar_hint_ring_needs">Pętla wymaga 3 punktów - zaznaczono %1$d.</string>
+    <string name="loop_needs_room">Najpierw obchód pomieszczenia - bez zeskanowanej przestrzeni nie ma dwóch wizyt do porównania.</string>
+    <string name="marker_unavailable">To urządzenie nie odczytuje znaczników. Kalibracja ręczna nadal działa.</string>
     <string name="crash_title">Aplikacja zamknęła się ostatnio</string>
     <string name="crash_body">Raport jest na telefonie. Zapisz go w folderze i odeślij – jest w nim, co aplikacja robiła tuż przed zamknięciem.</string>
     <string name="crash_dismiss">Odrzuć raport</string>

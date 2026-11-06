@@ -48,8 +48,6 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +61,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -123,11 +122,12 @@ import com.constructar.arengine.tracking.TrackingQuality
 import com.google.ar.core.Config
 import com.constructar.core.calib.CalibrationOutcome
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import com.constructar.core.calib.CalibrationReference
 import com.constructar.core.calib.CalibrationSweep
 import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.model.ConduitPresets
-import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.units.LengthUnit
 import com.constructar.core.units.PercentText
@@ -224,7 +224,20 @@ fun ArMeasureScreen(
     var markerOpen by remember { mutableStateOf(false) }
     var closureOpen by remember { mutableStateOf(false) }
     val markerState by controller.markerProbeState.collectAsStateWithLifecycle()
-    val markerAvailable = remember(controller) { controller.isMarkerProbeAvailable() }
+    // Whether the marker sweep can be opened - as state, not as a snapshot (finding 271).
+    //
+    // The answer comes from the native engine, and `TsdfScanPipeline.start()` creates that engine
+    // in a `LaunchedEffect`, i.e. *after* the first composition. `remember(controller)` therefore
+    // froze "no" for the whole session on every phone, the button stayed grey, and the sentence
+    // under it claimed the device could not read markers - a grey button that lies, which is the
+    // exact failure this finding is about. It is re-read when the pipeline's readiness flips, and
+    // only then: `tagScaleDefaults()` is a JNI call and the pipeline's state also emits per frame.
+    val markerAvailable by produceState(initialValue = false) {
+        controller.pipeline.state
+            .map { it.ready }
+            .distinctUntilChanged()
+            .collect { ready -> value = ready && controller.isMarkerProbeAvailable() }
+    }
 
     fun cameraGranted(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
@@ -1375,28 +1388,22 @@ fun ArMeasureScreen(
             }
 
             if (toolsOpen) {
-                    // The ring lives here rather than next to Save: it is the rare half of the same
-                    // decision, and the sentence under it says how many points it still needs.
-                    if (mode.setsPoints) {
-                        GloveButton(
-                            label = stringResource(R.string.ar_close_loop),
-                            icon = Icons.Default.Loop,
-                            tone = ActionTone.SECONDARY,
-                            enabled = routeState.nodeCount >= ActionGating.NODES_FOR_A_LOOP,
-                            onClick = { controller.routeSession.closeLoop() },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        if (routeState.nodeCount < ActionGating.NODES_FOR_A_LOOP) {
-                            Text(
-                                text = stringResource(
-                                    R.string.ar_hint_ring_needs,
-                                    routeState.nodeCount,
-                                ),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = HudStyle.hint,
-                            )
-                        }
-                    }
+                // The ring lives here rather than next to Save: it is the rare half of the same
+                // decision, and the sentence under it says how many points it still needs.
+                if (mode.setsPoints) {
+                    val ring = ToolsPlan.ring(routeState.nodeCount)
+                    GloveButton(
+                        label = stringResource(R.string.ar_close_loop),
+                        icon = Icons.Default.Loop,
+                        tone = ActionTone.SECONDARY,
+                        enabled = ring.enabled,
+                        onClick = { controller.routeSession.closeLoop() },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    // Every grey tool in this drawer says why (finding 271). The rule was already
+                    // being kept for the ring and broken for the two below it.
+                    ToolReasonLine(ring.reason, routeState.nodeCount)
+                }
                 // ── Reference calibration ────────────────────────────────────────────────
                 // ARCore's metre is metric on its own; this is the operator's check of it against an
                 // object of known size, and the factor it produces is applied to the metres that are
@@ -1417,17 +1424,19 @@ fun ArMeasureScreen(
                 // can be the same doorway or two different corners, and a wrong closure folds the
                 // room without anything looking wrong. Enabled once the graph holds nodes at all;
                 // the policy's own floor decides whether there is anything to ask about.
+                val loopCheck = ToolsPlan.loopCheck(graphStatus.nodes)
                 GloveButton(
                     label = stringResource(R.string.loop_check),
                     icon = Icons.Default.Loop,
                     tone = ActionTone.SECONDARY,
-                    enabled = graphStatus.nodes > 0,
+                    enabled = loopCheck.enabled,
                     onClick = {
                         closureOpen = true
                         controller.lookForClosure()
                     },
                     modifier = Modifier.fillMaxWidth(),
                 )
+                ToolReasonLine(loopCheck.reason, routeState.nodeCount)
 
                 // ── Marker check ────────────────────────────────────────────────────────
                 // A printed tag of known size, measured through the camera: the second tier of
@@ -1435,16 +1444,18 @@ fun ArMeasureScreen(
                 // walks, and the sweep counts the sightings. It publishes a factor, never a scale
                 // stored behind the operator's back; `Apply` is the same reporting-layer write the
                 // two-tap sweep uses.
+                val markerTool = ToolsPlan.marker(markerAvailable)
                 GloveButton(
                     label = stringResource(R.string.marker_title),
                     icon = Icons.Default.QrCodeScanner,
                     tone = ActionTone.SECONDARY,
-                    enabled = markerAvailable,
+                    enabled = markerTool.enabled,
                     onClick = {
                         if (controller.startMarkerProbe()) markerOpen = true
                     },
                     modifier = Modifier.fillMaxWidth(),
                 )
+                ToolReasonLine(markerTool.reason, routeState.nodeCount)
             }
 
             if (closureOpen) {
@@ -1674,6 +1685,28 @@ fun ArMeasureScreen(
 }
 
 /** Blocking message with one action: missing permission, unsupported device, failed session. */
+/**
+ * The sentence under a grey tool (finding 271).
+ *
+ * One implementation for all three, so that "a disabled control explains itself" cannot be honoured
+ * for the ring and forgotten for the two buttons under it - which is exactly what had happened.
+ */
+@Composable
+private fun ToolReasonLine(reason: ToolReason?, nodeCount: Int) {
+    if (reason == null) return
+    val text = when (reason) {
+        ToolReason.RING_NEEDS_POINTS -> stringResource(R.string.ar_hint_ring_needs, nodeCount)
+        ToolReason.LOOP_NEEDS_ROOM -> stringResource(R.string.loop_needs_room)
+        ToolReason.MARKER_NOT_AVAILABLE -> stringResource(R.string.marker_unavailable)
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = HudStyle.hint,
+        modifier = Modifier.padding(bottom = 4.dp),
+    )
+}
+
 @Composable
 private fun GateMessage(
     text: String,
@@ -1701,44 +1734,6 @@ private fun GateMessage(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 24.dp),
-        )
-    }
-}
-
-@Composable
-private fun SpecChip(
-    spec: ConduitSpec,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    // A local with a name of its own: inside `semantics { }` an unqualified `selected` resolves to
-    // the receiver's own property, so writing `this.selected = selected` there would read the very
-    // property it assigns and announce nothing - the same shape as finding 204's narrower helper.
-    val chosen = selected
-    Button(
-        onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
-        // The selection used to be a background colour and nothing else. `selected` makes the
-        // button announce "selected" inside its group; the colour stays what a sighted gloved
-        // hand sees (finding 211).
-        modifier = modifier
-            .padding(vertical = 2.dp)
-            .semantics { this.selected = chosen },
-        colors = ButtonDefaults.buttonColors(
-            // The selected chip used to be the spec colour at 90 % under *white* text - white on
-            // gold measures 1.4:1, so the one chip the worker just tapped was the one he could not
-            // read. The spec colours are all light (orange, blue, teal), which is exactly why the
-            // rest of the theme pairs them with Ink; do the same here and keep the fill opaque,
-            // because a label that depends on the camera behind it is not a label.
-            containerColor = if (selected) Color(spec.colorArgb) else HudStyle.panel,
-            contentColor = if (selected) Jamaica.Ink else HudStyle.text,
-        ),
-    ) {
-        Text(
-            text = spec.sizeLabel,
-            style = MaterialTheme.typography.labelMedium,
-            maxLines = 1,
         )
     }
 }

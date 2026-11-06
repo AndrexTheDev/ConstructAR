@@ -123,6 +123,8 @@
     <string name="ar_guide_ring">Runde geschlossen: %1$s im Umfang. Jetzt speichern oder weiterlaufen.</string>
     <string name="ar_hint_run_needs">Speichern braucht 2 Punkte - %1$d gesetzt.</string>
     <string name="ar_hint_ring_needs">Die Runde braucht 3 Punkte - %1$d gesetzt.</string>
+    <string name="loop_needs_room">Braucht zuerst den Rundgang - ohne erfassten Raum gibt es keine zwei Besuche zu vergleichen.</string>
+    <string name="marker_unavailable">Dieses Gerät erkennt keine Marker. Kalibrieren von Hand geht weiterhin.</string>
     <string name="crash_title">Die App wurde beim letzten Mal beendet</string>
     <string name="crash_body">Ein Bericht davon liegt auf dem Telefon. Speichere ihn in einen Ordner und schick ihn zurück – darin steht, was die App unmittelbar davor getan hat.</string>
     <string name="crash_dismiss">Bericht verwerfen</string>

@@ -123,6 +123,8 @@
     <string name="ar_guide_ring">Anillo cerrado: %1$s de contorno. Guárdalo ahora o sigue.</string>
     <string name="ar_hint_run_needs">Guardar necesita 2 puntos: %1$d marcados.</string>
     <string name="ar_hint_ring_needs">El anillo necesita 3 puntos: %1$d marcados.</string>
+    <string name="loop_needs_room">Necesita primero el recorrido: sin sala capturada no hay dos visitas que comparar.</string>
+    <string name="marker_unavailable">Este dispositivo no lee marcadores. La calibración manual sigue funcionando.</string>
     <string name="crash_title">La app se cerró la última vez</string>
     <string name="crash_body">Hay un informe en el teléfono. Guárdalo en una carpeta y envíalo: dice qué estaba haciendo la app justo antes de cerrarse.</string>
     <string name="crash_dismiss">Descartar el informe</string>

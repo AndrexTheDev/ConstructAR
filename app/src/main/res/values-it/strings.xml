@@ -123,6 +123,8 @@
     <string name="ar_guide_ring">Anello chiuso: %1$s di perimetro. Salvalo ora o continua.</string>
     <string name="ar_hint_run_needs">Per salvare servono 2 punti: %1$d segnati.</string>
     <string name="ar_hint_ring_needs">L’anello richiede 3 punti: %1$d segnati.</string>
+    <string name="loop_needs_room">Serve prima la scansione: senza stanza acquisita non ci sono due visite da confrontare.</string>
+    <string name="marker_unavailable">Questo dispositivo non legge i marker. La calibrazione a mano funziona ancora.</string>
     <string name="crash_title">L’app si è chiusa l’ultima volta</string>
     <string name="crash_body">Sul telefono c’è un rapporto. Salvalo in una cartella e rimandalo: dice cosa stava facendo l’app subito prima di chiudersi.</string>
     <string name="crash_dismiss">Scarta il rapporto</string>

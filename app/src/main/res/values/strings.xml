@@ -123,6 +123,8 @@
     <string name="ar_guide_ring">Ring closed: %1$s around. Save it now, or carry on.</string>
     <string name="ar_hint_run_needs">Save needs 2 points - %1$d set.</string>
     <string name="ar_hint_ring_needs">The ring needs 3 points - %1$d set.</string>
+    <string name="loop_needs_room">Needs the room walkthrough first - without a capture there are no two visits to compare.</string>
+    <string name="marker_unavailable">This device cannot read markers. Calibrating by hand still works.</string>
     <string name="crash_title">The app stopped last time</string>
     <string name="crash_body">A report of it is on the phone. Save it into a folder and send it back - it says what the app was doing just before it stopped.</string>
     <string name="crash_dismiss">Discard the report</string>
