@@ -310,12 +310,31 @@ def check_references(strings: dict[str, str], plurals: dict[str, dict[str, str]]
                 add(path, f"R.plurals.{name} is not defined in res/values/strings.xml")
 
 
+def only_removed(permission: str, text: str) -> bool:
+    """True when every mention of [permission] is a `tools:node="remove"` declaration.
+
+    Finding 263: a library merged `android.permission.INTERNET` into the built APK, so the app's
+    "0 bytes off-device" promise was true of the source and false of the package. The fix is a
+    removal element in the manifest - and a removal element has to *mention* the permission, which
+    is why this check looks at the element rather than at the string.
+    """
+    for match in re.finditer(re.escape(permission), text):
+        element = text[match.start():].split("/>", 1)[0]
+        if 'tools:node="remove"' not in element:
+            return False
+    return True
+
+
 def check_offline_guarantees() -> None:
     manifest = ROOT / "app" / "src" / "main" / "AndroidManifest.xml"
     text = manifest.read_text(encoding="utf-8")
     for permission in FORBIDDEN_PERMISSIONS:
-        if permission in text:
-            add(manifest, f"{permission} breaks the 100%-offline guarantee")
+        if permission in text and not only_removed(permission, text):
+            add(
+                manifest,
+                f"{permission} breaks the 100%-offline guarantee - it may only appear inside a "
+                f'tools:node="remove" element (finding 263)',
+            )
 
     for path in tracked_sources():
         if path.suffix not in {".kts", ".gradle", ".toml"}:

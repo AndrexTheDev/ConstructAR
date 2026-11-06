@@ -287,6 +287,17 @@ jobs:
           # "there was a problem parsing the package".
           AAPT2=$(ls -1 "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -n 1 || true)
           if [ -n "${AAPT2:-}" ]; then
+            "$AAPT2" dump badging "$APK" > /tmp/badging-full.txt 2>&1 || true
+            perms=$(grep -oE "uses-permission: name='[^']+'" /tmp/badging-full.txt | sed "s/uses-permission: name=//" | tr '\n' ' ')
+            echo "permissions: ${perms}"
+            echo "::notice title=permissions in the package::${perms}"
+            case "${perms}" in
+              *INTERNET*)
+                # The app's central promise is that a measurement cannot leave the phone. A library
+                # that merges INTERNET back in breaks it silently (finding 263).
+                echo "::error title=INTERNET in the package::a dependency merged it back in - the 'no network' promise is false for this APK"
+                exit 1 ;;
+            esac
             head_badging=$("$AAPT2" dump badging "$APK" 2>&1 | head -n 6 | tr '\n' '|' | cut -c1-900)
             echo "badging head: ${head_badging}"
             echo "::notice title=badging head::${head_badging}"

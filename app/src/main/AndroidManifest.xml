@@ -12,6 +12,18 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FLASHLIGHT" />
 
+    <!-- No dependency gets to add this back (finding 263).
+
+         The promise on the site, in the README and in the help screen is that a measurement cannot
+         leave the phone: "0 bytes off-device" is only checkable if the app *cannot* open a socket.
+         The merged manifest of the beta APK asked for INTERNET anyway - some library in the AR
+         stack declares it - so the promise was true of our code and false of the package. Removing
+         it here makes the permission list match the sentence again, and the beta workflow fails if
+         it ever reappears in a built APK. -->
+    <uses-permission
+        android:name="android.permission.INTERNET"
+        tools:node="remove" />
+
     <uses-feature android:name="android.hardware.camera.ar" android:required="true" />
     <uses-feature android:name="android.hardware.camera" android:required="true" />
     <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="true" />
