@@ -94,6 +94,18 @@
     <string name="ar_step_scan">1 Scan</string>
     <string name="ar_step_points">2 Set points</string>
     <string name="ar_step_finish">3 Save</string>
+    <string name="mode_measure">Point by point</string>
+    <string name="mode_capture">Walkthrough 3D</string>
+    <string name="mode_measure_hint">Measuring: you set every point yourself - that is where the cable goes.</string>
+    <string name="mode_capture_hint">Walkthrough: the app reconstructs the room in 3D, you only walk.</string>
+    <string name="scan_legend">Violet = captured by the scan</string>
+    <string name="scan_state_none">Nothing captured yet</string>
+    <string name="scan_state_growing">%1$d %% · %2$d k triangles</string>
+    <string name="scan_state_full">Scan full - nothing more is added</string>
+    <string name="scan_state_behind">The phone is not keeping up</string>
+    <string name="scan_state_unavailable">No mesh scan on this phone</string>
+    <string name="capture_walk">Walk slowly along the walls. Everything that turns violet is captured.</string>
+    <string name="capture_no_points">No points are set during a walkthrough. To set points and save a run, switch to “Point by point”.</string>
     <string name="step_now">now</string>
     <string name="step_done">done</string>
     <string name="ar_guide_first">Tap “Set point here” at the first end of the distance.</string>
@@ -118,8 +130,6 @@
     <string name="draft_save">Save as route</string>
     <string name="draft_discard">Discard</string>
     <string name="ar_torch">Torch</string>
-    <string name="ar_scan">Scan room</string>
-    <string name="ar_stop_scan">Stop scan</string>
     <string name="ar_closed_loop">closed loop</string>
     <string name="ar_confidence_weak">Weakest point %1$d %% - tap it again to improve the run</string>
     <string name="ar_no_surface">No surface found. Aim at a wall or the floor.</string>

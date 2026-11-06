@@ -94,6 +94,18 @@
     <string name="ar_step_scan">1 Scanner</string>
     <string name="ar_step_points">2 Poser les points</string>
     <string name="ar_step_finish">3 Enregistrer</string>
+    <string name="mode_measure">Point par point</string>
+    <string name="mode_capture">Parcours 3D</string>
+    <string name="mode_measure_hint">Mesure : tu poses chaque point toi-même ; c’est là que passera le câble.</string>
+    <string name="mode_capture_hint">Parcours : l’appli reconstruit la pièce en 3D, tu ne fais que marcher.</string>
+    <string name="scan_legend">Violet = capturé par le scan</string>
+    <string name="scan_state_none">Rien de capturé pour l’instant</string>
+    <string name="scan_state_growing">%1$d %% · %2$d k triangles scannés</string>
+    <string name="scan_state_full">Scan plein - plus rien ne s’ajoute</string>
+    <string name="scan_state_behind">Le téléphone ne suit pas</string>
+    <string name="scan_state_unavailable">Pas de scan de maillage sur ce téléphone</string>
+    <string name="capture_walk">Marche lentement le long des murs. Ce qui devient violet est capturé.</string>
+    <string name="capture_no_points">Aucun point n’est posé pendant le parcours. Pour poser et enregistrer : « Point par point ».</string>
     <string name="step_now">maintenant</string>
     <string name="step_done">fait</string>
     <string name="ar_guide_first">Touche « Poser le point ici » à la première extrémité de la distance.</string>
@@ -118,8 +130,6 @@
     <string name="draft_save">Enregistrer comme tracé</string>
     <string name="draft_discard">Abandonner</string>
     <string name="ar_torch">Torche</string>
-    <string name="ar_scan">Scanner la pièce</string>
-    <string name="ar_stop_scan">Arrêter le scan</string>
     <string name="ar_closed_loop">fermé</string>
     <string name="ar_confidence_weak">Point le plus faible %1$d %% : retouche-le pour améliorer le tracé</string>
     <string name="ar_no_surface">Aucune surface trouvée. Vise un mur ou le sol.</string>

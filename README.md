@@ -381,12 +381,12 @@ Six locales ship as resources, and **no user-facing text is hardcoded**: the eng
 
 | Directory | Locale | Keys |
 |-----------|--------|------|
-| `app/src/main/res/values/` | English (default) | 513 strings + 13 plurals |
-| `app/src/main/res/values-de/` | Deutsch | 513 strings + 13 plurals |
-| `app/src/main/res/values-es/` | Español | 513 strings + 13 plurals |
-| `app/src/main/res/values-fr/` | Français | 513 strings + 13 plurals |
-| `app/src/main/res/values-it/` | Italiano | 513 strings + 13 plurals |
-| `app/src/main/res/values-pl/` | Polski | 513 strings + 13 plurals (`few`/`many` included) |
+| `app/src/main/res/values/` | English (default) | 523 strings + 13 plurals |
+| `app/src/main/res/values-de/` | Deutsch | 523 strings + 13 plurals |
+| `app/src/main/res/values-es/` | Español | 523 strings + 13 plurals |
+| `app/src/main/res/values-fr/` | Français | 523 strings + 13 plurals |
+| `app/src/main/res/values-it/` | Italiano | 523 strings + 13 plurals |
+| `app/src/main/res/values-pl/` | Polski | 523 strings + 13 plurals (`few`/`many` included) |
 
 `scripts/verify_sources.py` fails on a missing key, an untranslated extra key, or a mismatched
 format placeholder — so a half-translated release cannot ship. That includes the exported
@@ -847,7 +847,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1158 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1163 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 332 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 332 checks, 0 failures, no data race reported |

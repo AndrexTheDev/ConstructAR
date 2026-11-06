@@ -90,10 +90,19 @@ class SceneViewMaterialProvider(
         private const val REFLECTANCE = 0.35f
 
         /**
-         * The scan overlay: cool grey at ~40 % alpha, so a routed service stays visible through
-         * the reconstructed surface. Unlit, so a dark site does not hide the room.
+         * The scan overlay: violet at ~53 % alpha, so a routed service stays visible through the
+         * reconstructed surface. Unlit, so a dark site does not hide the room.
+         *
+         * It used to be cool grey at 40 %. On the device the report was *"man sieht nicht, was
+         * gescannt ist"*, and grey at 40 % over a plastered wall in daylight is very nearly the
+         * wall: the one surface that answers "has anything been captured" was the one the operator
+         * could not see (finding 267). The hue is now a colour no service in [palette] uses, the
+         * legend on the glass names it in words, and the alpha went up rather than down.
+         *
+         * `ModeStyle.CAPTURE_OVERLAY_ARGB` in `:app` is this same value, asserted equal by
+         * `MeasureModeTest`: the legend cannot explain a colour the mesh is not drawn in.
          */
-        const val SCAN_OVERLAY_ARGB: Int = 0x668A8F98
+        const val SCAN_OVERLAY_ARGB: Int = 0x88A25BFF.toInt()
 
         /** Every colour the app can ask for, so nothing is created during a frame. */
         val palette: List<Int> = ConduitPresets.all.map { it.colorArgb }.distinct()

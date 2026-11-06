@@ -94,6 +94,18 @@
     <string name="ar_step_scan">1 Skanuj</string>
     <string name="ar_step_points">2 Zaznacz punkty</string>
     <string name="ar_step_finish">3 Zapisz</string>
+    <string name="mode_measure">Punkt po punkcie</string>
+    <string name="mode_capture">Obejście 3D</string>
+    <string name="mode_measure_hint">Pomiar: każdy punkt stawiasz sam - tam później idzie kabel.</string>
+    <string name="mode_capture_hint">Obejście: aplikacja odtwarza pomieszczenie w 3D, ty tylko chodzisz.</string>
+    <string name="scan_legend">Fiolet = zeskanowane</string>
+    <string name="scan_state_none">Nic jeszcze nie zeskanowano</string>
+    <string name="scan_state_growing">%1$d %% · %2$d tys. trójkątów</string>
+    <string name="scan_state_full">Skan pełny - nic już nie dojdzie</string>
+    <string name="scan_state_behind">Telefon nie nadąża</string>
+    <string name="scan_state_unavailable">Brak skanu siatki na tym telefonie</string>
+    <string name="capture_walk">Idź powoli wzdłuż ścian. To, co staje się fioletowe, jest nagrane.</string>
+    <string name="capture_no_points">Podczas obejścia nie zaznacza się punktów. Aby zaznaczać i zapisywać: „Punkt po punkcie”.</string>
     <string name="step_now">teraz</string>
     <string name="step_done">gotowe</string>
     <string name="ar_guide_first">Dotknij „Zaznacz punkt tutaj” na pierwszym końcu odcinka.</string>
@@ -118,8 +130,6 @@
     <string name="draft_save">Zapisz jako trasę</string>
     <string name="draft_discard">Odrzuć</string>
     <string name="ar_torch">Latarka</string>
-    <string name="ar_scan">Skanuj pomieszczenie</string>
-    <string name="ar_stop_scan">Zatrzymaj skan</string>
     <string name="ar_closed_loop">zamknięta</string>
     <string name="ar_confidence_weak">Najsłabszy punkt %1$d %% - dotknij go ponownie, aby poprawić trasę</string>
     <string name="ar_no_surface">Nie znaleziono powierzchni. Wyceluj w ścianę lub podłogę.</string>

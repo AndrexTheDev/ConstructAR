@@ -35,23 +35,30 @@ import com.constructar.app.ui.theme.SiteColors
  * Deliberately not a `Stepper` with next/back: the steps here are not pages to navigate, they are a
  * description of one job, and none of them is skippable by tapping something else. The strip
  * therefore has no touch target of its own; it announces itself to TalkBack and nothing more.
+ *
+ * Since finding 267 the strip takes its chips from [MeasureGuide.strip]: a walkthrough shows the
+ * scan step alone, a measurement shows the two it asks for. Which chips exist is the most visible
+ * difference between the two modes — it survives colour blindness, sunlight and a gloved thumb.
  */
 @Composable
-internal fun StepStrip(current: MeasureStep, modifier: Modifier = Modifier) {
-    val steps = listOf(
-        R.string.ar_step_scan,
-        R.string.ar_step_points,
-        R.string.ar_step_finish,
-    )
+internal fun StepStrip(
+    chips: List<Pair<MeasureStep, StepMark>>,
+    modifier: Modifier = Modifier,
+) {
     val now = stringResource(R.string.step_now)
     val done = stringResource(R.string.step_done)
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        steps.forEachIndexed { index, label ->
-            val mark = measureStepMark(index, current)
-            val text = stringResource(label)
+        chips.forEach { (step, mark) ->
+            val text = stringResource(
+                when (step) {
+                    MeasureStep.SCAN -> R.string.ar_step_scan
+                    MeasureStep.POINTS -> R.string.ar_step_points
+                    MeasureStep.FINISH -> R.string.ar_step_finish
+                },
+            )
             val state = when (mark) {
                 StepMark.NOW -> now
                 StepMark.DONE -> done

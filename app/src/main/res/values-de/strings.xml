@@ -94,6 +94,18 @@
     <string name="ar_step_scan">1 Scannen</string>
     <string name="ar_step_points">2 Punkte setzen</string>
     <string name="ar_step_finish">3 Speichern</string>
+    <string name="mode_measure">Punkt für Punkt</string>
+    <string name="mode_capture">Rundgang 3D</string>
+    <string name="mode_measure_hint">Messung: Du setzt jeden Punkt selbst - dort sitzt später das Kabel.</string>
+    <string name="mode_capture_hint">Rundgang: Die App erfasst den Raum in 3D, du gehst nur.</string>
+    <string name="scan_legend">Violett = vom Scan erfasst</string>
+    <string name="scan_state_none">Noch nichts erfasst</string>
+    <string name="scan_state_growing">%1$d %% · %2$d k Dreiecke</string>
+    <string name="scan_state_full">Scan voll - es kommt nichts mehr dazu</string>
+    <string name="scan_state_behind">Telefon kommt nicht mit</string>
+    <string name="scan_state_unavailable">Kein Mesh-Scan auf diesem Telefon</string>
+    <string name="capture_walk">Geh langsam an den Wänden entlang. Was violett wird, ist aufgenommen.</string>
+    <string name="capture_no_points">Im Rundgang werden keine Punkte gesetzt. Zum Setzen und Speichern: „Punkt für Punkt“.</string>
     <string name="step_now">jetzt</string>
     <string name="step_done">erledigt</string>
     <string name="ar_guide_first">Tippe auf „Punkt hier setzen“ am ersten Ende der Strecke.</string>
@@ -118,8 +130,6 @@
     <string name="draft_save">Als Strecke speichern</string>
     <string name="draft_discard">Verwerfen</string>
     <string name="ar_torch">Lampe</string>
-    <string name="ar_scan">Raum scannen</string>
-    <string name="ar_stop_scan">Scan stoppen</string>
     <string name="ar_closed_loop">geschlossen</string>
     <string name="ar_confidence_weak">Schwächster Punkt %1$d %% - tippe ihn erneut an, um die Messung zu verbessern</string>
     <string name="ar_no_surface">Keine Fläche gefunden. Ziele auf Wand oder Boden.</string>

@@ -94,6 +94,18 @@
     <string name="ar_step_scan">1 Escanear</string>
     <string name="ar_step_points">2 Marcar puntos</string>
     <string name="ar_step_finish">3 Guardar</string>
+    <string name="mode_measure">Punto por punto</string>
+    <string name="mode_capture">Recorrido 3D</string>
+    <string name="mode_measure_hint">Medición: marcas cada punto tú mismo; ahí va luego el cable.</string>
+    <string name="mode_capture_hint">Recorrido: la app reconstruye la estancia en 3D, tú solo caminas.</string>
+    <string name="scan_legend">Violeta = capturado por el escaneo</string>
+    <string name="scan_state_none">Aún no hay nada capturado</string>
+    <string name="scan_state_growing">%1$d %% · %2$d k triángulos</string>
+    <string name="scan_state_full">Escaneo lleno: no se añade más</string>
+    <string name="scan_state_behind">El teléfono no da abasto</string>
+    <string name="scan_state_unavailable">Sin escaneo de malla en este teléfono</string>
+    <string name="capture_walk">Camina despacio junto a las paredes. Lo que se vuelve violeta está capturado.</string>
+    <string name="capture_no_points">Durante el recorrido no se marcan puntos. Para marcar y guardar: «Punto por punto».</string>
     <string name="step_now">ahora</string>
     <string name="step_done">hecho</string>
     <string name="ar_guide_first">Toca «Marcar punto aquí» en el primer extremo de la distancia.</string>
@@ -118,8 +130,6 @@
     <string name="draft_save">Guardar como tramo</string>
     <string name="draft_discard">Descartar</string>
     <string name="ar_torch">Linterna</string>
-    <string name="ar_scan">Escanear estancia</string>
-    <string name="ar_stop_scan">Detener escaneo</string>
     <string name="ar_closed_loop">cerrado</string>
     <string name="ar_confidence_weak">Punto más débil %1$d %%: vuelve a tocarlo para mejorar el tramo</string>
     <string name="ar_no_surface">No se ha encontrado superficie. Apunta a una pared o al suelo.</string>

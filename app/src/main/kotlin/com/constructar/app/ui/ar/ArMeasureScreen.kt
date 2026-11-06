@@ -361,7 +361,9 @@ fun ArMeasureScreen(
     }
 
     var spec by remember { mutableStateOf(ConduitPresets.all.first()) }
-    var showScanner by remember { mutableStateOf(true) }
+    // Which of the two jobs this screen is doing (finding 267). Measuring points is the default:
+    // it is what the app is bought for, and a walkthrough is an errand the operator decides on.
+    var mode by rememberSaveable { mutableStateOf(MeasureMode.MEASURE) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
 
     /**
@@ -447,9 +449,11 @@ fun ArMeasureScreen(
     LaunchedEffect(routeState.preview, routeState.nodeCount) {
         controller.syncLiveRoute()
     }
-    // Re-upload the room scan whenever the (300 ms-throttled) mesh changes.
-    LaunchedEffect(scanState.meshVersion, showScanner) {
-        controller.syncScanMesh(showScanner)
+    // The room overlay is a property of the mode, not of a toggle buried among the tools: it is on
+    // exactly in the walkthrough (finding 267). Re-uploaded whenever the (300 ms-throttled) mesh
+    // changes, and explicitly hidden when the mode changes back to measuring.
+    LaunchedEffect(scanState.meshVersion, mode) {
+        controller.syncScanMesh(mode.showsRoomOverlay)
     }
     // Committed runs are re-meshed when a new one is added (and at most once per second).
     LaunchedEffect(project.routes.size) {
@@ -526,25 +530,28 @@ fun ArMeasureScreen(
     // testable without a phone, which is the only way a rule about "the gauge is never replaced by
     // an instruction" stays true after the next edit.
     val guideState = GuideState(
+        mode = mode,
         nodeCount = routeState.nodeCount,
         canFinish = routeState.canFinish,
         closedLoop = routeState.closedLoop,
         coaching = guidanceText != null,
-        scannerOn = showScanner,
+        // The room pipeline is offered to the screen exactly in the walkthrough; in measuring
+        // mode there is no scan sentence and no gauge at all.
+        scannerOn = mode.showsRoomOverlay,
         scanReady = scanState.ready,
         meshVersion = scanState.meshVersion,
         hitBlockBudget = scanState.hitBlockBudget,
         droppedShare = scanState.droppedFraction,
     )
-    val guideStep = MeasureGuide.step(guideState)
+    val guideStep = MeasureGuide.currentStep(guideState)
     // Where the operator is, in the report's own words (finding 266): "the app crashed" is not a
     // bug report. One line per step change, and the crash file's header carries the last one.
     LaunchedEffect(guideStep) {
         Diagnostics.place(
             when (guideStep) {
-                MeasureStep.SCAN -> "ar-measure: scanning the room"
-                MeasureStep.POINTS -> "ar-measure: setting points"
-                MeasureStep.FINISH -> "ar-measure: run ready to save"
+                MeasureStep.SCAN -> "ar-measure: capture - walking the room"
+                MeasureStep.POINTS -> "ar-measure: points - setting points"
+                MeasureStep.FINISH -> "ar-measure: points - run ready to save"
             },
         )
     }
@@ -552,6 +559,7 @@ fun ArMeasureScreen(
     val secondPointText = stringResource(R.string.ar_guide_second)
     val distanceText = stringResource(R.string.ar_guide_distance, lengthText)
     val ringText = stringResource(R.string.ar_guide_ring, lengthText)
+    val captureWalkText = stringResource(R.string.capture_walk)
     val blockRunText = stringResource(R.string.ar_hint_run_needs, routeState.nodeCount)
     val blockRingText = stringResource(R.string.ar_hint_ring_needs, routeState.nodeCount)
     val guideRows = MeasureGuide.lines(guideState).mapNotNull { line ->
@@ -566,6 +574,7 @@ fun ArMeasureScreen(
             GuideLine.SECOND_POINT -> secondPointText
             GuideLine.DISTANCE -> distanceText
             GuideLine.RING -> ringText
+            GuideLine.CAPTURE_WALK -> captureWalkText
             GuideLine.BLOCK_RUN -> blockRunText
             GuideLine.BLOCK_RING -> blockRingText
         }
@@ -663,7 +672,7 @@ fun ArMeasureScreen(
                     },
                     onSceneReady = { scene, engine, materialLoader ->
                         controller.onSceneReady(scene, engine, materialLoader)
-                        controller.syncScanMesh(showScanner)
+                        controller.syncScanMesh(mode.showsRoomOverlay)
                     },
                     onSceneReleased = { controller.onSceneReleased() },
                 )
@@ -824,8 +833,16 @@ fun ArMeasureScreen(
                 // the numbers (finding 265): the report was that the app "made no sense", and a
                 // screen with three jobs and no statement of which one is current is exactly that.
                 StepStrip(
-                    current = guideStep,
+                    chips = MeasureGuide.strip(guideState),
                     modifier = Modifier.padding(top = 6.dp),
+                )
+                // The room's own gauge, pinned above the scrolling text and drawn only in a
+                // walkthrough (finding 267): whether anything is captured, in what colour, and how
+                // much of it. In measuring mode it draws nothing at all.
+                ScanGauge(
+                    state = MeasureGuide.scanLine(guideState),
+                    detailFraction = scanState.detailFraction,
+                    triangles = scanState.triangleCount,
                 )
 
                 // Every coaching line lives inside a budget of its own (finding 257): the
@@ -1001,61 +1018,92 @@ fun ArMeasureScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // The one action the operator presses most, first and above the fold (finding 257):
-            // with a gloved hand a precise tap in the middle of the screen is not a given, and on
-            // the device this button was the only one whose touch ever reached the controller.
-            GloveButton(
-                label = stringResource(R.string.ar_add_point),
-                icon = Icons.Default.Add,
-                onClick = {
-                    // Logged, because "nothing happens" was the whole report: the log now says
-                    // whether the tap arrived and what the hit test made of it (finding 256).
-                    Diagnostics.event("tap", "add point at reticle ${viewSize.width}x${viewSize.height}")
-                    controller.requestTap(
-                        viewSize.width / 2f,
-                        viewSize.height / 2f,
-                        viewSize.width,
-                        viewSize.height,
-                    )
+            // Which job this is, before any of the controls that belong to one of them (finding
+            // 267). It has to be the first thing in the sheet: every button below it means
+            // something different depending on the answer.
+            ModePicker(
+                mode = mode,
+                onSelect = { chosen ->
+                    if (chosen != mode) {
+                        Diagnostics.event("ui", "mode ${chosen.name}")
+                        mode = chosen
+                    }
                 },
-                modifier = Modifier.fillMaxWidth(),
             )
-
-            val closeLoopLabel = stringResource(R.string.ar_close_loop)
-            val finishLabel = stringResource(R.string.ar_finish)
-            ArActionRow(
-                columns = pairColumns,
-                actions = listOf(
-                    ArAction(
-                        label = closeLoopLabel,
-                        icon = Icons.Default.Loop,
-                        enabled = routeState.nodeCount >= ActionGating.NODES_FOR_A_LOOP,
-                        onClick = { controller.routeSession.closeLoop() },
-                    ),
-                    ArAction(
-                        label = finishLabel,
-                        icon = Icons.Default.Save,
-                        tone = ActionTone.PRIMARY,
-                        enabled = routeState.canFinish,
-                        onClick = commitRun,
-                    ),
+            Text(
+                text = stringResource(
+                    if (mode.setsPoints) R.string.mode_measure_hint else R.string.mode_capture_hint,
                 ),
+                style = MaterialTheme.typography.bodySmall,
+                color = HudStyle.hint,
             )
-            // A greyed-out button that says nothing reads as a broken button - that is exactly how
-            // the first device run reported it (finding 258). One sentence, about the button the
-            // operator is reaching for, with the count in it: "Needs 3 points" without a "you have
-            // 2" is a riddle he cannot answer from the glass (finding 265).
-            blockRow?.let { (_, text) ->
+            if (!mode.setsPoints) {
+                // A walkthrough has no point button, and the sentence says where the points went
+                // instead of leaving the operator to discover that tapping does nothing.
                 Text(
-                    text = text,
+                    text = stringResource(R.string.capture_no_points),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = HudStyle.hint,
+                    color = HudStyle.text,
                 )
             }
 
+            // The one action the operator presses most, first and above the fold (finding 257):
+            // with a gloved hand a precise tap in the middle of the screen is not a given, and on
+            // the device this button was the only one whose touch ever reached the controller.
+            // It exists in measuring mode only: in a walkthrough the operator walks (finding 267).
+            if (mode.setsPoints) {
+                GloveButton(
+                    label = stringResource(R.string.ar_add_point),
+                    icon = Icons.Default.Add,
+                    onClick = {
+                        // Logged, because "nothing happens" was the whole report: the log now says
+                        // whether the tap arrived and what the hit test made of it (finding 256).
+                        Diagnostics.event("tap", "add point at reticle ${viewSize.width}x${viewSize.height}")
+                        controller.requestTap(
+                            viewSize.width / 2f,
+                            viewSize.height / 2f,
+                            viewSize.width,
+                            viewSize.height,
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                val closeLoopLabel = stringResource(R.string.ar_close_loop)
+                val finishLabel = stringResource(R.string.ar_finish)
+                ArActionRow(
+                    columns = pairColumns,
+                    actions = listOf(
+                        ArAction(
+                            label = closeLoopLabel,
+                            icon = Icons.Default.Loop,
+                            enabled = routeState.nodeCount >= ActionGating.NODES_FOR_A_LOOP,
+                            onClick = { controller.routeSession.closeLoop() },
+                        ),
+                        ArAction(
+                            label = finishLabel,
+                            icon = Icons.Default.Save,
+                            tone = ActionTone.PRIMARY,
+                            enabled = routeState.canFinish,
+                            onClick = commitRun,
+                        ),
+                    ),
+                )
+                // A greyed-out button that says nothing reads as a broken button - that is exactly how
+                // the first device run reported it (finding 258). One sentence, about the button the
+                // operator is reaching for, with the count in it: "Needs 3 points" without a "you have
+                // 2" is a riddle he cannot answer from the glass (finding 265).
+                blockRow?.let { (_, text) ->
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = HudStyle.hint,
+                    )
+                }
+                }
+
             val undoLabel = stringResource(R.string.ar_undo)
             val torchLabel = stringResource(R.string.ar_torch)
-            val scanLabel = stringResource(if (showScanner) R.string.ar_stop_scan else R.string.ar_scan)
             val toolActions = mutableListOf(
                 ArAction(
                     label = undoLabel,
@@ -1075,32 +1123,29 @@ fun ArMeasureScreen(
                     onClick = { controller.toggleTorch() },
                 )
             }
-            toolActions += ArAction(
-                label = scanLabel,
-                icon = Icons.Default.Add,
-                selected = showScanner,
-                onClick = { showScanner = !showScanner },
-            )
             ArActionRow(columns = actionColumns, actions = toolActions)
 
             // One conduit spec out of five: a group of radio buttons, so TalkBack says which one
             // is chosen instead of reading five identical-looking buttons (finding 211). Lower down
             // than the two measurements buttons, because the spec is chosen once per run and the
-            // point is tapped every metre.
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.selectableGroup(),
-            ) {
-                ConduitPresets.all.forEach { preset ->
-                    SpecChip(
-                        spec = preset,
-                        selected = preset == spec,
-                        onClick = {
-                            spec = preset
-                            controller.setSpec(preset)
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
+            // point is tapped every metre. Measuring mode only: a cable preset means nothing in a
+            // walkthrough, and a control that means nothing is a control that confuses (finding 267).
+            if (mode.setsPoints) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.selectableGroup(),
+                ) {
+                    ConduitPresets.all.forEach { preset ->
+                        SpecChip(
+                            spec = preset,
+                            selected = preset == spec,
+                            onClick = {
+                                spec = preset
+                                controller.setSpec(preset)
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
 

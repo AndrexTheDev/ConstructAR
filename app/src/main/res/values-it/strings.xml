@@ -94,6 +94,18 @@
     <string name="ar_step_scan">1 Scansiona</string>
     <string name="ar_step_points">2 Segna i punti</string>
     <string name="ar_step_finish">3 Salva</string>
+    <string name="mode_measure">Punto per punto</string>
+    <string name="mode_capture">Sopralluogo 3D</string>
+    <string name="mode_measure_hint">Misura: segni ogni punto tu stesso; lì passerà il cavo.</string>
+    <string name="mode_capture_hint">Sopralluogo: l’app ricostruisce il locale in 3D, tu devi solo camminare.</string>
+    <string name="scan_legend">Viola = acquisito dalla scansione</string>
+    <string name="scan_state_none">Niente di acquisito per ora</string>
+    <string name="scan_state_growing">%1$d %% · %2$d k triangoli</string>
+    <string name="scan_state_full">Scansione piena: non si aggiunge altro</string>
+    <string name="scan_state_behind">Il telefono non sta al passo</string>
+    <string name="scan_state_unavailable">Nessuna scansione mesh su questo telefono</string>
+    <string name="capture_walk">Cammina piano lungo le pareti. Ciò che diventa viola è acquisito.</string>
+    <string name="capture_no_points">Durante il sopralluogo non si segnano punti. Per segnare e salvare: «Punto per punto».</string>
     <string name="step_now">ora</string>
     <string name="step_done">fatto</string>
     <string name="ar_guide_first">Tocca «Segna il punto qui» al primo estremo della distanza.</string>
@@ -118,8 +130,6 @@
     <string name="draft_save">Salva come tratta</string>
     <string name="draft_discard">Scarta</string>
     <string name="ar_torch">Torcia</string>
-    <string name="ar_scan">Scansiona locale</string>
-    <string name="ar_stop_scan">Ferma scansione</string>
     <string name="ar_closed_loop">chiuso</string>
     <string name="ar_confidence_weak">Punto più debole %1$d %%: toccalo di nuovo per migliorare la tratta</string>
     <string name="ar_no_surface">Nessuna superficie trovata. Inquadra una parete o il pavimento.</string>

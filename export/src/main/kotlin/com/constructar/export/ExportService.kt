@@ -231,7 +231,10 @@ class ExportService(
             }
             if (request.includeScanGeometry) {
                 request.scanMesh?.takeIf { !it.isEmpty }?.let {
-                    add(GlbWriter.GlbPart("Room scan", it, 0xFF8A8F98.toInt()))
+                    // The same violet the operator walked through on the glass (finding 267):
+                    // the room in the file has to be recognisable as the room he captured, not as
+                    // a grey lump that happens to be in the same place.
+                    add(GlbWriter.GlbPart("Room scan", it, 0xFFA25BFF.toInt()))
                 }
             }
         }
