@@ -189,6 +189,7 @@ class PoseGraphCloserTest {
         val closed = closer.confirm(nowMillis = 1_000L) as ClosureState.Closed
         val correction = requireNotNull(closed.correction) { "a converged run has a report" }
         assertEquals(2, correction.nodes)
+        assertEquals("only the second node moved", 1, correction.movedNodes)
         assertEquals(0.25f, correction.maxShiftMetres, 1e-4f)
         assertTrue("the report has to say that something moved", correction.moved)
     }

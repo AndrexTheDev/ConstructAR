@@ -32,6 +32,7 @@ class CorrectionReportTest {
         val report = CorrectionReport.of(originals) { index -> originals.getOrNull(index) }
 
         assertEquals(3, report.nodes)
+        assertEquals(0, report.movedNodes)
         assertEquals(0f, report.maxShiftMetres, 1e-6f)
         assertFalse(report.moved)
     }
@@ -43,6 +44,7 @@ class CorrectionReportTest {
         val report = CorrectionReport.of(optimised) { index -> originals.getOrNull(index) }
 
         assertEquals(3, report.nodes)
+        assertEquals("all three moved past the threshold", 3, report.movedNodes)
         assertEquals(0.3f, report.maxShiftMetres, 1e-4f)
         // (0 + 0.1 + 0.3) / 3 - the mean is what separates "one node jumped" from "everything drifted".
         assertEquals(0.1333f, report.meanShiftMetres, 1e-3f)
@@ -56,6 +58,7 @@ class CorrectionReportTest {
         val report = CorrectionReport.of(optimised) { index -> originals.getOrNull(index) }
 
         assertEquals("the middle node has no before, so it has no shift", 2, report.nodes)
+        assertEquals("and cannot be counted as having moved", 1, report.movedNodes)
         assertEquals(0.2f, report.maxShiftMetres, 1e-4f)
     }
 
@@ -84,5 +87,31 @@ class CorrectionReportTest {
         val report = CorrectionReport.of(listOf(poseAt(0f))) { null }
         assertEquals(0, report.nodes)
         assertFalse(report.moved)
+    }
+
+    @Test
+    fun `one displaced node is one node, not the room`() {
+        // Ten nodes, one of them five hundred millimetres out. The maximum cannot tell this apart
+        // from ten nodes moving five hundred millimetres - the count can (finding 249).
+        val originals = List(10) { poseAt(0f) }
+        val optimised = originals.toMutableList().also { it[7] = poseAt(0.5f) }
+        val report = CorrectionReport.of(optimised) { index -> originals.getOrNull(index) }
+
+        assertEquals(10, report.nodes)
+        assertEquals(1, report.movedNodes)
+        assertEquals(0.5f, report.maxShiftMetres, 1e-4f)
+        assertEquals(0.05f, report.meanShiftMetres, 1e-4f)
+    }
+
+    @Test
+    fun `the count agrees with the threshold, not with the mean`() {
+        // Shifts of 0.0005, 0.0015 and 0.2 m: two nodes are over the millimetre, and the mean
+        // (0.067 m) says nothing about how many.
+        val originals = listOf(poseAt(0f), poseAt(0f), poseAt(0f))
+        val optimised = listOf(poseAt(0.0005f), poseAt(0.0015f), poseAt(0.2f))
+        val report = CorrectionReport.of(optimised) { index -> originals.getOrNull(index) }
+
+        assertEquals(3, report.nodes)
+        assertEquals(2, report.movedNodes)
     }
 }

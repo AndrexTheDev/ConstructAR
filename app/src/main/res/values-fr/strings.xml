@@ -86,7 +86,7 @@
     <string name="loop_none">Aucune boucle trouvée.</string>
     <string name="loop_closed">Boucle fermée : erreur résiduelle %1$s → %2$s.</string>
     <string name="loop_failed">Le graphe n’a pas pu être optimisé.</string>
-    <string name="loop_shift">Graphe de poses déplacé : %1$d nœuds, jusqu’à %2$s.</string>
+    <string name="loop_shift">Déplacés : %1$d nœuds sur %2$d, jusqu’à %3$s.</string>
     <string name="loop_unfinished">L’optimiseur a épuisé ses itérations : l’arête est posée, mais il n’y a pas de résultat. Ces chiffres sont un instantané, pas une correction.</string>
     <string name="ar_add_point">Ajouter un point au centre</string>
     <string name="ar_undo">Annuler</string>

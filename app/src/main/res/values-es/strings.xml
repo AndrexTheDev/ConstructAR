@@ -86,7 +86,7 @@
     <string name="loop_none">No se ha encontrado ningún bucle.</string>
     <string name="loop_closed">Bucle cerrado: error residual %1$s → %2$s.</string>
     <string name="loop_failed">No se pudo optimizar el grafo.</string>
-    <string name="loop_shift">Grafo de poses movido: %1$d nodos, hasta %2$s.</string>
+    <string name="loop_shift">Movidos %1$d de %2$d nodos, hasta %3$s.</string>
     <string name="loop_unfinished">El optimizador agotó sus iteraciones: la arista está puesta, pero no hay resultado. Estas cifras son un estado intermedio, no una corrección.</string>
     <string name="ar_add_point">Añadir punto en el centro</string>
     <string name="ar_undo">Deshacer</string>

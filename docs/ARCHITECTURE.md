@@ -334,7 +334,8 @@ revisit, `ClosurePolicy` decides whether and which one to ask about, and a confi
 the edge at 100x the odometry weight and optimises on the worker. The corrected poses are
 reported, not written back - a run's metres were measured with taps, and finding 217's rule
 applies to the graph too. What is reported is a `CorrectionReport` (`:core`): the nodes the
-optimiser and the app both know, the largest and the mean shift in metres (finding 246). A run
+optimiser and the app both know, how many of them moved, the largest and the mean shift in metres
+(findings 246, 249). A run
 that stopped without converging has no report at all - `ClosureState.Closed.correction` is null -
 because its poses are a snapshot halfway down the cost curve (finding 247).
 

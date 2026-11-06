@@ -101,12 +101,15 @@ fun LoopClosureDialog(
                                 )
                                 // How far the graph actually moved, because a residual that fell
                                 // proves the optimiser ran and says nothing about what it did to
-                                // the room (finding 246). Silence when nothing moved: a "0,000 m"
-                                // line teaches the operator that closures are theatre.
+                                // the room (finding 246) - and how many nodes it moved, because
+                                // one bad keyframe and a redistributed loop have the same maximum
+                                // (finding 249). Silence when nothing moved: a "0,000 m" line
+                                // teaches the operator that closures are theatre.
                                 if (correction.moved) {
                                     Text(
                                         text = stringResource(
                                             R.string.loop_shift,
+                                            correction.movedNodes,
                                             correction.nodes,
                                             shownLengthWithUnit(correction.maxShiftMetres),
                                         ),
