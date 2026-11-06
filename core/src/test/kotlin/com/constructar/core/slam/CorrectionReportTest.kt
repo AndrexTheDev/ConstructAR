@@ -44,7 +44,7 @@ class CorrectionReportTest {
         val report = CorrectionReport.of(optimised) { index -> originals.getOrNull(index) }
 
         assertEquals(3, report.nodes)
-        assertEquals("all three moved past the threshold", 3, report.movedNodes)
+        assertEquals("the first node stayed put, the other two moved", 2, report.movedNodes)
         assertEquals(0.3f, report.maxShiftMetres, 1e-4f)
         // (0 + 0.1 + 0.3) / 3 - the mean is what separates "one node jumped" from "everything drifted".
         assertEquals(0.1333f, report.meanShiftMetres, 1e-3f)
