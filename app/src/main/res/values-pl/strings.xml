@@ -87,6 +87,7 @@
     <string name="loop_closed">Pętla zamknięta: błąd resztkowy %1$s → %2$s.</string>
     <string name="loop_failed">Nie udało się zoptymalizować grafu.</string>
     <string name="loop_shift">Graf pozy przesunięty: %1$d węzły, do %2$s.</string>
+    <string name="loop_unfinished">Optymalizator wykorzystał limit iteracji: krawędź jest dodana, ale nie ma wyniku. Te liczby to stan pośredni, nie korekta.</string>
     <string name="ar_add_point">Dodaj punkt na środku</string>
     <string name="ar_undo">Cofnij</string>
     <string name="ar_close_loop">Zamknij</string>

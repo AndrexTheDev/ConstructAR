@@ -68,31 +68,54 @@ fun LoopClosureDialog(
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                     )
-                    is ClosureState.Closed -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            text = stringResource(
-                                R.string.loop_closed,
-                                NumberText.digits(state.optimisation.initialCost, 2, LocalDecimalMark.current),
-                                NumberText.digits(state.optimisation.finalCost, 2, LocalDecimalMark.current),
-                            ),
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                        )
-                        // How far the graph actually moved, because a residual that fell proves the
-                        // optimiser ran and says nothing about what it did to the room (finding
-                        // 246). Silence when nothing moved: a "0,000 m" line teaches the operator
-                        // that closures are theatre.
-                        if (state.correction.moved) {
-                            Text(
-                                text = stringResource(
-                                    R.string.loop_shift,
-                                    state.correction.nodes,
-                                    shownLengthWithUnit(state.correction.maxShiftMetres),
-                                ),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = SiteColors.accent,
-                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                            )
+                    is ClosureState.Closed -> {
+                        val correction = state.correction
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            if (correction == null) {
+                                // The solver stopped early. Saying "loop closed" here would present
+                                // a half-descent as a result - the residual is still moving, so the
+                                // numbers describe an iteration, not the room (finding 247).
+                                Text(
+                                    text = stringResource(R.string.loop_unfinished),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = SiteColors.danger,
+                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                                )
+                            } else {
+                                Text(
+                                    text = stringResource(
+                                        R.string.loop_closed,
+                                        NumberText.digits(
+                                            state.optimisation.initialCost,
+                                            2,
+                                            LocalDecimalMark.current,
+                                        ),
+                                        NumberText.digits(
+                                            state.optimisation.finalCost,
+                                            2,
+                                            LocalDecimalMark.current,
+                                        ),
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                                )
+                                // How far the graph actually moved, because a residual that fell
+                                // proves the optimiser ran and says nothing about what it did to
+                                // the room (finding 246). Silence when nothing moved: a "0,000 m"
+                                // line teaches the operator that closures are theatre.
+                                if (correction.moved) {
+                                    Text(
+                                        text = stringResource(
+                                            R.string.loop_shift,
+                                            correction.nodes,
+                                            shownLengthWithUnit(correction.maxShiftMetres),
+                                        ),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = SiteColors.accent,
+                                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                                    )
+                                }
+                            }
                         }
                     }
                     ClosureState.Failed -> Text(

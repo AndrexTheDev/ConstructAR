@@ -240,7 +240,9 @@ C++ thresholds (twenty keyframes apart, 0.35 m, half a radian) remain the only d
 through `ClosurePolicy` in `:core` (a room's worth of nodes before the question is asked, one
 question at a time, a refusal remembered for that pair and for a minute), and puts **one**
 question on screen. A confirmation adds the closure edge at 100x the odometry weight and runs
-`optimizePoseGraph` on the worker, which reports the residual before and after. Nothing is
+`optimizePoseGraph` on the worker, which reports the residual before and after, how far the poses
+moved, and - when the solver hit its iteration budget - that there is no result rather than a
+number (finding 247). Nothing is
 closed without that confirmation: a false closure folds a room in half and looks fine afterwards.
 
 Two things stay open, and the code says so: the closure is **operator-asserted, not

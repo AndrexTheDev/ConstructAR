@@ -87,6 +87,7 @@
     <string name="loop_closed">Ciclo chiuso: errore residuo %1$s → %2$s.</string>
     <string name="loop_failed">Non è stato possibile ottimizzare il grafo.</string>
     <string name="loop_shift">Grafo delle pose spostato: %1$d nodi, fino a %2$s.</string>
+    <string name="loop_unfinished">L’ottimizzatore ha esaurito le iterazioni: l’arco è inserito, ma non c’è un risultato. Questi numeri sono uno stato intermedio, non una correzione.</string>
     <string name="ar_add_point">Aggiungi punto al centro</string>
     <string name="ar_undo">Annulla</string>
     <string name="ar_close_loop">Chiudi</string>
