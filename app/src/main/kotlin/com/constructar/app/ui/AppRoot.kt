@@ -32,6 +32,7 @@ import androidx.navigation.compose.rememberNavController
 import com.constructar.app.BuildConfig
 import com.constructar.app.ProjectViewModel
 import com.constructar.app.R
+import com.constructar.app.diagnostics.Diagnostics
 import com.constructar.app.UiMessage
 import com.constructar.app.ui.ar.ArMeasureScreen
 import androidx.compose.runtime.CompositionLocalProvider
@@ -49,6 +50,24 @@ private object Routes {
     const val FIELD_BOOK = "fieldbook"
     const val PAYWALL = "paywall"
     const val HELP = "help"
+}
+
+/**
+ * Leaves this destination when the room it shows has gone - and only while it is still on screen.
+ *
+ * `closeProject()` clears the room *before* the arrow pops, so this destination recomposes into
+ * "no room" during its own exit animation. Popping unconditionally there removed the list as well
+ * and left an empty NavHost: a black window, and no back gesture that could leave it (finding 259).
+ * [NavGuard] is the comparison, kept outside Compose so it can be tested without a device.
+ */
+@Composable
+private fun LeaveWhenRoomIsGone(navController: NavHostController, route: String) {
+    LaunchedEffect(Unit) {
+        if (NavGuard.shouldLeave(navController.currentDestination?.route, route)) {
+            Diagnostics.event("nav", "leaving " + route + ": the room is gone")
+            navController.popBackStack()
+        }
+    }
 }
 
 /**
@@ -80,6 +99,17 @@ fun AppRoot(viewModel: ProjectViewModel) {
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Where the app went, in the file the tester sends back (finding 259). The black screen had
+    // no trace at all: the last thing a report could say was "I pressed back". A destination list
+    // turns that into a sequence - and a sequence that stops after `home` says the stack emptied.
+    DisposableEffect(navController) {
+        val listener = NavController.OnDestinationChangedListener { _, destination, _ ->
+            Diagnostics.event("nav", "destination " + (destination.route ?: "?"))
+        }
+        navController.addOnDestinationChangedListener(listener)
+        onDispose { navController.removeOnDestinationChangedListener(listener) }
     }
 
     val errorText = when (state.lastError) {
@@ -189,7 +219,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                                 modifier = Modifier.fillMaxSize(),
                                 color = SiteColors.danger,
                             )
-                            LaunchedEffect(Unit) { navController.popBackStack() }
+                            LeaveWhenRoomIsGone(navController, Routes.PROJECT)
                         } else {
                             ProjectScreen(
                                 project = project,
@@ -233,7 +263,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                                 modifier = Modifier.fillMaxSize(),
                                 color = SiteColors.danger,
                             )
-                            LaunchedEffect(Unit) { navController.popBackStack() }
+                            LeaveWhenRoomIsGone(navController, Routes.MEASURE)
                         } else {
                             // Read once per visit to the viewfinder: a draft only matters to the
                             // screen that can offer it back.

@@ -298,6 +298,47 @@ def check_no_language_was_forgotten() -> None:
             add(f"values-{lang}/strings.xml", f"{share:.0%} of the strings are identical to English")
 
 
+def check_locale_config() -> None:
+    """
+    Can the operator choose a language at all? (finding 260)
+
+    The first device report was "the APK is only in English although there are several languages".
+    Whether that is a packaging defect or a phone whose system language is English, the app had no
+    answer: Android 13+ only offers the per-app "App language" page to apps that declare
+    `android:localeConfig`, and this app declared nothing - so a phone in a seventh language could
+    only ever show English, with six translations sitting unused inside the APK.
+
+    Three lists have to agree: the values-* folders that exist, the `localeFilters` the build
+    packages, and the locales this file declares to the system.
+    """
+    manifest = (ROOT / "app" / "src" / "main" / "AndroidManifest.xml").read_text(encoding="utf-8")
+    if "android:localeConfig=" not in manifest:
+        add("AndroidManifest.xml", "no android:localeConfig - Android 13+ cannot offer a per-app language")
+
+    path = RES / "xml" / "locales_config.xml"
+    if not path.exists():
+        add("app/src/main/res/xml/locales_config.xml", "missing")
+        return
+    declared = re.findall(r'<locale\s+android:name="([^"]+)"', path.read_text(encoding="utf-8"))
+
+    gradle = (ROOT / "app" / "build.gradle.kts").read_text(encoding="utf-8")
+    packaged_match = re.search(r"localeFilters \+= listOf\(([^)]*)\)", gradle)
+    if packaged_match is None:
+        add("app/build.gradle.kts", "no localeFilters list - the packaged locales cannot be read")
+        return
+    packaged = re.findall(r'"([^"]+)"', packaged_match.group(1))
+
+    shipped = ["en", *LOCALES]
+    for code in shipped:
+        if code not in declared:
+            add("app/src/main/res/xml/locales_config.xml", f"'{code}' is translated but not declared")
+        if code not in packaged:
+            add("app/build.gradle.kts", f"'{code}' has a values folder but is not packaged")
+    for code in declared:
+        if code not in shipped:
+            add("app/src/main/res/xml/locales_config.xml", f"'{code}' is declared but no values-{code} folder exists")
+
+
 def main() -> int:
     check_app()
     check_site()
@@ -305,6 +346,7 @@ def main() -> int:
     check_plural_shortcuts()
     check_apostrophes()
     check_no_language_was_forgotten()
+    check_locale_config()
 
     if findings:
         print(f"i18n_audit: {len(findings)} finding(s)\n")

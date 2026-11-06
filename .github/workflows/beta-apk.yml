@@ -136,6 +136,40 @@ jobs:
           ls -l "$out"
           echo "APK=$out" >> "$GITHUB_ENV"
 
+      - name: Say which languages the APK actually carries
+        run: |
+          set -uo pipefail
+          # "The APK is only in English although the app has six languages" was the first device
+          # report nobody could answer from here (finding 260). The APK can: its resources are
+          # dumped and the six locales are looked for, so the next build either proves they are
+          # packaged or fails and says which one is missing.
+          AAPT2=$(ls -1 "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -n 1 || true)
+          if [ -z "${AAPT2:-}" ]; then
+            echo "::warning title=no aapt2::the packaged locales could not be read - no build-tools aapt2 on this runner"
+            exit 0
+          fi
+          "$AAPT2" dump resources "$APK" > /tmp/apk-resources.txt 2>&1 || true
+          echo "--- first lines of the resource dump"
+          head -n 20 /tmp/apk-resources.txt || true
+          found=$(grep -oE '\(([a-z]{2,3})(-[A-Za-z]{2,4})?\)' /tmp/apk-resources.txt | tr -d '()' | sort -u | tr '\n' ' ')
+          echo "configs found: ${found:-none}"
+          if [ -z "${found}" ]; then
+            echo "::warning title=packaged locales::aapt2 printed no config lines, so the six languages could not be confirmed"
+            exit 0
+          fi
+          missing=""
+          for loc in de es fr it pl; do
+            case " ${found} " in
+              *" ${loc} "*) ;;
+              *) missing="${missing} ${loc}" ;;
+            esac
+          done
+          if [ -n "${missing}" ]; then
+            echo "::error title=packaged locales::missing:${missing} (found: ${found})"
+            exit 1
+          fi
+          echo "::notice title=packaged locales::the APK carries ${found}"
+
       - uses: actions/upload-artifact@v4
         with:
           name: constructar-beta-apk
