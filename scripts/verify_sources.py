@@ -1819,6 +1819,10 @@ def check_the_run_row_names_its_run() -> None:
         add(screen, "the run row no longer shows the run's own name (finding 278)")
     if "run.label" not in screen_text:
         add(screen, "the delete confirmation no longer names the run it destroys (finding 278)")
+    if "R.string.run_delete, identity" not in screen_text:
+        add(screen, "the row's delete button no longer names the run - four rows would announce "
+                    "four identical buttons, which is the same defect as four identical rows "
+                    "(finding 278)")
 
 
 def check_csv_headers_name_their_cells() -> None:

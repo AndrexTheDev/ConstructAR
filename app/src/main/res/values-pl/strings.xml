@@ -346,7 +346,7 @@
     <string name="licences_intro">Ta aplikacja opiera się na tych komponentach open source. Ich informacje o prawach autorskich są tu powtórzone, zgodnie z wymogami licencji.</string>
     <string name="help_licence_title">Licencja</string>
     <string name="run_detail">%1$s · %2$s</string>
-    <string name="run_delete">Usuń trasę</string>
+    <string name="run_delete">Usuń trasę: %1$s</string>
     <string name="run_delete_title">Usunąć tę trasę?</string>
     <string name="run_delete_body">%1$s, %2$s. Znika z listy materiałów, z protokołu i z modelu 3D. Nie da się jej przywrócić.</string>
     <string name="run_recovered">Odzyskana po przerwaniu - długości i kształtki są dokładne, pozycja 3D nie</string>

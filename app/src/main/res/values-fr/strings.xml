@@ -340,7 +340,7 @@
     <string name="licences_intro">Cette application repose sur ces composants open source. Leurs mentions de copyright sont reproduites ici, comme leurs licences l’exigent.</string>
     <string name="help_licence_title">Licence</string>
     <string name="run_detail">%1$s · %2$s</string>
-    <string name="run_delete">Supprimer le tracé</string>
+    <string name="run_delete">Supprimer le tracé : %1$s</string>
     <string name="run_delete_title">Supprimer ce tracé ?</string>
     <string name="run_delete_body">%1$s, %2$s. Il disparaît de la liste de matériel, du protocole et du modèle 3D. Rien ne le ramène.</string>
     <string name="run_recovered">Récupéré après une interruption : longueurs et raccords sont exacts, la position 3D non</string>

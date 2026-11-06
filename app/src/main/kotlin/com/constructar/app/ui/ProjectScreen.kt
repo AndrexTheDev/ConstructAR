@@ -892,7 +892,10 @@ private fun RouteRow(
         IconButton(onClick = onDelete, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.Default.Delete,
-                contentDescription = stringResource(R.string.run_delete),
+                // The button is its own element for a screen reader, so it says *which* run it
+                // deletes: four rows with four identical "Delete run" buttons was the same defect
+                // one layer down (finding 278). The name is the one the protocol prints.
+                contentDescription = stringResource(R.string.run_delete, identity),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
