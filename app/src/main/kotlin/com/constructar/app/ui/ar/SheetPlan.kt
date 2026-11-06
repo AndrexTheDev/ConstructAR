@@ -74,6 +74,29 @@ internal object SheetPlan {
         savedLabel != null && nodeCount == 0
 
     /**
+     * Whether a tap on the AR surface may place a point (finding 273).
+     *
+     * The walkthrough's own sentence says *"no points are set during a walkthrough"* — and the tap
+     * surface never asked which mode it was in, so a tap on a wall during a walkthrough **did** add a
+     * node to the parked run. The sheet said one thing and the glass did another, which is the one
+     * thing this screen cannot afford: an operator who taps mid-walkthrough sees a dot appear in a
+     * run he thought was finished.
+     */
+    fun tapPlacesPoint(mode: MeasureMode): Boolean = mode.setsPoints
+
+    /**
+     * Whether the drawn run follows the reticle (finding 273).
+     *
+     * The rubber band is the point of measuring — it is the number and the geometry of the segment
+     * being decided (finding 270). In a walkthrough there is no segment being decided, so the run
+     * used to swing towards whatever the camera was pointed at while the operator walked the room:
+     * a *measured* line that changed shape with the reticle. It is the same question as
+     * [tapPlacesPoint] asked about the drawing instead of the tap, and it has to give the same
+     * answer.
+     */
+    fun runFollowsReticle(mode: MeasureMode): Boolean = mode.setsPoints
+
+    /**
      * Whether the rare tools are open. Closed on entry, and not remembered across entries: a
      * drawer that reopens itself next session is a drawer the operator has to close again.
      */

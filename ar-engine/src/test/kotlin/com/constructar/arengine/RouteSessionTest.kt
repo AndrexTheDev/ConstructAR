@@ -678,4 +678,28 @@ class RouteSessionTest {
             session.state.value.warning,
         )
     }
+
+    @Test
+    fun `the preview reaches the reticle without waiting for another mutation`() {
+        // Finding 273: `setLivePoint` marked the preview dirty and then published only the
+        // distance, and the one place that rebuilds on that flag (`recompute`) was never called
+        // from here. The drawn tube therefore refreshed only when some unrelated mutation arrived -
+        // an anchor drifting two centimetres, a spec change, an undo. The rubber band this whole
+        // preview exists for lagged behind the reticle, and on a still phone it did not move.
+        val session = RouteSession(FakeAnchorFactory())
+        // Bound once: a repeated `preview!!` is three warnings, and this module builds with
+        // `allWarningsAsErrors`.
+        fun drawnLength(): Float = requireNotNull(session.state.value.preview).path.totalLengthMeters
+
+        session.addNode(hit(0f, 0f, 0f))
+        session.addNode(hit(2f, 0f, 0f))
+        assertEquals("the run itself", 2f, drawnLength(), 0.05f)
+
+        session.setLivePoint(hit(5f, 0f, 0f))
+        assertEquals("the drawn segment has to reach the reticle at once", 5f, drawnLength(), 0.05f)
+
+        // Letting go (a walkthrough, or a frame with no surface) takes the segment back with it.
+        session.setLivePoint(null)
+        assertEquals("and lets go of it again", 2f, drawnLength(), 0.05f)
+    }
 }

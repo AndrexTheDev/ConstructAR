@@ -460,10 +460,13 @@ fun ArMeasureScreen(
     var tapAt by remember { mutableStateOf(Offset.Zero) }
     val haptics = LocalHapticFeedback.current
     val addPoint: (Offset?) -> Unit = { touched ->
-        // Before the first layout there is no pixel to sample and no frame to sample it from. A
-        // request for (0,0) of a 0 × 0 view is a division waiting to happen, and a ring drawn for
-        // a tap that cannot resolve anything would be the exact lie this finding removes.
-        if (viewSize.width <= 0 || viewSize.height <= 0) {
+        // A walkthrough sets no points - and until finding 273 it did: the tap surface never asked
+        // which mode it was in, so a tap on a wall during a walkthrough added a node to the parked
+        // run while the sheet's own sentence said that cannot happen. No ring either, because the
+        // ring is the confirmation of a point that landed.
+        if (!SheetPlan.tapPlacesPoint(mode)) {
+            Diagnostics.event("tap", "ignored: a walkthrough sets no points")
+        } else if (viewSize.width <= 0 || viewSize.height <= 0) {
             Diagnostics.event("tap", "ignored: the AR view has no size yet")
         } else {
             val x = touched?.x ?: (viewSize.width / 2f)
@@ -552,6 +555,12 @@ fun ArMeasureScreen(
     // - and the key becomes `null` when the run is finished, which removes the mesh.
     LaunchedEffect(routeState.preview, routeState.nodeCount) {
         controller.syncLiveRoute()
+    }
+    // ...but only while a run is being measured (finding 273). In a walkthrough the recorded run
+    // keeps the shape it was measured with, which is the whole difference between "a line I
+    // measured" and "a line that follows my camera".
+    LaunchedEffect(mode) {
+        controller.setFollowReticle(SheetPlan.runFollowsReticle(mode))
     }
     // The room overlay is a property of the mode, not of a toggle buried among the tools: it is on
     // exactly in the walkthrough (finding 267). Re-uploaded whenever the (300 ms-throttled) mesh
@@ -823,12 +832,18 @@ fun ArMeasureScreen(
                         .fillMaxSize()
                         .semantics {
                             contentDescription = tapHint
-                            onClick(label = tapAction) {
-                                // The accessibility action has no finger and therefore no point on
-                                // the wall: it asks for the reticle, which is where a screen-reader
-                                // user is aiming anyway (finding 211).
-                                addPoint(null)
-                                true
+                            // The action exists only where it can keep its promise (finding 273):
+                            // a walkthrough sets no points, so offering "set the point" there
+                            // would be an announced action that does nothing. TalkBack reads the
+                            // surface, finds no action, and the sheet's own sentence says why.
+                            if (SheetPlan.tapPlacesPoint(mode)) {
+                                onClick(label = tapAction) {
+                                    // The action has no finger and therefore no point on the
+                                    // wall: it asks for the reticle, which is where a screen-reader
+                                    // user is aiming anyway (finding 211).
+                                    addPoint(null)
+                                    true
+                                }
                             }
                         }
                         .pointerInput(Unit) {

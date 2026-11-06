@@ -71,4 +71,26 @@ class SheetPlanTest {
         // A drawer that is open on entry gets closed on entry, every time, forever.
         assertFalse(SheetPlan.TOOLS_OPEN_ON_ENTRY)
     }
+
+    @Test
+    fun `a walkthrough measures nothing - not by tap and not by drawing`() {
+        // Finding 273: the sheet said "no points are set during a walkthrough" while the tap surface
+        // still added nodes, and the run swung towards the reticle while the operator walked the
+        // room. Two questions, one answer, because they are the same claim made twice.
+        for (mode in MeasureMode.entries) {
+            assertEquals(
+                "tap and drawing agree in $mode",
+                SheetPlan.tapPlacesPoint(mode),
+                SheetPlan.runFollowsReticle(mode),
+            )
+            assertEquals(
+                "and both agree with the mode's own definition",
+                mode.setsPoints,
+                SheetPlan.tapPlacesPoint(mode),
+            )
+        }
+        assertTrue(SheetPlan.tapPlacesPoint(MeasureMode.MEASURE))
+        assertFalse(SheetPlan.tapPlacesPoint(MeasureMode.CAPTURE))
+        assertFalse(SheetPlan.runFollowsReticle(MeasureMode.CAPTURE))
+    }
 }

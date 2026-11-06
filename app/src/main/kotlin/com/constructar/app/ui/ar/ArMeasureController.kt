@@ -562,9 +562,13 @@ class ArMeasureController(private val context: Context) {
             if (poseUsable) {
                 activeInteraction.onFrameEnter(frame, viewWidth, viewHeight, SystemClock.uptimeMillis())
             }
-            // Live preview follows the reticle (throttled inside ArInteraction to 12 Hz).
+            // Live preview follows the reticle (throttled inside ArInteraction to 12 Hz) - but only
+            // while a run is actually being measured (finding 273). In a walkthrough there is no
+            // segment being decided, and feeding the reticle in made the drawn run swing towards
+            // whatever the camera pointed at: a measured line changing shape while the operator
+            // walked the room.
             val reticleHit = activeInteraction.reticle.value
-            routeSession.setLivePoint(reticleHit)
+            routeSession.setLivePoint(if (followReticle) reticleHit else null)
             if (poseUsable) {
                 stability.value = hitStabilizer.sample(reticleHit, SystemClock.uptimeMillis())
             }
@@ -709,6 +713,25 @@ class ArMeasureController(private val context: Context) {
             point = points.lastOrNull(),
             argb = SceneViewMaterialProvider.NODE_CURRENT_ARGB,
         )
+    }
+
+    /**
+     * Whether the drawn run follows the reticle (finding 273).
+     *
+     * Set by the screen from its mode, because the mode is a property of the screen and this class
+     * must not know that a "walkthrough" exists. Off, `RouteSession` keeps its last node as the end
+     * of the run: the preview is then built from the nodes alone, which is the committed shape.
+     */
+    @Volatile
+    private var followReticle: Boolean = true
+
+    fun setFollowReticle(follow: Boolean) {
+        followReticle = follow
+        if (!follow) {
+            // One write now rather than on the next frame: the tube has to stop moving when the
+            // operator leaves measuring, not a frame later.
+            routeSession.setLivePoint(null)
+        }
     }
 
     fun setSpec(spec: ConduitSpec) = routeSession.setSpec(spec)
