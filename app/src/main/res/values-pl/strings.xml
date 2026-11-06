@@ -79,6 +79,8 @@
     <string name="marker_state_walking">Przesuń teraz telefon o około metr w bok, nie tracąc znacznika z kadru.</string>
     <string name="ar_pose_graph">Graf pozy: %1$d węzły · %2$d krawędzie</string>
     <string name="ar_pose_graph_lost">Utracone klatki kluczowe: %1$d</string>
+    <string name="ar_pose_graph_closures">Zamknięcie: %1$d potwierdzone</string>
+    <string name="ar_pose_graph_closure_shift">Ostatnie zamknięcie: przesunięto %1$d z %2$d węzłów, do %3$s</string>
     <string name="loop_check">Sprawdź powrót</string>
     <string name="loop_title">Zamknij pętlę</string>
     <string name="loop_offer">Trasa jest ponownie %1$s od wcześniejszego punktu. Zamknięcie zakłada, że to to samo miejsce.</string>

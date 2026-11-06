@@ -79,6 +79,8 @@
     <string name="marker_state_walking">Bewege das Handy jetzt etwa einen Meter seitlich; der Marker bleibt im Bild.</string>
     <string name="ar_pose_graph">Pose-Graph: %1$d Knoten · %2$d Kanten</string>
     <string name="ar_pose_graph_lost">Verlorene Keyframes: %1$d</string>
+    <string name="ar_pose_graph_closures">Schleife: %1$d bestätigt</string>
+    <string name="ar_pose_graph_closure_shift">Letzte Schleife: %1$d von %2$d Knoten bewegt, bis zu %3$s</string>
     <string name="loop_check">Rückkehr prüfen</string>
     <string name="loop_title">Schleife schließen</string>
     <string name="loop_offer">Der Weg ist wieder %1$s von einem früheren Punkt entfernt. Schließen setzt voraus, dass es derselbe Ort ist.</string>

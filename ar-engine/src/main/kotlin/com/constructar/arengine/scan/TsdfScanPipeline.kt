@@ -20,6 +20,7 @@ import com.constructar.arengine.keyframe.NativePoseGraphSource
 import com.constructar.arengine.keyframe.PoseGraphCloser
 import com.constructar.core.calib.MarkerSweep
 import com.constructar.core.calib.MarkerSweepOptions
+import com.constructar.core.slam.CorrectionReport
 import com.constructar.nativebridge.FloorplanPayload
 import com.constructar.nativebridge.IntegrationResult
 import com.constructar.nativebridge.NativeSlamEngine
@@ -236,6 +237,14 @@ class TsdfScanPipeline(
 
     /** Asks arriving from the UI. Applied on the worker, never on the thread that tapped. */
     private val closureActions = Channel<ClosureAction>(capacity = 4)
+
+    /**
+     * How many closures this session's operator has confirmed, and what the last one moved
+     * (finding 250). Kept here rather than in the closer because they outlive the conversation:
+     * the dialog closes, the numbers stay on the graph line.
+     */
+    private var closedLoops = 0
+    private var lastCorrection: CorrectionReport? = null
 
     private enum class ClosureAction { LOOK, CONFIRM, DISMISS }
 
@@ -601,6 +610,8 @@ class TsdfScanPipeline(
         keyframeApplier = null
         keyframeQueue.close()
         mutablePoseGraphStatus.value = PoseGraphStatus()
+        closedLoops = 0
+        lastCorrection = null
         poseGraphCloser = null
         mutableClosureState.value = ClosureState.Idle
         val job = workerJob
@@ -650,11 +661,18 @@ class TsdfScanPipeline(
         while (true) {
             val action = closureActions.tryReceive().getOrNull() ?: return
             val now = android.os.SystemClock.uptimeMillis()
-            mutableClosureState.value = when (action) {
+            val next = when (action) {
                 ClosureAction.LOOK -> closer.look(keyframeApplier?.appliedNodes ?: 0, now)
                 ClosureAction.CONFIRM -> closer.confirm(now)
                 ClosureAction.DISMISS -> closer.dismiss(now)
             }
+            if (next is ClosureState.Closed) {
+                // The edge is in the graph whether or not the solver finished, so the count is
+                // every confirmation - but only a converged run has a report to keep.
+                closedLoops += 1
+                next.correction?.let { lastCorrection = it }
+            }
+            mutableClosureState.value = next
         }
     }
 
@@ -671,7 +689,12 @@ class TsdfScanPipeline(
         }
         // Published on every integrated frame, not only when something was drained: "0 nodes and
         // 0 lost" is itself the answer a support call needs, and StateFlow drops the repeats.
-        mutablePoseGraphStatus.value = PoseGraphStatus.of(applier, keyframeQueue.dropped)
+        mutablePoseGraphStatus.value = PoseGraphStatus.of(
+            applier = applier,
+            droppedByQueue = keyframeQueue.dropped,
+            closures = closedLoops,
+            lastCorrection = lastCorrection,
+        )
     }
 
     companion object {

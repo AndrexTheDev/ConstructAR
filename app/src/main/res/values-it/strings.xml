@@ -79,6 +79,8 @@
     <string name="marker_state_walking">Ora sposta il telefono di circa un metro di lato, tenendo il marker in vista.</string>
     <string name="ar_pose_graph">Grafo delle pose: %1$d nodi · %2$d archi</string>
     <string name="ar_pose_graph_lost">Fotogrammi chiave persi: %1$d</string>
+    <string name="ar_pose_graph_closures">Chiusura: %1$d confermata</string>
+    <string name="ar_pose_graph_closure_shift">Ultima chiusura: %1$d di %2$d nodi spostati, fino a %3$s</string>
     <string name="loop_check">Verifica ritorno</string>
     <string name="loop_title">Chiudi il ciclo</string>
     <string name="loop_offer">Il percorso è di nuovo a %1$s da un punto precedente. Chiudere presuppone che sia lo stesso luogo.</string>

@@ -337,7 +337,9 @@ applies to the graph too. What is reported is a `CorrectionReport` (`:core`): th
 optimiser and the app both know, how many of them moved, the largest and the mean shift in metres
 (findings 246, 249). A run
 that stopped without converging has no report at all - `ClosureState.Closed.correction` is null -
-because its poses are a snapshot halfway down the cost curve (finding 247).
+because its poses are a snapshot halfway down the cost curve (finding 247). The count of
+confirmed closures and the last report travel on `PoseGraphStatus`, so the HUD keeps saying what
+the dialog said after the dialog is gone (finding 250).
 
 **Monocular depth fusion.** Optional and strictly additive, and it names itself: the model's asset
 path comes from `BuildConfig.DEPTH_MODEL_ASSET` (one declaration, so a variant that ships a

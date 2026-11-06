@@ -79,6 +79,8 @@
     <string name="marker_state_walking">Déplace maintenant le téléphone d’un mètre sur le côté, en gardant l’étiquette à l’écran.</string>
     <string name="ar_pose_graph">Graphe de poses : %1$d nœuds · %2$d arêtes</string>
     <string name="ar_pose_graph_lost">Images clés perdues : %1$d</string>
+    <string name="ar_pose_graph_closures">Fermeture : %1$d confirmée</string>
+    <string name="ar_pose_graph_closure_shift">Dernière fermeture : %1$d nœuds sur %2$d déplacés, jusqu’à %3$s</string>
     <string name="loop_check">Vérifier le retour</string>
     <string name="loop_title">Fermer la boucle</string>
     <string name="loop_offer">Le parcours repasse à %1$s d’un point antérieur. Fermer suppose que c’est le même endroit.</string>
