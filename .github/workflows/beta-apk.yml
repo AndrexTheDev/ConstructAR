@@ -282,6 +282,20 @@ jobs:
             "")     echo "::warning title=resources.arsc::not found in the archive listing" ;;
             *)      echo "::warning title=resources.arsc::compression not understood: ${arsc}" ;;
           esac
+          # The manifest as the installer reads it: `sdkVersion` did not appear in the badging
+          # summary, and a `minSdkVersion` above the phone's API level is the other half of
+          # "there was a problem parsing the package".
+          AAPT2=$(ls -1 "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -n 1 || true)
+          if [ -n "${AAPT2:-}" ]; then
+            head_badging=$("$AAPT2" dump badging "$APK" 2>&1 | head -n 6 | tr '\n' '|' | cut -c1-900)
+            echo "badging head: ${head_badging}"
+            echo "::notice title=badging head::${head_badging}"
+            manifest=$("$AAPT2" dump xmltree --file AndroidManifest.xml "$APK" 2>&1 \
+              | grep -E 'uses-sdk|minSdkVersion|targetSdkVersion|E: (manifest|application)' \
+              | head -n 12 | tr '\n' '|' | cut -c1-900)
+            echo "manifest: ${manifest}"
+            echo "::notice title=manifest uses-sdk::${manifest}"
+          fi
           libs=$(unzip -l "$APK" | grep -oE 'lib/[^/]+/' | sort -u | tr '\n' ' ')
           echo "native ABIs in the package: ${libs:-none}"
           echo "::notice title=native ABIs::${libs:-none}"
