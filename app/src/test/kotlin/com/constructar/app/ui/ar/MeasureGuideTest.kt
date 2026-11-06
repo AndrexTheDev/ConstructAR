@@ -113,15 +113,20 @@ class MeasureGuideTest {
     @Test
     fun `every grey button has a line, and never two at once`() {
         // One reason at a time: the operator is reaching for one button, and a paragraph of two
-        // refusals is how the first report got the buttons wrong in the first place.
-        listOf(0, 1, 2, 3).forEach { count ->
-            val lines = MeasureGuide.lines(scanned(nodeCount = count, canFinish = count >= 2))
-            assertEquals(
-                "point count $count",
-                1,
-                lines.count { it == GuideLine.BLOCK_RUN || it == GuideLine.BLOCK_RING },
-            )
+        // refusals is how the first report got the buttons wrong in the first place. From three
+        // points on, nothing is grey and the screen owes no refusal at all.
+        val expected = mapOf(
+            0 to GuideLine.BLOCK_RUN,
+            1 to GuideLine.BLOCK_RUN,
+            2 to GuideLine.BLOCK_RING,
+        )
+        expected.forEach { (count, reason) ->
+            val blocks = MeasureGuide.lines(scanned(nodeCount = count, canFinish = count >= 2))
+                .filter { it == GuideLine.BLOCK_RUN || it == GuideLine.BLOCK_RING }
+            assertEquals("point count $count", listOf(reason), blocks)
         }
+        val complete = MeasureGuide.lines(scanned(nodeCount = 3, canFinish = true))
+        assertTrue(complete.none { it == GuideLine.BLOCK_RUN || it == GuideLine.BLOCK_RING })
     }
 
     @Test
