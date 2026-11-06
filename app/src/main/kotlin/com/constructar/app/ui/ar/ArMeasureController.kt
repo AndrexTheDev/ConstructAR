@@ -693,6 +693,13 @@ class ArMeasureController(private val context: Context) {
             spec = state.spec,
             previewGeometry = state.preview?.mesh,
         )
+        // The points themselves, as dots on the wall (finding 269). The tube needs two nodes, so
+        // until this line existed the first tap of every run - and every tap after a save - drew
+        // nothing at all, and the wall the operator had just measured looked untouched.
+        sceneController?.syncNodeMarkers(
+            points = state.nodes.map { it.position },
+            argb = SceneViewMaterialProvider.NODE_MARKER_ARGB,
+        )
     }
 
     fun setSpec(spec: ConduitSpec) = routeSession.setSpec(spec)

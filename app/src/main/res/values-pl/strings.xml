@@ -577,7 +577,7 @@
     <string name="pdf_section_photos">Dokumentacja zdjęciowa</string>
     <string name="pdf_note_photos">Tu jest wydrukowanych %1$d z %2$d zdjęć z teczki budowy - pozostałe zostają w aplikacji.</string>
     <string name="ar_hold_steady">Trzymaj nieruchomo</string>
-    <string name="ar_point_locked">Punkt ustalony</string>
+    <string name="tap_placed">Punkt zaznaczony</string>
     <string name="hud_segment">Odcinek %1$.2f m</string>
     <string name="route_warning_surface_jump">Ten punkt jest za ostatnią powierzchnią – sprawdź ścianę, zanim przejdziesz dalej</string>
     <string name="paywall_err_untrusted">Nie można potwierdzić tej instalacji. Zainstaluj oficjalną wersję z oryginalnego źródła i spróbuj ponownie.</string>

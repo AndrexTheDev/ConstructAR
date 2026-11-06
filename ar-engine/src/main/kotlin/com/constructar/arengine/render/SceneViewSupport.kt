@@ -45,13 +45,14 @@ class SceneViewMaterialProvider(
 ) : ColorMaterialProvider {
 
     private val lit = ConcurrentHashMap<Int, MaterialInstance>(8)
-    private val unlit = ConcurrentHashMap<Int, MaterialInstance>(4)
+    private val unlit = ConcurrentHashMap<Int, MaterialInstance>(6)
 
     init {
         // Pre-warm on the constructing (main) thread: every colour the app can render exists
         // before the first frame, so `create`/`createUnlit` never build a material mid-frame.
         palette.forEach { create(it) }
         createUnlit(SCAN_OVERLAY_ARGB)
+        createUnlit(NODE_MARKER_ARGB)
     }
 
     override fun create(argb: Int): MaterialInstance? {
@@ -103,6 +104,20 @@ class SceneViewMaterialProvider(
          * `MeasureModeTest`: the legend cannot explain a colour the mesh is not drawn in.
          */
         const val SCAN_OVERLAY_ARGB: Int = 0x99A25BFF.toInt()
+
+        /**
+         * The measured points: lime, unlit, fully opaque (finding 269).
+         *
+         * A node marker answers "where is the point I just set" and has to read against three
+         * different backgrounds - a plastered wall, the violet scan overlay and the conduit tube
+         * drawn through it - so it is never shaded (a lit sphere in a dark corner disappears into
+         * the corner) and it uses the accent rather than the cable's gold, because the marker is
+         * about the *measurement* and the tube is about the *installation*.
+         *
+         * Pre-warmed like the scan overlay: `createUnlit` is called from the render thread when a
+         * mesh is uploaded, and the material loader may only build instances on the main thread.
+         */
+        const val NODE_MARKER_ARGB: Int = 0xFFC8F04A.toInt()
 
         /** Every colour the app can ask for, so nothing is created during a frame. */
         val palette: List<Int> = ConduitPresets.all.map { it.colorArgb }.distinct()

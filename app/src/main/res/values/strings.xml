@@ -565,7 +565,7 @@
     <string name="pdf_section_photos">Photo documentation</string>
     <string name="pdf_note_photos">%1$d of %2$d photos from the site file are printed here - the rest stay in the app.</string>
     <string name="ar_hold_steady">Hold steady</string>
-    <string name="ar_point_locked">Point locked</string>
+    <string name="tap_placed">Point set</string>
     <string name="hud_segment">Segment %1$.2f m</string>
     <string name="route_warning_surface_jump">That point is behind the last surface - check the wall before you continue</string>
     <string name="paywall_err_untrusted">This installation cannot be confirmed. Install the official build from the original source and try again.</string>

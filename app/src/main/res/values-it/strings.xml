@@ -565,7 +565,7 @@
     <string name="pdf_section_photos">Documentazione fotografica</string>
     <string name="pdf_note_photos">Qui sono stampate %1$d foto su %2$d del fascicolo - le altre restano nell’app.</string>
     <string name="ar_hold_steady">Tieni fermo</string>
-    <string name="ar_point_locked">Punto agganciato</string>
+    <string name="tap_placed">Punto segnato</string>
     <string name="hud_segment">Tratto %1$.2f m</string>
     <string name="route_warning_surface_jump">Quel punto è dietro l’ultima superficie: controlla la parete prima di proseguire</string>
     <string name="paywall_err_untrusted">Impossibile confermare questa installazione. Installa la versione ufficiale dalla fonte originale e riprova.</string>

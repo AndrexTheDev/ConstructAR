@@ -60,18 +60,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
@@ -118,6 +122,7 @@ import com.constructar.arengine.session.ArReadiness
 import com.constructar.arengine.tracking.TrackingQuality
 import com.google.ar.core.Config
 import com.constructar.core.calib.CalibrationOutcome
+import kotlinx.coroutines.delay
 import com.constructar.core.calib.CalibrationReference
 import com.constructar.core.calib.CalibrationSweep
 import com.constructar.core.calib.ReferenceCalibration
@@ -429,16 +434,33 @@ fun ArMeasureScreen(
             draftWritten = false
         }
     }
-    val addPoint: () -> Unit = {
-        // Logged, because "nothing happens" was the whole report: the log now says whether the tap
-        // arrived and what the hit test made of it (finding 256).
-        Diagnostics.event("tap", "add point at reticle ${viewSize.width}x${viewSize.height}")
-        controller.requestTap(
-            viewSize.width / 2f,
-            viewSize.height / 2f,
-            viewSize.width,
-            viewSize.height,
-        )
+    // The one place a point is asked for (finding 269). Both paths go through it - the big button,
+    // which samples the reticle in the middle of the screen, and a free tap on the wall, which
+    // samples the finger - so the ring, the haptic and the sentence can never disagree about
+    // whether something happened.
+    var tapEcho by remember { mutableStateOf<TapEcho?>(null) }
+    var tapTick by remember { mutableIntStateOf(0) }
+    var tapAt by remember { mutableStateOf(Offset.Zero) }
+    val haptics = LocalHapticFeedback.current
+    val addPoint: (Offset?) -> Unit = { touched ->
+        // Before the first layout there is no pixel to sample and no frame to sample it from. A
+        // request for (0,0) of a 0 × 0 view is a division waiting to happen, and a ring drawn for
+        // a tap that cannot resolve anything would be the exact lie this finding removes.
+        if (viewSize.width <= 0 || viewSize.height <= 0) {
+            Diagnostics.event("tap", "ignored: the AR view has no size yet")
+        } else {
+            val x = touched?.x ?: (viewSize.width / 2f)
+            val y = touched?.y ?: (viewSize.height / 2f)
+            tapAt = Offset(x, y)
+            tapTick++
+            // Logged, because "nothing happens" was the whole report: the log now says whether the
+            // tap arrived and what the hit test made of it (finding 256).
+            Diagnostics.event(
+                "tap",
+                "add point at ${x.toInt()},${y.toInt()} of ${viewSize.width}x${viewSize.height}",
+            )
+            controller.requestTap(x, y, viewSize.width, viewSize.height)
+        }
     }
     val commitRun: () -> Unit = {
         // Persisted label: locale-independent and stable across devices, so a run reads the same
@@ -469,11 +491,42 @@ fun ArMeasureScreen(
 
     // Tap results are produced on the render thread; they are applied here, on the main
     // thread, where anchor creation belongs.
+    // The decimal mark for the snap digits, resolved once: `SnapReading.moved` prints numbers, and
+    // a lambda that runs in a coroutine cannot call `stringResource`-style composables.
+    val decimalMarkForEcho = LocalDecimalMark.current
     LaunchedEffect(Unit) {
         controller.pipeline.start(scope)
         controller.hitEvents.collect { event ->
-            if (event != null) controller.applyPendingHit()
+            if (event != null) {
+                // What the tap actually did, read where the tap is applied (finding 269). The node
+                // count before and after is the only honest answer: a resolution that found a
+                // surface says nothing about whether the run accepted the point - `TOO_CLOSE` and
+                // `UNPINNED` are refusals, and until now they were a line in a scrolling block
+                // that the operator was not looking at.
+                val before = controller.routeSession.state.value.nodeCount
+                val resolution = controller.applyPendingHit()
+                val hit = resolution?.hit
+                val echo = TapFeedback.echo(
+                    hasSurface = hit != null,
+                    added = controller.routeSession.state.value.nodeCount > before,
+                    snapped = SnapReading.moved(hit?.snap, decimalMarkForEcho) != null,
+                )
+                tapEcho = echo
+                // One tick through a glove for the two answers that were a point placed. A miss
+                // and a refusal stay silent to the hand and speak on the glass: a pattern the
+                // operator learns in ten taps is worth more than a buzz on everything.
+                if (echo == TapEcho.PLACED || echo == TapEcho.SNAPPED) {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                }
+            }
         }
+    }
+    // The result is an event, not a state: it leaves on its own, and a new tap restarts the clock
+    // instead of stacking a second line (finding 269).
+    LaunchedEffect(tapTick) {
+        if (tapTick == 0) return@LaunchedEffect
+        delay(TapFeedback.RESULT_VISIBLE_MS)
+        tapEcho = null
     }
     // The run being measured follows the reticle (finding 162): `RouteSession` rebuilds the
     // preview whenever a node is added or the reticle moves, and the geometry controller skips the
@@ -595,6 +648,37 @@ fun ArMeasureScreen(
     val captureWalkText = stringResource(R.string.capture_walk)
     val changeCableText = stringResource(R.string.spec_change)
     val blockRunText = stringResource(R.string.ar_hint_run_needs, routeState.nodeCount)
+    // The one slot under the strip (finding 269): the result of the last tap, or the one action the
+    // reticle is asking for. It is the same slot the readiness instruction used to occupy - behind
+    // the diagnostics toggle, where the operator never found it.
+    val tapSlot = TapFeedback.slot(
+        resultVisible = tapEcho != null,
+        // Only a measurement places points. A walkthrough has nothing to steady: its reticle is not
+        // being used, and a "hold steady" over a room being scanned is an instruction to nowhere.
+        holding = mode.setsPoints && stability?.let { it.hasPoint && !it.settled } == true,
+    )
+    val snapEchoText = lastHit?.hit?.snap?.let { snap ->
+        SnapReading.moved(snap, decimalMarkForEcho)?.let { stringResource(snap.kind.snapMovedRes(), it) }
+    }
+    val slotText: String? = when (tapSlot) {
+        TapSlot.NONE -> null
+        TapSlot.HOLD -> stringResource(R.string.ar_hold_steady)
+        TapSlot.RESULT -> when (tapEcho) {
+            TapEcho.PLACED -> stringResource(R.string.tap_placed)
+            TapEcho.SNAPPED -> snapEchoText
+            TapEcho.MISS -> stringResource(R.string.ar_no_surface)
+            // The refusal prints the sentence the run already wrote - "too close to the previous
+            // point", "that point could not be pinned". A generic "not possible" would hide the
+            // one word that says what to do differently.
+            TapEcho.REFUSED, null -> warningText
+        }
+    }
+    // Lime for a point that exists, amber for everything that is asking something of the operator:
+    // a miss, a refusal, and "hold steady" are all "act before the next tap".
+    val slotColor = when (tapEcho) {
+        TapEcho.PLACED, TapEcho.SNAPPED -> SiteColors.accent
+        else -> SiteColors.warning
+    }
     val guideRows = MeasureGuide.lines(guideState).mapNotNull { line ->
         val text = when (line) {
             GuideLine.COACHING -> guidanceText
@@ -713,30 +797,24 @@ fun ArMeasureScreen(
                 // and had nothing to double-tap. It now announces itself and offers the one
                 // action a camera view can have without a fingertip - "set the point in the
                 // middle of the screen" - which is where the reticle already is (finding 211).
-                var tapSurface by remember { mutableStateOf(IntSize.Zero) }
                 val tapHint = stringResource(R.string.a11y_ar_view)
                 val tapAction = stringResource(R.string.a11y_ar_place_point)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .onSizeChanged { tapSurface = it }
                         .semantics {
                             contentDescription = tapHint
                             onClick(label = tapAction) {
-                                if (tapSurface.width > 0 && tapSurface.height > 0) {
-                                    controller.requestTap(
-                                        tapSurface.width / 2f,
-                                        tapSurface.height / 2f,
-                                        tapSurface.width,
-                                        tapSurface.height,
-                                    )
-                                }
+                                // The accessibility action has no finger and therefore no point on
+                                // the wall: it asks for the reticle, which is where a screen-reader
+                                // user is aiming anyway (finding 211).
+                                addPoint(null)
                                 true
                             }
                         }
                         .pointerInput(Unit) {
                             detectTapGestures { offset ->
-                                controller.requestTap(offset.x, offset.y, size.width, size.height)
+                                addPoint(offset)
                             }
                         },
                 ) {
@@ -745,6 +823,17 @@ fun ArMeasureScreen(
                     SnapMarker(
                         active = SnapReading.moved(lastHit?.hit?.snap, LocalDecimalMark.current) != null,
                         modifier = Modifier.align(Alignment.Center),
+                    )
+                    // And the event: one ring out of the finger, once per tap (finding 269). It
+                    // sits above the AR view but takes no touch - a `Canvas` with no gesture
+                    // modifier leaves the tap surface underneath untouched.
+                    TapEchoRing(
+                        trigger = tapTick,
+                        at = tapAt,
+                        tone = when (tapEcho) {
+                            TapEcho.MISS -> SiteColors.warning
+                            else -> SiteColors.accent
+                        },
                     )
                 }
             }
@@ -864,6 +953,27 @@ fun ArMeasureScreen(
                     chips = MeasureGuide.strip(guideState),
                     modifier = Modifier.padding(top = 6.dp),
                 )
+                // One slot, directly under the strip, that answers exactly one of two questions
+                // (finding 269): what the last tap did, or - when nothing was just tapped - the
+                // one action the reticle is asking for right now ("hold steady"). It is pinned,
+                // not scrolled: it is the answer to a thing the operator just did with his hand,
+                // and a line he has to scroll to find is a line he never sees.
+                //
+                // The readiness half used to live behind the diagnostics toggle (finding 268). It
+                // does not belong there: "hold steady" is the instruction that decides whether the
+                // next tap commits one noisy frame, not a diagnostic.
+                slotText?.let { line ->
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = slotColor,
+                        modifier = Modifier
+                            .padding(top = 4.dp)
+                            // It changes without the operator touching anything, so a screen
+                            // reader has to be told rather than asked to find it.
+                            .semantics { liveRegion = LiveRegionMode.Polite },
+                    )
+                }
                 // The room's own gauge, pinned above the scrolling text and drawn only in a
                 // walkthrough (finding 267): whether anything is captured, in what colour, and how
                 // much of it. In measuring mode it draws nothing at all.
@@ -947,23 +1057,6 @@ fun ArMeasureScreen(
                             style = MaterialTheme.typography.labelMedium,
                             color = HudStyle.hint,
                         )
-                    }
-                    // Whether the point under the crosshair has settled. Until it has, a tap would
-                    // commit one noisy frame; the stabiliser says when it is worth tapping.
-                    if (diagnosticsOpen) stability?.let { reading ->
-                        if (reading.hasPoint) {
-                            Text(
-                                text = stringResource(
-                                    if (reading.settled) R.string.ar_point_locked else R.string.ar_hold_steady,
-                                ),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (reading.settled) {
-                                    SiteColors.accent
-                                } else {
-                                    HudStyle.text
-                                },
-                            )
-                        }
                     }
                     // Hit diagnostics, in the operator's language: which surface and which cascade
                     // tier produced the last node.
@@ -1127,14 +1220,14 @@ fun ArMeasureScreen(
                 SheetPlan.Primary.FIRST_POINT -> GloveButton(
                     label = stringResource(R.string.ar_add_first_point),
                     icon = Icons.Default.Add,
-                    onClick = addPoint,
+                    onClick = { addPoint(null) },
                     modifier = Modifier.fillMaxWidth(),
                 )
 
                 SheetPlan.Primary.POINT -> GloveButton(
                     label = stringResource(R.string.ar_add_point),
                     icon = Icons.Default.Add,
-                    onClick = addPoint,
+                    onClick = { addPoint(null) },
                     modifier = Modifier.fillMaxWidth(),
                 )
 

@@ -153,4 +153,76 @@ class RouteSceneControllerTest {
         assertEquals("the dropped mesh is re-uploaded", 2, sink.uploads.size)
         assertTrue("and drawn again", sink.contains("route:live"))
     }
+
+    // ── the measured points themselves (finding 269) ─────────────────────────────────────────
+
+    private val markerArgb = 0xFFC8F04A.toInt()
+
+    @Test
+    fun `every measured point gets a dot, in one upload`() {
+        val sink = RecordingSink()
+
+        RouteSceneController(sink).syncNodeMarkers(nodes.map { it.position }, markerArgb)
+
+        assertEquals("one mesh for the whole run, not one per point", 1, sink.uploads.size)
+        assertEquals(
+            "under its own key, so the tube and the dots are drawn from different meshes",
+            RouteSceneController.MARKERS_KEY,
+            sink.uploads[0].first,
+        )
+        val mesh = sink.uploads[0].second
+        // Three spheres of eight segments: four stacks of eight, 45 vertices each.
+        assertEquals("one sphere per node", 45 * nodes.size, mesh.vertexCount)
+        assertEquals("and shown", true, sink.visibility[RouteSceneController.MARKERS_KEY])
+    }
+
+    @Test
+    fun `a still reticle does not re-upload the dots`() {
+        val sink = RecordingSink()
+        val controller = RouteSceneController(sink)
+        val points = nodes.map { it.position }
+
+        repeat(5) { controller.syncNodeMarkers(points, markerArgb) }
+
+        assertEquals("the reticle moves twelve times a second; the nodes do not", 1, sink.uploads.size)
+    }
+
+    @Test
+    fun `a moved point and a new point both re-upload`() {
+        val sink = RecordingSink()
+        val controller = RouteSceneController(sink)
+        controller.syncNodeMarkers(nodes.map { it.position }, markerArgb)
+
+        // Undo: one fewer node.
+        controller.syncNodeMarkers(nodes.dropLast(1).map { it.position }, markerArgb)
+        assertEquals("undo redraws the dots", 2, sink.uploads.size)
+
+        // A node nudged by more than the 1 cm grid.
+        val moved = nodes.dropLast(1).map { it.position } + Vec3(2f, 0.5f, 0f)
+        controller.syncNodeMarkers(moved, markerArgb)
+        assertEquals("a moved node redraws the dots", 3, sink.uploads.size)
+
+        // A nudge below the grid is not a change worth a GPU upload.
+        val nudged = moved.dropLast(1) + Vec3(2f, 0.5f, 0.001f)
+        controller.syncNodeMarkers(nudged, markerArgb)
+        assertEquals("a sub-centimetre jitter is swallowed", 3, sink.uploads.size)
+    }
+
+    @Test
+    fun `an empty run and a torn-down scene leave no dots behind`() {
+        val sink = RecordingSink()
+        val controller = RouteSceneController(sink)
+        controller.syncNodeMarkers(nodes.map { it.position }, markerArgb)
+        assertTrue("drawn to start with", sink.contains(RouteSceneController.MARKERS_KEY))
+
+        // Saving the run starts a new one: the dots of the saved run must not stay on the wall.
+        controller.syncNodeMarkers(emptyList(), markerArgb)
+        assertFalse("a new run starts with a clean wall", sink.contains(RouteSceneController.MARKERS_KEY))
+
+        controller.syncNodeMarkers(nodes.map { it.position }, markerArgb)
+        assertEquals("and it is re-uploaded, not remembered", 2, sink.uploads.size)
+
+        controller.clearAll()
+        assertFalse("a torn-down scene keeps no dots", sink.contains(RouteSceneController.MARKERS_KEY))
+    }
 }
