@@ -66,4 +66,16 @@ class ClosureNoteTest {
         assertEquals(labels.closureNoteUnfinished, note)
         assertFalse("no number may stand in for a result: $note", note!!.contains("0 of 0"))
     }
+
+    @Test
+    fun `a record the optimiser could not have written is not printed`() {
+        // Restored from a backup, or edited in between: the file is not a trusted input
+        // (finding 253). A gap in the document is honest; "42 of 10 nodes" is not.
+        val impossible = ScanClosure(closures = 1, movedNodes = 42, nodes = 10, maxShiftMetres = 0.1f)
+
+        assertNull(
+            "an impossible record must print nothing",
+            closureNote(impossible, labels.closureNote, labels.closureNoteUnfinished),
+        )
+    }
 }

@@ -124,4 +124,53 @@ class ScanSummaryTest {
         assertEquals(false, loaded.closures?.converged)
         assertTrue("the verdict has to be in the file: $saved", saved.contains("\"converged\": false"))
     }
+
+    @Test
+    fun `a record the optimiser could have produced is plausible`() {
+        val sane = ScanClosure(closures = 2, movedNodes = 42, nodes = 380, maxShiftMetres = 0.183f)
+
+        assertTrue("a normal report must pass its own arithmetic", sane.isPlausible)
+    }
+
+    @Test
+    fun `more moved nodes than compared ones is not a report`() {
+        // A project file can be restored from a backup and is text in between: nothing stops
+        // a record saying "moved 42 of 10" from arriving here (finding 253).
+        val broken = ScanClosure(closures = 1, movedNodes = 42, nodes = 10, maxShiftMetres = 0.1f)
+
+        assertFalse("42 of 10 nodes cannot happen", broken.isPlausible)
+    }
+
+    @Test
+    fun `a distance that is not a distance is not a report`() {
+        assertFalse(
+            "a NaN shift must never reach a protocol",
+            ScanClosure(closures = 1, movedNodes = 1, nodes = 10, maxShiftMetres = Float.NaN).isPlausible,
+        )
+        assertFalse(
+            "a negative shift is not a movement",
+            ScanClosure(closures = 1, movedNodes = 1, nodes = 10, maxShiftMetres = -0.2f).isPlausible,
+        )
+        assertFalse(
+            "a negative count is not a count",
+            ScanClosure(closures = -1).isPlausible,
+        )
+    }
+
+    @Test
+    fun `a run without a result may not carry numbers`() {
+        // Finding 252: a non-converged run has no report, so a record that says otherwise was
+        // written by something other than the pipeline.
+        val contradictory = ScanClosure(
+            closures = 1,
+            movedNodes = 5,
+            nodes = 380,
+            maxShiftMetres = 0.02f,
+            converged = false,
+        )
+        val honest = ScanClosure(closures = 1, converged = false)
+
+        assertFalse("numbers from a solver that gave up are a contradiction", contradictory.isPlausible)
+        assertTrue("the honest record of an unfinished run is a confirmation and nothing else", honest.isPlausible)
+    }
 }

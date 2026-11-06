@@ -863,7 +863,10 @@ internal fun closureNote(
     template: String,
     unfinishedTemplate: String,
 ): String? {
-    if (closure == null || closure.closures <= 0) return null
+    // A record that could not have come from the optimiser is not printed at all: silence is a
+    // gap in the document, "moved 42 of 10 nodes by up to NaN m" is a lie in a signed one
+    // (finding 253).
+    if (closure == null || closure.closures <= 0 || !closure.isPlausible) return null
     // A confirmation whose solver gave up has no numbers to print, only the sentence saying so
     // (findings 247, 252). "0 of 0 nodes" would be a correction of nothing, presented as one.
     if (!closure.converged) return unfinishedTemplate

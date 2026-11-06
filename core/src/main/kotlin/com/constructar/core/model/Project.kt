@@ -83,7 +83,28 @@ data class ScanClosure(
      * other kind of record then.
      */
     val converged: Boolean = true,
-)
+) {
+
+    /**
+     * Whether these numbers could have come from the optimiser at all (finding 253).
+     *
+     * A project file is not a trusted input: it is copied out as a backup, restored on another
+     * phone and readable as text in between, and `ProjectRepository` refuses a file only on its
+     * `schemaVersion`. So `movedNodes = 42, nodes = 10` or a NaN shift can reach this record and,
+     * from here, a protocol the customer signs. The rule is the arithmetic of the report itself:
+     * no negative counts, no more moved nodes than compared ones, a finite non-negative distance,
+     * and - the coherence finding 252 established - no numbers at all for a run whose solver
+     * stopped.
+     */
+    val isPlausible: Boolean
+        get() = closures >= 0 &&
+            nodes >= 0 &&
+            movedNodes >= 0 &&
+            movedNodes <= nodes &&
+            maxShiftMetres.isFinite() &&
+            maxShiftMetres >= 0f &&
+            (converged || (nodes == 0 && movedNodes == 0 && maxShiftMetres == 0f))
+}
 
 /**
  * The on-device project: one room (or one zone) of one site.

@@ -407,7 +407,7 @@ fun ExportScreen(
                     // A folded-back room says so before the operator hands it over: the protocol
                     // will carry the same sentence, and a correction the customer never learns
                     // about is an inference presented as a measurement (findings 217, 251).
-                    scan.closures?.takeIf { it.closures > 0 }?.let { closure ->
+                    scan.closures?.takeIf { it.closures > 0 && it.isPlausible }?.let { closure ->
                         Text(
                             if (closure.converged) {
                                 // The screen is localised, so the number is too: the protocol's
