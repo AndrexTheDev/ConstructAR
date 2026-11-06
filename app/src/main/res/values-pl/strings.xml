@@ -130,6 +130,7 @@
     <string name="crash_dismiss">Odrzuć raport</string>
     <string name="ar_add_point">Zaznacz punkt tutaj</string>
     <string name="ar_undo">Usuń ostatni punkt</string>
+    <string name="undo_nothing_to_remove">Nie ma jeszcze punktu - nie ma czego usuwać.</string>
     <string name="ar_close_loop">Zamknij w pętlę</string>
     <string name="ar_finish">Zapisz odcinek</string>
     <string name="ar_leave_title">Wyjść z trasy?</string>

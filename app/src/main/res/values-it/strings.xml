@@ -130,6 +130,7 @@
     <string name="crash_dismiss">Scarta il rapporto</string>
     <string name="ar_add_point">Segna il punto qui</string>
     <string name="ar_undo">Elimina l’ultimo punto</string>
+    <string name="undo_nothing_to_remove">Nessun punto impostato - non c’è niente da eliminare.</string>
     <string name="ar_close_loop">Chiudi ad anello</string>
     <string name="ar_finish">Salva la tratta</string>
     <string name="ar_leave_title">Uscire dal tracciato?</string>

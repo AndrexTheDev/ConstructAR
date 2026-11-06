@@ -130,6 +130,7 @@
     <string name="crash_dismiss">Discard the report</string>
     <string name="ar_add_point">Set point here</string>
     <string name="ar_undo">Remove last point</string>
+    <string name="undo_nothing_to_remove">No point set yet - there is nothing to remove.</string>
     <string name="ar_close_loop">Close into a ring</string>
     <string name="ar_finish">Save this run</string>
     <string name="ar_leave_title">Leave this run?</string>

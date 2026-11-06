@@ -18,6 +18,11 @@ import org.junit.Test
  * ring and broken for the other two tools in the same drawer. These tests pin the thresholds to the
  * ones that actually gate the buttons, and pin the rule itself over the whole state space, because a
  * rule that is only true where somebody remembered to look is not a rule.
+ *
+ * The same lesson cost a second round (finding 276): the drawer was fixed and the action row
+ * directly above it was not, because the rule had been written into the three tools instead of into
+ * the shape every button has. Undo is the state space's newest member, and the sweep below covers it
+ * from the first day rather than from the next bug report.
  */
 class ToolsPlanTest {
 
@@ -61,6 +66,7 @@ class ToolsPlanTest {
             for (points in 0..6) add(ToolsPlan.ring(points))
             for (nodes in 0..4) add(ToolsPlan.loopCheck(nodes))
             for (available in listOf(true, false)) add(ToolsPlan.marker(available))
+            for (points in 0..4) add(ToolsPlan.undo(points))
         }
         for (state in states) {
             if (state.enabled) {
@@ -69,6 +75,32 @@ class ToolsPlanTest {
                 assertTrue("a grey tool must say why", state.reason != null)
             }
         }
+    }
+
+    @Test
+    fun `undo on an empty run says so instead of going quiet`() {
+        // The button is grey the moment the screen opens - every other grey control in the sheet
+        // had been given a sentence by findings 258, 265 and 271, and this one was missed because
+        // the rule had been taught to the drawer rather than to the type (finding 276).
+        val empty = ToolsPlan.undo(0)
+        assertEquals(false, empty.enabled)
+        assertEquals(ToolReason.UNDO_NOTHING_TO_REMOVE, empty.reason)
+        assertEquals(ToolState(enabled = true), ToolsPlan.undo(1))
+        assertEquals(ToolState(enabled = true), ToolsPlan.undo(4))
+    }
+
+    @Test
+    fun `undo goes usable exactly when the screen stops asking for the first point`() {
+        // Two answers about one state: the guide asks for the first point and the button that
+        // would take a point back is grey. If either moves without the other, the sheet tells the
+        // operator to do something it has already done - or offers to undo what never happened.
+        val fresh = GuideState(nodeCount = 0)
+        assertTrue("a fresh sheet asks for the first point", GuideLine.FIRST_POINT in MeasureGuide.lines(fresh))
+        assertEquals(false, ToolsPlan.undo(fresh.nodeCount).enabled)
+
+        val withOne = GuideState(nodeCount = 1)
+        assertTrue("the first point is no longer asked for", GuideLine.FIRST_POINT !in MeasureGuide.lines(withOne))
+        assertEquals(true, ToolsPlan.undo(withOne.nodeCount).enabled)
     }
 
     @Test

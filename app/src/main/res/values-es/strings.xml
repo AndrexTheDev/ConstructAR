@@ -130,6 +130,7 @@
     <string name="crash_dismiss">Descartar el informe</string>
     <string name="ar_add_point">Marcar punto aquí</string>
     <string name="ar_undo">Borrar el último punto</string>
+    <string name="undo_nothing_to_remove">Todavía no hay ningún punto - no hay nada que borrar.</string>
     <string name="ar_close_loop">Cerrar en anillo</string>
     <string name="ar_finish">Guardar el tramo</string>
     <string name="ar_leave_title">¿Salir del trazado?</string>

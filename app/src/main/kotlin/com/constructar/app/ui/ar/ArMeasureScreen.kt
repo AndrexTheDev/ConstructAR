@@ -1357,7 +1357,10 @@ fun ArMeasureScreen(
                 ArAction(
                     label = undoLabel,
                     icon = Icons.AutoMirrored.Filled.Undo,
-                    enabled = routeState.nodeCount > 0,
+                    // The state comes from the same object the drawer's tools use (finding 276):
+                    // on a fresh screen this button is grey, and grey without a word is the
+                    // reading the first device report gave a working button (finding 258).
+                    state = ToolsPlan.undo(routeState.nodeCount),
                     onClick = {
                         controller.undo()
                         // The last action on this screen that changed a measurement and said
@@ -1375,11 +1378,12 @@ fun ArMeasureScreen(
                 toolActions += ArAction(
                     label = torchLabel,
                     icon = Icons.Default.FlashlightOn,
+                    state = ToolState(enabled = true),
                     selected = torchOn,
                     onClick = { controller.toggleTorch() },
                 )
             }
-            ArActionRow(columns = pairColumns, actions = toolActions)
+            ArActionRow(columns = pairColumns, actions = toolActions, nodeCount = routeState.nodeCount)
 
             // One setting, one chip (finding 268). Six chips at once were five buttons nobody
             // pressed plus one they could not find; the chip names the cable the run is built
@@ -1745,7 +1749,6 @@ fun ArMeasureScreen(
     }
 }
 
-/** Blocking message with one action: missing permission, unsupported device, failed session. */
 /**
  * The sentence under a grey tool (finding 271).
  *
@@ -1754,12 +1757,7 @@ fun ArMeasureScreen(
  */
 @Composable
 private fun ToolReasonLine(reason: ToolReason?, nodeCount: Int) {
-    if (reason == null) return
-    val text = when (reason) {
-        ToolReason.RING_NEEDS_POINTS -> stringResource(R.string.ar_hint_ring_needs, nodeCount)
-        ToolReason.LOOP_NEEDS_ROOM -> stringResource(R.string.loop_needs_room)
-        ToolReason.MARKER_NOT_AVAILABLE -> stringResource(R.string.marker_unavailable)
-    }
+    val text = toolReasonText(reason, nodeCount) ?: return
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,
@@ -1768,6 +1766,25 @@ private fun ToolReasonLine(reason: ToolReason?, nodeCount: Int) {
     )
 }
 
+/**
+ * The one place a [ToolReason] becomes a sentence (finding 271).
+ *
+ * There are two ways to print the answer and they are the same answer: the drawer has room for a
+ * line under the button, and the action row - two buttons side by side, on glass, next to the
+ * primary - has none. The row puts the same sentence on the button as its `stateDescription`
+ * instead (finding 276), which is why the resolution is a function both call rather than a `when`
+ * in each of them: a second `when` is how the first one drifted away from the buttons it described.
+ */
+@Composable
+private fun toolReasonText(reason: ToolReason?, nodeCount: Int): String? = when (reason) {
+    null -> null
+    ToolReason.RING_NEEDS_POINTS -> stringResource(R.string.ar_hint_ring_needs, nodeCount)
+    ToolReason.LOOP_NEEDS_ROOM -> stringResource(R.string.loop_needs_room)
+    ToolReason.MARKER_NOT_AVAILABLE -> stringResource(R.string.marker_unavailable)
+    ToolReason.UNDO_NOTHING_TO_REMOVE -> stringResource(R.string.undo_nothing_to_remove)
+}
+
+/** Blocking message with one action: missing permission, unsupported device, failed session. */
 @Composable
 private fun GateMessage(
     text: String,
@@ -1827,13 +1844,19 @@ private fun calibrationLabel(reference: CalibrationReference): String = if (refe
     stringResource(R.string.calib_zollstock, shownLengthWithUnit(reference.realMetres.toFloat()))
 }
 
-/** One button of the action sheet, as data: [ArActionRow] decides how many fit side by side. */
+/**
+ * One button of the action sheet, as data: [ArActionRow] decides how many fit side by side.
+ *
+ * The state is a [ToolState] rather than an `enabled` flag (finding 276): a row button cannot be
+ * built grey without a reason any more than a drawer tool can, which is the whole point of having
+ * taught the rule to the type instead of to the three instances that happened to be in the drawer.
+ */
 private data class ArAction(
     val label: String,
     val icon: ImageVector,
+    val state: ToolState,
     val onClick: () -> Unit,
     val tone: ActionTone = ActionTone.SECONDARY,
-    val enabled: Boolean = true,
     val selected: Boolean = false,
 )
 
@@ -1847,22 +1870,14 @@ private data class ArAction(
  * anything.
  */
 @Composable
-private fun ArActionRow(columns: Int, actions: List<ArAction>) {
+private fun ArActionRow(columns: Int, actions: List<ArAction>, nodeCount: Int) {
     if (columns <= 1) {
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             actions.forEach { action ->
-                GloveButton(
-                    label = action.label,
-                    icon = action.icon,
-                    onClick = action.onClick,
-                    modifier = Modifier.fillMaxWidth(),
-                    tone = action.tone,
-                    enabled = action.enabled,
-                    selected = action.selected,
-                )
+                ArActionButton(action, nodeCount, Modifier.fillMaxWidth())
             }
         }
     } else {
@@ -1871,16 +1886,36 @@ private fun ArActionRow(columns: Int, actions: List<ArAction>) {
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             actions.forEach { action ->
-                GloveButton(
-                    label = action.label,
-                    icon = action.icon,
-                    onClick = action.onClick,
-                    modifier = Modifier.weight(1f),
-                    tone = action.tone,
-                    enabled = action.enabled,
-                    selected = action.selected,
-                )
+                ArActionButton(action, nodeCount, Modifier.weight(1f))
             }
         }
     }
+}
+
+/**
+ * One button of the row, with its reason attached to the button itself.
+ *
+ * The row has no room for a line - it is two glove buttons under the primary action - so the
+ * reason is announced rather than printed: `stateDescription` is what a screen reader adds after
+ * the label and the disabled state, and it is the only place a control this size can explain
+ * itself without pushing the next action off the glass (finding 276).
+ */
+@Composable
+private fun ArActionButton(action: ArAction, nodeCount: Int, modifier: Modifier) {
+    // Hoisted: a `semantics { }` lambda is not composable and `stringResource` may not be called
+    // inside it. `null` on a usable button, so an enabled control announces no excuse.
+    val reasonText = toolReasonText(action.state.reason, nodeCount)
+    GloveButton(
+        label = action.label,
+        icon = action.icon,
+        onClick = action.onClick,
+        modifier = if (reasonText == null) {
+            modifier
+        } else {
+            modifier.semantics { stateDescription = reasonText }
+        },
+        tone = action.tone,
+        enabled = action.state.enabled,
+        selected = action.selected,
+    )
 }

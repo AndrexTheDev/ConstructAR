@@ -20,6 +20,13 @@ package com.constructar.app.ui.ar
  * The invariant is enforced by the type rather than by discipline: a [ToolState] cannot be empty of
  * a reason while it is disabled, so a new tool cannot be added without one. Which reason a state
  * gets is decided here and nowhere else; the sentence lives in the resources.
+ *
+ * It was applied to this drawer only (finding 276). The action row two lines above it - the two
+ * buttons used on every metre, undo and torch - still carried a raw `enabled: Boolean`, and undo
+ * was therefore grey on every single entry to the screen and said nothing about it: the drawer had
+ * learned the rule and the button beside it had not, because the rule had been taught to the
+ * *instance* (`ToolsPlan`) instead of to the type. The row now takes a [ToolState] too, so the
+ * fourth silent grey button cannot be built either.
  */
 internal object ToolsPlan {
 
@@ -44,6 +51,19 @@ internal object ToolsPlan {
     fun marker(available: Boolean): ToolState = when {
         available -> ToolState(enabled = true)
         else -> ToolState(enabled = false, reason = ToolReason.MARKER_NOT_AVAILABLE)
+    }
+
+    /**
+     * "Remove last point" on a run that has no point yet.
+     *
+     * The one control on the sheet that is disabled the moment the screen opens, and the one whose
+     * reason the operator can read without being told: there is nothing to remove. It is still
+     * named, because a dimmed button and a broken button look the same (finding 258) and because
+     * this is the same rule as the drawer's - not a second, softer one for the buttons in the row.
+     */
+    fun undo(nodeCount: Int): ToolState = when {
+        nodeCount > 0 -> ToolState(enabled = true)
+        else -> ToolState(enabled = false, reason = ToolReason.UNDO_NOTHING_TO_REMOVE)
     }
 }
 
@@ -71,4 +91,7 @@ internal enum class ToolReason {
 
     /** This device's pipeline cannot read a marker at all. */
     MARKER_NOT_AVAILABLE,
+
+    /** The run has no point yet, so "Remove last point" has nothing to take back. */
+    UNDO_NOTHING_TO_REMOVE,
 }

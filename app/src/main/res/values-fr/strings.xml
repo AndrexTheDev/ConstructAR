@@ -130,6 +130,7 @@
     <string name="crash_dismiss">Écarter le rapport</string>
     <string name="ar_add_point">Poser le point ici</string>
     <string name="ar_undo">Supprimer le dernier point</string>
+    <string name="undo_nothing_to_remove">Aucun point pour l’instant - il n’y a rien à supprimer.</string>
     <string name="ar_close_loop">Fermer en boucle</string>
     <string name="ar_finish">Enregistrer le tronçon</string>
     <string name="ar_leave_title">Quitter le tracé ?</string>
