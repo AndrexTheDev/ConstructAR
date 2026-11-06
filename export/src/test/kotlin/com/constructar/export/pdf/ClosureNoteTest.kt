@@ -8,6 +8,7 @@ package com.constructar.export.pdf
 
 import com.constructar.core.model.ScanClosure
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -30,6 +31,7 @@ class ClosureNoteTest {
         val note = closureNote(
             ScanClosure(closures = 1, movedNodes = 42, nodes = 380, maxShiftMetres = 0.183f),
             labels.closureNote,
+            labels.closureNoteUnfinished,
         )
 
         assertTrue("the note has to name how far the geometry moved: $note", note!!.contains("0.18 m"))
@@ -41,7 +43,7 @@ class ClosureNoteTest {
     fun `a scan without a closure adds nothing`() {
         assertNull(
             "an ordinary room must not carry a sentence about a correction nobody confirmed",
-            closureNote(null, labels.closureNote),
+            closureNote(null, labels.closureNote, labels.closureNoteUnfinished),
         )
     }
 
@@ -49,6 +51,19 @@ class ClosureNoteTest {
     fun `a record with no confirmation in it is not a closure either`() {
         // Zero confirmations with a record present would be a contradiction; the note refuses to
         // print it rather than reporting a correction of nothing.
-        assertNull(closureNote(ScanClosure(closures = 0), labels.closureNote))
+        assertNull(closureNote(ScanClosure(closures = 0), labels.closureNote, labels.closureNoteUnfinished))
+    }
+
+    @Test
+    fun `a confirmation whose solver stopped prints the sentence, never the zeros`() {
+        // Finding 252: "0 of 0 nodes" would be a correction of nothing, presented as one.
+        val note = closureNote(
+            ScanClosure(closures = 1, converged = false),
+            labels.closureNote,
+            labels.closureNoteUnfinished,
+        )
+
+        assertEquals(labels.closureNoteUnfinished, note)
+        assertFalse("no number may stand in for a result: $note", note!!.contains("0 of 0"))
     }
 }

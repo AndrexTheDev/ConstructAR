@@ -283,7 +283,11 @@ class ProtocolPdfWriter(
             // HUD showed at the time (findings 246, 249, 251). Printed before the accuracy note
             // because it changes what the positions mean, while the accuracy note explains how
             // exact the distances are.
-            closureNote(scan?.closures, content.labels.closureNote)?.let { text ->
+            closureNote(
+                scan?.closures,
+                content.labels.closureNote,
+                content.labels.closureNoteUnfinished,
+            )?.let { text ->
                 y += 4
                 note(text)
             }
@@ -854,8 +858,15 @@ internal fun scanLimitedNote(scanLimited: Boolean, template: String): String? =
  * a scan without a closure, and a project with no scan at all - end in `null` rather than in a
  * sentence about a correction nobody confirmed.
  */
-internal fun closureNote(closure: ScanClosure?, template: String): String? {
+internal fun closureNote(
+    closure: ScanClosure?,
+    template: String,
+    unfinishedTemplate: String,
+): String? {
     if (closure == null || closure.closures <= 0) return null
+    // A confirmation whose solver gave up has no numbers to print, only the sentence saying so
+    // (findings 247, 252). "0 of 0 nodes" would be a correction of nothing, presented as one.
+    if (!closure.converged) return unfinishedTemplate
     return String.format(
         Locale.ROOT,
         template,

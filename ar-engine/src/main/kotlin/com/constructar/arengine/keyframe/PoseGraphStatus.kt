@@ -62,6 +62,16 @@ data class PoseGraphStatus(
      * (finding 246's rule, one level up).
      */
     val lastCorrection: CorrectionReport? = null,
+    /**
+     * Whether the last confirmed closure's solver converged: `null` before any closure, `true`
+     * with a report, `false` with none (finding 252).
+     *
+     * Without this, `closures > 0` and `lastCorrection == null` meant two different things that
+     * looked identical on the graph line: "confirmed, and the graph was already consistent" and
+     * "confirmed, and the optimiser gave up". The dialog made that distinction for as long as it
+     * was open (finding 247); the HUD, the project file and the protocol did not keep it.
+     */
+    val lastClosureConverged: Boolean? = null,
 ) {
     val standing: PoseGraphStanding
         get() = when {
@@ -85,9 +95,15 @@ data class PoseGraphStatus(
             droppedByQueue: Int = 0,
             closures: Int = 0,
             lastCorrection: CorrectionReport? = null,
+            lastClosureConverged: Boolean? = null,
         ): PoseGraphStatus {
             if (applier == null) {
-                return PoseGraphStatus(lost = droppedByQueue, closures = closures, lastCorrection = lastCorrection)
+                return PoseGraphStatus(
+                    lost = droppedByQueue,
+                    closures = closures,
+                    lastCorrection = lastCorrection,
+                    lastClosureConverged = lastClosureConverged,
+                )
             }
             return PoseGraphStatus(
                 nodes = applier.appliedNodes,
@@ -95,6 +111,7 @@ data class PoseGraphStatus(
                 lost = droppedByQueue + applier.refusedNodes + applier.droppedEdges,
                 closures = closures,
                 lastCorrection = lastCorrection,
+                lastClosureConverged = lastClosureConverged,
             )
         }
     }

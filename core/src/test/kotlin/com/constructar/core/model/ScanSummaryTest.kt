@@ -107,4 +107,21 @@ class ScanSummaryTest {
         assertEquals(380, closure?.nodes)
         assertEquals(0.183f, closure?.maxShiftMetres ?: 0f, 1e-4f)
     }
+
+    @Test
+    fun `a closure whose solver stopped keeps saying so in the file`() {
+        // The numbers of a half-descent are not a correction, and a file that stored only zeros
+        // would tell a later reader the graph was already consistent (findings 247, 252).
+        val saved = json.encodeToString(
+            ScanSummary.serializer(),
+            ScanSummary(
+                meshTriangleCount = 12000,
+                closures = ScanClosure(closures = 1, converged = false),
+            ),
+        )
+        val loaded = json.decodeFromString(ScanSummary.serializer(), saved)
+
+        assertEquals(false, loaded.closures?.converged)
+        assertTrue("the verdict has to be in the file: $saved", saved.contains("\"converged\": false"))
+    }
 }

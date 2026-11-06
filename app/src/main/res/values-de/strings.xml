@@ -81,6 +81,7 @@
     <string name="ar_pose_graph_lost">Verlorene Keyframes: %1$d</string>
     <string name="ar_pose_graph_closures">Schleife: %1$d bestätigt</string>
     <string name="ar_pose_graph_closure_shift">Letzte Schleife: %1$d von %2$d Knoten bewegt, bis zu %3$s</string>
+    <string name="ar_pose_graph_closure_unfinished">Letzte Schleife: kein Ergebnis (Optimierer abgebrochen)</string>
     <string name="loop_check">Rückkehr prüfen</string>
     <string name="loop_title">Schleife schließen</string>
     <string name="loop_offer">Der Weg ist wieder %1$s von einem früheren Punkt entfernt. Schließen setzt voraus, dass es derselbe Ort ist.</string>
@@ -160,6 +161,7 @@
     <string name="export_room_scan">Raumscan aufgenommen: %1$d k Dreiecke - im Protokoll; das 3D-Modell enthält die Strecken</string>
     <string name="export_room_scan_limited">Nur ein Teil des Raums wurde erfasst (Scan-Limit) - miss nach, was fehlt, bevor du das übergibst.</string>
     <string name="export_room_closure">Schleife: %1$d von %2$d Knoten bewegt, bis zu %3$s</string>
+    <string name="export_room_closure_unfinished">Schleife bestätigt, aber der Optimierer hat abgebrochen: die Positionen sind unkorrigiert.</string>
     <string name="export_offline_note">Dateien werden in den gewählten Ordner geschrieben. Nichts wird hochgeladen; Export funktioniert im Flugmodus und im Keller.</string>
     <string name="export_about">%1$s %2$s · %3$s</string>
     <string name="project_none">Kein Projekt geöffnet</string>
@@ -388,6 +390,7 @@
     <string name="pdf_note_accuracy">Erwartete Genauigkeit: 1-2 cm auf einer ebenen Wand zwischen 1 und 4 m, 3-6 cm wo nur Tiefendaten vorliegen, rund 1 %% der Länge auf einer Diagonale. Die Konfidenz ist der schwächste Punkt einer Strecke - unter %1$d %% muss sie nachgeprüft werden.</string>
     <string name="pdf_note_scan_limited">Scan-Limit erreicht: Nur ein Teil des Raums wurde erfasst. Die Längen, Fittings und Preise in diesem Protokoll sind gemessen und davon unberührt - Bereiche außerhalb des erfassten Volumens wurden nicht vermessen und fehlen in diesem Protokoll.</string>
     <string name="pdf_note_closure">Schleife geschlossen (%1$d): Die letzte bewegte %2$d von %3$d Knoten um bis zu %4$s. Die Geometrie wurde auf Bestätigung des Bedieners zurückgefaltet - die Längen in diesem Protokoll sind gemessen, die Positionen korrigiert.</string>
+    <string name="pdf_note_closure_unfinished">Eine Schleife wurde bestätigt, aber der Optimierer hat vor einem Ergebnis abgebrochen - die Positionen in diesem Protokoll sind die unkorrigierten. Die Längen sind davon unberührt.</string>
     <string name="pdf_note_recovered">Nach einem Abbruch geborgen - Längen und Fittings stimmen, die 3D-Position fehlt im Modell: %1$s</string>
     <string name="pdf_note_unbuildable">Für diese Strecken ließ sich keine 3D-Geometrie bauen - Längen und Fittings zählen trotzdem: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - auf dem Gerät erzeugt</string>

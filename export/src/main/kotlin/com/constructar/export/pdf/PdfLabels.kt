@@ -98,6 +98,16 @@ data class PdfLabels(
             "The geometry was folded back on the operator's confirmation - the lengths in this " +
             "protocol were measured, the positions were corrected.",
     /**
+     * Printed instead of [closureNote] when the last closure's optimiser did not converge; no
+     * placeholders.
+     *
+     * The numbers of a half-descent are not a correction (finding 247), and a document that
+     * printed "0 of 0 nodes" would tell the customer the graph was already consistent (252).
+     */
+    val closureNoteUnfinished: String =
+        "A loop closure was confirmed, but the optimiser stopped before it reached a result - " +
+            "the positions in this protocol are the uncorrected ones. Lengths are unaffected.",
+    /**
      * Printed under the summary when the scan volume hit its block budget; no placeholders.
      *
      * A full volume stops allocating blocks, so the mesh freezes at its current extent and the

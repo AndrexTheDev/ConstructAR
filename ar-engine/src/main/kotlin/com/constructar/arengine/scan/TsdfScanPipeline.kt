@@ -246,6 +246,9 @@ class TsdfScanPipeline(
     private var closedLoops = 0
     private var lastCorrection: CorrectionReport? = null
 
+    /** `null` before the first closure, then the last one's verdict (finding 252). */
+    private var lastClosureConverged: Boolean? = null
+
     private enum class ClosureAction { LOOK, CONFIRM, DISMISS }
 
     /** Runs the conversation on the worker. Null until the engine exists. */
@@ -612,6 +615,7 @@ class TsdfScanPipeline(
         mutablePoseGraphStatus.value = PoseGraphStatus()
         closedLoops = 0
         lastCorrection = null
+        lastClosureConverged = null
         poseGraphCloser = null
         mutableClosureState.value = ClosureState.Idle
         val job = workerJob
@@ -668,9 +672,13 @@ class TsdfScanPipeline(
             }
             if (next is ClosureState.Closed) {
                 // The edge is in the graph whether or not the solver finished, so the count is
-                // every confirmation - but only a converged run has a report to keep.
+                // every confirmation - but only a converged run has a report to keep, and the
+                // report of an *earlier* closure must not stand in for this one's (finding 252:
+                // assigning through `let` left the previous numbers on screen as if they were
+                // the last closure's).
                 closedLoops += 1
-                next.correction?.let { lastCorrection = it }
+                lastClosureConverged = next.optimisation.converged
+                lastCorrection = next.correction
             }
             mutableClosureState.value = next
         }
@@ -694,6 +702,7 @@ class TsdfScanPipeline(
             droppedByQueue = keyframeQueue.dropped,
             closures = closedLoops,
             lastCorrection = lastCorrection,
+            lastClosureConverged = lastClosureConverged,
         )
     }
 

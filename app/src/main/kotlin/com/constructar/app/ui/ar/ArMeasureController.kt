@@ -743,6 +743,9 @@ class ArMeasureController(private val context: Context) {
                 movedNodes = correction?.movedNodes ?: 0,
                 nodes = correction?.nodes ?: 0,
                 maxShiftMetres = correction?.maxShiftMetres ?: 0f,
+                // The document must not read "0 of 0 nodes" for a run whose solver gave up: the
+                // absence of a report is not a report of no movement (findings 247, 252).
+                converged = graph.lastClosureConverged != false,
             )
         } else {
             null

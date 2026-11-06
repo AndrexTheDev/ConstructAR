@@ -81,6 +81,7 @@
     <string name="ar_pose_graph_lost">Images clés perdues : %1$d</string>
     <string name="ar_pose_graph_closures">Fermeture : %1$d confirmée</string>
     <string name="ar_pose_graph_closure_shift">Dernière fermeture : %1$d nœuds sur %2$d déplacés, jusqu’à %3$s</string>
+    <string name="ar_pose_graph_closure_unfinished">Dernière fermeture : pas de résultat (optimiseur arrêté)</string>
     <string name="loop_check">Vérifier le retour</string>
     <string name="loop_title">Fermer la boucle</string>
     <string name="loop_offer">Le parcours repasse à %1$s d’un point antérieur. Fermer suppose que c’est le même endroit.</string>
@@ -160,6 +161,7 @@
     <string name="export_room_scan">Scan de la pièce enregistré : %1$d k triangles - il va dans le protocole ; le modèle 3D contient les tracés</string>
     <string name="export_room_scan_limited">Une partie seulement de la pièce a été capturée (limite de numérisation) : mesure ce qui manque avant de le transmettre.</string>
     <string name="export_room_closure">Fermeture : %1$d nœuds sur %2$d déplacés, jusqu’à %3$s</string>
+    <string name="export_room_closure_unfinished">Fermeture confirmée, mais l’optimiseur a abandonné : les positions ne sont pas corrigées.</string>
     <string name="export_offline_note">Les fichiers sont écrits dans le dossier choisi. Rien n’est téléversé ; l’export fonctionne en mode avion et au sous-sol.</string>
     <string name="export_about">%1$s %2$s · %3$s</string>
     <string name="project_none">Aucun chantier ouvert</string>
@@ -388,6 +390,7 @@
     <string name="pdf_note_accuracy">Précision attendue : 1-2 cm sur un mur plat entre 1 et 4 m, 3-6 cm là où seules les données de profondeur existent, environ 1 %% de la longueur sur une diagonale. La confiance est le point le plus faible d’un tracé - sous %1$d %%, il faut le revérifier.</string>
     <string name="pdf_note_scan_limited">Limite de numérisation atteinte : une partie seulement de la pièce a été capturée. Les longueurs, les raccords et les prix de ce protocole sont mesurés et non affectés : les zones hors du volume capturé n’ont pas été mesurées et ne figurent pas dans ce protocole.</string>
     <string name="pdf_note_closure">Fermeture de boucle confirmée (%1$d) : la dernière a déplacé %2$d nœuds sur %3$d, jusqu’à %4$s. La géométrie a été repliée sur la confirmation de l’opérateur : les longueurs de ce protocole sont mesurées, les positions corrigées.</string>
+    <string name="pdf_note_closure_unfinished">Une fermeture de boucle a été confirmée, mais l’optimiseur s’est arrêté avant d’aboutir : les positions de ce protocole sont les positions non corrigées. Les longueurs ne sont pas affectées.</string>
     <string name="pdf_note_recovered">Récupéré après une interruption : longueurs et raccords exacts, la position 3D n’est pas dans le modèle : %1$s</string>
     <string name="pdf_note_unbuildable">Aucune géométrie 3D n’a pu être générée pour ces tracés : longueurs et raccords comptent quand même : %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - généré sur l’appareil</string>

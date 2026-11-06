@@ -59,7 +59,6 @@ import com.constructar.core.bom.MaterialList
 import com.constructar.core.bom.MaterialListBuilder
 import com.constructar.core.bom.MaterialListOptions
 import com.constructar.core.model.ProjectRecord
-import com.constructar.core.units.LengthFormatter
 import com.constructar.core.price.Pricing
 import com.constructar.export.ExportService
 import com.constructar.export.pdf.PdfSection
@@ -410,12 +409,18 @@ fun ExportScreen(
                     // about is an inference presented as a measurement (findings 217, 251).
                     scan.closures?.takeIf { it.closures > 0 }?.let { closure ->
                         Text(
-                            stringResource(
-                                R.string.export_room_closure,
-                                closure.movedNodes,
-                                closure.nodes,
-                                LengthFormatter.format(closure.maxShiftMetres),
-                            ),
+                            if (closure.converged) {
+                                // The screen is localised, so the number is too: the protocol's
+                                // dot belongs to the document, not to this line (finding 252).
+                                stringResource(
+                                    R.string.export_room_closure,
+                                    closure.movedNodes,
+                                    closure.nodes,
+                                    shownLengthWithUnit(closure.maxShiftMetres),
+                                )
+                            } else {
+                                stringResource(R.string.export_room_closure_unfinished)
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = SiteColors.warning,
                         )

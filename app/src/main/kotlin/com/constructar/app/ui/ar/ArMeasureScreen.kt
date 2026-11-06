@@ -834,6 +834,15 @@ fun ArMeasureScreen(
                                 color = HudStyle.hint,
                             )
                         }
+                        // A closure whose solver gave up is not a closure that moved nothing
+                        // (findings 247, 252): silence here would read as a consistent graph.
+                        if (correction == null && graphStatus.lastClosureConverged == false) {
+                            Text(
+                                text = stringResource(R.string.ar_pose_graph_closure_unfinished),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = SiteColors.warning,
+                            )
+                        }
                     }
                 }
                 lastHit?.let { resolution ->

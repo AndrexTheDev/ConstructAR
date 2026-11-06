@@ -74,6 +74,15 @@ data class ScanClosure(
     val nodes: Int = 0,
     /** How far the last converged closure moved the worst node, in metres. */
     val maxShiftMetres: Float = 0f,
+    /**
+     * Whether the last closure's optimiser converged (finding 252).
+     *
+     * `false` means the numbers above are not "nothing moved" but "there is no result": the
+     * solver hit its iteration limit and left the poses halfway (finding 247). Defaults to `true`,
+     * because a file written before this field can only describe a converged run - there was no
+     * other kind of record then.
+     */
+    val converged: Boolean = true,
 )
 
 /**

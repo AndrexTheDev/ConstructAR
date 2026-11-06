@@ -171,4 +171,20 @@ class PoseGraphStatusTest {
         assertEquals(0, status.closures)
         assertEquals(null, status.lastCorrection)
     }
+
+    @Test
+    fun `a closure whose solver gave up is not a closure that moved nothing`() {
+        // Finding 252: `closures > 0` with no report meant two things - "the graph was already
+        // consistent" and "the optimiser stopped" - and the graph line could not tell them apart.
+        val status = PoseGraphStatus.of(
+            applier = KeyframeApplier(RecordingSink()),
+            closures = 2,
+            lastCorrection = null,
+            lastClosureConverged = false,
+        )
+
+        assertEquals(2, status.closures)
+        assertEquals(null, status.lastCorrection)
+        assertEquals(Boolean.FALSE, status.lastClosureConverged)
+    }
 }
