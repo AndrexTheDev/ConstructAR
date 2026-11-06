@@ -58,6 +58,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -475,24 +476,25 @@ fun ProjectScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp),
                 )
-                project.routes.forEach { route ->
+                // The rows come from `RunList`: every row carries the run's own stored name, the
+                // one the protocol and the CSV print, so two runs of the same cable cannot render
+                // as two identical rows (finding 278). The metres are the reported ones, which is
+                // what makes the list add up to the total above it (finding 277).
+                RunList.rows(project).forEach { row ->
                     RouteRow(
-                        kind = route.spec.kind.routingLabel(),
+                        kind = row.route.spec.kind.routingLabel(),
+                        identity = row.identity,
                         detail = stringResource(
                             R.string.run_detail,
-                            route.spec.label,
-                            route.spec.sizeLabel,
+                            row.route.spec.label,
+                            row.route.spec.sizeLabel,
                         ),
-                        // The reported metres, not the measured ones: this row sits under the
-                        // project's total, which is corrected by the calibration, and a list that
-                        // does not add up to its own sum is a number the operator can see is wrong
-                        // (finding 277).
-                        length = shownLengthWithUnit(project.calibratedMeters(route)),
+                        length = shownLengthWithUnit(row.meters),
                         // A run recovered after an interruption counts in every length and every
                         // fitting, but its 3D geometry is not in the model. Saying so is the
                         // difference between a documented limitation and a surprise in a viewer.
-                        badge = if (route.recovered) stringResource(R.string.run_recovered) else null,
-                        onDelete = { routeToRemove = route },
+                        badge = if (row.route.recovered) stringResource(R.string.run_recovered) else null,
+                        onDelete = { routeToRemove = row.route },
                     )
                 }
             }
@@ -769,7 +771,12 @@ fun ProjectScreen(
                 Text(
                     stringResource(
                         R.string.run_delete_body,
-                        stringResource(R.string.run_detail, run.spec.label, run.spec.sizeLabel),
+                        // The run's own name, not its cable: this dialog destroys one run, and the
+                        // name is the only string that says which - it is also what the protocol
+                        // prints, so the operator can match the dialog to the page (finding 278).
+                        // The stored label already carries kind and size ("CABLE 20 mm #3"), which
+                        // is why naming it loses nothing the cable line used to say.
+                        run.label,
                         // The same metres the row above it shows and the total counts (finding 277).
                         shownLengthWithUnit(project.calibratedMeters(run)),
                     ),
@@ -835,6 +842,7 @@ private fun PriceLine(label: String, value: String, emphasis: Boolean = false) {
 @Composable
 private fun RouteRow(
     kind: String,
+    identity: String,
     detail: String,
     length: String,
     badge: String? = null,
@@ -847,11 +855,27 @@ private fun RouteRow(
             .padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
+        Column(
+            // The three lines are one thing to a screen reader: "Kabel, CABLE 20 mm #3, NYM-J ...
+            // 20 mm" is a row, and reading it as three unrelated texts was the same defect one
+            // layer down. The delete button stays its own element.
+            modifier = Modifier
+                .weight(1f)
+                .semantics(mergeDescendants = true) {},
+        ) {
             Text(kind, style = MaterialTheme.typography.titleSmall)
             Text(
                 detail,
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // The name the protocol and the CSV print, verbatim and never re-derived: it is the
+            // one string that tells two runs of the same cable apart (finding 278).
+            Text(
+                identity,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

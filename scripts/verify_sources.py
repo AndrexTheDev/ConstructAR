@@ -1784,6 +1784,43 @@ def check_totals_are_sums_of_printed_rows() -> None:
                                "sum of the printed rows and the paperwork does not add up "
                                "(finding 154)")
 
+def check_the_run_row_names_its_run() -> None:
+    """The project's run list has to name the run the paperwork names (finding 278).
+
+    The row printed the kind ("Kabel"), the cable and the size - and never the run's own name,
+    which is the one string the protocol's first column, the CSV and the AR screen's saved card all
+    print ("CABLE 20 mm #3"). Two runs of the same cable on the same wall were therefore two
+    identical rows, one delete button away from losing the wrong one, and the delete dialog named
+    the cable rather than the run.
+
+    Two rules, both cheap to check: the row's identity comes from `RunList` and is the *stored*
+    label (a name derived from the spec would contradict the page), and the confirmation names the
+    run it destroys.
+    """
+    ui = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui"
+    rows = ui / "RunList.kt"
+    if not rows.exists():
+        add(rows, "`RunList` is gone - a run row could be built without the run's stored name, "
+                  "which is how two runs of one cable became two identical rows (finding 278)")
+        return
+    row_text = rows.read_text(encoding="utf-8")
+    if "identity = route.label" not in row_text:
+        add(rows, "the row's identity is no longer the stored `route.label` - a name derived from "
+                  "the cable would contradict the protocol, which prints the stored one")
+    if "meters = project.calibratedMeters(route)" not in row_text:
+        add(rows, "the row's metres are no longer the reported ones, so the list stops adding up "
+                  "to the project's total (finding 277)")
+    screen = ui / "ProjectScreen.kt"
+    screen_text = screen.read_text(encoding="utf-8")
+    if "RunList.rows(project)" not in screen_text:
+        add(screen, "the run list no longer comes from `RunList`, so a row can be built without a "
+                    "name - two runs of one cable render as two identical rows (finding 278)")
+    if "identity = row.identity" not in screen_text:
+        add(screen, "the run row no longer shows the run's own name (finding 278)")
+    if "run.label" not in screen_text:
+        add(screen, "the delete confirmation no longer names the run it destroys (finding 278)")
+
+
 def check_csv_headers_name_their_cells() -> None:
     """A column of numbers may not sit under a blank header (finding 155).
 
@@ -4827,6 +4864,7 @@ def main() -> int:
     check_the_tag_decoder_is_vendored_and_credited()
     check_the_plane_fitter_is_reproducible()
     check_totals_are_sums_of_printed_rows()
+    check_the_run_row_names_its_run()
     check_csv_headers_name_their_cells()
     check_screen_states_the_trade_defaults()
     check_failure_reporter_finds_the_pull_request()
