@@ -94,6 +94,14 @@ internal object MeasureGuide {
                     else -> GuideLine.DISTANCE
                 },
             )
+            // A run with a guessed point in it (finding 275). This is a **warning**, not a
+            // diagnostic: the weakest point is the one number that says whether the length about
+            // to be saved is a measurement or an estimate, and it is actionable only while the
+            // operator is still standing in front of it. It sat behind the diagnostics toggle for
+            // a round because it had been counted among the eight technical lines that made the
+            // sheet unreadable - but those lines print on every frame, and this one prints only
+            // when the run is actually weak.
+            if (state.weakPointPercent != null) add(GuideLine.WEAK_POINT)
             // One refusal, about the button that is on the glass. The ring left the sheet in
             // finding 268 (it lives in the tools drawer with its own sentence), so a line about it
             // here would explain a button the operator cannot see.
@@ -111,7 +119,8 @@ internal object MeasureGuide {
         GuideLine.COACHING,
         GuideLine.SCAN_FULL,
         GuideLine.SCAN_BEHIND,
-        GuideLine.SCAN_UNAVAILABLE -> GuideTone.ATTENTION
+        GuideLine.SCAN_UNAVAILABLE,
+        GuideLine.WEAK_POINT -> GuideTone.ATTENTION
         GuideLine.BLOCK_RUN -> GuideTone.QUIET
         GuideLine.SCAN_EMPTY,
         GuideLine.SCAN_PROGRESS,
@@ -226,6 +235,12 @@ internal enum class GuideLine {
     /** A ring: its length, and that saving is allowed. */
     RING,
 
+    /**
+     * At least one point came from something weaker than a surface hit, so the run's length is
+     * partly a guess. Never hidden: a warning behind a toggle is not a warning (finding 275).
+     */
+    WEAK_POINT,
+
     /** Why "Save this run" cannot be tapped. */
     BLOCK_RUN,
 }
@@ -262,4 +277,11 @@ internal data class GuideState(
     val meshVersion: Int = 0,
     val hitBlockBudget: Boolean = false,
     val droppedShare: Float = 0f,
+    /**
+     * The weakest point's confidence as a percentage, or `null` when the run is not weak.
+     *
+     * A *number* rather than a sentence: the object stays string-free, and the screen decides how
+     * a percentage is written.
+     */
+    val weakPointPercent: Int? = null,
 )

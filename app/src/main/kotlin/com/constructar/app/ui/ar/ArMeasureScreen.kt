@@ -586,9 +586,6 @@ fun ArMeasureScreen(
     }
     val guidanceText = tracking.guidance.message(tracking)
     val warningText = routeState.warning.message()
-    val weakPointText = RunConfidence
-        .weakPointPercent(routeState.nodeCount, routeState.worstNodeConfidence)
-        ?.let { percent -> stringResource(R.string.ar_confidence_weak, percent) }
     val readinessIssue = readiness
     val readinessText = if (readinessIssue != null && !readinessIssue.canStartSession) {
         readinessIssue.message()
@@ -655,6 +652,12 @@ fun ArMeasureScreen(
         meshVersion = scanState.meshVersion,
         hitBlockBudget = scanState.hitBlockBudget,
         droppedShare = scanState.droppedFraction,
+        // The weakest point of the run, as a percentage - the one number that says whether the
+        // length about to be saved is a measurement or an estimate (finding 275).
+        weakPointPercent = RunConfidence.weakPointPercent(
+            routeState.nodeCount,
+            routeState.worstNodeConfidence,
+        ),
     )
     val guideStep = MeasureGuide.currentStep(guideState)
     // Where the operator is, in the report's own words (finding 266): "the app crashed" is not a
@@ -720,6 +723,9 @@ fun ArMeasureScreen(
             GuideLine.DISTANCE -> distanceText
             GuideLine.RING -> ringText
             GuideLine.CAPTURE_WALK -> captureWalkText
+            GuideLine.WEAK_POINT -> guideState.weakPointPercent?.let { percent ->
+                stringResource(R.string.ar_confidence_weak, percent)
+            }
             GuideLine.BLOCK_RUN -> blockRunText
         }
         text?.let { line to it }
@@ -1115,13 +1121,6 @@ fun ArMeasureScreen(
                     }
                     warningText?.let {
                         Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
-                    }
-                    // The weakest point of the run, not the last one: one guessed point makes the
-                    // whole length a guess, and this is the only moment it can still be re-tapped.
-                    if (diagnosticsOpen) {
-                        weakPointText?.let {
-                            Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
-                        }
                     }
                     roomTotalText?.let {
                         Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.accent)

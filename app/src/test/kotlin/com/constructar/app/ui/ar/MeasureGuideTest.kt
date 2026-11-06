@@ -34,6 +34,7 @@ class MeasureGuideTest {
         meshVersion: Int = 1,
         hitBlockBudget: Boolean = false,
         droppedShare: Float = 0f,
+        weakPointPercent: Int? = null,
     ) = GuideState(
         mode = mode,
         nodeCount = nodeCount,
@@ -45,6 +46,7 @@ class MeasureGuideTest {
         meshVersion = meshVersion,
         hitBlockBudget = hitBlockBudget,
         droppedShare = droppedShare,
+        weakPointPercent = weakPointPercent,
     )
 
     private fun capture(
@@ -73,12 +75,14 @@ class MeasureGuideTest {
         canFinish: Boolean = false,
         closedLoop: Boolean = false,
         coaching: Boolean = false,
+        weakPointPercent: Int? = null,
     ) = state(
         mode = MeasureMode.MEASURE,
         nodeCount = nodeCount,
         canFinish = canFinish,
         closedLoop = closedLoop,
         coaching = coaching,
+        weakPointPercent = weakPointPercent,
     )
 
     // ── Finding 265: the gauge survives the coaching line ───────────────────────────────────────
@@ -309,5 +313,47 @@ class MeasureGuideTest {
     @Test
     fun `the run threshold is the one the session finishes on`() {
         assertEquals(LeaveGuard.MIN_NODES_FOR_A_RUN, MeasureGuide.NODES_FOR_A_RUN)
+    }
+
+    @Test
+    fun `a weak run says so where the point can still be re-tapped`() {
+        // Finding 275: the weakest point of the run is the one number that says whether the length
+        // about to be saved is a measurement or an estimate. It had been counted among the eight
+        // technical lines of finding 268 and hidden behind the diagnostics toggle - but a warning
+        // behind a toggle is not a warning.
+        val lines = MeasureGuide.lines(measuring(nodeCount = 3, canFinish = true, weakPointPercent = 70))
+
+        assertTrue("the run is weak, so it says so", GuideLine.WEAK_POINT in lines)
+        assertTrue(
+            "after the line that says what the run is",
+            lines.indexOf(GuideLine.WEAK_POINT) > lines.indexOf(GuideLine.DISTANCE),
+        )
+        assertEquals(
+            "and it is printed as something to act on, not as a whisper",
+            GuideTone.ATTENTION,
+            MeasureGuide.tone(GuideLine.WEAK_POINT),
+        )
+    }
+
+    @Test
+    fun `the weak point comes before the reason the save button is grey`() {
+        // Both can be true at once: the warning is about the run, the refusal is about the button,
+        // and the button's explanation stays the last thing read.
+        val lines = MeasureGuide.lines(measuring(nodeCount = 1, canFinish = false, weakPointPercent = 62))
+
+        assertTrue(GuideLine.WEAK_POINT in lines)
+        assertTrue(GuideLine.BLOCK_RUN in lines)
+        assertTrue(lines.indexOf(GuideLine.WEAK_POINT) < lines.indexOf(GuideLine.BLOCK_RUN))
+    }
+
+    @Test
+    fun `a strong run says nothing about confidence`() {
+        assertFalse(GuideLine.WEAK_POINT in MeasureGuide.lines(measuring(nodeCount = 4, canFinish = true)))
+    }
+
+    @Test
+    fun `a walkthrough has no run to be weak`() {
+        val lines = MeasureGuide.lines(state(mode = MeasureMode.CAPTURE, nodeCount = 3, weakPointPercent = 40))
+        assertFalse("a walkthrough never prints a point sentence", GuideLine.WEAK_POINT in lines)
     }
 }
