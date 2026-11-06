@@ -118,8 +118,11 @@ object Diagnostics {
      */
     private fun localeLine(): String {
         val app = appContext?.resources?.configuration?.locales?.get(0)?.toLanguageTag()
-        val device = LocaleList.getDefault().joinToString(",") { it.toLanguageTag() }
-        return "Locale: app=" + (app ?: "?") + " device=" + device
+        // Indexed rather than iterated: `LocaleList` is only an `Iterable` from API 26 in the
+        // compile stubs, and this app starts at 24 (CI said so: UNRESOLVED_REFERENCE joinToString).
+        val device = LocaleList.getDefault()
+        val tags = (0 until device.size()).map { device[it].toLanguageTag() }
+        return "Locale: app=" + (app ?: "?") + " device=" + tags.joinToString(",")
     }
 
     private fun append(line: String) {
