@@ -106,13 +106,26 @@ jobs:
       - name: assembleBeta
         run: |
           set -o pipefail
-          gradle --no-daemon --stacktrace :app:assembleBeta 2>&1 | tee /tmp/beta.log | tail -n 60
+          if ! gradle --no-daemon --stacktrace :app:assembleBeta 2>&1 | tee /tmp/beta.log | tail -n 60; then
+            # The job log of a failed run is not always reachable through the API, so the tail is
+            # posted as an annotation: that one always is. Single line - a newline would end it.
+            python3 - <<'ANNOTATE'
+import json
+tail = open('/tmp/beta.log', errors='replace').read().strip().splitlines()[-70:]
+print('::error title=assembleBeta failed::' + json.dumps(' | '.join(tail))[:4000])
+ANNOTATE
+            exit 1
+          fi
 
       - name: Name the APK after the commit it came from
         run: |
           set -euo pipefail
-          apk=$(find app/build/outputs/apk/beta -name '*.apk' | head -n 1)
-          test -n "$apk"
+          apk=$(find app/build/outputs/apk/beta -name '*.apk' 2>/dev/null | head -n 1 || true)
+          if [ -z "$apk" ]; then
+            echo "::error title=no APK produced::app/build/outputs/apk/beta holds no .apk - the assemble step reported success but left nothing behind"
+            find app/build/outputs -maxdepth 3 -type d 2>/dev/null | head -n 20 || true
+            exit 1
+          fi
           out="ConstructAR-beta-${GITHUB_SHA::7}.apk"
           cp "$apk" "$out"
           ls -l "$out"

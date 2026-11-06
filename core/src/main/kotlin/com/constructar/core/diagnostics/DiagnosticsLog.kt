@@ -38,7 +38,7 @@ class DiagnosticsLog(
 
     /** One line: when, which part of the app, and what happened. */
     fun add(tag: String, message: String) {
-        val line = formatStamp(clock()) + " " + tag.padEnd(TAG_WIDTH) + " " + message.replace('\n', ' ')
+        val line = formatStamp(clock()) + " [" + tag + "] " + message.replace('\n', ' ')
         synchronized(lock) {
             entries.addLast(line)
             while (entries.size > capacity) entries.removeFirst()
@@ -48,18 +48,26 @@ class DiagnosticsLog(
     /** The lines that are still held, oldest first. */
     fun lines(): List<String> = synchronized(lock) { entries.toList() }
 
-    /** The whole log as one text file, with [header] first (build, phone, when it started). */
-    fun toText(header: List<String>): String = buildString {
-        header.forEach { appendLine(it) }
-        appendLine()
-        lines().forEach { appendLine(it) }
+    /**
+     * The whole log as one text file, with [header] first (build, phone, when it started).
+     *
+     * The entries are read *before* the builder starts: inside `buildString` the receiver is a
+     * `StringBuilder`, whose own `lines()` extension would happily split the header this method
+     * just wrote - the file came out containing its own header twice and nothing else
+     * (finding 256).
+     */
+    fun toText(header: List<String>): String {
+        val kept = lines()
+        return buildString {
+            header.forEach { appendLine(it) }
+            appendLine()
+            kept.forEach { appendLine(it) }
+        }
     }
 
     companion object {
         /** A thousand lines is a whole session of interest and a few hundred kilobytes of storage. */
         const val MAX_ENTRIES: Int = 1000
-
-        private const val TAG_WIDTH = 10
 
         private fun formatStamp(epochMillis: Long): String =
             SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT).format(Date(epochMillis))
