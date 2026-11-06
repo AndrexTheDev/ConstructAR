@@ -12,7 +12,8 @@ name: beta-apk
 # reaches `assembleRelease`.
 #
 # Triggered by hand and by a push that touches this file: a beta APK is an artifact somebody asked
-# for, not something every commit produces.
+# for, not something every commit produces. `workflow_dispatch` needs the `actions: write` scope,
+# which a scoped CI token need not have - a push touching this file is the fallback trigger.
 on:
   workflow_dispatch:
   push:

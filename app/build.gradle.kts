@@ -147,6 +147,10 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             manifestPlaceholders["appLabel"] = "ConstructAR Beta"
             buildConfigField("boolean", "BETA_BUILD", "true")
+            // `:core`, `:ar-engine`, `:export` and `:native-slam` only know debug and release; the
+            // beta app compiles against their debug variant instead of failing dependency
+            // resolution for a "beta" variant that does not exist in the libraries.
+            matchingFallbacks += listOf("debug")
         }
     }
 
