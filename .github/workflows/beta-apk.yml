@@ -105,12 +105,15 @@ jobs:
 
       - name: assembleBeta
         run: |
-          set -o pipefail
-          if ! gradle --no-daemon --stacktrace :app:assembleBeta 2>&1 | tee /tmp/beta.log | tail -n 60; then
-            # The job log of a failed run is not always reachable through the API, so the tail is
-            # posted as an annotation: that one always is. Single line - a newline would end it.
-            python3 -c "import json; tail = open('/tmp/beta.log', errors='replace').read().strip().splitlines()[-70:]; print('::error title=assembleBeta failed::' + json.dumps(' | '.join(tail))[:4000])"
-            exit 1
+          set -uo pipefail
+          code=0
+          gradle --no-daemon --stacktrace :app:assembleBeta > /tmp/beta.log 2>&1 || code=$?
+          tail -n 40 /tmp/beta.log
+          if [ "$code" != 0 ]; then
+            # The same helper the main build uses: a failed run's raw log is not reachable through
+            # every network, but its check-run annotations are (see scripts/ci_annotate.sh).
+            bash scripts/ci_annotate.sh /tmp/beta.log "assembleBeta failed" "0"
+            exit "$code"
           fi
 
       - name: Name the APK after the commit it came from
