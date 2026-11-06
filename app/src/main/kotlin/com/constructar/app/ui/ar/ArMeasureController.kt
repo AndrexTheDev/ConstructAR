@@ -609,7 +609,18 @@ class ArMeasureController(private val context: Context) {
 
     /** Called from the UI thread when the operator taps the AR view. */
     fun requestTap(x: Float, y: Float, viewWidth: Int, viewHeight: Int) {
-        interaction?.requestTap(x, y, viewWidth, viewHeight)
+        val current = interaction
+        if (current == null) {
+            // Before the scene is ready - or after it was released - a tap used to vanish without
+            // a word, which from the outside is exactly "the button does nothing" (finding 257).
+            Diagnostics.event(
+                "tap",
+                "ignored: no scene (${x.toInt()},${y.toInt()} of ${viewWidth}x$viewHeight)",
+            )
+            return
+        }
+        Diagnostics.event("tap", "requested ${x.toInt()},${y.toInt()} of ${viewWidth}x$viewHeight")
+        current.requestTap(x, y, viewWidth, viewHeight)
     }
 
     /** Applies the tap that was resolved on the render thread (main thread only). */
@@ -618,6 +629,16 @@ class ArMeasureController(private val context: Context) {
         mutableHitEvents.value = null
         lastHit.value = resolution
         val hit = resolution.hit
+        // The other half of "nothing happens": the tap did arrive, and the hit test found no
+        // surface under the crosshair - in a dark room ARCore has no plane to give (finding 257).
+        Diagnostics.event(
+            "tap",
+            if (hit == null) {
+                "resolved: no surface"
+            } else {
+                "resolved: ${hit.surfaceKind} / ${hit.source} at ${hit.point.x},${hit.point.y},${hit.point.z}"
+            },
+        )
         if (hit == null) {
             // Tap into nothing: the window is stale, and keeping it would let a later tap
             // commit a point the operator has already walked away from.

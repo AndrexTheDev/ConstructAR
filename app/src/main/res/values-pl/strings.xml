@@ -203,6 +203,14 @@
         <item quantity="many">%1$d punktów</item>
         <item quantity="other">%1$d punktu</item>
     </plurals>
+    <!-- Why a greyed-out action is greyed out (finding 257): the device showed two dead
+         buttons and no word about what was missing. -->
+    <plurals name="ar_needs_points">
+        <item quantity="one">Od %1$d punktu</item>
+        <item quantity="few">Od %1$d punktów</item>
+        <item quantity="many">Od %1$d punktów</item>
+        <item quantity="other">Od %1$d punktu</item>
+    </plurals>
     <string name="plan_free">Darmowa</string>
     <string name="plan_pro">Pro</string>
     <string name="home_upgrade">Odblokuj Pro</string>

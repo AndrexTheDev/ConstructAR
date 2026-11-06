@@ -18,6 +18,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,11 +26,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
@@ -66,6 +70,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -90,7 +95,6 @@ import com.constructar.app.ui.LocalDecimalMark
 import com.constructar.app.ui.shownLength
 import com.constructar.app.diagnostics.Diagnostics
 import com.constructar.app.ui.shownLengthWithUnit
-import com.constructar.app.ui.GloveButtonRow
 import com.constructar.app.ui.formatTimeLabel
 import com.constructar.app.ui.rememberTimePattern
 import com.constructar.app.ui.label
@@ -185,6 +189,19 @@ fun ArMeasureScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
+    // What this screen may spend on its two panels (finding 257). The first run on a phone showed
+    // why a budget is needed: the action stack was laid out at its natural height, which is taller
+    // than a phone, and because it is aligned to the bottom it grew upwards over the status bar -
+    // over the export and close icons in it, which is why they stopped answering. The numbers come
+    // from `HudLayout`, so they are tested without a device.
+    val configuration = LocalConfiguration.current
+    val screenHeightDp = configuration.screenHeightDp.toFloat()
+    val screenWidthDp = configuration.screenWidthDp.toFloat()
+    val fontScale = configuration.fontScale
+    val statusMaxHeight = HudLayout.statusMaxHeightDp(screenHeightDp, fontScale).dp
+    val sheetMaxHeight = HudLayout.sheetMaxHeightDp(screenHeightDp, fontScale).dp
+    val actionColumns = HudLayout.columns(screenWidthDp, 3, fontScale)
+    val pairColumns = HudLayout.columns(screenWidthDp, 2, fontScale)
     val controller = remember { ArMeasureController(context) }
     val activity = remember(context) { context.findActivity() }
     // The two-tap calibration sweep (see `CalibrationSweep`): one value instead of three
@@ -728,7 +745,15 @@ fun ArMeasureScreen(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         )
                     }
-                    IconButton(onClick = onOpenExport, modifier = Modifier.size(72.dp)) {
+                    IconButton(
+                        onClick = {
+                            // The first device run could not open the export sheet at all, and it
+                            // could not say whether the tap ever arrived (finding 258).
+                            Diagnostics.event("ui", "export opened from the HUD")
+                            onOpenExport()
+                        },
+                        modifier = Modifier.size(72.dp),
+                    ) {
                         Icon(
                             Icons.Default.Share,
                             contentDescription = stringResource(R.string.home_export),
@@ -744,155 +769,165 @@ fun ArMeasureScreen(
                     }
                 }
 
-                // Coaching: tracking verdict first, then the scan state.
-                val statusLine = guidanceText ?: when (hint) {
-                    ScanHint.NONE -> null
-                    ScanHint.UNAVAILABLE -> scanUnavailableText
-                    ScanHint.FULL -> scanFullText
-                    ScanHint.INSTRUCTION -> scanInstructionText
-                    ScanHint.BEHIND -> scanBehindText
-                    ScanHint.PROGRESS -> scanProgressText
-                }
-                statusLine?.let { line ->
-                    Text(
-                        text = line,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = when {
-                            warningText != null -> SiteColors.warning
-                            hint == ScanHint.FULL || hint == ScanHint.BEHIND -> SiteColors.warning
-                            tracking.quality == TrackingQuality.NOT_TRACKING -> SiteColors.danger
-                            else -> HudStyle.text
-                        },
-                    )
-                }
-                // `isFinal`, not just the state: during the model's load the answer is
-                // "planes only" and it may stop being true in a second. A line that appears and
-                // vanishes on every cold start is a line the operator learns to ignore.
-                if (!depthStatus.hasDepthField && depthStatus.isFinal) {
-                    Text(
-                        text = stringResource(R.string.ar_depth_planes_only),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = SiteColors.warning,
-                    )
-                }
-                when (floorLine) {
-                    FloorHudLine.RECORDED -> Text(
-                        text = stringResource(R.string.ar_floor_recorded),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = SiteColors.accent,
-                    )
-                    FloorHudLine.UNCERTAIN -> Text(
-                        text = stringResource(R.string.ar_floor_uncertain),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = SiteColors.warning,
-                    )
-                    FloorHudLine.NONE -> Unit
-                }
-                warningText?.let {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
-                }
-                // The weakest point of the run, not the last one: one guessed point makes the
-                // whole length a guess, and this is the only moment it can still be re-tapped.
-                weakPointText?.let {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
-                }
-                roomTotalText?.let {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.accent)
-                }
-                // Whether the point under the crosshair has settled. Until it has, a tap would
-                // commit one noisy frame; the stabiliser says when it is worth tapping.
-                stability?.let { reading ->
-                    if (reading.hasPoint) {
+                // Every coaching line lives inside a budget of its own (finding 257): the
+                // header above stays pinned — the export and close icons live there, and they
+                // were the first casualties when this column used to grow over them — while the
+                // long tail below it scrolls instead of pushing the panels on top of each other.
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = statusMaxHeight)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    // Coaching: tracking verdict first, then the scan state.
+                    val statusLine = guidanceText ?: when (hint) {
+                        ScanHint.NONE -> null
+                        ScanHint.UNAVAILABLE -> scanUnavailableText
+                        ScanHint.FULL -> scanFullText
+                        ScanHint.INSTRUCTION -> scanInstructionText
+                        ScanHint.BEHIND -> scanBehindText
+                        ScanHint.PROGRESS -> scanProgressText
+                    }
+                    statusLine?.let { line ->
                         Text(
-                            text = stringResource(
-                                if (reading.settled) R.string.ar_point_locked else R.string.ar_hold_steady,
-                            ),
+                            text = line,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = if (reading.settled) {
-                                SiteColors.accent
-                            } else {
-                                HudStyle.text
+                            color = when {
+                                warningText != null -> SiteColors.warning
+                                hint == ScanHint.FULL || hint == ScanHint.BEHIND -> SiteColors.warning
+                                tracking.quality == TrackingQuality.NOT_TRACKING -> SiteColors.danger
+                                else -> HudStyle.text
                             },
                         )
                     }
-                }
-                // Hit diagnostics, in the operator's language: which surface and which cascade
-                // tier produced the last node.
-                // What the pose graph took and what it lost (finding 244). Hidden until there is
-                // something to say: a line reading "nodes: 0" over a wall that is being measured
-                // fine would read as a fault.
-                if (graphStatus.standing != PoseGraphStanding.EMPTY) {
-                    Text(
-                        text = stringResource(R.string.ar_pose_graph, graphStatus.nodes, graphStatus.edges),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = HudStyle.text,
-                    )
-                    if (graphStatus.standing == PoseGraphStanding.LOSSY) {
-                        // A hole in the graph is not a cosmetic detail: the optimiser will spread
-                        // the missing node's error over the trajectory that connects it.
+                    // `isFinal`, not just the state: during the model's load the answer is
+                    // "planes only" and it may stop being true in a second. A line that appears and
+                    // vanishes on every cold start is a line the operator learns to ignore.
+                    if (!depthStatus.hasDepthField && depthStatus.isFinal) {
                         Text(
-                            text = stringResource(R.string.ar_pose_graph_lost, graphStatus.lost),
+                            text = stringResource(R.string.ar_depth_planes_only),
                             style = MaterialTheme.typography.bodyMedium,
                             color = SiteColors.warning,
                         )
                     }
-                    // A confirmed closure stays visible after its dialog is gone (finding 250):
-                    // the numbers used to exist only while the question was on screen, and the
-                    // geometry the operator was about to sign said nothing about whether the walk
-                    // had been folded back at all.
-                    if (graphStatus.closures > 0) {
+                    when (floorLine) {
+                        FloorHudLine.RECORDED -> Text(
+                            text = stringResource(R.string.ar_floor_recorded),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = SiteColors.accent,
+                        )
+                        FloorHudLine.UNCERTAIN -> Text(
+                            text = stringResource(R.string.ar_floor_uncertain),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = SiteColors.warning,
+                        )
+                        FloorHudLine.NONE -> Unit
+                    }
+                    warningText?.let {
+                        Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
+                    }
+                    // The weakest point of the run, not the last one: one guessed point makes the
+                    // whole length a guess, and this is the only moment it can still be re-tapped.
+                    weakPointText?.let {
+                        Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
+                    }
+                    roomTotalText?.let {
+                        Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.accent)
+                    }
+                    // Whether the point under the crosshair has settled. Until it has, a tap would
+                    // commit one noisy frame; the stabiliser says when it is worth tapping.
+                    stability?.let { reading ->
+                        if (reading.hasPoint) {
+                            Text(
+                                text = stringResource(
+                                    if (reading.settled) R.string.ar_point_locked else R.string.ar_hold_steady,
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (reading.settled) {
+                                    SiteColors.accent
+                                } else {
+                                    HudStyle.text
+                                },
+                            )
+                        }
+                    }
+                    // Hit diagnostics, in the operator's language: which surface and which cascade
+                    // tier produced the last node.
+                    // What the pose graph took and what it lost (finding 244). Hidden until there is
+                    // something to say: a line reading "nodes: 0" over a wall that is being measured
+                    // fine would read as a fault.
+                    if (graphStatus.standing != PoseGraphStanding.EMPTY) {
                         Text(
-                            text = stringResource(R.string.ar_pose_graph_closures, graphStatus.closures),
+                            text = stringResource(R.string.ar_pose_graph, graphStatus.nodes, graphStatus.edges),
                             style = MaterialTheme.typography.bodyMedium,
                             color = HudStyle.text,
                         )
-                        val correction = graphStatus.lastCorrection
-                        if (correction != null && correction.moved) {
+                        if (graphStatus.standing == PoseGraphStanding.LOSSY) {
+                            // A hole in the graph is not a cosmetic detail: the optimiser will spread
+                            // the missing node's error over the trajectory that connects it.
                             Text(
-                                text = stringResource(
-                                    R.string.ar_pose_graph_closure_shift,
-                                    correction.movedNodes,
-                                    correction.nodes,
-                                    shownLengthWithUnit(correction.maxShiftMetres),
-                                ),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = HudStyle.hint,
-                            )
-                        }
-                        // A closure whose solver gave up is not a closure that moved nothing
-                        // (findings 247, 252): silence here would read as a consistent graph.
-                        if (correction == null && graphStatus.lastClosureConverged == false) {
-                            Text(
-                                text = stringResource(R.string.ar_pose_graph_closure_unfinished),
+                                text = stringResource(R.string.ar_pose_graph_lost, graphStatus.lost),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = SiteColors.warning,
                             )
                         }
+                        // A confirmed closure stays visible after its dialog is gone (finding 250):
+                        // the numbers used to exist only while the question was on screen, and the
+                        // geometry the operator was about to sign said nothing about whether the walk
+                        // had been folded back at all.
+                        if (graphStatus.closures > 0) {
+                            Text(
+                                text = stringResource(R.string.ar_pose_graph_closures, graphStatus.closures),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = HudStyle.text,
+                            )
+                            val correction = graphStatus.lastCorrection
+                            if (correction != null && correction.moved) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.ar_pose_graph_closure_shift,
+                                        correction.movedNodes,
+                                        correction.nodes,
+                                        shownLengthWithUnit(correction.maxShiftMetres),
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = HudStyle.hint,
+                                )
+                            }
+                            // A closure whose solver gave up is not a closure that moved nothing
+                            // (findings 247, 252): silence here would read as a consistent graph.
+                            if (correction == null && graphStatus.lastClosureConverged == false) {
+                                Text(
+                                    text = stringResource(R.string.ar_pose_graph_closure_unfinished),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = SiteColors.warning,
+                                )
+                            }
+                        }
                     }
-                }
-                lastHit?.let { resolution ->
-                    val hit = resolution.hit
-                    Text(
-                        text = if (hit != null) {
-                            hit.surfaceKind.label() + " · " + hit.source.tierLabel()
-                        } else {
-                            stringResource(R.string.ar_no_surface)
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (hit != null) HudStyle.hint else SiteColors.danger,
-                    )
-                    // The reticle was pulled onto a corner or an edge: say which one, and by how
-                    // far, in the accent colour - otherwise the jump is a mystery and the operator
-                    // taps again to "fix" a point that was already better than his aim
-                    // (finding 213).
-                    val snap = hit?.snap
-                    val moved = SnapReading.moved(snap, LocalDecimalMark.current)
-                    if (snap != null && moved != null) {
+                    lastHit?.let { resolution ->
+                        val hit = resolution.hit
                         Text(
-                            text = stringResource(snap.kind.snapMovedRes(), moved),
+                            text = if (hit != null) {
+                                hit.surfaceKind.label() + " · " + hit.source.tierLabel()
+                            } else {
+                                stringResource(R.string.ar_no_surface)
+                            },
                             style = MaterialTheme.typography.bodyMedium,
-                            color = SiteColors.accent,
+                            color = if (hit != null) HudStyle.hint else SiteColors.danger,
                         )
+                        // The reticle was pulled onto a corner or an edge: say which one, and by how
+                        // far, in the accent colour - otherwise the jump is a mystery and the operator
+                        // taps again to "fix" a point that was already better than his aim
+                        // (finding 213).
+                        val snap = hit?.snap
+                        val moved = SnapReading.moved(snap, LocalDecimalMark.current)
+                        if (snap != null && moved != null) {
+                            Text(
+                                text = stringResource(snap.kind.snapMovedRes(), moved),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = SiteColors.accent,
+                            )
+                        }
                     }
                 }
             }
@@ -903,11 +938,99 @@ fun ArMeasureScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
+                // The budget, and a scroll inside it (finding 257). Without this the stack simply
+                // grew taller than the screen and drew itself over the status bar.
+                .navigationBarsPadding()
+                .heightIn(max = sheetMaxHeight)
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            // The one action the operator presses most, first and above the fold (finding 257):
+            // with a gloved hand a precise tap in the middle of the screen is not a given, and on
+            // the device this button was the only one whose touch ever reached the controller.
+            GloveButton(
+                label = stringResource(R.string.ar_add_point),
+                icon = Icons.Default.Add,
+                onClick = {
+                    // Logged, because "nothing happens" was the whole report: the log now says
+                    // whether the tap arrived and what the hit test made of it (finding 256).
+                    Diagnostics.event("tap", "add point at reticle ${viewSize.width}x${viewSize.height}")
+                    controller.requestTap(
+                        viewSize.width / 2f,
+                        viewSize.height / 2f,
+                        viewSize.width,
+                        viewSize.height,
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            val closeLoopLabel = stringResource(R.string.ar_close_loop)
+            val finishLabel = stringResource(R.string.ar_finish)
+            ArActionRow(
+                columns = pairColumns,
+                actions = listOf(
+                    ArAction(
+                        label = closeLoopLabel,
+                        icon = Icons.Default.Loop,
+                        enabled = routeState.nodeCount >= ActionGating.NODES_FOR_A_LOOP,
+                        onClick = { controller.routeSession.closeLoop() },
+                    ),
+                    ArAction(
+                        label = finishLabel,
+                        icon = Icons.Default.Save,
+                        tone = ActionTone.PRIMARY,
+                        enabled = routeState.canFinish,
+                        onClick = commitRun,
+                    ),
+                ),
+            )
+            // A greyed-out button that says nothing reads as a broken button - that is exactly how
+            // the first device run reported it (finding 258). Say what is still missing, from the
+            // one object that repeats the thresholds the buttons are enabled with.
+            ActionGating.missingPoints(routeState.nodeCount, routeState.canFinish)?.let { needed ->
+                Text(
+                    text = pluralStringResource(R.plurals.ar_needs_points, needed, needed),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = HudStyle.hint,
+                )
+            }
+
+            val undoLabel = stringResource(R.string.ar_undo)
+            val torchLabel = stringResource(R.string.ar_torch)
+            val scanLabel = stringResource(if (showScanner) R.string.ar_stop_scan else R.string.ar_scan)
+            val toolActions = mutableListOf(
+                ArAction(
+                    label = undoLabel,
+                    icon = Icons.AutoMirrored.Filled.Undo,
+                    enabled = routeState.nodeCount > 0,
+                    onClick = { controller.undo() },
+                ),
+            )
+            // A torch button that cannot switch anything on is not a button: on a device whose
+            // camera refuses the torch (most tablets have no flash) the tap used to do nothing at
+            // all (finding 106).
+            if (!torchUnavailable) {
+                toolActions += ArAction(
+                    label = torchLabel,
+                    icon = Icons.Default.FlashlightOn,
+                    selected = torchOn,
+                    onClick = { controller.toggleTorch() },
+                )
+            }
+            toolActions += ArAction(
+                label = scanLabel,
+                icon = Icons.Default.Add,
+                selected = showScanner,
+                onClick = { showScanner = !showScanner },
+            )
+            ArActionRow(columns = actionColumns, actions = toolActions)
+
             // One conduit spec out of five: a group of radio buttons, so TalkBack says which one
-            // is chosen instead of reading five identical-looking buttons (finding 211).
+            // is chosen instead of reading five identical-looking buttons (finding 211). Lower down
+            // than the two measurements buttons, because the spec is chosen once per run and the
+            // point is tapped every metre.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.selectableGroup(),
@@ -924,70 +1047,6 @@ fun ArMeasureScreen(
                     )
                 }
             }
-
-            GloveButtonRow {
-                GloveButton(
-                    label = stringResource(R.string.ar_undo),
-                    icon = Icons.AutoMirrored.Filled.Undo,
-                    onClick = { controller.undo() },
-                    tone = ActionTone.SECONDARY,
-                    enabled = routeState.nodeCount > 0,
-                    modifier = Modifier.weight(1f),
-                )
-                if (!torchUnavailable) {
-                    GloveButton(
-                        label = stringResource(R.string.ar_torch),
-                        icon = Icons.Default.FlashlightOn,
-                        onClick = { controller.toggleTorch() },
-                        tone = ActionTone.SECONDARY,
-                        selected = torchOn,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                GloveButton(
-                    label = stringResource(if (showScanner) R.string.ar_stop_scan else R.string.ar_scan),
-                    icon = Icons.Default.Add,
-                    onClick = { showScanner = !showScanner },
-                    tone = ActionTone.SECONDARY,
-                    selected = showScanner,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-
-            GloveButtonRow {
-                GloveButton(
-                    label = stringResource(R.string.ar_close_loop),
-                    icon = Icons.Default.Loop,
-                    onClick = { controller.routeSession.closeLoop() },
-                    tone = ActionTone.SECONDARY,
-                    enabled = routeState.nodeCount >= 3,
-                    modifier = Modifier.weight(1f),
-                )
-                GloveButton(
-                    label = stringResource(R.string.ar_finish),
-                    icon = Icons.Default.Save,
-                    onClick = commitRun,
-                    tone = ActionTone.PRIMARY,
-                    enabled = routeState.canFinish,
-                    modifier = Modifier.weight(2f),
-                )
-            }
-
-            GloveButton(
-                label = stringResource(R.string.ar_add_point),
-                icon = Icons.Default.Add,
-                onClick = {
-                    // Convenience for gloved hands: a big button that adds the reticle point
-                    // without requiring a precise tap in the middle of the screen.
-                    controller.requestTap(
-                        viewSize.width / 2f,
-                        viewSize.height / 2f,
-                        viewSize.width,
-                        viewSize.height,
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
 
             // ── Reference calibration ────────────────────────────────────────────────
             // ARCore's metre is metric on its own; this is the operator's check of it against an
@@ -1360,4 +1419,62 @@ private fun calibrationLabel(reference: CalibrationReference): String = if (refe
     )
 } else {
     stringResource(R.string.calib_zollstock, shownLengthWithUnit(reference.realMetres.toFloat()))
+}
+
+/** One button of the action sheet, as data: [ArActionRow] decides how many fit side by side. */
+private data class ArAction(
+    val label: String,
+    val icon: ImageVector,
+    val onClick: () -> Unit,
+    val tone: ActionTone = ActionTone.SECONDARY,
+    val enabled: Boolean = true,
+    val selected: Boolean = false,
+)
+
+/**
+ * A row of glove buttons that turns into a stack when they would not fit.
+ *
+ * A `Row` with three weighted children on a 360 dp screen and a large system font gives each button
+ * ~103 dp; the icon and the paddings take most of that and "Close loop" wraps to one character per
+ * line, which is what the first device run showed (finding 257). [HudLayout.columns] decides from
+ * the width and the font scale alone, so this stays a rendering decision and nothing here measures
+ * anything.
+ */
+@Composable
+private fun ArActionRow(columns: Int, actions: List<ArAction>) {
+    if (columns <= 1) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            actions.forEach { action ->
+                GloveButton(
+                    label = action.label,
+                    icon = action.icon,
+                    onClick = action.onClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    tone = action.tone,
+                    enabled = action.enabled,
+                    selected = action.selected,
+                )
+            }
+        }
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            actions.forEach { action ->
+                GloveButton(
+                    label = action.label,
+                    icon = action.icon,
+                    onClick = action.onClick,
+                    modifier = Modifier.weight(1f),
+                    tone = action.tone,
+                    enabled = action.enabled,
+                    selected = action.selected,
+                )
+            }
+        }
+    }
 }
