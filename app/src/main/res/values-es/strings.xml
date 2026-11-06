@@ -79,6 +79,9 @@
     <string name="marker_state_walking">Ahora desplaza el teléfono un metro hacia un lado sin perder la etiqueta.</string>
     <string name="ar_pose_graph">Grafo de poses: %1$d nodos · %2$d aristas</string>
     <string name="ar_pose_graph_lost">Fotogramas clave perdidos: %1$d</string>
+    <string name="ar_pose_graph_closures">Cierre: %1$d confirmado</string>
+    <string name="ar_pose_graph_closure_shift">Último cierre: %1$d de %2$d nodos movidos, hasta %3$s</string>
+    <string name="ar_pose_graph_closure_unfinished">Último cierre: sin resultado (optimizador detenido)</string>
     <string name="loop_check">Comprobar regreso</string>
     <string name="loop_title">Cerrar el bucle</string>
     <string name="loop_offer">El recorrido vuelve a estar a %1$s de un punto anterior. Cerrar supone que es el mismo lugar.</string>
@@ -86,7 +89,8 @@
     <string name="loop_none">No se ha encontrado ningún bucle.</string>
     <string name="loop_closed">Bucle cerrado: error residual %1$s → %2$s.</string>
     <string name="loop_failed">No se pudo optimizar el grafo.</string>
-    <string name="loop_shift">Grafo de poses movido: %1$d nodos, hasta %2$s.</string>
+    <string name="loop_shift">Movidos %1$d de %2$d nodos, hasta %3$s.</string>
+    <string name="loop_unfinished">El optimizador agotó sus iteraciones: la arista está puesta, pero no hay resultado. Estas cifras son un estado intermedio, no una corrección.</string>
     <string name="ar_add_point">Añadir punto en el centro</string>
     <string name="ar_undo">Deshacer</string>
     <string name="ar_close_loop">Cerrar</string>
@@ -156,6 +160,8 @@
     <string name="export_fittings">Abrazaderas %1$d · manguitos %2$d · curvas %3$d</string>
     <string name="export_room_scan">Escáner de sala registrado: %1$d k triángulos - va en el protocolo; el modelo 3D contiene las tiradas</string>
     <string name="export_room_scan_limited">Solo se capturó parte de la estancia (límite de escaneo): mide lo que falta antes de entregarlo.</string>
+    <string name="export_room_closure">Cierre: %1$d de %2$d nodos movidos, hasta %3$s</string>
+    <string name="export_room_closure_unfinished">Cierre confirmado, pero el optimizador se detuvo: las posiciones no están corregidas.</string>
     <string name="export_offline_note">Los archivos se escriben en la carpeta elegida. No se sube nada; la exportación funciona en modo avión y en un sótano.</string>
     <string name="export_about">%1$s %2$s · %3$s</string>
     <string name="project_none">No hay ninguna obra abierta</string>
@@ -383,6 +389,8 @@
     <string name="pdf_procurement_note">Las longitudes de pedido incluyen la reserva de obra. Valores de nodos refinados con anclas; comprueba los tramos críticos con cinta antes de cortar.</string>
     <string name="pdf_note_accuracy">Precisión esperada: 1-2 cm en una pared plana entre 1 y 4 m, 3-6 cm donde solo hay datos de profundidad, cerca del 1 %% de la longitud en diagonal. La confianza es el punto más débil de una tirada - por debajo del %1$d %% conviene revisarla.</string>
     <string name="pdf_note_scan_limited">Límite de escaneo alcanzado: solo se capturó parte de la estancia. Las longitudes, los accesorios y los precios de este protocolo están medidos y no se ven afectados: las zonas fuera del volumen capturado no se midieron y no aparecen en este protocolo.</string>
+    <string name="pdf_note_closure">Cierre de bucle confirmado (%1$d): el último movió %2$d de %3$d nodos hasta %4$s. La geometría se plegó sobre la confirmación del operador: las longitudes de este protocolo están medidas, las posiciones corregidas.</string>
+    <string name="pdf_note_closure_unfinished">Se confirmó un cierre de bucle, pero el optimizador se detuvo antes de llegar a un resultado: las posiciones de este protocolo son las sin corregir. Las longitudes no se ven afectadas.</string>
     <string name="pdf_note_recovered">Recuperado tras una interrupción: longitudes y accesorios son exactos, la posición 3D no está en el modelo: %1$s</string>
     <string name="pdf_note_unbuildable">No se pudo generar geometría 3D para estas tiradas: longitudes y accesorios siguen contando: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - generado en el dispositivo</string>

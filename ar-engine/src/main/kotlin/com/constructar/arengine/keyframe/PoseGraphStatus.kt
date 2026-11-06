@@ -6,6 +6,8 @@
 
 package com.constructar.arengine.keyframe
 
+import com.constructar.core.slam.CorrectionReport
+
 /** What the pose graph is doing, in the three states a status line can act on. */
 enum class PoseGraphStanding {
     /** Nothing in the graph and nothing lost: the policy has not fired yet. */
@@ -42,6 +44,34 @@ data class PoseGraphStatus(
     val edges: Int = 0,
     /** Everything that was accepted by the policy and did not reach the graph, for any reason. */
     val lost: Int = 0,
+    /**
+     * Loop closures this session's operator has confirmed (finding 250).
+     *
+     * The graph line used to say "380 nodes, 379 edges" whether or not the walk had been folded
+     * back, because the closure's own counters stopped at the dialog: `ClosureState.Closed`
+     * carried the residual and the shift, the dialog printed them, and closing it threw them away.
+     * An operator who wants to know *afterwards* whether the room was closed had nothing to look
+     * at, and the geometry they were about to sign did not say either.
+     */
+    val closures: Int = 0,
+    /**
+     * What the most recent *converged* closure moved, or `null` before one has run.
+     *
+     * `null` here does not mean "nothing moved" - that is a report with `moved == false`. It means
+     * there is no closure to report on, which is why the status line prints nothing at all
+     * (finding 246's rule, one level up).
+     */
+    val lastCorrection: CorrectionReport? = null,
+    /**
+     * Whether the last confirmed closure's solver converged: `null` before any closure, `true`
+     * with a report, `false` with none (finding 252).
+     *
+     * Without this, `closures > 0` and `lastCorrection == null` meant two different things that
+     * looked identical on the graph line: "confirmed, and the graph was already consistent" and
+     * "confirmed, and the optimiser gave up". The dialog made that distinction for as long as it
+     * was open (finding 247); the HUD, the project file and the protocol did not keep it.
+     */
+    val lastClosureConverged: Boolean? = null,
 ) {
     val standing: PoseGraphStanding
         get() = when {
@@ -60,12 +90,28 @@ data class PoseGraphStatus(
          * that printed three counts would be a debug panel pretending to be a status line. The
          * split stays on the applier, where a test can still see it.
          */
-        fun of(applier: KeyframeApplier?, droppedByQueue: Int = 0): PoseGraphStatus {
-            if (applier == null) return PoseGraphStatus(lost = droppedByQueue)
+        fun of(
+            applier: KeyframeApplier?,
+            droppedByQueue: Int = 0,
+            closures: Int = 0,
+            lastCorrection: CorrectionReport? = null,
+            lastClosureConverged: Boolean? = null,
+        ): PoseGraphStatus {
+            if (applier == null) {
+                return PoseGraphStatus(
+                    lost = droppedByQueue,
+                    closures = closures,
+                    lastCorrection = lastCorrection,
+                    lastClosureConverged = lastClosureConverged,
+                )
+            }
             return PoseGraphStatus(
                 nodes = applier.appliedNodes,
                 edges = applier.appliedEdges,
                 lost = droppedByQueue + applier.refusedNodes + applier.droppedEdges,
+                closures = closures,
+                lastCorrection = lastCorrection,
+                lastClosureConverged = lastClosureConverged,
             )
         }
     }

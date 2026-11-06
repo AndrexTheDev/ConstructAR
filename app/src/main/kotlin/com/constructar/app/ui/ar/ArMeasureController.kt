@@ -38,6 +38,7 @@ import com.constructar.core.math.Quat
 import com.constructar.core.math.Vec3
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ConduitSpec
+import com.constructar.core.model.ScanClosure
 import com.constructar.core.model.ScanSummary
 import com.google.android.filament.Engine
 import com.google.android.filament.Scene
@@ -731,9 +732,28 @@ class ArMeasureController(private val context: Context) {
     /** Scan statistics for the protocol header: two numbers, both measured (finding 103). */
     fun scanSummary(): ScanSummary {
         val state = pipeline.state.value
+        val graph = pipeline.poseGraphStatus.value
+        val correction = graph.lastCorrection
+        // A closure the operator confirmed is part of what this scan *is*, not a detail of the
+        // session: the protocol has to say the geometry was folded back on someone's word
+        // (finding 251). No closure means no record - never a record of zeros (finding 103).
+        val closure = if (graph.closures > 0) {
+            ScanClosure(
+                closures = graph.closures,
+                movedNodes = correction?.movedNodes ?: 0,
+                nodes = correction?.nodes ?: 0,
+                maxShiftMetres = correction?.maxShiftMetres ?: 0f,
+                // The document must not read "0 of 0 nodes" for a run whose solver gave up: the
+                // absence of a report is not a report of no movement (findings 247, 252).
+                converged = graph.lastClosureConverged != false,
+            )
+        } else {
+            null
+        }
         return ScanSummary(
             meshTriangleCount = state.triangleCount,
             scanLimited = state.hitBlockBudget,
+            closures = closure,
         )
     }
 

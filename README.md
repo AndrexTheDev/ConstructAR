@@ -381,12 +381,12 @@ Six locales ship as resources, and **no user-facing text is hardcoded**: the eng
 
 | Directory | Locale | Keys |
 |-----------|--------|------|
-| `app/src/main/res/values/` | English (default) | 482 strings + 13 plurals |
-| `app/src/main/res/values-de/` | Deutsch | 482 strings + 13 plurals |
-| `app/src/main/res/values-es/` | Español | 482 strings + 13 plurals |
-| `app/src/main/res/values-fr/` | Français | 482 strings + 13 plurals |
-| `app/src/main/res/values-it/` | Italiano | 482 strings + 13 plurals |
-| `app/src/main/res/values-pl/` | Polski | 482 strings + 13 plurals (`few`/`many` included) |
+| `app/src/main/res/values/` | English (default) | 490 strings + 13 plurals |
+| `app/src/main/res/values-de/` | Deutsch | 490 strings + 13 plurals |
+| `app/src/main/res/values-es/` | Español | 490 strings + 13 plurals |
+| `app/src/main/res/values-fr/` | Français | 490 strings + 13 plurals |
+| `app/src/main/res/values-it/` | Italiano | 490 strings + 13 plurals |
+| `app/src/main/res/values-pl/` | Polski | 490 strings + 13 plurals (`few`/`many` included) |
 
 `scripts/verify_sources.py` fails on a missing key, an untranslated extra key, or a mismatched
 format placeholder — so a half-translated release cannot ship. That includes the exported
@@ -515,12 +515,15 @@ Optional pieces (both are opt-in, the app works without them):
   writes the node and the odometry edge between it and the previous one. Since finding 245 the
   correction is driven too, but never by itself: the native proximity detector proposes a revisit,
   the app asks the operator once ("the same place?"), and only a confirmation adds the closure
-  edge and runs the optimiser on the worker, which reports the residual before and after. What it
+  edge and runs the optimiser on the worker, which reports the residual before and after and how
+  far it moved the poses (finding 246) - and when the solver stops without converging it says
+  that instead, because a half-finished descent is not a result (finding 247). What it
   does **not** do is move your measurements: the corrected poses are reported, not written back
   into the measured runs, because a run's metres were measured with taps and an inference may not
   replace them (finding 217). Appearance verification (RTAB-Map) is still not wired, so the
   closure rests on the operator's confirmation and says so. `verify_sources.py` reads the wiring
-  from the code and refuses this file if it claims the opposite.
+  from the code and refuses this file if it claims the opposite - in either direction: no document
+  may promise a closure nothing feeds (finding 98), and none may call a live one dead (finding 248).
 
 Full step-by-step setup — including how to convert the depth model and how to build RTAB-Map
 without non-free modules — is in **[docs/SETUP.md](docs/SETUP.md)**.
@@ -818,7 +821,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1093 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1118 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 332 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 332 checks, 0 failures, no data race reported |

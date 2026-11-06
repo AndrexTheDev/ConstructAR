@@ -19,6 +19,7 @@ import com.constructar.core.bom.MaterialList
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.HitConfidence
 import com.constructar.core.model.ProjectRecord
+import com.constructar.core.model.ScanClosure
 import com.constructar.core.units.LengthFormatter
 import com.constructar.core.units.PercentText
 import java.io.OutputStream
@@ -274,6 +275,19 @@ class ProtocolPdfWriter(
             // A capture that hit the volume limit is a valid measurement of the runs it holds,
             // but it is not the whole room (finding 100).
             scanLimitedNote(scan?.scanLimited == true, content.labels.scanLimitedNote)?.let { text ->
+                y += 4
+                note(text)
+            }
+
+            // A room that was folded back on the operator's word says so, with the numbers the
+            // HUD showed at the time (findings 246, 249, 251). Printed before the accuracy note
+            // because it changes what the positions mean, while the accuracy note explains how
+            // exact the distances are.
+            closureNote(
+                scan?.closures,
+                content.labels.closureNote,
+                content.labels.closureNoteUnfinished,
+            )?.let { text ->
                 y += 4
                 note(text)
             }
@@ -835,6 +849,36 @@ internal fun summaryRows(
  */
 internal fun scanLimitedNote(scanLimited: Boolean, template: String): String? =
     if (scanLimited) template else null
+
+/**
+ * The line the summary gets when the scan's trajectory was folded back, or `null` when it was not
+ * (finding 251).
+ *
+ * Out of the drawing code so the decision is testable, and so both ways of having nothing to say -
+ * a scan without a closure, and a project with no scan at all - end in `null` rather than in a
+ * sentence about a correction nobody confirmed.
+ */
+internal fun closureNote(
+    closure: ScanClosure?,
+    template: String,
+    unfinishedTemplate: String,
+): String? {
+    // A record that could not have come from the optimiser is not printed at all: silence is a
+    // gap in the document, "moved 42 of 10 nodes by up to NaN m" is a lie in a signed one
+    // (finding 253).
+    if (closure == null || closure.closures <= 0 || !closure.isPlausible) return null
+    // A confirmation whose solver gave up has no numbers to print, only the sentence saying so
+    // (findings 247, 252). "0 of 0 nodes" would be a correction of nothing, presented as one.
+    if (!closure.converged) return unfinishedTemplate
+    return String.format(
+        Locale.ROOT,
+        template,
+        closure.closures,
+        closure.movedNodes,
+        closure.nodes,
+        LengthFormatter.format(closure.maxShiftMetres),
+    )
+}
 
 /**
  * The line the photo appendix gets when it cannot hold every photo on the job, or `null` when it

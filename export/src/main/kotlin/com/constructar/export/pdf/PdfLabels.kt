@@ -87,6 +87,27 @@ data class PdfLabels(
             "data is available, about 1 %% of the length on a diagonal. Confidence is the " +
             "weakest point of a run - below %1\$d %% it needs a second look.",
     /**
+     * Printed under the summary when the scan's operator confirmed a loop closure; `%1$d` is how
+     * many, `%2$d` of `%3$d` the nodes the last one moved, `%4$s` the largest shift.
+     *
+     * A protocol that prints the corrected room without saying the trajectory was folded presents
+     * an inference as a measurement (findings 217, 251).
+     */
+    val closureNote: String =
+        "Loop closure confirmed (%1\$d): the last one moved %2\$d of %3\$d nodes by up to %4\$s. " +
+            "The geometry was folded back on the operator's confirmation - the lengths in this " +
+            "protocol were measured, the positions were corrected.",
+    /**
+     * Printed instead of [closureNote] when the last closure's optimiser did not converge; no
+     * placeholders.
+     *
+     * The numbers of a half-descent are not a correction (finding 247), and a document that
+     * printed "0 of 0 nodes" would tell the customer the graph was already consistent (252).
+     */
+    val closureNoteUnfinished: String =
+        "A loop closure was confirmed, but the optimiser stopped before it reached a result - " +
+            "the positions in this protocol are the uncorrected ones. Lengths are unaffected.",
+    /**
      * Printed under the summary when the scan volume hit its block budget; no placeholders.
      *
      * A full volume stops allocating blocks, so the mesh freezes at its current extent and the

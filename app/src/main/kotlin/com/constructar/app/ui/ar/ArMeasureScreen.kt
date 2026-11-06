@@ -811,6 +811,39 @@ fun ArMeasureScreen(
                             color = SiteColors.warning,
                         )
                     }
+                    // A confirmed closure stays visible after its dialog is gone (finding 250):
+                    // the numbers used to exist only while the question was on screen, and the
+                    // geometry the operator was about to sign said nothing about whether the walk
+                    // had been folded back at all.
+                    if (graphStatus.closures > 0) {
+                        Text(
+                            text = stringResource(R.string.ar_pose_graph_closures, graphStatus.closures),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = HudStyle.text,
+                        )
+                        val correction = graphStatus.lastCorrection
+                        if (correction != null && correction.moved) {
+                            Text(
+                                text = stringResource(
+                                    R.string.ar_pose_graph_closure_shift,
+                                    correction.movedNodes,
+                                    correction.nodes,
+                                    shownLengthWithUnit(correction.maxShiftMetres),
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = HudStyle.hint,
+                            )
+                        }
+                        // A closure whose solver gave up is not a closure that moved nothing
+                        // (findings 247, 252): silence here would read as a consistent graph.
+                        if (correction == null && graphStatus.lastClosureConverged == false) {
+                            Text(
+                                text = stringResource(R.string.ar_pose_graph_closure_unfinished),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = SiteColors.warning,
+                            )
+                        }
+                    }
                 }
                 lastHit?.let { resolution ->
                     val hit = resolution.hit

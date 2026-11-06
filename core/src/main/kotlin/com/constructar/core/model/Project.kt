@@ -12,7 +12,7 @@ import kotlinx.serialization.Serializable
  * What the scan pipeline (TSDF in `:native-slam`) measured, attached to a project for the
  * protocol header.
  *
- * Deliberately two fields (finding 103). Everything here is written by
+ * Deliberately three fields (findings 103, 251). Everything here is written by
  * `ArMeasureController.scanSummary()` when a run is finished and read by something that leaves
  * the phone - the protocol's summary row and its partial-capture note, and the export screen.
  * The model used to carry nine more: a vertex count, a floor area, a ceiling height, a bounding
@@ -39,7 +39,72 @@ data class ScanSummary(
      * loads (see `ScanSummaryTest`).
      */
     val scanLimited: Boolean = false,
+    /**
+     * The loop closures this scan's operator confirmed, or `null` when there were none.
+     *
+     * `null` rather than a zero-valued record on purpose. This model used to carry an "accepted
+     * loop closures" count among nine fields nothing filled, and *0 accepted loop closures* in a
+     * project the app had written read as a measurement - a room that was checked and needed no
+     * folding (finding 103). The difference matters more now than it did then: since finding 245
+     * a closure *can* be confirmed, so a zero would be ambiguous between "nothing was folded" and
+     * "the operator never asked". A missing value says which.
+     *
+     * Written by `ArMeasureController.scanSummary()` from `PoseGraphStatus`, read by the
+     * protocol's closure note and by the export screen (finding 250's numbers, persisted).
+     */
+    val closures: ScanClosure? = null,
 )
+
+/**
+ * What the pose graph's confirmed loop closures did to one scan (finding 251).
+ *
+ * The numbers the HUD shows after the dialog is gone (`PoseGraphStatus.closures` and
+ * `lastCorrection`) did not survive the run: a project file, and the protocol written from it,
+ * said nothing about the trajectory having been folded. That is the assumption the whole geometry
+ * rests on, and the one thing a customer reading the protocol would never learn - the same rule as
+ * finding 217, one level up: an inference may not be presented as a measurement, and here the
+ * inference *corrects* the measurements.
+ */
+@Serializable
+data class ScanClosure(
+    /** Confirmations in this scan. Every one added an edge to the graph, converged or not. */
+    val closures: Int = 0,
+    /** Nodes the last *converged* closure moved, and the nodes it compared (findings 246, 249). */
+    val movedNodes: Int = 0,
+    val nodes: Int = 0,
+    /** How far the last converged closure moved the worst node, in metres. */
+    val maxShiftMetres: Float = 0f,
+    /**
+     * Whether the last closure's optimiser converged (finding 252).
+     *
+     * `false` means the numbers above are not "nothing moved" but "there is no result": the
+     * solver hit its iteration limit and left the poses halfway (finding 247). Defaults to `true`,
+     * because a file written before this field can only describe a converged run - there was no
+     * other kind of record then.
+     */
+    val converged: Boolean = true,
+) {
+
+    /**
+     * Whether these numbers could have come from the optimiser at all (finding 253).
+     *
+     * A project file is not a trusted input: it is copied out as a backup, restored on another
+     * phone and readable as text in between, and `ProjectRepository` refuses a file only on its
+     * `schemaVersion`. So `movedNodes = 42, nodes = 10` or a NaN shift can reach this record and,
+     * from here, a protocol the customer signs. The rule is the arithmetic of the report itself:
+     * no negative counts, no more moved nodes than compared ones, a finite non-negative distance,
+     * and - the coherence finding 252 established - no numbers at all for a run whose solver
+     * stopped.
+     */
+    val isPlausible: Boolean
+        get() = closures >= 0 &&
+            nodes >= 0 &&
+            movedNodes >= 0 &&
+            movedNodes <= nodes &&
+            maxShiftMetres.isFinite() &&
+            maxShiftMetres >= 0f &&
+            (converged || (nodes == 0 && movedNodes == 0 && maxShiftMetres == 0f))
+}
 
 /**
  * The on-device project: one room (or one zone) of one site.

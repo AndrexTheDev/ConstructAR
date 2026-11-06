@@ -220,8 +220,9 @@ a link, and no run of this app has done that.
 
 * `RtabMapBridge::processKeyframe` feeds one keyframe (RGB + the ARCore odometry pose) and
   reports whether RTAB-Map accepted a loop closure and which node it matched. It does **not**
-  return an optimised pose list — the poses come from the pose-graph call below, which the app
-  does not make yet;
+  return an optimised pose list — the poses come from the pose-graph call below, which the scan
+  worker makes when the operator confirms a revisit (finding 245). What is still missing is
+  RTAB-Map's *verification*, not the call;
 * `ProximityLoopClosureDetector` proposes a revisit by pose proximity (proposals only — a false
   closure folds a room in half, so nothing is promoted silently);
 * `PoseGraph::optimize` redistributes a closure over the whole trajectory.
@@ -240,7 +241,9 @@ C++ thresholds (twenty keyframes apart, 0.35 m, half a radian) remain the only d
 through `ClosurePolicy` in `:core` (a room's worth of nodes before the question is asked, one
 question at a time, a refusal remembered for that pair and for a minute), and puts **one**
 question on screen. A confirmation adds the closure edge at 100x the odometry weight and runs
-`optimizePoseGraph` on the worker, which reports the residual before and after. Nothing is
+`optimizePoseGraph` on the worker, which reports the residual before and after, how far the poses
+moved, and - when the solver hit its iteration budget - that there is no result rather than a
+number (finding 247). Nothing is
 closed without that confirmation: a false closure folds a room in half and looks fine afterwards.
 
 Two things stay open, and the code says so: the closure is **operator-asserted, not
@@ -291,7 +294,7 @@ proves the pin compiles.
 | `UnsatisfiedLinkError: libconstructar_slam.so` | ABI not built (e.g. an x86 emulator) | The app detects it (`NativeSlamEngine.isAvailable == false`) and disables scanning; add `x86_64` to `abiFilters` or use a real device |
 | Black AR view, `CameraNotAvailableException` | Another app holds the camera | `ArSessionController.resume()` retries once after 250 ms; otherwise the UI says "camera unavailable" |
 | Scan looks holey at silhouettes | Free-space carving is off by default (it costs ~7.7× integration: 7.3 → 55.9 ms per 320×240 frame) | Enable `TsdfConfig.carveFreeSpace` for a final clean-up pass, or rescan from a second angle |
-| Mesh is shifted after a relocalisation | Anchors were recreated from the persisted node positions | Nothing folds the trajectory back yet - the app does not run a loop closure (finding 98) - so finish the run and re-measure it, or scan again; the protocol flags low-confidence runs |
+| Mesh is shifted after a relocalisation | Anchors were recreated from the persisted node positions | The pose graph can fold the trajectory back, but only when you confirm a revisit (**Check return** → **Same place**), and what the optimiser computes is **reported**, not written into the measured nodes (findings 217, 246) - so the geometry you already saved does not move. Finish the run and re-measure it, or scan again; the protocol flags low-confidence runs |
 | Depth hits land behind the surface | Stale depth frame used for the raycast | Must not happen: a snapshot's array goes back to `DepthBufferPool` only when its last reference is released, so a frame the hit cascade or the worker is still reading cannot be overwritten (finding 168) |
 | Torch does nothing | Device reports `FlashMode.TORCH` unsupported, or the front camera is in use | SceneView silently downgrades the typed `flashMode`; `TorchController` keeps the button state honest |
 | `FAIL_ON_PROJECT_REPOS` failure | A dependency pulled in `jcenter`/a second repo | Keep everything on `google()` + `mavenCentral()`; see `settings.gradle.kts` |

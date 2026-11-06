@@ -27,11 +27,17 @@ import kotlin.math.sqrt
  *    working as advertised; the number says how much moved, not whether the move was right.
  *
  * The mean is carried beside the maximum because one outlier node and a whole trajectory
- * drifting are different situations that a maximum alone cannot tell apart.
+ * drifting are different situations that a maximum alone cannot tell apart. [movedNodes] says
+ * which of the two it was in the operator's own terms - "42 of 380 nodes moved" is a room that
+ * was redistributed over the loop, "1 of 380" is one bad keyframe, and both have the same
+ * maximum (finding 249). Deciding that with a threshold on the ratio would be inventing a number
+ * to hide two real ones behind.
  */
 data class CorrectionReport(
     /** Nodes the optimiser returned a pose for *and* the app had an original for. */
     val nodes: Int,
+    /** Of those, the ones that moved further than [MOVED_THRESHOLD_METRES]. */
+    val movedNodes: Int,
     val maxShiftMetres: Float,
     val meanShiftMetres: Float,
 ) {
@@ -42,7 +48,7 @@ data class CorrectionReport(
      * Below this the graph was already consistent and the honest thing to print is nothing - a
      * "0.000 m" line teaches the operator that closures are theatre.
      */
-    val moved: Boolean get() = maxShiftMetres > MOVED_THRESHOLD_METRES
+    val moved: Boolean get() = movedNodes > 0
 
     companion object {
         /** 1 mm: under the noise of a single ARCore pose, over the optimiser's rounding. */
@@ -57,6 +63,7 @@ data class CorrectionReport(
          */
         fun of(optimised: List<FloatArray>, original: (Int) -> FloatArray?): CorrectionReport {
             var nodes = 0
+            var movedNodes = 0
             var max = 0f
             var total = 0.0
             for (index in optimised.indices) {
@@ -67,11 +74,15 @@ data class CorrectionReport(
                 if (!shift.isFinite()) continue
                 nodes += 1
                 total += shift.toDouble()
+                if (shift > MOVED_THRESHOLD_METRES) movedNodes += 1
                 if (shift > max) max = shift
             }
-            if (nodes == 0) return CorrectionReport(nodes = 0, maxShiftMetres = 0f, meanShiftMetres = 0f)
+            if (nodes == 0) {
+                return CorrectionReport(nodes = 0, movedNodes = 0, maxShiftMetres = 0f, meanShiftMetres = 0f)
+            }
             return CorrectionReport(
                 nodes = nodes,
+                movedNodes = movedNodes,
                 maxShiftMetres = max,
                 meanShiftMetres = (total / nodes).toFloat(),
             )

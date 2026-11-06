@@ -68,10 +68,18 @@ sealed interface ClosureState {
     /** One question on screen, waiting for the operator. */
     data class Offered(val offer: ClosureOffer) : ClosureState
 
-    /** The closure was applied and the graph optimised - with what it did to the trajectory. */
+    /**
+     * The closure was applied and the graph optimised - with what it did to the trajectory.
+     *
+     * [correction] is `null` when the solver stopped without converging. That is not a missing
+     * value, it is the absence of a result: the poses of a run that hit its iteration budget are a
+     * snapshot halfway down the cost, and a shift computed from them would be a movement the
+     * optimiser never finished deciding on (finding 247). The type carries the difference so the
+     * screen cannot print a correction it does not have.
+     */
     data class Closed(
         val optimisation: ClosureOptimisation,
-        val correction: CorrectionReport,
+        val correction: CorrectionReport?,
     ) : ClosureState
 
     /** The closure was applied but there is no graph to optimise - counted, not hidden. */
@@ -127,8 +135,14 @@ class PoseGraphCloser(
             return state
         }
         // What the closure did, in metres. The corrected poses are *not* stored anywhere: this is
-        // the report the operator gets instead of a silently moved room (finding 246).
-        val correction = CorrectionReport.of(result.poses) { index -> history.originalPose(index) }
+        // the report the operator gets instead of a silently moved room (finding 246) - and only
+        // when the solver actually converged, because `finalCost` below a falling curve proves an
+        // iteration ran, not that it arrived (finding 247).
+        val correction = if (result.converged) {
+            CorrectionReport.of(result.poses) { index -> history.originalPose(index) }
+        } else {
+            null
+        }
         state = ClosureState.Closed(result, correction)
         return state
     }

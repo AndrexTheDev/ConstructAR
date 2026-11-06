@@ -333,7 +333,19 @@ can be corrected too, but only on a human's word: `ProximityLoopClosureDetector`
 revisit, `ClosurePolicy` decides whether and which one to ask about, and a confirmed closure adds
 the edge at 100x the odometry weight and optimises on the worker. The corrected poses are
 reported, not written back - a run's metres were measured with taps, and finding 217's rule
-applies to the graph too.
+applies to the graph too. What is reported is a `CorrectionReport` (`:core`): the nodes the
+optimiser and the app both know, how many of them moved, the largest and the mean shift in metres
+(findings 246, 249). A run
+that stopped without converging has no report at all - `ClosureState.Closed.correction` is null -
+because its poses are a snapshot halfway down the cost curve (finding 247). The count of
+confirmed closures and the last report travel on `PoseGraphStatus`, so the HUD keeps saying what
+the dialog said after the dialog is gone (finding 250); committing the run copies them into
+`ScanSummary.closures` and the protocol prints them, so the document says the geometry was folded
+back on someone's word (finding 251). Both carry the solver's verdict, so "the graph was already
+consistent" and "the optimiser gave up" stay two sentences all the way to the paper (finding 252).
+Which of those facts a screen has to mention is not a screen's decision: `MeasurementProvenance.of`
+(`:core`) assembles the caveats - partial capture, folded loop, uncorrected loop - and the project
+screen renders that list instead of deciding for itself (finding 254).
 
 **Monocular depth fusion.** Optional and strictly additive, and it names itself: the model's asset
 path comes from `BuildConfig.DEPTH_MODEL_ASSET` (one declaration, so a variant that ships a

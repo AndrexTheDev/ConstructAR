@@ -10,6 +10,7 @@ import com.constructar.core.math.Mat4
 import com.constructar.core.math.Pose
 import com.constructar.core.math.Quat
 import com.constructar.core.math.Vec3
+import com.constructar.core.slam.CorrectionReport
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -131,5 +132,59 @@ class PoseGraphStatusTest {
         assertEquals(1, status.edges)
         assertEquals(0, status.lost)
         assertEquals(2, feed.report.nodes)
+    }
+
+    @Test
+    fun `a confirmed closure is part of the status`() {
+        // Finding 250: the numbers used to exist only while the dialog was open, so a status line
+        // could not tell a folded room from an open loop.
+        val status = PoseGraphStatus.of(
+            applier = KeyframeApplier(RecordingSink()),
+            closures = 2,
+            lastCorrection = CorrectionReport(
+                nodes = 380,
+                movedNodes = 42,
+                maxShiftMetres = 0.183f,
+                meanShiftMetres = 0.02f,
+            ),
+        )
+
+        assertEquals(2, status.closures)
+        assertEquals(42, status.lastCorrection?.movedNodes)
+        assertEquals(380, status.lastCorrection?.nodes)
+    }
+
+    @Test
+    fun `a closure whose solver stopped early is counted but has nothing to print`() {
+        // The count is every confirmation - the edge is in the graph - while the report only
+        // exists for a converged run (finding 247).
+        val status = PoseGraphStatus.of(applier = KeyframeApplier(RecordingSink()), closures = 1)
+
+        assertEquals(1, status.closures)
+        assertEquals(null, status.lastCorrection)
+    }
+
+    @Test
+    fun `a session without a closure says nothing about one`() {
+        val status = PoseGraphStatus.of(KeyframeApplier(RecordingSink()))
+
+        assertEquals(0, status.closures)
+        assertEquals(null, status.lastCorrection)
+    }
+
+    @Test
+    fun `a closure whose solver gave up is not a closure that moved nothing`() {
+        // Finding 252: `closures > 0` with no report meant two things - "the graph was already
+        // consistent" and "the optimiser stopped" - and the graph line could not tell them apart.
+        val status = PoseGraphStatus.of(
+            applier = KeyframeApplier(RecordingSink()),
+            closures = 2,
+            lastCorrection = null,
+            lastClosureConverged = false,
+        )
+
+        assertEquals(2, status.closures)
+        assertEquals(null, status.lastCorrection)
+        assertEquals("the last closure has no result", false, status.lastClosureConverged)
     }
 }

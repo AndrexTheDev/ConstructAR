@@ -79,6 +79,9 @@
     <string name="marker_state_walking">Now move the phone sideways about a metre, keeping the tag in view.</string>
     <string name="ar_pose_graph">Pose graph: %1$d nodes · %2$d edges</string>
     <string name="ar_pose_graph_lost">Keyframes lost: %1$d</string>
+    <string name="ar_pose_graph_closures">Closure: %1$d confirmed</string>
+    <string name="ar_pose_graph_closure_shift">Last closure: %1$d of %2$d nodes moved, up to %3$s</string>
+    <string name="ar_pose_graph_closure_unfinished">Last closure: no result (optimiser stopped)</string>
     <string name="loop_check">Check return</string>
     <string name="loop_title">Close the loop</string>
     <string name="loop_offer">The walk is %1$s from an earlier point again. Closing assumes it is the same place.</string>
@@ -86,7 +89,8 @@
     <string name="loop_none">No loop found.</string>
     <string name="loop_closed">Loop closed: residual %1$s → %2$s.</string>
     <string name="loop_failed">The graph could not be optimised.</string>
-    <string name="loop_shift">Pose graph moved: %1$d nodes, up to %2$s.</string>
+    <string name="loop_shift">Moved %1$d of %2$d nodes, up to %3$s.</string>
+    <string name="loop_unfinished">The optimiser hit its iteration limit: the edge is set, but there is no result. These numbers are a snapshot, not a correction.</string>
     <string name="ar_add_point">Add point at centre</string>
     <string name="ar_undo">Undo</string>
     <string name="ar_close_loop">Close loop</string>
@@ -156,6 +160,8 @@
     <string name="export_fittings">Clips %1$d · couplings %2$d · bends %3$d</string>
     <string name="export_room_scan">Room scan recorded: %1$d k triangles - in the protocol; the 3D model holds the runs</string>
     <string name="export_room_scan_limited">Only part of the room was captured (scan limit) - measure what is missing before you hand this over.</string>
+    <string name="export_room_closure">Loop closure: %1$d of %2$d nodes moved, up to %3$s</string>
+    <string name="export_room_closure_unfinished">Loop closure confirmed, but the optimiser gave up: the positions are uncorrected.</string>
     <string name="export_offline_note">Files are written to the folder you pick. Nothing is uploaded; export works in airplane mode and in a basement.</string>
     <string name="export_about">%1$s %2$s · %3$s</string>
     <string name="project_none">No project open</string>
@@ -383,6 +389,8 @@
     <string name="pdf_procurement_note">Order lengths include the site waste factor. Figures come from anchor-refined node positions; check critical runs with a tape measure before cutting.</string>
     <string name="pdf_note_accuracy">Expected accuracy: 1-2 cm on a flat wall between 1 and 4 m, 3-6 cm where only depth data is available, about 1 %% of the length on a diagonal. Confidence is the weakest point of a run - below %1$d %% it needs a second look.</string>
     <string name="pdf_note_scan_limited">Scan limit reached: only part of the room was captured. The lengths, fittings and prices in this protocol are measured and unaffected - areas outside the captured volume were not measured and are not in this protocol.</string>
+    <string name="pdf_note_closure">Loop closure confirmed (%1$d): the last one moved %2$d of %3$d nodes by up to %4$s. The geometry was folded back on the operator’s confirmation - the lengths in this protocol were measured, the positions were corrected.</string>
+    <string name="pdf_note_closure_unfinished">A loop closure was confirmed, but the optimiser stopped before it reached a result - the positions in this protocol are the uncorrected ones. Lengths are unaffected.</string>
     <string name="pdf_note_recovered">Recovered after an interruption - lengths and fittings are exact, the 3D position is not in the model: %1$s</string>
     <string name="pdf_note_unbuildable">No 3D geometry could be built for these runs - their lengths and fittings are still counted: %1$s</string>
     <string name="pdf_footer">ConstructAR %1$s - generated on device</string>
