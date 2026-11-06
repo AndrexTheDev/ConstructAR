@@ -852,10 +852,23 @@ fun ArMeasureScreen(
                             }
                         },
                 ) {
-                    // The ring appears where the reticle samples, for as long as the last point
-                    // really was moved onto a corner or an edge (finding 213).
+                    // The ring appears where the reticle samples, for as long as **the reticle** is
+                    // on a corner or an edge (findings 213 and 274).
+                    //
+                    // It used to read `lastHit`, which is the last *tap*: so it never appeared
+                    // while the operator aimed at a corner (the moment the information is worth
+                    // most), and once a tap had snapped it stayed on screen at the centre of the
+                    // display long after the reticle had moved somewhere else - a permanent claim
+                    // about a point that was no longer under it. The stabiliser's reading carries
+                    // the hit the reticle produced on its most recent sample, which is the only
+                    // live source of the snap; the tap-time fact ("your point was moved onto the
+                    // edge") is the slot's sentence, and stays there.
+                    //
+                    // Gated by the mode like every other measuring affordance (finding 273): a
+                    // walkthrough has no reticle to settle onto anything.
                     SnapMarker(
-                        active = SnapReading.moved(lastHit?.hit?.snap, LocalDecimalMark.current) != null,
+                        active = SheetPlan.tapPlacesPoint(mode) &&
+                            SnapReading.moved(stability?.lastHit?.snap, LocalDecimalMark.current) != null,
                         modifier = Modifier.align(Alignment.Center),
                     )
                     // And the event: one ring out of the finger, once per tap (finding 269). It
