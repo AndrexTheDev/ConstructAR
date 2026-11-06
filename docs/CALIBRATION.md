@@ -62,7 +62,14 @@ applied to:
   same, equally short, metre, so the ratio and therefore the count is unchanged. A certified
   calibration changes what the customer is charged for in metres, not how many clips are needed;
 * the AR HUD while measuring — the operator measures what the phone sees; the paperwork is where
-  the correction belongs, and the room screen says so in words when a factor is in force.
+  the correction belongs, and the room screen says so in words when a factor is in force. The
+  HUD's own "N runs · X total" line (`RunSummary.of`) is part of the HUD, not of the paperwork: it
+  adds up the same measured metres the run readouts above it show, so the running total on the
+  glass and the corrected total on the project screen differ by exactly the factor the project
+  screen names. `verify_sources.py` refuses `calibratedMeters`/`reportedMeters` in
+  `ArMeasureScreen.kt` for that reason. What finding 277 fixed is the other side of the rule: a
+  surface that *does* report corrected metres (the project screen's list, the protocol's runs
+  table) must take them from `Project.reportedMeters`, or its rows do not add up to its own sum.
 
 **What the paperwork says.** When a factor is in force the protocol prints one line under its
 header — *Calibrated: factor 1.053* — and the full CSV and the wholesaler's order list print a

@@ -3124,6 +3124,15 @@ def check_the_calibration_has_one_home() -> None:
                                                           "DuctMeshGenerator.kt"):
             add(path, "the calibration factor has reached the geometry - it must only ever scale "
                       "reported metres, or a better calibration could not correct the project")
+    hud = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" / "ar" /
+           "ArMeasureScreen.kt")
+    if hud.exists():
+        hud_text = hud.read_text(encoding="utf-8")
+        for name in ("calibratedMeters", "reportedMeters"):
+            if name in hud_text:
+                add(hud, f"`{name}` on the measure screen puts the correction into the HUD - "
+                         "`docs/CALIBRATION.md` keeps the factor in the paperwork, where it can be "
+                         "named, and the operator measures what the phone sees (finding 277)")
     for path in kotlin_sources("app") + kotlin_sources("ar-engine") + kotlin_sources("export"):
         source = path.read_text(encoding="utf-8")
         for literal in ("0.0856", "0.05398"):

@@ -599,13 +599,17 @@ fun ArMeasureScreen(
     val closedLoopText = if (routeState.closedLoop) stringResource(R.string.ar_closed_loop) else null
     // The room, not just the run: the operator's real question on site. It reuses the export
     // screen's own "N runs · X total" line, so the number on the phone and on the protocol come
-    // from one sentence and one formatter - and, since finding 277, from one *value*: every metre
-    // here is a reported metre, the saved runs and the run in hand alike. Measured metres summed
-    // under a corrected total is how the project screen's list came to disagree with its own sum.
+    // from one sentence and one formatter.
+    //
+    // Measured metres, not reported ones, and that is `docs/CALIBRATION.md`'s boundary rather than
+    // an oversight: the factor is applied where the paperwork is written (the project screen, the
+    // protocol, the CSV), never on the HUD, because the operator measures what the phone sees. The
+    // list on the project screen is the other half of that rule (finding 277) and `verify_sources`
+    // refuses a calibration factor in this file.
     val roomTotals = RunSummary.of(
-        committedMeters = project.routes.map { project.calibratedMeters(it) },
+        committedMeters = project.routes.map { it.polylineLengthMeters },
         liveNodes = routeState.nodeCount,
-        liveMeters = project.reportedMeters(routeState.lengthMeters),
+        liveMeters = routeState.lengthMeters,
     )
     val roomTotalText = if (roomTotals.runs > 0) {
         stringResource(
