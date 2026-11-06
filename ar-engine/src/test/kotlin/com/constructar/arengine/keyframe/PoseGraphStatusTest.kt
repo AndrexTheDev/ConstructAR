@@ -185,6 +185,6 @@ class PoseGraphStatusTest {
 
         assertEquals(2, status.closures)
         assertEquals(null, status.lastCorrection)
-        assertEquals(Boolean.FALSE, status.lastClosureConverged)
+        assertEquals("the last closure has no result", false, status.lastClosureConverged)
     }
 }
