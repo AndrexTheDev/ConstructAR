@@ -27,7 +27,14 @@ class DepthSourceMetadataTest {
         assertFalse(full.confidenceAvailable)
         assertEquals(255, full.confidenceAt(0, 0))
 
-        val raw = full.copy(source = DepthSource.RAW, confidence = byteArrayOf(0x40))
+        val raw = DepthFrameSnapshot(
+            depthMm = shortArrayOf(1_000),
+            width = 1,
+            height = 1,
+            rowStride = 1,
+            source = DepthSource.RAW,
+            confidence = byteArrayOf(0x40),
+        )
         assertTrue(raw.confidenceAvailable)
     }
 
