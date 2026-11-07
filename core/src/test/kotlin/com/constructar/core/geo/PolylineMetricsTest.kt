@@ -9,6 +9,7 @@ package com.constructar.core.geo
 import com.constructar.core.math.Vec3
 import com.constructar.core.model.ConduitKind
 import com.constructar.core.model.ConduitSpec
+import com.constructar.core.model.HitConfidence
 import com.constructar.core.model.HitSource
 import com.constructar.core.model.RouteNodeRecord
 import com.constructar.core.model.SurfaceKind
@@ -185,21 +186,26 @@ class PolylineMetricsTest {
     }
 
     @Test
-    fun `a raycast point marks the run as uncertain in the order list`() {
-        // 0.7 is below the depth tier (0.85), so the phone already tells the operator the weakest
-        // point of this run is 70 %. The order list used to draw its line at 0.5 and stay silent,
-        // which meant the paperwork was more optimistic than the screen (finding 47).
+    fun `a low scoring raycast point marks the run as uncertain in the order list`() {
+        // The source prior alone is 0.65 and no longer implies a warning. Incidence and depth
+        // uncertainty produce the actual score; 0.59 must warn on paper exactly as it does in AR.
         val raycast = listOf(
+            node(0f, 0f, 0f),
+            node(1f, 0f, 0f, HitSource.DIRECT_DEPTH_RAYCAST).copy(confidence = 0.59f),
+            node(2f, 0f, 0f),
+        )
+        assertEquals(1, PolylineMetrics.measure(raycast, ConduitSpec.cable(16f)).lowConfidenceNodes)
+        val cleanRaycast = listOf(
             node(0f, 0f, 0f),
             node(1f, 0f, 0f, HitSource.DIRECT_DEPTH_RAYCAST),
             node(2f, 0f, 0f),
         )
-        assertEquals(1, PolylineMetrics.measure(raycast, ConduitSpec.cable(16f)).lowConfidenceNodes)
+        assertEquals(0, PolylineMetrics.measure(cleanRaycast, ConduitSpec.cable(16f)).lowConfidenceNodes)
 
-        // A depth point is exactly at the bar: measured, not questioned.
+        // A computed depth score exactly at the bar is measured, not questioned.
         val depth = listOf(
             node(0f, 0f, 0f),
-            node(1f, 0f, 0f, HitSource.AR_DEPTH_POINT),
+            node(1f, 0f, 0f, HitSource.AR_DEPTH_POINT).copy(confidence = HitConfidence.RUN_TRUSTED),
             node(2f, 0f, 0f),
         )
         assertEquals(0, PolylineMetrics.measure(depth, ConduitSpec.cable(16f)).lowConfidenceNodes)

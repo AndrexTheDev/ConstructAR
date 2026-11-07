@@ -56,6 +56,17 @@ android {
             ndk {
                 debugSymbolLevel = "FULL"
             }
+            // Symbols are kept for the shipping build only (finding 261). They used to be kept in
+            // every variant, which turned the *test* APK into a 95 MB download for a phone with a
+            // 4 GB of RAM and a flaky connection - the person installing it gets nothing from
+            // symbols, and a bigger file is a bigger thing to arrive damaged. `debug` and `beta`
+            // are stripped; the release keeps them, which is where a native crash report comes
+            // from.
+            packaging {
+                jniLibs {
+                    keepDebugSymbols += "**/*.so"
+                }
+            }
         }
     }
 
@@ -67,8 +78,6 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = false
-            // Required by Play for 16 KB page-size devices.
-            keepDebugSymbols += "**/*.so"
         }
     }
 }

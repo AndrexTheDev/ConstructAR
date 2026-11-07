@@ -23,9 +23,9 @@ import kotlin.test.assertTrue
 /**
  * What a calibration factor does to the numbers a project *reports*.
  *
- * The factor is stored on the project and applied to metres at the point they are printed or
- * summed - never to the node positions, never to the mesh, never to the AR HUD. These tests pin
- * exactly that boundary: the reported metres move, the geometry and the fitting counts do not.
+ * The factor is stored on the project while routes remain raw evidence. A central transformed copy
+ * feeds rendering, material quantities and exports; reported distances pass through the same
+ * arithmetic exactly once, so every surface agrees without mutating the persisted measurement.
  */
 class CalibratedReportTest {
 
@@ -83,6 +83,37 @@ class CalibratedReportTest {
     }
 
     @Test
+    fun `the rows of a calibrated project add up to its total`() {
+        // The invariant every list on the phone and in the protocol depends on (finding 277). The
+        // project screen's rows printed the raw measurement while the total above them was
+        // corrected, so a 5.00 m job read as 3.00 + 2.00 under "5.25 m" - a list the operator can
+        // see is wrong and cannot explain. Summed the way the screens sum it: printed metres.
+        val project = project(route("a", 3f), route("b", 2f), scale = 1.05)
+
+        val rows = project.routes.map { project.calibratedMeters(it) }
+        // kotlin.test takes the message last - the JUnit order does not compile against this
+        // overload, which is the trap `verify_sources` refuses elsewhere in the tree.
+        assertEquals(
+            project.totalLengthMeters,
+            rows.sum(),
+            1e-4f,
+            "the rows must add up to the number above them",
+        )
+    }
+
+    @Test
+    fun `a measured length is corrected once, in one function`() {
+        // `reportedMeters` is the only multiplication site: the total goes through it, a route goes
+        // through it, and the AR screen's running total - saved runs and the run in hand alike -
+        // goes through it. A second application would print 13.44 m as 14.11 m.
+        val project = project(route("a", 4f), scale = 1.05)
+
+        assertEquals(4.2f, project.reportedMeters(4f), 1e-4f)
+        assertEquals(4.2f, project.calibratedMeters(project.routes.first()), 1e-4f)
+        assertEquals(4.2f, project.totalLengthMeters, 1e-4f)
+    }
+
+    @Test
     fun `the bill of materials follows the same factor`() {
         val list = MaterialListBuilder.build(
             project(route("a", 3f), route("b", 2f), scale = 1.05),
@@ -97,10 +128,10 @@ class CalibratedReportTest {
     }
 
     @Test
-    fun `fitting counts are not scaled, because a clip per spacing is a ratio`() {
-        // Length and clip spacing were both measured in the same, equally short, metre. Scaling
-        // the length and not the spacing - or both - leaves the count where it was; a certified
-        // calibration must therefore not change what is ordered in clips.
+    fun `uniform calibration preserves bend angles and these fitting counts`() {
+        // Material metrics are measured after transforming the points. Uniform scaling preserves
+        // bend angles; clip/coupling counts are recalculated from calibrated metres and may change
+        // when they cross a spacing/stock threshold (these lengths deliberately do not cross one).
         val uncalibrated = MaterialListBuilder.build(project(route("a", 4f)), nowMs = 7L)
         val calibrated = MaterialListBuilder.build(project(route("a", 4f), scale = 1.05), nowMs = 7L)
 
@@ -116,6 +147,18 @@ class CalibratedReportTest {
             uncalibrated.lines.single().elbow90Count,
             calibrated.lines.single().elbow90Count,
         )
+    }
+
+    @Test
+    fun `material quantities are calculated after calibration rather than scaled afterwards`() {
+        // 55 cm needs two clips at 60 cm spacing. Once calibrated to 60.5 cm it crosses the
+        // spacing boundary and needs three; multiplying only the final metre total would miss it.
+        val raw = MaterialListBuilder.build(project(route("a", 0.55f)), nowMs = 7L)
+        val calibrated = MaterialListBuilder.build(project(route("a", 0.55f), scale = 1.10), nowMs = 7L)
+
+        assertEquals(2, raw.lines.single().clipCount)
+        assertEquals(0.605f, calibrated.lines.single().totalMeters, 1e-4f)
+        assertEquals(3, calibrated.lines.single().clipCount)
     }
 
     @Test

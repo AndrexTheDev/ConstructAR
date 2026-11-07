@@ -6,6 +6,8 @@
 
 package com.constructar.core.model
 
+import com.constructar.core.math.Aabb
+import com.constructar.core.math.Vec3
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -38,7 +40,7 @@ class ScanSummaryTest {
         assertEquals(
             "a field here becomes a line in every project file and a possible row in the " +
                 "protocol; it has to arrive with a producer and a reader (finding 103)",
-            listOf("meshTriangleCount", "scanLimited", "closures"),
+            listOf("meshTriangleCount", "scanLimited", "closures", "bounds"),
             names,
         )
     }
@@ -173,4 +175,17 @@ class ScanSummaryTest {
         assertFalse("numbers from a solver that gave up are a contradiction", contradictory.isPlausible)
         assertTrue("the honest record of an unfinished run is a confirmation and nothing else", honest.isPlausible)
     }
+
+    @Test
+    fun `independent mesh bounds survive a project file round trip`() {
+        val bounds = Aabb(Vec3(-1f, 0f, -2f), Vec3(4f, 2.7f, 5f))
+        val saved = json.encodeToString(
+            ScanSummary.serializer(),
+            ScanSummary(meshTriangleCount = 24, bounds = bounds),
+        )
+        val loaded = json.decodeFromString(ScanSummary.serializer(), saved)
+        assertEquals(bounds, loaded.bounds)
+        assertTrue(saved.contains("bounds"))
+    }
+
 }

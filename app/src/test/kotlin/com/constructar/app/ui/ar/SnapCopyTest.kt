@@ -21,12 +21,12 @@ import java.util.Locale
 /**
  * The snap line, in the six languages the app ships.
  *
- * Four whole sentences per language rather than one sentence with the kind of feature as an
+ * One whole sentence per feature and language rather than one sentence with the feature as an
  * argument: "An der Ecke ausgerichtet" and "An der Bodenkante ausgerichtet" take different cases,
  * and a placeholder would make every translator bend the sentence around a noun they cannot
  * decline. What a test can check is that each sentence exists, that it still carries the distance,
- * and that the four are not the same string - a translator who copies one line four times would
- * otherwise ship a HUD that says "corner" for a floor edge in one language only.
+ * and that no two features share a string - a translator who copies one line would otherwise ship
+ * a HUD that says "corner" for a floor edge in one language only.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -49,7 +49,7 @@ class SnapCopyTest {
     }
 
     @Test
-    fun `every locale states the feature and the distance, four different ways`() {
+    fun `every locale states each feature and the distance in its own way`() {
         locales.forEach { locale ->
             val context = context(locale)
             val tag = locale.toLanguageTag()

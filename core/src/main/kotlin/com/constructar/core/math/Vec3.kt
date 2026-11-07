@@ -49,6 +49,7 @@ data class Vec3(val x: Float, val y: Float, val z: Float) {
 
     val lengthSquared: Float get() = x * x + y * y + z * z
     val length: Float get() = sqrt(lengthSquared)
+    val isFinite: Boolean get() = x.isFinite() && y.isFinite() && z.isFinite()
 
     /** Unit vector, or [FALLBACK_UP] when the vector is degenerate (never NaN). */
     fun normalized(): Vec3 {

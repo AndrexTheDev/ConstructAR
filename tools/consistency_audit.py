@@ -112,7 +112,14 @@ if page_version and not app_version.startswith(page_version):
 if "0 Bytes" not in page and "0 bytes" not in page:
     add("the page no longer states the '0 bytes leave the phone' claim")
 permissions = read("app/src/main/AndroidManifest.xml")
-if "android.permission.INTERNET" in permissions:
+# A `tools:node="remove"` element has to *name* the permission it removes, so the string alone is
+# not a declaration (finding 263: a library merged INTERNET into the built APK and the fix states
+# the removal in the manifest). Everything outside such an element is a real request.
+_permission_mentions = [
+    permissions[m.start():].split("/>", 1)[0]
+    for m in re.finditer(re.escape("android.permission.INTERNET"), permissions)
+]
+if any('tools:node="remove"' not in element for element in _permission_mentions):
     add("the app declares INTERNET while the page promises it sends nothing")
 
 # ---------------------------------------------------------------------------------------------

@@ -199,16 +199,31 @@ class RouteSession(
             else -> raw.copy(position = target.position, normal = target.normal)
         }
         livePoint = node
-        if (previous?.position != node?.position && node != null) previewDirty = true
+        // Either direction counts, including letting go of the reticle: the preview is geometry
+        // whose last node is the live point, so a reticle that *disappears* changes the shape
+        // just as much as one that moves (finding 273).
+        if (previous?.position != node?.position) previewDirty = true
 
-        // Published on every reticle update (12 Hz) because it costs one distance, not a
-        // geometry rebuild: the operator sees the segment under the crosshair growing while he
-        // walks, which is what tells him "stop, that is the 3 m I need".
+        // Published, and drawn, on every reticle update (12 Hz): the operator sees the segment under
+        // the crosshair growing while he walks, which is what tells him "stop, that is the 3 m I
+        // need". The rebuild below is the price of that sentence, and `previewDirty` is what keeps
+        // it from being paid on a dead-still reticle.
         val last = mutableState.value.nodes.lastOrNull()
         val distance = if (last != null && node != null) last.position.distanceTo(node.position) else 0f
         val current = mutableState.value
-        if (current.liveSegmentMeters != distance) {
-            mutableState.value = current.copy(liveSegmentMeters = distance)
+        val next = if (current.liveSegmentMeters != distance) {
+            current.copy(liveSegmentMeters = distance)
+        } else {
+            current
+        }
+        // The geometry, not only the number (finding 273). `previewDirty` was set here and then read
+        // by `recompute`, which nothing called on this path: the drawn tube refreshed only whenever
+        // some *other* mutation happened to arrive - an anchor drifting two centimetres, a spec
+        // change, an undo - so the rubber band the whole preview exists for lagged behind the
+        // reticle by an arbitrary amount of time, and on a still phone it did not move at all.
+        // `recompute` rebuilds only while the flag is set, so a still reticle still costs nothing.
+        if (previewDirty || next !== current) {
+            mutableState.value = recompute(next)
         }
     }
 

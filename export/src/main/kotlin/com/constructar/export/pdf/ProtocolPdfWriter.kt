@@ -320,7 +320,7 @@ class ProtocolPdfWriter(
                         y = MARGIN
                         y = drawTableHeader(page.canvas, header, columns, y)
                     }
-                    y = drawTableRow(page.canvas, routeRow(route, content.labels), columns, y)
+                    y = drawTableRow(page.canvas, runTableRow(content.project, route, content.labels), columns, y)
                 }
                 // A run that survived an interruption counts in every length, every fitting and
                 // the price - its coordinates belong to an ARCore session that no longer exists,
@@ -723,24 +723,6 @@ class ProtocolPdfWriter(
     }
 
     /**
-     * One row of the runs table.
-     *
-     * The confidence is rounded by `PercentText` - the same rule the phone's weak-point warning
-     * uses - instead of being truncated on the way into the document that gets signed
-     * (finding 147).
-     */
-    private fun routeRow(route: ConduitRoute, labels: PdfLabels): List<String> {
-        val metrics = com.constructar.core.geo.PolylineMetrics.measure(route)
-        return listOf(
-            route.label,
-            route.spec.sizeLabel,
-            format(route.polylineLengthMeters),
-            metrics.bendCount.toString(),
-            PercentText.format(labels.percentValue, metrics.minimumConfidence),
-        )
-    }
-
-    /**
      * [value] on one line, no wider than [maxWidth], measured with the paint that will draw it.
      *
      * The header used to call `drawText` directly, so a long room name ran past the margin and a
@@ -810,6 +792,31 @@ internal fun unbuildableRunsNote(labels: List<String>, template: String): String
  */
 internal fun accuracyNote(template: String, trusted: Float = HitConfidence.RUN_TRUSTED): String =
     PercentText.format(template, trusted)
+
+/**
+ * One row of the runs table, as data: [runTableRow] exists so a test can hold what the page prints.
+ *
+ * The length is `project.calibratedMeters`, i.e. the same number [summaryRows]' "total length" row
+ * is the sum of (finding 277). It used to be `route.polylineLengthMeters`, the raw measurement: on a
+ * calibrated project the table added up to 12.80 m under a summary that said 13.44 m, on the page
+ * the customer signs, while the CSV beside it already printed the corrected figure. The confidence
+ * is rounded by `PercentText` - the same rule the phone's weak-point warning uses - instead of
+ * being truncated on the way into a document that gets signed (finding 147).
+ */
+internal fun runTableRow(
+    project: ProjectRecord,
+    route: ConduitRoute,
+    labels: PdfLabels,
+): List<String> {
+    val metrics = com.constructar.core.geo.PolylineMetrics.measure(route)
+    return listOf(
+        route.label,
+        route.spec.sizeLabel,
+        LengthFormatter.number(project.calibratedMeters(route)),
+        metrics.bendCount.toString(),
+        PercentText.format(labels.percentValue, metrics.minimumConfidence),
+    )
+}
 
 /**
  * The key/value rows of the protocol's summary, in the order they are drawn (finding 103).

@@ -43,7 +43,7 @@
     <string name="home_export">Esporta</string>
 
     <!-- AR measuring screen -->
-    <string name="scan_instruction">Muovi il telefono lentamente su pareti e pavimento per scansionare il locale.</string>
+    <string name="scan_instruction">Non è ancora stato scansionato nulla. Passa il telefono lentamente su una parete: il dettaglio inizia a salire appena il primo pezzo è acquisito.</string>
     <string name="tracking_loss">Tracking perso. Inquadra una parete con texture o il pavimento e muoviti lentamente.</string>
     <string name="tracking_searching">Ricerca di riferimenti. Muovi il telefono lentamente sulla superficie.</string>
     <string name="tracking_limited">Tracking limitato. Muoviti più lentamente.</string>
@@ -82,7 +82,7 @@
     <string name="ar_pose_graph_closures">Chiusura: %1$d confermata</string>
     <string name="ar_pose_graph_closure_shift">Ultima chiusura: %1$d di %2$d nodi spostati, fino a %3$s</string>
     <string name="ar_pose_graph_closure_unfinished">Ultima chiusura: nessun risultato (ottimizzatore fermato)</string>
-    <string name="loop_check">Verifica ritorno</string>
+    <string name="loop_check">Stesso punto?</string>
     <string name="loop_title">Chiudi il ciclo</string>
     <string name="loop_offer">Il percorso è di nuovo a %1$s da un punto precedente. Chiudere presuppone che sia lo stesso luogo.</string>
     <string name="loop_confirm">Stesso luogo</string>
@@ -91,21 +91,57 @@
     <string name="loop_failed">Non è stato possibile ottimizzare il grafo.</string>
     <string name="loop_shift">Spostati %1$d di %2$d nodi, fino a %3$s.</string>
     <string name="loop_unfinished">L’ottimizzatore ha esaurito le iterazioni: l’arco è inserito, ma non c’è un risultato. Questi numeri sono uno stato intermedio, non una correzione.</string>
-    <string name="ar_add_point">Aggiungi punto al centro</string>
-    <string name="ar_undo">Annulla</string>
-    <string name="ar_close_loop">Chiudi</string>
-    <string name="ar_finish">Termina tracciato</string>
-    <string name="ar_leave_title">Uscire dal tracciato?</string>
+    <string name="ar_step_scan">1 Scansiona</string>
+    <string name="ar_step_points">2 Segna i punti</string>
+    <string name="ar_step_finish">3 Salva</string>
+    <string name="mode_measure">Punto per punto</string>
+    <string name="mode_capture">Sopralluogo 3D</string>
+    <string name="mode_measure_hint">Misura: segni ogni punto tu stesso; lì passerà il cavo.</string>
+    <string name="mode_capture_hint">Sopralluogo: l’app ricostruisce il locale in 3D, tu devi solo camminare.</string>
+    <string name="scan_legend">Viola = acquisito dalla scansione</string>
+    <string name="scan_state_none">Niente di acquisito per ora</string>
+    <string name="scan_state_growing">%1$d %% · %2$d k triangoli</string>
+    <string name="scan_state_full">Scansione piena: non si aggiunge altro</string>
+    <string name="scan_state_behind">Il telefono non sta al passo</string>
+    <string name="scan_state_unavailable">Nessuna scansione mesh su questo telefono</string>
+    <string name="capture_walk">Cammina piano lungo le pareti. Ciò che diventa viola è acquisito.</string>
+    <string name="capture_no_points">Durante il sopralluogo non si segnano punti. Per segnare e salvare: «Punto per punto».</string>
+    <string name="ar_add_first_point">Segna il primo punto</string>
+    <string name="capture_end">Termina il sopralluogo</string>
+    <string name="tools_show">Mostra strumenti</string>
+    <string name="tools_hide">Nascondi strumenti</string>
+    <string name="diag_show">Mostra diagnostica</string>
+    <string name="diag_hide">Nascondi diagnostica</string>
+    <string name="spec_change">Cambia il tipo di cavo</string>
+    <string name="spec_dialog_title">Quale cavo?</string>
+    <string name="run_saved">%1$s salvato · %2$s</string>
+    <string name="step_now">ora</string>
+    <string name="step_done">fatto</string>
+    <string name="ar_guide_first">Due punti sono una distanza: uno qui, uno all’altro estremo.</string>
+    <string name="ar_guide_second">Primo punto segnato. Vai all’altro estremo e tocca di nuovo: è la tua prima distanza.</string>
+    <string name="ar_guide_distance">%1$s misurati. Ogni punto successivo allunga la tratta; salva quando vuoi.</string>
+    <string name="ar_guide_ring">Anello chiuso: %1$s di perimetro. Salvalo ora o continua.</string>
+    <string name="ar_hint_run_needs">Per salvare servono 2 punti: %1$d segnati.</string>
+    <string name="ar_hint_ring_needs">L’anello richiede 3 punti: %1$d segnati.</string>
+    <string name="loop_needs_room">Serve prima la scansione: senza stanza acquisita non ci sono due visite da confrontare.</string>
+    <string name="marker_unavailable">Questo dispositivo non legge i marker. La calibrazione a mano funziona ancora.</string>
+    <string name="crash_title">L’app si è chiusa l’ultima volta</string>
+    <string name="crash_body">Sul telefono c’è un rapporto. Salvalo in una cartella e rimandalo: dice cosa stava facendo l’app subito prima di chiudersi.</string>
+    <string name="crash_dismiss">Scarta il rapporto</string>
+    <string name="ar_add_point">Segna il punto qui</string>
+    <string name="ar_undo">Elimina l’ultimo punto</string>
+    <string name="undo_nothing_to_remove">Nessun punto impostato - non c’è niente da eliminare.</string>
+    <string name="ar_close_loop">Chiudi ad anello</string>
+    <string name="ar_finish">Salva la tratta</string>
+    <string name="ar_leave_title">Uscire dalla tratta?</string>
     <string name="ar_leave_body">%1$s misurati. Salvarlo come tratta o scartarlo?</string>
     <string name="ar_leave_save">Salva come tratta</string>
     <string name="ar_leave_discard">Scarta</string>
     <string name="draft_title">Misurazione non terminata</string>
-    <string name="draft_body">%1$s, salvata l’ultima volta alle %2$s. Le lunghezze e i raccordi sono esatti; la posizione 3D non è recuperabile.</string>
+    <string name="draft_body">%1$s, salvata l’ultima volta alle %2$s. Osserva di nuovo gli ancoraggi salvati per ripristinare le coordinate 3D oppure conserva lunghezze e raccordi esatti senza posizione 3D.</string>
     <string name="draft_save">Salva come tratta</string>
     <string name="draft_discard">Scarta</string>
     <string name="ar_torch">Torcia</string>
-    <string name="ar_scan">Scansiona locale</string>
-    <string name="ar_stop_scan">Ferma scansione</string>
     <string name="ar_closed_loop">chiuso</string>
     <string name="ar_confidence_weak">Punto più debole %1$d %%: toccalo di nuovo per migliorare la tratta</string>
     <string name="ar_no_surface">Nessuna superficie trovata. Inquadra una parete o il pavimento.</string>
@@ -155,7 +191,7 @@
     <string name="export_nothing_selected">Scegli almeno un formato di file.</string>
     <string name="export_nothing_to_export">Ancora nessuna geometria 3D: misura prima una tratta o scansiona la stanza.</string>
     <string name="export_measurement">Rilievo</string>
-    <string name="export_runs_total">%1$d tracciati · %2$s in totale</string>
+    <string name="export_runs_total">%1$d percorsi · %2$s in totale</string>
     <string name="export_order_length">Lunghezza di ordine con sfrido: %1$s</string>
     <string name="export_fittings">Fissaggi %1$d · manicotti %2$d · curve %3$d</string>
     <string name="export_room_scan">Scansione della stanza registrata: %1$d k triangoli - va nel protocollo; il modello 3D contiene le tratte</string>
@@ -183,8 +219,8 @@
 
     <!-- Counts -->
     <plurals name="home_runs">
-        <item quantity="one">%1$d tracciato</item>
-        <item quantity="other">%1$d tracciati</item>
+        <item quantity="one">%1$d percorso</item>
+        <item quantity="other">%1$d percorsi</item>
     </plurals>
     <plurals name="home_unreadable">
         <item quantity="one">1 file di progetto non è stato letto. È stato conservato: ripristinalo da un backup o eliminalo qui sotto per liberare la stanza.</item>
@@ -196,12 +232,6 @@
     <plurals name="ar_points">
         <item quantity="one">%1$d punto</item>
         <item quantity="other">%1$d punti</item>
-    </plurals>
-    <!-- Why a greyed-out action is greyed out (finding 257): the device showed two dead
-         buttons and no word about what was missing. -->
-    <plurals name="ar_needs_points">
-        <item quantity="one">Da %1$d punto</item>
-        <item quantity="other">Da %1$d punti</item>
     </plurals>
     <string name="plan_free">Gratuito</string>
     <string name="plan_pro">Pro</string>
@@ -309,12 +339,12 @@
     <string name="licences_title">Componenti di terze parti</string>
     <string name="licences_intro">Questa app si basa su questi componenti open source. Le loro note di copyright sono riprodotte qui, come richiedono le licenze.</string>
     <string name="help_licence_title">Licenza</string>
-    <string name="runs_title">Percorsi</string>
     <string name="run_detail">%1$s · %2$s</string>
-    <string name="run_delete">Elimina percorso</string>
+    <string name="run_delete">Elimina percorso: %1$s</string>
     <string name="run_delete_title">Eliminare questo percorso?</string>
     <string name="run_delete_body">%1$s, %2$s. Sparisce dalla distinta materiali, dal protocollo e dal modello 3D. Non si può recuperare.</string>
     <string name="run_recovered">Recuperata dopo un’interruzione: lunghezze e raccordi sono esatti, la posizione 3D no</string>
+    <string name="run_review_required">Misurazione incerta - controlla questa tratta prima dell’ordine</string>
     <string name="technician_title">Installatore in cantiere</string>
     <string name="technician_hint">Nome come deve comparire sul protocollo</string>
     <string name="materials_title">Materiale e ordine</string>
@@ -538,8 +568,10 @@
     <string name="pdf_section_photos">Documentazione fotografica</string>
     <string name="pdf_note_photos">Qui sono stampate %1$d foto su %2$d del fascicolo - le altre restano nell’app.</string>
     <string name="ar_hold_steady">Tieni fermo</string>
-    <string name="ar_point_locked">Punto agganciato</string>
+    <string name="tap_placed">Punto segnato</string>
+    <string name="tap_undone">Punto rimosso</string>
     <string name="hud_segment">Tratto %1$.2f m</string>
+    <string name="hud_segment_word">Tratto</string>
     <string name="route_warning_surface_jump">Quel punto è dietro l’ultima superficie: controlla la parete prima di proseguire</string>
     <string name="paywall_err_untrusted">Impossibile confermare questa installazione. Installa la versione ufficiale dalla fonte originale e riprova.</string>
     <string name="licence_clock_rollback">L’orologio del dispositivo è indietro rispetto all’ultima data vista dall’app. Imposta data e ora corrette: abbonamento e prova vengono verificati sull’ultima data nota.</string>
@@ -579,4 +611,16 @@
     <string name="pdf_procurement_excluded">%1$d percorsi troppo incerti per essere quotati sono stati esclusi da questa tabella di acquisto (%2$s): i totali sopra non li includono.</string>
     <string name="field_leave_body">La voce del diario, il difetto o la posizione che hai scritto per «%1$s» non sono ancora stati aggiunti.</string>
     <string name="onboard_back">Indietro</string>
+    <string name="draft_relocalise">Ripristina coordinate</string>
+    <string name="draft_save_measurements">Salva solo le misure</string>
+    <string name="relocalise_title">Recupero degli ancoraggi della tratta</string>
+    <string name="relocalise_progress">%1$d di %2$d ancoraggi osservati</string>
+    <string name="relocalise_next">Tocca l’ancoraggio salvato %1$d nella stanza. Non verrà aggiunto alcun punto alla tratta.</string>
+    <string name="relocalise_finish">Ripristina coordinate</string>
+    <string name="relocalise_cancel">Torna alle opzioni di recupero</string>
+    <string name="relocalise_failed">Recupero rifiutato: le osservazioni non sono coerenti. Osserva di nuovo gli ancoraggi o salva solo le misure.</string>
+    <string name="din_sonderverlegung">Sonderverlegung: fuori dalle zone DIN applicabili; il punto resta invariato.</string>
+    <string name="snap_installation_zone">Allineato di %1$s cm alla zona di installazione DIN</string>
+    <string name="wall_ua_profile">Rinforzo UA (2 mm)</string>
+    <string name="wall_ua_value">%1$d profili · %2$s</string>
 </resources>

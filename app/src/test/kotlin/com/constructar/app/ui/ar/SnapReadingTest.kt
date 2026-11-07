@@ -15,7 +15,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * The number a snapped reticle states, and the four sentences it can choose from.
+ * The number a snapped reticle states, and the feature-specific sentences it can choose from.
  *
  * The snap moves a point by up to ten centimetres and used to do it without a word. What the HUD
  * says now is a distance in centimetres and the kind of feature it landed on - and both halves have

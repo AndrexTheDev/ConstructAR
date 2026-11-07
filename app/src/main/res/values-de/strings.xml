@@ -43,7 +43,7 @@
     <string name="home_export">Export</string>
 
     <!-- AR measuring screen -->
-    <string name="scan_instruction">Bewege das Telefon langsam über Wände und Boden, um den Raum zu scannen.</string>
+    <string name="scan_instruction">Noch nichts gescannt. Fahr langsam über eine Wand - sobald das erste Stück erfasst ist, steigt der Detailwert.</string>
     <string name="tracking_loss">Tracking verloren. Ziele auf eine strukturierte Wand oder den Boden und bewege dich langsam.</string>
     <string name="tracking_searching">Suche Merkmale. Bewege das Telefon langsam über die Fläche.</string>
     <string name="tracking_limited">Tracking eingeschränkt. Bewege dich langsamer.</string>
@@ -82,7 +82,7 @@
     <string name="ar_pose_graph_closures">Schleife: %1$d bestätigt</string>
     <string name="ar_pose_graph_closure_shift">Letzte Schleife: %1$d von %2$d Knoten bewegt, bis zu %3$s</string>
     <string name="ar_pose_graph_closure_unfinished">Letzte Schleife: kein Ergebnis (Optimierer abgebrochen)</string>
-    <string name="loop_check">Rückkehr prüfen</string>
+    <string name="loop_check">Gleiche Stelle prüfen</string>
     <string name="loop_title">Schleife schließen</string>
     <string name="loop_offer">Der Weg ist wieder %1$s von einem früheren Punkt entfernt. Schließen setzt voraus, dass es derselbe Ort ist.</string>
     <string name="loop_confirm">Derselbe Ort</string>
@@ -91,21 +91,57 @@
     <string name="loop_failed">Der Graph konnte nicht optimiert werden.</string>
     <string name="loop_shift">Bewegt: %1$d von %2$d Knoten, bis zu %3$s.</string>
     <string name="loop_unfinished">Der Optimierer hat sein Iterationslimit erreicht: die Kante ist gesetzt, aber es gibt kein Ergebnis. Die Zahlen sind ein Zwischenstand, keine Korrektur.</string>
-    <string name="ar_add_point">Punkt in der Mitte</string>
-    <string name="ar_undo">Zurück</string>
-    <string name="ar_close_loop">Schließen</string>
-    <string name="ar_finish">Trasse fertig</string>
+    <string name="ar_step_scan">1 Scannen</string>
+    <string name="ar_step_points">2 Punkte setzen</string>
+    <string name="ar_step_finish">3 Speichern</string>
+    <string name="mode_measure">Punkt für Punkt</string>
+    <string name="mode_capture">Rundgang 3D</string>
+    <string name="mode_measure_hint">Messung: Du setzt jeden Punkt selbst - dort sitzt später das Kabel.</string>
+    <string name="mode_capture_hint">Rundgang: Die App erfasst den Raum in 3D, du gehst nur.</string>
+    <string name="scan_legend">Violett = vom Scan erfasst</string>
+    <string name="scan_state_none">Noch nichts erfasst</string>
+    <string name="scan_state_growing">%1$d %% · %2$d k Dreiecke</string>
+    <string name="scan_state_full">Scan voll - es kommt nichts mehr dazu</string>
+    <string name="scan_state_behind">Telefon kommt nicht mit</string>
+    <string name="scan_state_unavailable">Kein Mesh-Scan auf diesem Telefon</string>
+    <string name="capture_walk">Geh langsam an den Wänden entlang. Was violett wird, ist aufgenommen.</string>
+    <string name="capture_no_points">Im Rundgang werden keine Punkte gesetzt. Zum Setzen und Speichern: „Punkt für Punkt“.</string>
+    <string name="ar_add_first_point">Ersten Punkt setzen</string>
+    <string name="capture_end">Rundgang beenden</string>
+    <string name="tools_show">Werkzeuge anzeigen</string>
+    <string name="tools_hide">Werkzeuge ausblenden</string>
+    <string name="diag_show">Diagnose anzeigen</string>
+    <string name="diag_hide">Diagnose ausblenden</string>
+    <string name="spec_change">Kabelart ändern</string>
+    <string name="spec_dialog_title">Welche Leitung?</string>
+    <string name="run_saved">%1$s gespeichert · %2$s</string>
+    <string name="step_now">jetzt</string>
+    <string name="step_done">erledigt</string>
+    <string name="ar_guide_first">Zwei Punkte sind eine Strecke: einer hier, einer am anderen Ende.</string>
+    <string name="ar_guide_second">Erster Punkt gesetzt. Geh zum anderen Ende und tippe erneut - das ist deine erste Strecke.</string>
+    <string name="ar_guide_distance">%1$s gemessen. Jeder weitere Punkt verlängert den Abschnitt; speichern kannst du jederzeit.</string>
+    <string name="ar_guide_ring">Runde geschlossen: %1$s im Umfang. Jetzt speichern oder weiterlaufen.</string>
+    <string name="ar_hint_run_needs">Speichern braucht 2 Punkte - %1$d gesetzt.</string>
+    <string name="ar_hint_ring_needs">Die Runde braucht 3 Punkte - %1$d gesetzt.</string>
+    <string name="loop_needs_room">Braucht zuerst den Rundgang - ohne erfassten Raum gibt es keine zwei Besuche zu vergleichen.</string>
+    <string name="marker_unavailable">Dieses Gerät erkennt keine Marker. Kalibrieren von Hand geht weiterhin.</string>
+    <string name="crash_title">Die App wurde beim letzten Mal beendet</string>
+    <string name="crash_body">Ein Bericht davon liegt auf dem Telefon. Speichere ihn in einen Ordner und schick ihn zurück – darin steht, was die App unmittelbar davor getan hat.</string>
+    <string name="crash_dismiss">Bericht verwerfen</string>
+    <string name="ar_add_point">Punkt hier setzen</string>
+    <string name="ar_undo">Letzten Punkt löschen</string>
+    <string name="undo_nothing_to_remove">Noch kein Punkt gesetzt - es gibt nichts zu löschen.</string>
+    <string name="ar_close_loop">Zur Runde schließen</string>
+    <string name="ar_finish">Abschnitt speichern</string>
     <string name="ar_leave_title">Strecke verlassen?</string>
     <string name="ar_leave_body">%1$s gemessen. Als Strecke speichern oder verwerfen?</string>
     <string name="ar_leave_save">Als Strecke speichern</string>
     <string name="ar_leave_discard">Verwerfen</string>
     <string name="draft_title">Nicht beendete Messung</string>
-    <string name="draft_body">%1$s, zuletzt gespeichert um %2$s. Längen und Fittings stimmen; die 3D-Position lässt sich nicht wiederherstellen.</string>
+    <string name="draft_body">%1$s, zuletzt gespeichert um %2$s. Beobachte die gespeicherten Anker erneut, um die 3D-Koordinaten wiederherzustellen, oder behalte exakte Längen und Fittings ohne 3D-Position.</string>
     <string name="draft_save">Als Strecke speichern</string>
     <string name="draft_discard">Verwerfen</string>
     <string name="ar_torch">Lampe</string>
-    <string name="ar_scan">Raum scannen</string>
-    <string name="ar_stop_scan">Scan stoppen</string>
     <string name="ar_closed_loop">geschlossen</string>
     <string name="ar_confidence_weak">Schwächster Punkt %1$d %% - tippe ihn erneut an, um die Messung zu verbessern</string>
     <string name="ar_no_surface">Keine Fläche gefunden. Ziele auf Wand oder Boden.</string>
@@ -155,7 +191,7 @@
     <string name="export_nothing_selected">Wähle mindestens ein Dateiformat.</string>
     <string name="export_nothing_to_export">Noch keine 3D-Geometrie: miss zuerst eine Strecke oder scanne den Raum.</string>
     <string name="export_measurement">Aufmaß</string>
-    <string name="export_runs_total">%1$d Trassen · %2$s gesamt</string>
+    <string name="export_runs_total">%1$d Strecken · %2$s gesamt</string>
     <string name="export_order_length">Bestelllänge inkl. Verschnitt: %1$s</string>
     <string name="export_fittings">Scheiben %1$d · Kupplungen %2$d · Bögen %3$d</string>
     <string name="export_room_scan">Raumscan aufgenommen: %1$d k Dreiecke - im Protokoll; das 3D-Modell enthält die Strecken</string>
@@ -183,8 +219,8 @@
 
     <!-- Counts -->
     <plurals name="home_runs">
-        <item quantity="one">%1$d Trasse</item>
-        <item quantity="other">%1$d Trassen</item>
+        <item quantity="one">%1$d Strecke</item>
+        <item quantity="other">%1$d Strecken</item>
     </plurals>
     <plurals name="home_unreadable">
         <item quantity="one">1 Projektdatei konnte nicht gelesen werden. Die Datei wurde behalten - spiele sie aus einer Sicherung zurück oder lösche sie unten, um den Raum freizugeben.</item>
@@ -196,12 +232,6 @@
     <plurals name="ar_points">
         <item quantity="one">%1$d Punkt</item>
         <item quantity="other">%1$d Punkte</item>
-    </plurals>
-    <!-- Why a greyed-out action is greyed out (finding 257): the device showed two dead
-         buttons and no word about what was missing. -->
-    <plurals name="ar_needs_points">
-        <item quantity="one">Ab %1$d Punkt</item>
-        <item quantity="other">Ab %1$d Punkten</item>
     </plurals>
     <string name="plan_free">Kostenlos</string>
     <string name="plan_pro">Pro</string>
@@ -309,12 +339,12 @@
     <string name="licences_title">Komponenten von Drittanbietern</string>
     <string name="licences_intro">Diese App baut auf diesen Open-Source-Komponenten auf. Die Urheberrechtshinweise stehen hier, wie die Lizenzen es verlangen.</string>
     <string name="help_licence_title">Lizenz</string>
-    <string name="runs_title">Strecken</string>
     <string name="run_detail">%1$s · %2$s</string>
-    <string name="run_delete">Strecke löschen</string>
+    <string name="run_delete">Strecke löschen: %1$s</string>
     <string name="run_delete_title">Diese Strecke löschen?</string>
     <string name="run_delete_body">%1$s, %2$s. Die Strecke verschwindet aus der Materialliste, dem Protokoll und dem 3D-Modell. Zurückholen geht nicht.</string>
     <string name="run_recovered">Nach einem Abbruch geborgen - Längen und Fittings stimmen, die 3D-Position nicht</string>
+    <string name="run_review_required">Unsichere Messung - prüfe diese Strecke vor der Bestellung</string>
     <string name="technician_title">Monteur vor Ort</string>
     <string name="technician_hint">Name, wie er auf dem Protokoll stehen soll</string>
     <string name="materials_title">Material und Bestellung</string>
@@ -538,8 +568,10 @@
     <string name="pdf_section_photos">Fotodokumentation</string>
     <string name="pdf_note_photos">%1$d von %2$d Fotos aus der Bauakte stehen hier - die übrigen bleiben in der App.</string>
     <string name="ar_hold_steady">Ruhig halten</string>
-    <string name="ar_point_locked">Punkt gesetzt</string>
+    <string name="tap_placed">Punkt gesetzt</string>
+    <string name="tap_undone">Punkt entfernt</string>
     <string name="hud_segment">Abschnitt %1$.2f m</string>
+    <string name="hud_segment_word">Abschnitt</string>
     <string name="route_warning_surface_jump">Der Punkt liegt hinter der letzten Fläche – prüfe die Wand, bevor du weitermachst</string>
     <string name="paywall_err_untrusted">Diese Installation kann nicht bestätigt werden. Installiere die offizielle Version aus der Originalquelle und versuche es erneut.</string>
     <string name="licence_clock_rollback">Die Uhr des Geräts steht vor dem zuletzt gesehenen Datum. Stelle Datum und Uhrzeit richtig ein – Abo und Testphase werden am zuletzt bekannten Datum geprüft.</string>
@@ -579,4 +611,16 @@
     <string name="pdf_procurement_excluded">%1$d zu unsichere Strecken wurden aus dieser Beschaffungstabelle ausgelassen (%2$s) - die Summen oben enthalten sie nicht.</string>
     <string name="field_leave_body">Der Tagebucheintrag, die Mängelnotiz oder der Ort, den du für „%1$s“ eingegeben hast, wurde noch nicht hinzugefügt.</string>
     <string name="onboard_back">Zurück</string>
+    <string name="draft_relocalise">Koordinaten neu lokalisieren</string>
+    <string name="draft_save_measurements">Nur Maße wiederherstellen</string>
+    <string name="relocalise_title">Routenanker wiederfinden</string>
+    <string name="relocalise_progress">%1$d von %2$d Ankern beobachtet</string>
+    <string name="relocalise_next">Gespeicherten Anker %1$d im Raum antippen. Es wird kein Routenpunkt hinzugefügt.</string>
+    <string name="relocalise_finish">Koordinaten wiederherstellen</string>
+    <string name="relocalise_cancel">Zurück zu den Wiederherstellungsoptionen</string>
+    <string name="relocalise_failed">Wiederherstellung abgelehnt: Die Beobachtungen sind nicht konsistent. Beobachte die Anker erneut oder stelle nur die Maße wieder her.</string>
+    <string name="din_sonderverlegung">Sonderverlegung: außerhalb der zutreffenden DIN-Zonen; der Punkt bleibt unverändert.</string>
+    <string name="snap_installation_zone">Um %1$s cm auf die DIN-Installationszone ausgerichtet</string>
+    <string name="wall_ua_profile">UA-Aussteifung (2 mm)</string>
+    <string name="wall_ua_value">%1$d Profile · %2$s</string>
 </resources>

@@ -201,6 +201,50 @@ def check_app() -> None:
             print(f"  app {lang}: {len(translated)} strings, {len(reviewed)} reviewed as shared")
 
 
+MODE_CHIP_MAX = 20
+
+MODE_KEYS = (
+    "mode_measure",
+    "mode_capture",
+    "mode_measure_hint",
+    "mode_capture_hint",
+    "scan_legend",
+    "capture_walk",
+    "capture_no_points",
+)
+
+
+def check_modes() -> None:
+    """The two jobs stay two jobs in every language (finding 267).
+
+    The device report was that the screen never said whether it was capturing a room or setting a
+    measuring point - one mode, one set of instructions, two jobs. The fix is a named choice on the
+    glass, and a choice is only a choice if the two names are different and both fit the button.
+    A translator who renders both as the same word, or as a sentence that overflows the 56 dp chip,
+    turns the switch back into the ambiguity it was built to end.
+    """
+    folders = ["values"] + [LOCALES[lang] for lang in LOCALES]
+    for folder in folders:
+        values = load(folder)
+        for key in MODE_KEYS:
+            if not values.get(key, "").strip():
+                add(f"{folder}/strings.xml", f"`{key}` is missing - the two modes are not fully named")
+        measure = values.get("mode_measure", "").strip()
+        capture = values.get("mode_capture", "").strip()
+        if measure and capture and measure == capture:
+            add(
+                f"{folder}/strings.xml",
+                f"both modes are called {measure!r} - the switch names one decision twice",
+            )
+        for key in ("mode_measure", "mode_capture"):
+            value = values.get(key, "").strip()
+            if len(value) > MODE_CHIP_MAX:
+                add(
+                    f"{folder}/strings.xml",
+                    f"`{key}` is {len(value)} characters - it does not fit the two-up mode chip",
+                )
+
+
 def check_plural_shortcuts() -> None:
     """No shipped sentence may fake a plural with brackets or a slash."""
     for folder in ["values", *LOCALES.values()]:
@@ -343,6 +387,7 @@ def main() -> int:
     check_app()
     check_site()
     check_register()
+    check_modes()
     check_plural_shortcuts()
     check_apostrophes()
     check_no_language_was_forgotten()

@@ -310,12 +310,31 @@ def check_references(strings: dict[str, str], plurals: dict[str, dict[str, str]]
                 add(path, f"R.plurals.{name} is not defined in res/values/strings.xml")
 
 
+def only_removed(permission: str, text: str) -> bool:
+    """True when every mention of [permission] is a `tools:node="remove"` declaration.
+
+    Finding 263: a library merged `android.permission.INTERNET` into the built APK, so the app's
+    "0 bytes off-device" promise was true of the source and false of the package. The fix is a
+    removal element in the manifest - and a removal element has to *mention* the permission, which
+    is why this check looks at the element rather than at the string.
+    """
+    for match in re.finditer(re.escape(permission), text):
+        element = text[match.start():].split("/>", 1)[0]
+        if 'tools:node="remove"' not in element:
+            return False
+    return True
+
+
 def check_offline_guarantees() -> None:
     manifest = ROOT / "app" / "src" / "main" / "AndroidManifest.xml"
     text = manifest.read_text(encoding="utf-8")
     for permission in FORBIDDEN_PERMISSIONS:
-        if permission in text:
-            add(manifest, f"{permission} breaks the 100%-offline guarantee")
+        if permission in text and not only_removed(permission, text):
+            add(
+                manifest,
+                f"{permission} breaks the 100%-offline guarantee - it may only appear inside a "
+                f'tools:node="remove" element (finding 263)',
+            )
 
     for path in tracked_sources():
         if path.suffix not in {".kts", ".gradle", ".toml"}:
@@ -1526,13 +1545,14 @@ def check_licence_diagnostics_reach_the_screen() -> None:
     if not fields:
         add(store, "Diagnostics has no boolean field - the rule would pass without checking anything")
         return
-    view_model = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app"
-                  / "ProjectViewModel.kt").read_text(encoding="utf-8")
-    ui = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui"
+    app_root = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app"
+    view_model = (app_root / "ProjectViewModel.kt").read_text(encoding="utf-8")
+    app_state = (app_root / "AppState.kt").read_text(encoding="utf-8")
+    ui = app_root / "ui"
     screens = "\n".join(path.read_text(encoding="utf-8") for path in ui.rglob("*.kt"))
     for field in fields:
-        if f"val {field}: Boolean" not in view_model:
-            add(store, f"Diagnostics.{field} never reaches UiState - no screen can show it")
+        if f"val {field}: Boolean" not in app_state or field not in view_model:
+            add(store, f"Diagnostics.{field} never reaches AppState - no screen can show it")
         if field not in screens:
             add(store, f"Diagnostics.{field} is printed by no screen in app/ui")
 
@@ -1764,6 +1784,99 @@ def check_totals_are_sums_of_printed_rows() -> None:
             add(material_list, f"`{getter.strip()}` sums the raw floats, so the total is not the "
                                "sum of the printed rows and the paperwork does not add up "
                                "(finding 154)")
+
+def check_the_run_row_names_its_run() -> None:
+    """The project's run list has to name the run the paperwork names (finding 278).
+
+    The row printed the kind ("Kabel"), the cable and the size - and never the run's own name,
+    which is the one string the protocol's first column, the CSV and the AR screen's saved card all
+    print ("CABLE 20 mm #3"). Two runs of the same cable on the same wall were therefore two
+    identical rows, one delete button away from losing the wrong one, and the delete dialog named
+    the cable rather than the run.
+
+    The row's identity comes from `RunList` and is the *stored* label (a name derived from the spec
+    would contradict the page), and the confirmation names the run it destroys. Since finding 279
+    the row also carries the review state that used to vanish when the AR screen closed: uncertainty
+    comes from the same metrics as procurement, and recovery is an additional notice rather than an
+    `else` branch that could hide it.
+    """
+    ui = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui"
+    rows = ui / "RunList.kt"
+    if not rows.exists():
+        add(rows, "`RunList` is gone - a run row could be built without the run's stored name, "
+                  "which is how two runs of one cable became two identical rows (finding 278)")
+        return
+    row_text = rows.read_text(encoding="utf-8")
+    if "identity = route.label" not in row_text:
+        add(rows, "the row's identity is no longer the stored `route.label` - a name derived from "
+                  "the cable would contradict the protocol, which prints the stored one")
+    if "meters = project.calibratedMeters(route)" not in row_text:
+        add(rows, "the row's metres are no longer the reported ones, so the list stops adding up "
+                  "to the project's total (finding 277)")
+    if "PolylineMetrics.measure(route)" not in row_text or "metrics.lowConfidenceNodes > 0" not in row_text:
+        add(rows, "a saved run no longer takes its review flag from procurement's metrics - the "
+                  "AR warning would die at save time again (finding 279)")
+    if "if (route.recovered) add(Notice.RECOVERED)" not in row_text:
+        add(rows, "recovery is no longer an independent row notice, so an uncertain recovered run "
+                  "can lose one of its two warnings (finding 279)")
+    screen = ui / "ProjectScreen.kt"
+    screen_text = screen.read_text(encoding="utf-8")
+    if "RunList.rows(project)" not in screen_text:
+        add(screen, "the run list no longer comes from `RunList`, so a row can be built without a "
+                    "name - two runs of one cable render as two identical rows (finding 278)")
+    if "notices = row.notices" not in screen_text:
+        add(screen, "the run rows no longer receive their notices, so saving a weak measurement "
+                    "makes it look firm again (finding 279)")
+    if "RunList.Notice.UNCERTAIN" not in screen_text or "R.string.run_review_required" not in screen_text:
+        add(screen, "the uncertain-run notice is decided but never drawn (finding 279)")
+    if "identity = row.identity" not in screen_text:
+        add(screen, "the run row no longer shows the run's own name (finding 278)")
+    if "run.label" not in screen_text:
+        add(screen, "the delete confirmation no longer names the run it destroys (finding 278)")
+    if "R.string.run_delete, identity" not in screen_text:
+        add(screen, "the row's delete button no longer names the run - four rows would announce "
+                    "four identical buttons, which is the same defect as four identical rows "
+                    "(finding 278)")
+
+
+def check_project_destinations_own_their_empty_state() -> None:
+    """A run count is not permission to open paperwork or its explanation (finding 280).
+
+    The project screen greyed Export, Materials and Walls until a run existed, without saying why.
+    That was not merely an accessibility repeat: the export service has an explicit test that a
+    runless project still writes its PDF and CSV, and the home card already offered that path. The
+    material and wall destinations also own useful empty states (and the material screen's firm
+    settings sit above its empty return), so the run gate hid functioning screens, not broken work.
+    """
+    ui = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui"
+    screen = ui / "ProjectScreen.kt"
+    text = screen.read_text(encoding="utf-8")
+    destinations = (
+        ("R.string.export_title", "export"),
+        ("R.string.materials_button", "materials"),
+        ("R.string.wall_open", "walls"),
+    )
+    for resource, name in destinations:
+        start = text.find(f"label = stringResource({resource})")
+        if start < 0:
+            add(screen, f"the {name} destination is gone; this empty-state rule has nothing to check")
+            continue
+        end = text.find("GloveButton(", start)
+        block = text[start:end if end >= 0 else start + 800]
+        if "enabled = measured" in block or "enabled = project.routes" in block:
+            add(screen, f"the {name} destination is gated by a run again, hiding a screen that "
+                        "already supports and explains its empty state (finding 280)")
+
+    export_test = ROOT / "export" / "src" / "test" / "kotlin" / "com" / "constructar" / "export" / "ExportServiceTest.kt"
+    if "a project with no runs still exports its paper, and no model files" not in export_test.read_text(encoding="utf-8"):
+        add(export_test, "the runless-paper-export contract is no longer tested (finding 280)")
+    for file_name, resource in (("MaterialsScreen.kt", "R.string.materials_empty"),
+                                ("WallScreen.kt", "R.string.wall_empty")):
+        destination = ui / file_name
+        if resource not in destination.read_text(encoding="utf-8"):
+            add(destination, f"the empty destination lost its explanation ({resource}); it must "
+                             "not be made reachable by hiding what it says (finding 280)")
+
 
 def check_csv_headers_name_their_cells() -> None:
     """A column of numbers may not sit under a blank header (finding 155).
@@ -3071,12 +3184,31 @@ def check_the_calibration_has_one_home() -> None:
     project_model = (ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" /
                      "model" / "Project.kt")
     model_text = project_model.read_text(encoding="utf-8")
-    if "get() = (routes.sumOf { it.polylineLengthMeters.toDouble() } * calibrationScale).toFloat()" not in model_text:
-        add(project_model, "`totalLengthMeters` no longer applies `calibrationScale`, so the room "
-                           "screen and the protocol would report uncorrected metres")
-    if "fun calibratedMeters(" not in model_text:
-        add(project_model, "`calibratedMeters` is gone - a caller would multiply a route length by "
-                           "the factor itself, which is the second definition this rule exists for")
+    if "get() = reportedMeters(routes.sumOf { it.polylineLengthMeters.toDouble() }.toFloat())" not in model_text:
+        add(project_model, "`totalLengthMeters` no longer goes through `reportedMeters`, so the room "
+                           "screen and the protocol would report uncorrected metres - or correct "
+                           "the same metres twice")
+    # One multiplication, in one function (finding 277). It used to be two - the total and
+    # `calibratedMeters` - and the surfaces picked whichever they found: the project screen's rows
+    # and the protocol's runs table printed the raw measurement under a corrected sum, so a
+    # calibrated project's list read 12.80 m under a 13.44 m total, on the page the customer signs.
+    multiplications = model_text.count("* calibrationScale")
+    if multiplications != 0:
+        add(project_model, f"the calibration factor is multiplied directly into metres in "
+                           f"{multiplications} places - `reportedMeters` must delegate to "
+                           "CalibrationTransform so points, routes and distances share one rule")
+    if "CalibrationTransform.of(calibrationScale).distance(measuredMeters)" not in model_text:
+        add(project_model, "`reportedMeters` no longer uses CalibrationTransform - PDF and material "
+                           "distances could drift from the calibrated route points")
+    if "fun reportedMeters(measuredMeters: Float): Float" not in model_text:
+        add(project_model, "`reportedMeters` is gone - every surface that prints a per-run length "
+                           "would have to decide for itself whether to apply the factor, which is "
+                           "exactly how the list stopped adding up (finding 277)")
+    if "fun calibratedMeters(" not in model_text or \
+            "= reportedMeters(route.polylineLengthMeters)" not in model_text:
+        add(project_model, "`calibratedMeters` is gone or no longer delegates to `reportedMeters` - "
+                           "a caller would multiply a route length by the factor itself, which is "
+                           "the second definition this rule exists for")
     bom = (ROOT / "core" / "src" / "main" / "kotlin" / "com" / "constructar" / "core" / "bom" /
            "MaterialList.kt")
     if "project.calibrationScale" not in bom.read_text(encoding="utf-8"):
@@ -3087,8 +3219,18 @@ def check_the_calibration_has_one_home() -> None:
         if "calibrationScale" in source and path.name in ("Route.kt", "RouteGeometry.kt",
                                                           "TubeMeshGenerator.kt",
                                                           "DuctMeshGenerator.kt"):
-            add(path, "the calibration factor has reached the geometry - it must only ever scale "
-                      "reported metres, or a better calibration could not correct the project")
+            add(path, "geometry reads the calibration factor independently - transform raw points "
+                      "through CalibrationTransform instead, or a second scaling path can drift")
+    hud = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" / "ar" /
+           "ArMeasureScreen.kt")
+    if hud.exists():
+        hud_text = hud.read_text(encoding="utf-8")
+        if "project.reportedMeters(routeState.lengthMeters)" not in hud_text:
+            add(hud, "the live route length no longer uses the project's central calibrated-distance "
+                     "rule, so the HUD can disagree with the PDF and material list")
+        if "* project.calibrationScale" in hud_text or "project.calibrationScale *" in hud_text:
+            add(hud, "the measure screen multiplies the factor itself - route displays must delegate "
+                     "to `reportedMeters` or calibration could be applied twice")
     for path in kotlin_sources("app") + kotlin_sources("ar-engine") + kotlin_sources("export"):
         source = path.read_text(encoding="utf-8")
         for literal in ("0.0856", "0.05398"):
@@ -3104,6 +3246,57 @@ def check_the_calibration_has_one_home() -> None:
             if f'name="{key}"' not in path.read_text(encoding="utf-8"):
                 add(path, f"'{key}' is missing - the calibration dialog of one language would "
                           f"fall back to English mid-sentence")
+
+
+def check_phase3_din_and_calibration() -> None:
+    """The DIN zoning/reinforcement and calibrated-geometry contracts, at their integration points."""
+    zones = ROOT / "core/src/main/kotlin/com/constructar/core/wall/Din18015Zones.kt"
+    zone_text = zones.read_text(encoding="utf-8")
+    for token in ("0.15f", "0.45f", "1.00f", "1.30f", "SNAP_GRID_METERS: Float = 0.05f"):
+        if token not in zone_text:
+            add(zones, f"DIN 18015 boundary/grid token `{token}` is missing")
+    if "return Assignment(Horizontal.SONDER, belowCeiling, null, true)" not in zone_text:
+        add(zones, "an outside point can acquire a snapped height instead of explicit Sonderverlegung")
+
+    room = ROOT / "ar-engine/src/main/kotlin/com/constructar/arengine/hit/RoomReference.kt"
+    room_text = room.read_text(encoding="utf-8")
+    for token in ("floor.usable", "it.normal.y < -0.6f", "it.center.y > viewerHeightMeters + 0.20f",
+                  "it in 2.0f..4.5f"):
+        if token not in room_text:
+            add(room, f"automatic room height lost its usable-floor/downward-ceiling guard: {token}")
+
+    hit_source = ROOT / "ar-engine/src/main/kotlin/com/constructar/arengine/hit/ArHitSource.kt"
+    hit_text = hit_source.read_text(encoding="utf-8")
+    if "RoomReference.roomHeightMeters" not in hit_text or "InstallationZoneSnap.apply" not in hit_text:
+        add(hit_source, "resolved hits no longer receive the session room reference and DIN assignment")
+    elif hit_text.index("RoomReference.roomHeightMeters") > hit_text.index("InstallationZoneSnap.apply"):
+        add(hit_source, "DIN assignment runs before this session's floor/ceiling reference is resolved")
+
+    drywall = ROOT / "core/src/main/kotlin/com/constructar/core/wall/DrywallEstimator.kt"
+    drywall_text = drywall.read_text(encoding="utf-8")
+    for token in ("it.kind != OpeningKind.WINDOW", "val cwStuds = baseStuds - uaStuds",
+                  "uaProfileThicknessMm: Int = 2"):
+        if token not in drywall_text:
+            add(drywall, f"DIN 18181 CW/UA separation is missing: {token}")
+
+    for relative in (
+        "core/src/main/kotlin/com/constructar/core/bom/MaterialList.kt",
+        "core/src/main/kotlin/com/constructar/core/wall/WallPlan.kt",
+        "export/src/main/kotlin/com/constructar/export/ExportService.kt",
+        "app/src/main/kotlin/com/constructar/app/ui/ar/ArMeasureController.kt",
+    ):
+        path = ROOT / relative
+        if "CalibrationTransform" not in path.read_text(encoding="utf-8"):
+            add(path, "this raw-point consumer bypasses the central calibration transform")
+
+    screen = ROOT / "app/src/main/kotlin/com/constructar/app/ui/ar/ArMeasureScreen.kt"
+    screen_text = screen.read_text(encoding="utf-8")
+    if "R.string.din_sonderverlegung" not in screen_text:
+        add(screen, "Sonderverlegung is persisted but never explicitly shown to the operator")
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if path.exists() and 'name="din_sonderverlegung"' not in path.read_text(encoding="utf-8"):
+            add(path, "the explicit Sonderverlegung warning would fall back to another language")
 
 
 FUN_DECLARATION = re.compile(
@@ -3253,7 +3446,7 @@ THUMBNAIL_CHAIN = (
      "pipeline.floorplan(",
      "the AR controller no longer asks the pipeline for one"),
     ("app/src/main/kotlin/com/constructar/app/ui/ar/ArMeasureScreen.kt",
-     "controller.finalFloorplan()?.let(onFloorplan)",
+     "plan?.let(onFloorplan)",
      "a committed run no longer hands the plan to the caller"),
     ("app/src/main/kotlin/com/constructar/app/ui/AppRoot.kt",
      "onFloorplan = { plan -> viewModel.saveFloorplanThumbnail(plan) }",
@@ -3326,7 +3519,7 @@ CARD_OUTLINE_CHAIN = (
      "val sketch = RoomThumbnail.sketch(plan) ?: return",
      "the view model no longer asks for an outline"),
     ("app/src/main/kotlin/com/constructar/app/ProjectViewModel.kt",
-     "val updated = project.copy(sketch = sketch)",
+     "project.copy(sketch = sketch),",
      "the outline is derived but never stored on the room"),
     ("app/src/main/kotlin/com/constructar/app/data/ProjectRepository.kt",
      "sketch = project.sketch,",
@@ -3609,7 +3802,7 @@ HAND_CLOSED_ROOM_CHAIN = (
      "onCloseRoom = viewModel::closeRoomByHand,",
      "the chip's tap never reaches the view model"),
     ("app/src/main/kotlin/com/constructar/app/ProjectViewModel.kt",
-     "val updated = project.copy(sketch = open)",
+     "project.copy(sketch = open),",
      "the view model no longer writes the hand-closed ring onto the room"),
 )
 
@@ -4776,6 +4969,7 @@ def main() -> int:
     check_the_draft_choice_is_saved()
     check_the_camera_answer_survives_a_reclaim()
     check_the_calibration_has_one_home()
+    check_phase3_din_and_calibration()
     check_the_frame_solver_is_built_everywhere()
     check_the_squared_wall_keeps_its_distance()
     check_the_native_cmake_is_spelled_out()
@@ -4783,6 +4977,8 @@ def main() -> int:
     check_the_tag_decoder_is_vendored_and_credited()
     check_the_plane_fitter_is_reproducible()
     check_totals_are_sums_of_printed_rows()
+    check_the_run_row_names_its_run()
+    check_project_destinations_own_their_empty_state()
     check_csv_headers_name_their_cells()
     check_screen_states_the_trade_defaults()
     check_failure_reporter_finds_the_pull_request()

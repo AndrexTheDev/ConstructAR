@@ -338,6 +338,16 @@ fun WallScreen(
                         shownLength(drywall.trackProfileMeters),
                     ),
                 )
+                if (drywall.uaStuds > 0) {
+                    WallRow(
+                        stringResource(R.string.wall_ua_profile),
+                        stringResource(
+                            R.string.wall_ua_value,
+                            drywall.uaStuds,
+                            shownLength(drywall.uaProfileMeters),
+                        ),
+                    )
+                }
                 WallRow(stringResource(R.string.wall_screws), drywall.screws.toString())
                 Text(
                     stringResource(

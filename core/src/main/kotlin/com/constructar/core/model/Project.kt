@@ -6,15 +6,18 @@
 
 package com.constructar.core.model
 
+import com.constructar.core.calib.CalibrationTransform
+import com.constructar.core.math.Aabb
+import com.constructar.core.workflow.ProjectWorkflowState
 import kotlinx.serialization.Serializable
 
 /**
  * What the scan pipeline (TSDF in `:native-slam`) measured, attached to a project for the
  * protocol header.
  *
- * Deliberately three fields (findings 103, 251). Everything here is written by
- * `ArMeasureController.scanSummary()` when a run is finished and read by something that leaves
- * the phone - the protocol's summary row and its partial-capture note, and the export screen.
+ * Deliberately limited to values with both a producer and a reader (findings 103, 251).
+ * `ArMeasureController.scanSummary()` fills the scan and bounds; the sketch supplies the
+ * independent floorplan. Both are persisted without requiring any cable route.
  * The model used to carry nine more: a vertex count, a floor area, a ceiling height, a bounding
  * box, a voxel size, an accepted-loop-closure count, a pose-graph RMS and a derived volume. The
  * scan filled **none** of them, so they travelled into every project file and every backup as
@@ -53,6 +56,11 @@ data class ScanSummary(
      * protocol's closure note and by the export screen (finding 250's numbers, persisted).
      */
     val closures: ScanClosure? = null,
+    /**
+     * Metric bounds of the captured mesh, independent of any route. `null` means no mesh was
+     * captured; it never means a zero-sized room.
+     */
+    val bounds: Aabb? = null,
 )
 
 /**
@@ -127,6 +135,13 @@ data class ProjectRecord(
     val updatedAtEpochMs: Long,
     val routes: List<ConduitRoute> = emptyList(),
     val scan: ScanSummary? = null,
+    /** Durable MVI milestone; never derived from a cable route's existence alone. */
+    val workflow: ProjectWorkflowState = ProjectWorkflowState.IDLE,
+    /** Review/signature/export timestamps make the later milestones auditable after process death. */
+    val bomCalculatedAtEpochMs: Long? = null,
+    val fieldBookCompletedAtEpochMs: Long? = null,
+    val signatureCapturedAtEpochMs: Long? = null,
+    val lastExportAtEpochMs: Long? = null,
     /**
      * The room's outline as the home screen's card draws it, or `null` before a closed plan exists.
      *
@@ -151,15 +166,11 @@ data class ProjectRecord(
      *
      * ARCore's metre is metric on its own; this factor is the operator's check of it against an
      * object of known size - an ISO/IEC 7810 bank card or a folding rule at the 1 m / 2 m mark
-     * (`ReferenceCalibration`). It is stored on the project rather than baked into the node
-     * positions for one reason: a factor that has been multiplied into the geometry cannot be
-     * corrected by a better one tomorrow, and the nodes are also what the 3D overlay and the
-     * anchors are built from.
+     * (`ReferenceCalibration`). Raw node positions stay recoverable so a better calibration can
+     * replace an older one; every renderer, material calculator and 3D exporter passes those raw
+     * points through the central `CalibrationTransform`, exactly once.
      *
-     * Defaults to `1.0`, so a project written before this field existed loads and reports exactly
-     * what it always did. Only the *reported* metres scale: this number never reaches
-     * `route.nodes`, never reaches the mesh, and never reaches the AR HUD while measuring - the
-     * operator measures what the phone sees, and the paperwork says what the calibration says.
+     * Defaults to `1.0`, so a project written before this field existed keeps its geometry.
      */
     val calibrationScale: Double = 1.0,
     /**
@@ -207,6 +218,8 @@ data class ProjectRecord(
      * tallest point in a room is not its ceiling.
      */
     val wallHeightM: Float? = null,
+    /** Automatically detected floor-to-ceiling distance; used when no manual override is stated. */
+    val measuredRoomHeightM: Float? = null,
     /**
      * Doors, windows and passages the operator placed on the room's walls.
      *
@@ -240,11 +253,28 @@ data class ProjectRecord(
      * default factor of 1.0 this is exactly the sum of the runs, which is what it always was.
      */
     val totalLengthMeters: Float
-        get() = (routes.sumOf { it.polylineLengthMeters.toDouble() } * calibrationScale).toFloat()
+        get() = reportedMeters(routes.sumOf { it.polylineLengthMeters.toDouble() }.toFloat())
+
+    /**
+     * One measured length as it is reported: the phone's rows, the AR screen's running total, the
+     * protocol's table and its summary, the bill of materials (finding 277).
+     *
+     * This was two multiplications - here and in [calibratedMeters] - and every surface picked
+     * whichever one it happened to find. The project screen's rows and the protocol's runs table
+     * printed the raw `polylineLengthMeters` while the total *above them* was corrected, so a
+     * calibrated project's list added up to 12.80 m under a 13.44 m sum, and the page the customer
+     * signs carried the same 64 cm tear between its table and its summary. A list that does not add
+     * up to its own total is worse than no list: it is a number the operator can see is wrong and
+     * cannot explain.
+     *
+     * With one function there is no "which metres" decision left for a screen to get wrong, and the
+     * rows add up by construction.
+     */
+    fun reportedMeters(measuredMeters: Float): Float =
+        CalibrationTransform.of(calibrationScale).distance(measuredMeters)
 
     /** One run's length as it is reported: measured by the phone, corrected by the calibration. */
-    fun calibratedMeters(route: ConduitRoute): Float =
-        (route.polylineLengthMeters.toDouble() * calibrationScale).toFloat()
+    fun calibratedMeters(route: ConduitRoute): Float = reportedMeters(route.polylineLengthMeters)
 
     /** True when a reference calibration has been applied to this project. */
     val isCalibrated: Boolean
@@ -377,7 +407,7 @@ data class ProjectRecord(
 
     companion object {
         /** Bump when the JSON shape changes; migrations live in `ProjectMigrations`. */
-        const val SCHEMA_VERSION: Int = 1
+        const val SCHEMA_VERSION: Int = 2
 
         fun empty(id: String, name: String, nowMs: Long = System.currentTimeMillis()) = ProjectRecord(
             id = id,

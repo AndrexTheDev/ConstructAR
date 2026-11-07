@@ -6,6 +6,7 @@
 
 package com.constructar.core.math
 
+import kotlinx.serialization.Serializable
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -153,7 +154,8 @@ data class Plane3(val normal: Vec3, val d: Float) {
 /** Result of a least-squares plane fit: plane, inlier centroid, sample count. */
 data class Plane3Fit(val plane: Plane3, val centroid: Vec3, val sampleCount: Int)
 
-/** Axis-aligned bounding box in metres. */
+/** Axis-aligned bounding box in metres, persisted with an independently saved room scan. */
+@Serializable
 data class Aabb(val min: Vec3, val max: Vec3) {
     val center: Vec3 get() = (min + max) * 0.5f
     val size: Vec3 get() = max - min

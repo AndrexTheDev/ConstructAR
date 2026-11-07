@@ -6,6 +6,7 @@
 
 package com.constructar.core.wall
 
+import com.constructar.core.calib.CalibrationTransform
 import com.constructar.core.math.Vec3
 import com.constructar.core.model.ProjectRecord
 import kotlinx.serialization.Serializable
@@ -263,23 +264,27 @@ data class WallPlan(
  * purchase order without its assumptions is a number to argue with.
  */
 fun wallPlan(project: ProjectRecord, spec: DrywallSpec = DrywallSpec()): WallPlan {
-    val scale = project.calibrationScale.toFloat().takeIf { it.isFinite() && it > 0f } ?: 1f
-    // The room's own height, when the operator stated one inside the range a room can be; the
-    // trade default otherwise, and `wallHeightAssumed` carries which of the two this plan used.
-    val stated = statedRoomHeight(project.wallHeightM)
-    val wallHeightM = stated ?: DEFAULT_WALL_HEIGHT_M
-    val walls = ringWalls(project.sketch, metresScale = scale, heightM = wallHeightM)
+    val calibration = CalibrationTransform.of(project.calibrationScale)
+    // A manual height is already a physical dimension and takes precedence. The automatically
+    // measured height is raw ARCore evidence, so it crosses the same calibration as every route
+    // point. The trade default is not a measurement and is therefore never scaled.
+    val manualHeight = statedRoomHeight(project.wallHeightM)
+    val measuredHeight = statedRoomHeight(project.measuredRoomHeightM)
+        ?.let(calibration::distance)
+        ?.let(::statedRoomHeight)
+    val wallHeightM = manualHeight ?: measuredHeight ?: DEFAULT_WALL_HEIGHT_M
+    val walls = ringWalls(project.sketch?.let(calibration::sketch), metresScale = 1f, heightM = wallHeightM)
     val openings = openingsByWall(project.openings)
     val surface = wallSurface(walls, openings)
-    val drywall = estimateDrywall(surface, spec)
+    val drywall = estimateDrywall(surface, spec, openings)
     val nodes = project.routes.flatMap { it.nodes }
     val relative = relativeNodes(
         nodes = nodes,
         sessionFloorHeights = project.sessionFloorHeights,
-        metresScale = scale,
+        metresScale = 1f,
         legacyFloorHeightM = project.floorHeightM,
     )
-    val points: List<Vec3> = relative.points
+    val points: List<Vec3> = relative.points.map(calibration::point)
     // The ceiling zone is fixed by the same height the walls were built at - not by
     // `walls.first().heightM`, which is the same number only as long as one caller remembers to
     // pass it, and not by the default either: a room estimated at 2.80 m has its ceiling outlets
@@ -297,7 +302,7 @@ fun wallPlan(project: ProjectRecord, spec: DrywallSpec = DrywallSpec()): WallPla
         installations = installations,
         floorHeightM = project.floorHeightM,
         wallHeightM = wallHeightM,
-        wallHeightAssumed = stated == null,
+        wallHeightAssumed = manualHeight == null && measuredHeight == null,
         openingsRecorded = project.openings.size,
         openings = project.openings,
         openingsUnplaced = project.openings.count { it.wallIndex !in walls.indices },

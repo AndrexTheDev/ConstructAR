@@ -7,6 +7,7 @@
 package com.constructar.core.model
 
 import com.constructar.core.math.Vec3
+import com.constructar.core.wall.Din18015Zones
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 
@@ -38,7 +39,7 @@ enum class HitSource {
         get() = when (this) {
             PLANE_POLYGON -> 1.0f
             AR_DEPTH_POINT -> 0.85f
-            DIRECT_DEPTH_RAYCAST -> 0.7f
+            DIRECT_DEPTH_RAYCAST -> 0.65f
             FEATURE_POINT -> 0.4f
             MANUAL -> 0.2f
         }
@@ -62,21 +63,16 @@ object HitConfidence {
      * This is the per-tap gate (`RouteSession.MIN_TRUSTED_CONFIDENCE`), not the bar a finished run
      * is judged by - see [RUN_TRUSTED].
      */
-    const val TRUSTED: Float = 0.5f
+    const val TRUSTED: Float = 0.60f
 
     /**
      * The bar a **finished run** is measured against, in AR and in the paperwork.
      *
-     * Every tier of the hit cascade is at or above it except the raycast (0.7) and the feature
-     * point (0.4): 1.0 for a plane hit, 0.85 for a depth point. So a run whose weakest point is
-     * below 0.85 has at least one point the app trusts less than a depth measurement.
-     *
-     * One number for both places on purpose. The HUD warned below 0.85 while the order list only
-     * flagged a run below 0.5, so a run measured off a raycast was called out on the phone
-     * ("weakest point 70 % - tap it again") and reached the wholesaler's list unflagged: the
-     * paperwork was more optimistic than the screen the operator was looking at (finding 47).
+     * This is deliberately the same 0.60 boundary as the per-tap warning. Confidence is now the
+     * cascade's `type weight × incidence × depth certainty`, not a source label alone, so a
+     * grazing plane can need review while a frontal ARCore depth point can pass it.
      */
-    const val RUN_TRUSTED: Float = 0.85f
+    const val RUN_TRUSTED: Float = TRUSTED
 }
 
 /**
@@ -125,6 +121,12 @@ data class RouteNodeRecord(
      * and the rule that does so lives in `:core` (`relativeNodes`), not in the screen.
      */
     val sessionId: String = "",
+    /** DIN band assigned from this session's measured floor/ceiling references. */
+    val installationZone: Din18015Zones.Horizontal? = null,
+    /** Vertical corner-zone classification, retained independently of the horizontal band. */
+    val verticalInstallationZone: Din18015Zones.Vertical? = null,
+    /** True when the point lies outside both the horizontal bands and a vertical corner zone. */
+    val sonderverlegung: Boolean = false,
 ) {
     fun withPosition(newPosition: Vec3) = copy(position = newPosition)
 }
@@ -157,6 +159,10 @@ data class ConduitRoute(
      * cannot accept; pretending the geometry is where it was would be the second.
      */
     val recovered: Boolean = false,
+    /** Coordinates were restored from persisted observations by the offline Kabsch relocaliser. */
+    val relocalised: Boolean = false,
+    /** Relative graph edges and feature clusters, suitable for a later offline relocalisation. */
+    val evidence: List<AnchorEvidence> = emptyList(),
 ) {
     val points: List<Vec3> get() = nodes.map { it.position }
 

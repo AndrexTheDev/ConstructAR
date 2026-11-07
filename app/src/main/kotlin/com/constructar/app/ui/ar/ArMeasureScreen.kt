@@ -37,17 +37,17 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -58,26 +58,34 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -107,22 +115,26 @@ import com.constructar.app.ui.tierLabel
 import com.constructar.arengine.hit.FloorHudLine
 import com.constructar.arengine.hit.floorHudLine
 import com.constructar.arengine.keyframe.ClosureState
+import com.constructar.arengine.relocalisation.AnchorGraphRelocaliser
 import com.constructar.arengine.keyframe.PoseGraphStanding
 import com.constructar.arengine.render.ArScene
 import com.constructar.arengine.session.ArReadiness
 import com.constructar.arengine.tracking.TrackingQuality
 import com.google.ar.core.Config
 import com.constructar.core.calib.CalibrationOutcome
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import com.constructar.core.calib.CalibrationReference
 import com.constructar.core.calib.CalibrationSweep
 import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.model.ConduitPresets
-import com.constructar.core.model.ConduitSpec
 import com.constructar.core.model.ProjectRecord
 import com.constructar.core.units.LengthUnit
 import com.constructar.core.units.PercentText
 import com.constructar.core.model.RouteDraft
 import com.constructar.core.model.RouteLabels
+import java.util.UUID
 
 /**
  * The AR measuring screen.
@@ -155,12 +167,15 @@ fun ArMeasureScreen(
      * where the volume is still alive.
      */
     onFloorplan: (com.constructar.nativebridge.FloorplanPayload) -> Unit = {},
+    /** Combined commit keeps scan, bounds and sketch in one write; null retains the legacy callbacks. */
+    onCaptureFinished: ((com.constructar.core.model.ScanSummary, com.constructar.nativebridge.FloorplanPayload?) -> Unit)? = null,
     onOpenExport: () -> Unit,
     /** A run a killed process left behind, loaded by the caller. Offered back once per entry. */
     draft: RouteDraft? = null,
     /** `null` clears the stored draft; anything else is the run as it stands. */
     onDraftChanged: (RouteDraft?) -> Unit = {},
     onDraftRecovered: (RouteDraft) -> Unit = {},
+    onDraftRelocalised: (RouteDraft, List<com.constructar.core.model.RouteNodeRecord>, String) -> Unit = { _, _, _ -> },
     onDraftDiscarded: () -> Unit = {},
     /**
      * Stores the factor a reference calibration produced, or refuses it (the view model asks
@@ -185,6 +200,7 @@ fun ArMeasureScreen(
      * had been measured from today's floor (finding 217).
      */
     onFloorHeight: (String, Float) -> Unit = { _, _ -> },
+    onRoomHeight: (Float) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -200,7 +216,6 @@ fun ArMeasureScreen(
     val fontScale = configuration.fontScale
     val statusMaxHeight = HudLayout.statusMaxHeightDp(screenHeightDp, fontScale).dp
     val sheetMaxHeight = HudLayout.sheetMaxHeightDp(screenHeightDp, fontScale).dp
-    val actionColumns = HudLayout.columns(screenWidthDp, 3, fontScale)
     val pairColumns = HudLayout.columns(screenWidthDp, 2, fontScale)
     val controller = remember { ArMeasureController(context) }
     val activity = remember(context) { context.findActivity() }
@@ -215,7 +230,20 @@ fun ArMeasureScreen(
     var markerOpen by remember { mutableStateOf(false) }
     var closureOpen by remember { mutableStateOf(false) }
     val markerState by controller.markerProbeState.collectAsStateWithLifecycle()
-    val markerAvailable = remember(controller) { controller.isMarkerProbeAvailable() }
+    // Whether the marker sweep can be opened - as state, not as a snapshot (finding 271).
+    //
+    // The answer comes from the native engine, and `TsdfScanPipeline.start()` creates that engine
+    // in a `LaunchedEffect`, i.e. *after* the first composition. `remember(controller)` therefore
+    // froze "no" for the whole session on every phone, the button stayed grey, and the sentence
+    // under it claimed the device could not read markers - a grey button that lies, which is the
+    // exact failure this finding is about. It is re-read when the pipeline's readiness flips, and
+    // only then: `tagScaleDefaults()` is a JNI call and the pipeline's state also emits per frame.
+    val markerAvailable by produceState(initialValue = false) {
+        controller.pipeline.state
+            .map { it.ready }
+            .distinctUntilChanged()
+            .collect { ready -> value = ready && controller.isMarkerProbeAvailable() }
+    }
 
     fun cameraGranted(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
@@ -289,6 +317,7 @@ fun ArMeasureScreen(
     }
 
     val routeState by controller.routeSession.state.collectAsStateWithLifecycle()
+    val relocalisation by controller.relocalisation.collectAsStateWithLifecycle()
     val tracking by controller.tracking.status.collectAsStateWithLifecycle()
     val scanState by controller.pipeline.state.collectAsStateWithLifecycle()
     val torchOn by controller.torchOn.collectAsStateWithLifecycle()
@@ -300,6 +329,7 @@ fun ArMeasureScreen(
     val lastHit by controller.lastHit.collectAsStateWithLifecycle()
     val stability by controller.stability.collectAsStateWithLifecycle()
     val floorDecision by controller.floor.collectAsStateWithLifecycle()
+    val measuredRoomHeight by controller.roomHeightMeters.collectAsStateWithLifecycle()
     // A table top is upward-facing, below the phone and higher than the floor: the one case
     // "highest plane wins" got wrong (finding 218). When the evaluator is not sure, the HUD says
     // so instead of the app quietly recording a floor it will later print mounting heights from -
@@ -359,9 +389,31 @@ fun ArMeasureScreen(
         if (!decision.usable) return@LaunchedEffect
         decision.heightM?.let { if (it.isFinite()) onFloorHeight(controller.sessionId, it) }
     }
+    LaunchedEffect(measuredRoomHeight) {
+        measuredRoomHeight?.let { if (it.isFinite()) onRoomHeight(it) }
+    }
 
     var spec by remember { mutableStateOf(ConduitPresets.all.first()) }
-    var showScanner by remember { mutableStateOf(true) }
+    // Which of the two jobs this screen is doing (finding 267). Measuring points is the default:
+    // it is what the app is bought for, and a walkthrough is an errand the operator decides on.
+    var mode by rememberSaveable { mutableStateOf(MeasureMode.MEASURE) }
+    // Two disclosures, both closed on entry (finding 268): "the tools" and "the numbers a person
+    // can act on". Everything rare lives behind them, so the screen states one job at a time.
+    var toolsOpen by rememberSaveable { mutableStateOf(SheetPlan.TOOLS_OPEN_ON_ENTRY) }
+    var diagnosticsOpen by rememberSaveable { mutableStateOf(false) }
+    var specOpen by rememberSaveable { mutableStateOf(false) }
+    /**
+     * The run that was just saved, until the next one starts.
+     *
+     * Saving used to be silent: the sheet went back to "no points" and the only proof the tap had
+     * done anything was a number in the header and a line in the project list. This is the sentence
+     * that answers "what did I just do", and it stays until the operator taps the next point - a
+     * toast that vanishes after three seconds would be missed while the cable is still in his hand.
+     */
+    var savedRun by remember { mutableStateOf<Pair<String, Float>?>(null) }
+    LaunchedEffect(routeState.nodeCount) {
+        if (routeState.nodeCount > 0) savedRun = null
+    }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
 
     /**
@@ -390,15 +442,7 @@ fun ArMeasureScreen(
     LaunchedEffect(project.id, routeState.nodeCount, routeState.closedLoop) {
         val state = routeState
         if (state.nodeCount >= LeaveGuard.MIN_NODES_FOR_A_RUN) {
-            onDraftChanged(
-                RouteDraft(
-                    projectId = project.id,
-                    spec = state.spec,
-                    nodes = state.nodes,
-                    closedLoop = state.closedLoop,
-                    savedAtEpochMs = System.currentTimeMillis(),
-                ),
-            )
+            onDraftChanged(controller.makeDraft(project.id, state))
             draftWritten = true
         } else if (draftWritten) {
             // Everything was undone: there is no run left to recover.
@@ -406,19 +450,63 @@ fun ArMeasureScreen(
             draftWritten = false
         }
     }
+    // The one place a point is asked for (finding 269). Both paths go through it - the big button,
+    // which samples the reticle in the middle of the screen, and a free tap on the wall, which
+    // samples the finger - so the ring, the haptic and the sentence can never disagree about
+    // whether something happened.
+    var tapEcho by remember { mutableStateOf<TapEcho?>(null) }
+    // Two counters on purpose: the ring belongs to a tap on the *wall* (it grows out of the
+    // finger that touched it), the slot belongs to any action that changed something - including
+    // undo, which is a button and must not draw a ring at the last tap's position.
+    var ringTick by remember { mutableIntStateOf(0) }
+    var slotTick by remember { mutableIntStateOf(0) }
+    var tapAt by remember { mutableStateOf(Offset.Zero) }
+    val haptics = LocalHapticFeedback.current
+    val addPoint: (Offset?) -> Unit = { touched ->
+        // A walkthrough sets no points - and until finding 273 it did: the tap surface never asked
+        // which mode it was in, so a tap on a wall during a walkthrough added a node to the parked
+        // run while the sheet's own sentence said that cannot happen. No ring either, because the
+        // ring is the confirmation of a point that landed.
+        if (!SheetPlan.tapPlacesPoint(mode)) {
+            Diagnostics.event("tap", "ignored: a walkthrough sets no points")
+        } else if (viewSize.width <= 0 || viewSize.height <= 0) {
+            Diagnostics.event("tap", "ignored: the AR view has no size yet")
+        } else {
+            val x = touched?.x ?: (viewSize.width / 2f)
+            val y = touched?.y ?: (viewSize.height / 2f)
+            tapAt = Offset(x, y)
+            ringTick++
+            slotTick++
+            // Logged, because "nothing happens" was the whole report: the log now says whether the
+            // tap arrived and what the hit test made of it (finding 256).
+            Diagnostics.event(
+                "tap",
+                "add point at ${x.toInt()},${y.toInt()} of ${viewSize.width}x${viewSize.height}",
+            )
+            controller.requestTap(x, y, viewSize.width, viewSize.height)
+        }
+    }
+    val commitCapture: () -> Unit = {
+        val summary = controller.scanSummary()
+        val plan = controller.finalFloorplan()
+        val combined = onCaptureFinished
+        if (combined != null) {
+            combined(summary, plan)
+        } else {
+            onScanSummary(summary)
+            plan?.let(onFloorplan)
+        }
+    }
     val commitRun: () -> Unit = {
         // Persisted label: locale-independent and stable across devices, so a run reads the same
         // in the CSV, the PDF and the project file. One implementation, in `RouteLabels`.
         val runLabel = RouteLabels.next(spec, project.routes.map { it.label })
         controller.finish(label = runLabel)?.let { route ->
+            savedRun = runLabel to project.reportedMeters(route.polylineLengthMeters)
             onRouteFinished(route)
-            // Snapshot the scan statistics with the first finished run: the protocol header must
-            // describe the room as it was measured.
-            onScanSummary(controller.scanSummary())
-            // The plan comes last: the summary is a measurement and the picture is a convenience,
-            // so if the worker is too busy to answer within its bounded wait, the run still keeps
-            // its statistics.
-            controller.finalFloorplan()?.let(onFloorplan)
+            // A scan is committed even when this block has no route; commitCapture is also the
+            // walkthrough's own save action, so scan bounds and plan never depend on this route.
+            commitCapture()
         }
     }
     val leave: () -> Unit = {
@@ -434,11 +522,42 @@ fun ArMeasureScreen(
 
     // Tap results are produced on the render thread; they are applied here, on the main
     // thread, where anchor creation belongs.
+    // The decimal mark for the snap digits, resolved once: `SnapReading.moved` prints numbers, and
+    // a lambda that runs in a coroutine cannot call `stringResource`-style composables.
+    val decimalMarkForEcho = LocalDecimalMark.current
     LaunchedEffect(Unit) {
         controller.pipeline.start(scope)
         controller.hitEvents.collect { event ->
-            if (event != null) controller.applyPendingHit()
+            if (event != null) {
+                // What the tap actually did, read where the tap is applied (finding 269). The node
+                // count before and after is the only honest answer: a resolution that found a
+                // surface says nothing about whether the run accepted the point - `TOO_CLOSE` and
+                // `UNPINNED` are refusals, and until now they were a line in a scrolling block
+                // that the operator was not looking at.
+                val before = controller.routeSession.state.value.nodeCount
+                val resolution = controller.applyPendingHit()
+                val hit = resolution?.hit
+                val echo = TapFeedback.echo(
+                    hasSurface = hit != null,
+                    added = controller.routeSession.state.value.nodeCount > before,
+                    snapped = SnapReading.moved(hit?.snap, decimalMarkForEcho) != null,
+                )
+                tapEcho = echo
+                // One tick through a glove for the two answers that were a point placed. A miss
+                // and a refusal stay silent to the hand and speak on the glass: a pattern the
+                // operator learns in ten taps is worth more than a buzz on everything.
+                if (echo == TapEcho.PLACED || echo == TapEcho.SNAPPED) {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                }
+            }
         }
+    }
+    // The result is an event, not a state: it leaves on its own, and a new tap restarts the clock
+    // instead of stacking a second line (finding 269).
+    LaunchedEffect(slotTick) {
+        if (slotTick == 0) return@LaunchedEffect
+        delay(TapFeedback.RESULT_VISIBLE_MS)
+        tapEcho = null
     }
     // The run being measured follows the reticle (finding 162): `RouteSession` rebuilds the
     // preview whenever a node is added or the reticle moves, and the geometry controller skips the
@@ -447,9 +566,25 @@ fun ArMeasureScreen(
     LaunchedEffect(routeState.preview, routeState.nodeCount) {
         controller.syncLiveRoute()
     }
-    // Re-upload the room scan whenever the (300 ms-throttled) mesh changes.
-    LaunchedEffect(scanState.meshVersion, showScanner) {
-        controller.syncScanMesh(showScanner)
+    // ...but only while a run is being measured (finding 273). In a walkthrough the recorded run
+    // keeps the shape it was measured with, which is the whole difference between "a line I
+    // measured" and "a line that follows my camera".
+    LaunchedEffect(mode) {
+        controller.setFollowReticle(SheetPlan.runFollowsReticle(mode))
+    }
+    // The room overlay is a property of the mode, not of a toggle buried among the tools: it is on
+    // exactly in the walkthrough (finding 267). Re-uploaded whenever the (300 ms-throttled) mesh
+    // changes, and explicitly hidden when the mode changes back to measuring.
+    LaunchedEffect(scanState.meshVersion, mode) {
+        controller.syncScanMesh(mode.showsRoomOverlay)
+    }
+    LaunchedEffect(project.calibrationScale) {
+        // One ordered refresh prevents live/scan meshes from retaining the previous factor while
+        // committed routes already use the new one.
+        controller.setCalibrationScale(project.calibrationScale)
+        controller.syncLiveRoute()
+        controller.syncScanMesh(mode.showsRoomOverlay)
+        controller.syncCommittedRoutes(project.routes)
     }
     // Committed runs are re-meshed when a new one is added (and at most once per second).
     LaunchedEffect(project.routes.size) {
@@ -459,19 +594,16 @@ fun ArMeasureScreen(
         controller.syncCommittedRoutes(project.routes)
     }
 
-    val lengthText = stringResource(R.string.hud_length, shownLength(routeState.lengthMeters))
-    // The segment under the crosshair, while walking: the number that tells the operator when
-    // to stop and tap, rather than tapping and then reading the result.
+    val lengthText = stringResource(R.string.hud_length, shownLength(project.reportedMeters(routeState.lengthMeters)))
+    // Every displayed metre is derived from the same central calibration as the rendered route,
+    // the material list and the export. Stored ARCore coordinates remain untouched.
     val liveSegmentText = if (routeState.nodeCount > 0 && routeState.liveSegmentMeters >= 0.05f) {
-        stringResource(R.string.hud_segment, routeState.liveSegmentMeters)
+        stringResource(R.string.hud_segment, shownLength(project.reportedMeters(routeState.liveSegmentMeters)))
     } else {
         null
     }
     val guidanceText = tracking.guidance.message(tracking)
     val warningText = routeState.warning.message()
-    val weakPointText = RunConfidence
-        .weakPointPercent(routeState.nodeCount, routeState.worstNodeConfidence)
-        ?.let { percent -> stringResource(R.string.ar_confidence_weak, percent) }
     val readinessIssue = readiness
     val readinessText = if (readinessIssue != null && !readinessIssue.canStartSession) {
         readinessIssue.message()
@@ -486,10 +618,12 @@ fun ArMeasureScreen(
     // The room, not just the run: the operator's real question on site. It reuses the export
     // screen's own "N runs · X total" line, so the number on the phone and on the protocol come
     // from one sentence and one formatter.
+    // The room total is the sum of the exact same calibrated values as the per-run rows above;
+    // it must never be calculated from raw coordinates and scaled a second time.
     val roomTotals = RunSummary.of(
-        committedMeters = project.routes.map { it.polylineLengthMeters },
+        committedMeters = project.routes.map { project.reportedMeters(it.polylineLengthMeters) },
         liveNodes = routeState.nodeCount,
-        liveMeters = routeState.lengthMeters,
+        liveMeters = project.reportedMeters(routeState.lengthMeters),
     )
     val roomTotalText = if (roomTotals.runs > 0) {
         stringResource(
@@ -520,13 +654,110 @@ fun ArMeasureScreen(
         R.string.ar_scan_behind,
         PercentText.of(scanState.droppedFraction),
     )
-    val hint = scanHint(
-        showScanner = showScanner,
-        ready = scanState.ready,
-        hitBlockBudget = scanState.hitBlockBudget,
+
+    // What the screen owes the operator, in order (finding 265). Everything below is resolved here
+    // at composition, never inside a `buildString`, and the ordering itself is `MeasureGuide`'s -
+    // testable without a phone, which is the only way a rule about "the gauge is never replaced by
+    // an instruction" stays true after the next edit.
+    val guideState = GuideState(
+        mode = mode,
+        nodeCount = routeState.nodeCount,
+        canFinish = routeState.canFinish,
+        closedLoop = routeState.closedLoop,
+        coaching = guidanceText != null,
+        // The room pipeline is offered to the screen exactly in the walkthrough; in measuring
+        // mode there is no scan sentence and no gauge at all.
+        scannerOn = mode.showsRoomOverlay,
+        scanReady = scanState.ready,
         meshVersion = scanState.meshVersion,
+        hitBlockBudget = scanState.hitBlockBudget,
         droppedShare = scanState.droppedFraction,
+        // The weakest point of the run, as a percentage - the one number that says whether the
+        // length about to be saved is a measurement or an estimate (finding 275).
+        weakPointPercent = RunConfidence.weakPointPercent(
+            routeState.nodeCount,
+            routeState.worstNodeConfidence,
+        ),
     )
+    val guideStep = MeasureGuide.currentStep(guideState)
+    // Where the operator is, in the report's own words (finding 266): "the app crashed" is not a
+    // bug report. One line per step change, and the crash file's header carries the last one.
+    LaunchedEffect(guideStep) {
+        Diagnostics.place(
+            when (guideStep) {
+                MeasureStep.SCAN -> "ar-measure: capture - walking the room"
+                MeasureStep.POINTS -> "ar-measure: points - setting points"
+                MeasureStep.FINISH -> "ar-measure: points - run ready to save"
+            },
+        )
+    }
+    val firstPointText = stringResource(R.string.ar_guide_first)
+    val secondPointText = stringResource(R.string.ar_guide_second)
+    val distanceText = stringResource(R.string.ar_guide_distance, lengthText)
+    val ringText = stringResource(R.string.ar_guide_ring, lengthText)
+    val captureWalkText = stringResource(R.string.capture_walk)
+    val changeCableText = stringResource(R.string.spec_change)
+    val blockRunText = stringResource(R.string.ar_hint_run_needs, routeState.nodeCount)
+    // The one slot under the strip (finding 269): the result of the last tap, or the one action the
+    // reticle is asking for. It is the same slot the readiness instruction used to occupy - behind
+    // the diagnostics toggle, where the operator never found it.
+    val tapSlot = TapFeedback.slot(
+        resultVisible = tapEcho != null,
+        // Only a measurement places points. A walkthrough has nothing to steady: its reticle is not
+        // being used, and a "hold steady" over a room being scanned is an instruction to nowhere.
+        holding = mode.setsPoints && stability?.let { it.hasPoint && !it.settled } == true,
+    )
+    val snapEchoText = lastHit?.hit?.snap?.let { snap ->
+        SnapReading.moved(snap, decimalMarkForEcho)?.let { stringResource(snap.kind.snapMovedRes(), it) }
+    }
+    val sonderverlegung = lastHit?.hit?.sonderverlegung == true &&
+        (tapEcho == TapEcho.PLACED || tapEcho == TapEcho.SNAPPED)
+    val slotText: String? = when (tapSlot) {
+        TapSlot.NONE -> null
+        TapSlot.HOLD -> stringResource(R.string.ar_hold_steady)
+        TapSlot.RESULT -> if (sonderverlegung) {
+            stringResource(R.string.din_sonderverlegung)
+        } else when (tapEcho) {
+            TapEcho.PLACED -> stringResource(R.string.tap_placed)
+            TapEcho.SNAPPED -> snapEchoText
+            TapEcho.MISS -> stringResource(R.string.ar_no_surface)
+            TapEcho.UNDONE -> stringResource(R.string.tap_undone)
+            // The refusal prints the sentence the run already wrote - "too close to the previous
+            // point", "that point could not be pinned". A generic "not possible" would hide the
+            // one word that says what to do differently.
+            TapEcho.REFUSED, null -> warningText
+        }
+    }
+    // Lime for a point that exists, amber for everything that is asking something of the operator:
+    // a miss, a refusal, and "hold steady" are all "act before the next tap".
+    val slotColor = when {
+        sonderverlegung -> SiteColors.warning
+        tapEcho == TapEcho.PLACED || tapEcho == TapEcho.SNAPPED -> SiteColors.accent
+        else -> SiteColors.warning
+    }
+    val guideRows = MeasureGuide.lines(guideState).mapNotNull { line ->
+        val text = when (line) {
+            GuideLine.COACHING -> guidanceText
+            GuideLine.SCAN_EMPTY -> scanInstructionText
+            GuideLine.SCAN_PROGRESS -> scanProgressText
+            GuideLine.SCAN_FULL -> scanFullText
+            GuideLine.SCAN_BEHIND -> scanBehindText
+            GuideLine.SCAN_UNAVAILABLE -> scanUnavailableText
+            GuideLine.FIRST_POINT -> firstPointText
+            GuideLine.SECOND_POINT -> secondPointText
+            GuideLine.DISTANCE -> distanceText
+            GuideLine.RING -> ringText
+            GuideLine.CAPTURE_WALK -> captureWalkText
+            GuideLine.WEAK_POINT -> guideState.weakPointPercent?.let { percent ->
+                stringResource(R.string.ar_confidence_weak, percent)
+            }
+            GuideLine.BLOCK_RUN -> blockRunText
+        }
+        text?.let { line to it }
+    }
+    // The refusal stays under the button it belongs to; everything else is the status block.
+    val blockRow = guideRows.firstOrNull { (line, _) -> line == GuideLine.BLOCK_RUN }
+    val statusRows = guideRows.filterNot { (line, _) -> line == GuideLine.BLOCK_RUN }
 
     Box(
         modifier = Modifier
@@ -612,7 +843,7 @@ fun ArMeasureScreen(
                     },
                     onSceneReady = { scene, engine, materialLoader ->
                         controller.onSceneReady(scene, engine, materialLoader)
-                        controller.syncScanMesh(showScanner)
+                        controller.syncScanMesh(mode.showsRoomOverlay)
                     },
                     onSceneReleased = { controller.onSceneReleased() },
                 )
@@ -625,38 +856,62 @@ fun ArMeasureScreen(
                 // and had nothing to double-tap. It now announces itself and offers the one
                 // action a camera view can have without a fingertip - "set the point in the
                 // middle of the screen" - which is where the reticle already is (finding 211).
-                var tapSurface by remember { mutableStateOf(IntSize.Zero) }
                 val tapHint = stringResource(R.string.a11y_ar_view)
                 val tapAction = stringResource(R.string.a11y_ar_place_point)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .onSizeChanged { tapSurface = it }
                         .semantics {
                             contentDescription = tapHint
-                            onClick(label = tapAction) {
-                                if (tapSurface.width > 0 && tapSurface.height > 0) {
-                                    controller.requestTap(
-                                        tapSurface.width / 2f,
-                                        tapSurface.height / 2f,
-                                        tapSurface.width,
-                                        tapSurface.height,
-                                    )
+                            // The action exists only where it can keep its promise (finding 273):
+                            // a walkthrough sets no points, so offering "set the point" there
+                            // would be an announced action that does nothing. TalkBack reads the
+                            // surface, finds no action, and the sheet's own sentence says why.
+                            if (SheetPlan.tapPlacesPoint(mode)) {
+                                onClick(label = tapAction) {
+                                    // The action has no finger and therefore no point on the
+                                    // wall: it asks for the reticle, which is where a screen-reader
+                                    // user is aiming anyway (finding 211).
+                                    addPoint(null)
+                                    true
                                 }
-                                true
                             }
                         }
                         .pointerInput(Unit) {
                             detectTapGestures { offset ->
-                                controller.requestTap(offset.x, offset.y, size.width, size.height)
+                                addPoint(offset)
                             }
                         },
                 ) {
-                    // The ring appears where the reticle samples, for as long as the last point
-                    // really was moved onto a corner or an edge (finding 213).
+                    // The ring appears where the reticle samples, for as long as **the reticle** is
+                    // on a corner or an edge (findings 213 and 274).
+                    //
+                    // It used to read `lastHit`, which is the last *tap*: so it never appeared
+                    // while the operator aimed at a corner (the moment the information is worth
+                    // most), and once a tap had snapped it stayed on screen at the centre of the
+                    // display long after the reticle had moved somewhere else - a permanent claim
+                    // about a point that was no longer under it. The stabiliser's reading carries
+                    // the hit the reticle produced on its most recent sample, which is the only
+                    // live source of the snap; the tap-time fact ("your point was moved onto the
+                    // edge") is the slot's sentence, and stays there.
+                    //
+                    // Gated by the mode like every other measuring affordance (finding 273): a
+                    // walkthrough has no reticle to settle onto anything.
                     SnapMarker(
-                        active = SnapReading.moved(lastHit?.hit?.snap, LocalDecimalMark.current) != null,
+                        active = SheetPlan.tapPlacesPoint(mode) &&
+                            SnapReading.moved(stability?.lastHit?.snap, LocalDecimalMark.current) != null,
                         modifier = Modifier.align(Alignment.Center),
+                    )
+                    // And the event: one ring out of the finger, once per tap (finding 269). It
+                    // sits above the AR view but takes no touch - a `Canvas` with no gesture
+                    // modifier leaves the tap surface underneath untouched.
+                    TapEchoRing(
+                        trigger = ringTick,
+                        at = tapAt,
+                        tone = when (tapEcho) {
+                            TapEcho.PLACED, TapEcho.SNAPPED -> SiteColors.accent
+                            TapEcho.MISS, TapEcho.REFUSED, TapEcho.UNDONE, null -> SiteColors.warning
+                        },
                     )
                 }
             }
@@ -664,7 +919,9 @@ fun ArMeasureScreen(
 
         // ── Floating length label anchored to the last measured point ───────────────────
         hudPosition?.let { (x, y) ->
-            if (routeState.nodeCount > 0 && viewSize.width > 0) {
+            // Only once there is a length to print (finding 272): with one point the label said
+            // `0.00 m` in the middle of the wall the operator had just measured.
+            if (HudReadout.labelsLastPoint(routeState.nodeCount) && viewSize.width > 0) {
                 val labelWidthPx = with(density) { 190.dp.toPx() }
                 Surface(
                     color = HudStyle.panel,
@@ -701,19 +958,51 @@ fun ArMeasureScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(
-                            text = lengthText,
-                            style = MaterialTheme.typography.displaySmall,
-                            color = SiteColors.cable,
+                        // The headline is the number being decided (finding 272). Until the run
+                        // has a length - one point, and a reticle that has something under it -
+                        // that is the segment the operator is walking towards; from the second
+                        // point on it is the run itself. Before this, the largest type on the
+                        // glass carried `0.00 m` in the colour of a measured value while the
+                        // number he was actually deciding grew underneath it in body text.
+                        val headline = HudReadout.headline(
+                            nodeCount = routeState.nodeCount,
+                            hasLiveSegment = liveSegmentText != null,
                         )
-                        // Total above, the segment under the crosshair below it: while walking,
-                        // the second number is the one being decided.
-                        liveSegmentText?.let { segment ->
-                            Text(
-                                text = segment,
+                        Text(
+                            // A number, never a phrase: `displaySmall` in this column has ~184 dp
+                            // on a 360 dp phone next to two 72 dp icons, and "Abschnitt 3,20 m"
+                            // would wrap the headline onto a second line and push the whole HUD
+                            // down. The word that names the number goes underneath it.
+                            text = when (headline) {
+                                HudHeadline.SEGMENT -> stringResource(
+                                    R.string.hud_length,
+                                    shownLength(project.reportedMeters(routeState.liveSegmentMeters)),
+                                )
+                                HudHeadline.TOTAL -> lengthText
+                            },
+                            style = MaterialTheme.typography.displaySmall,
+                            // Gold is what a committed length looks like; the segment is still
+                            // being aimed at, so it takes the accent the screen uses for "now".
+                            color = when (HudReadout.ink(headline)) {
+                                HudInk.MEASURED -> SiteColors.cable
+                                HudInk.PROVISIONAL -> SiteColors.accent
+                            },
+                        )
+                        // The caption: under a run it is the segment being decided, with one point
+                        // it is the word that says the big number is not the run yet.
+                        when (headline) {
+                            HudHeadline.SEGMENT -> Text(
+                                text = stringResource(R.string.hud_segment_word),
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = HudStyle.text,
+                                color = SiteColors.accent,
                             )
+                            HudHeadline.TOTAL -> liveSegmentText?.let { segment ->
+                                Text(
+                                    text = segment,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = HudStyle.text,
+                                )
+                            }
                         }
                         Text(
                             text = buildString {
@@ -769,6 +1058,43 @@ fun ArMeasureScreen(
                     }
                 }
 
+                // Which of the three steps is being asked for, always visible and directly under
+                // the numbers (finding 265): the report was that the app "made no sense", and a
+                // screen with three jobs and no statement of which one is current is exactly that.
+                StepStrip(
+                    chips = MeasureGuide.strip(guideState),
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+                // One slot, directly under the strip, that answers exactly one of two questions
+                // (finding 269): what the last tap did, or - when nothing was just tapped - the
+                // one action the reticle is asking for right now ("hold steady"). It is pinned,
+                // not scrolled: it is the answer to a thing the operator just did with his hand,
+                // and a line he has to scroll to find is a line he never sees.
+                //
+                // The readiness half used to live behind the diagnostics toggle (finding 268). It
+                // does not belong there: "hold steady" is the instruction that decides whether the
+                // next tap commits one noisy frame, not a diagnostic.
+                slotText?.let { line ->
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = slotColor,
+                        modifier = Modifier
+                            .padding(top = 4.dp)
+                            // It changes without the operator touching anything, so a screen
+                            // reader has to be told rather than asked to find it.
+                            .semantics { liveRegion = LiveRegionMode.Polite },
+                    )
+                }
+                // The room's own gauge, pinned above the scrolling text and drawn only in a
+                // walkthrough (finding 267): whether anything is captured, in what colour, and how
+                // much of it. In measuring mode it draws nothing at all.
+                ScanGauge(
+                    state = MeasureGuide.scanLine(guideState),
+                    detailFraction = scanState.detailFraction,
+                    triangles = scanState.triangleCount,
+                )
+
                 // Every coaching line lives inside a budget of its own (finding 257): the
                 // header above stays pinned — the export and close icons live there, and they
                 // were the first casualties when this column used to grow over them — while the
@@ -778,31 +1104,27 @@ fun ArMeasureScreen(
                         .heightIn(max = statusMaxHeight)
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    // Coaching: tracking verdict first, then the scan state.
-                    val statusLine = guidanceText ?: when (hint) {
-                        ScanHint.NONE -> null
-                        ScanHint.UNAVAILABLE -> scanUnavailableText
-                        ScanHint.FULL -> scanFullText
-                        ScanHint.INSTRUCTION -> scanInstructionText
-                        ScanHint.BEHIND -> scanBehindText
-                        ScanHint.PROGRESS -> scanProgressText
-                    }
-                    statusLine?.let { line ->
+                    // Coaching *and* evidence, never one instead of the other (finding 265). The
+                    // old `guidanceText ?: when (hint)` line dropped the scan gauge on every frame
+                    // where the tracking advisor had something to say - which on a Pixel 3a in a
+                    // hallway is most frames - so the operator walked and no number ever moved.
+                    statusRows.forEach { (line, text) ->
                         Text(
-                            text = line,
+                            text = text,
                             style = MaterialTheme.typography.bodyMedium,
                             color = when {
-                                warningText != null -> SiteColors.warning
-                                hint == ScanHint.FULL || hint == ScanHint.BEHIND -> SiteColors.warning
+                                warningText != null && line == GuideLine.COACHING -> SiteColors.warning
+                                MeasureGuide.tone(line) == GuideTone.QUIET -> HudStyle.hint
+                                MeasureGuide.tone(line) == GuideTone.NORMAL -> HudStyle.text
                                 tracking.quality == TrackingQuality.NOT_TRACKING -> SiteColors.danger
-                                else -> HudStyle.text
+                                else -> SiteColors.warning
                             },
                         )
                     }
                     // `isFinal`, not just the state: during the model's load the answer is
                     // "planes only" and it may stop being true in a second. A line that appears and
                     // vanishes on every cold start is a line the operator learns to ignore.
-                    if (!depthStatus.hasDepthField && depthStatus.isFinal) {
+                    if (diagnosticsOpen && !depthStatus.hasDepthField && depthStatus.isFinal) {
                         Text(
                             text = stringResource(R.string.ar_depth_planes_only),
                             style = MaterialTheme.typography.bodyMedium,
@@ -825,37 +1147,28 @@ fun ArMeasureScreen(
                     warningText?.let {
                         Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
                     }
-                    // The weakest point of the run, not the last one: one guessed point makes the
-                    // whole length a guess, and this is the only moment it can still be re-tapped.
-                    weakPointText?.let {
-                        Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.warning)
-                    }
                     roomTotalText?.let {
                         Text(it, style = MaterialTheme.typography.bodyMedium, color = SiteColors.accent)
                     }
-                    // Whether the point under the crosshair has settled. Until it has, a tap would
-                    // commit one noisy frame; the stabiliser says when it is worth tapping.
-                    stability?.let { reading ->
-                        if (reading.hasPoint) {
-                            Text(
-                                text = stringResource(
-                                    if (reading.settled) R.string.ar_point_locked else R.string.ar_hold_steady,
-                                ),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (reading.settled) {
-                                    SiteColors.accent
-                                } else {
-                                    HudStyle.text
-                                },
-                            )
-                        }
+                    // The line a worker needs stays; the lines only a developer can use go behind
+                    // one tap (finding 268). Pose graph, depth field, last hit and its snap are real
+                    // measurements - eight lines of them over a camera image is how a working
+                    // screen becomes unreadable, which is what "das macht alles keinen Sinn" meant.
+                    TextButton(onClick = { diagnosticsOpen = !diagnosticsOpen }) {
+                        Text(
+                            text = stringResource(
+                                if (diagnosticsOpen) R.string.diag_hide else R.string.diag_show,
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = HudStyle.hint,
+                        )
                     }
                     // Hit diagnostics, in the operator's language: which surface and which cascade
                     // tier produced the last node.
                     // What the pose graph took and what it lost (finding 244). Hidden until there is
                     // something to say: a line reading "nodes: 0" over a wall that is being measured
                     // fine would read as a fault.
-                    if (graphStatus.standing != PoseGraphStanding.EMPTY) {
+                    if (diagnosticsOpen && graphStatus.standing != PoseGraphStanding.EMPTY) {
                         Text(
                             text = stringResource(R.string.ar_pose_graph, graphStatus.nodes, graphStatus.edges),
                             style = MaterialTheme.typography.bodyMedium,
@@ -904,7 +1217,7 @@ fun ArMeasureScreen(
                             }
                         }
                     }
-                    lastHit?.let { resolution ->
+                    if (diagnosticsOpen) lastHit?.let { resolution ->
                         val hit = resolution.hit
                         Text(
                             text = if (hit != null) {
@@ -934,7 +1247,73 @@ fun ArMeasureScreen(
         }
 
         // ── Bottom controls ──────────────────────────────────────────────────────────────
-        Column(
+        relocalisation?.let { progress ->
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .heightIn(max = sheetMaxHeight)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.relocalise_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                )
+                Text(
+                    text = stringResource(
+                        R.string.relocalise_progress,
+                        progress.observations.size,
+                        progress.draft.nodes.size,
+                    ),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = HudStyle.text,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+                progress.nextNodeId?.let { id ->
+                    val index = progress.draft.nodes.indexOfFirst { it.id == id } + 1
+                    Text(
+                        text = stringResource(R.string.relocalise_next, index),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SiteColors.accent,
+                    )
+                }
+                if (progress.rejection != null) {
+                    Text(
+                        text = stringResource(R.string.relocalise_failed),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SiteColors.danger,
+                    )
+                }
+                GloveButton(
+                    label = stringResource(R.string.relocalise_finish),
+                    icon = Icons.Default.Save,
+                    enabled = progress.canFinish,
+                    onClick = {
+                        when (val result = controller.finishRelocalisation()) {
+                            is AnchorGraphRelocaliser.Result.Success -> {
+                                val routeId = "route-${UUID.randomUUID()}"
+                                controller.admitRelocalisedRoute(routeId)
+                                recoverable = null
+                                onDraftRelocalised(progress.draft, result.nodes, routeId)
+                            }
+                            else -> Unit
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                TextButton(
+                    onClick = controller::cancelRelocalisation,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.relocalise_cancel), color = HudStyle.dialogAction)
+                }
+            }
+        }
+        if (relocalisation == null) Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
@@ -946,66 +1325,142 @@ fun ArMeasureScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // The one action the operator presses most, first and above the fold (finding 257):
-            // with a gloved hand a precise tap in the middle of the screen is not a given, and on
-            // the device this button was the only one whose touch ever reached the controller.
-            GloveButton(
-                label = stringResource(R.string.ar_add_point),
-                icon = Icons.Default.Add,
-                onClick = {
-                    // Logged, because "nothing happens" was the whole report: the log now says
-                    // whether the tap arrived and what the hit test made of it (finding 256).
-                    Diagnostics.event("tap", "add point at reticle ${viewSize.width}x${viewSize.height}")
-                    controller.requestTap(
-                        viewSize.width / 2f,
-                        viewSize.height / 2f,
-                        viewSize.width,
-                        viewSize.height,
+            // What the last tap did, first in the sheet and until the next point (finding 268):
+            // saving used to be silent, and "did that work?" is the question a worker asks after
+            // every tap that ends something. It reads like the number he will carry to the van.
+            savedRun?.let { (label, meters) ->
+                if (SheetPlan.showsSavedRun(routeState.nodeCount, label)) {
+                    // Resolved outside `semantics`: a `Modifier.semantics { }` lambda is not
+                    // composable and `stringResource` may not be called inside it.
+                    val savedText = stringResource(
+                        R.string.run_saved,
+                        label,
+                        shownLengthWithUnit(meters),
                     )
+                    Surface(
+                        color = HudStyle.panel,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            // A card that appears by itself is a change a screen reader has to be
+                            // told about; the visible text is the announcement.
+                            .semantics(mergeDescendants = true) {
+                                liveRegion = LiveRegionMode.Polite
+                            },
+                    ) {
+                        Text(
+                            text = savedText,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Jamaica.Lime,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            }
+            // Which job this is, before any of the controls that belong to one of them (finding
+            // 267). It has to be the first thing in the sheet: every button below it means
+            // something different depending on the answer.
+            ModePicker(
+                mode = mode,
+                onSelect = { chosen ->
+                    if (chosen != mode) {
+                        Diagnostics.event("ui", "mode ${chosen.name}")
+                        mode = chosen
+                    }
                 },
-                modifier = Modifier.fillMaxWidth(),
             )
-
-            val closeLoopLabel = stringResource(R.string.ar_close_loop)
-            val finishLabel = stringResource(R.string.ar_finish)
-            ArActionRow(
-                columns = pairColumns,
-                actions = listOf(
-                    ArAction(
-                        label = closeLoopLabel,
-                        icon = Icons.Default.Loop,
-                        enabled = routeState.nodeCount >= ActionGating.NODES_FOR_A_LOOP,
-                        onClick = { controller.routeSession.closeLoop() },
-                    ),
-                    ArAction(
-                        label = finishLabel,
-                        icon = Icons.Default.Save,
-                        tone = ActionTone.PRIMARY,
-                        enabled = routeState.canFinish,
-                        onClick = commitRun,
-                    ),
-                ),
-            )
-            // A greyed-out button that says nothing reads as a broken button - that is exactly how
-            // the first device run reported it (finding 258). Say what is still missing, from the
-            // one object that repeats the thresholds the buttons are enabled with.
-            ActionGating.missingPoints(routeState.nodeCount, routeState.canFinish)?.let { needed ->
+            // In measuring mode the two chips and the button that follows already say what the
+            // screen does; a third sentence about the same thing was the copy that made the sheet
+            // feel like a manual (finding 268). A walkthrough does need one line, because its point
+            // button is missing.
+            if (!mode.setsPoints) {
+                // A walkthrough has no point button, and the sentence says where the points went
+                // instead of leaving the operator to discover that tapping does nothing.
                 Text(
-                    text = pluralStringResource(R.plurals.ar_needs_points, needed, needed),
+                    text = stringResource(R.string.capture_no_points),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = HudStyle.hint,
+                    color = HudStyle.text,
                 )
+            }
+
+            // ── The one thing to do next (finding 268) ─────────────────────────────────────
+            // One primary action, and it is always the operator's next step: the first point,
+            // every further point, or - in a walkthrough - the way back to measuring. Nothing else
+            // on this screen is allowed to be a second "thing to do" at the same time.
+            when (SheetPlan.primary(mode, routeState.nodeCount)) {
+                SheetPlan.Primary.FIRST_POINT -> GloveButton(
+                    label = stringResource(R.string.ar_add_first_point),
+                    icon = Icons.Default.Add,
+                    onClick = { addPoint(null) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                SheetPlan.Primary.POINT -> GloveButton(
+                    label = stringResource(R.string.ar_add_point),
+                    icon = Icons.Default.Add,
+                    onClick = { addPoint(null) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                // A walkthrough has nothing to tap, so its primary action is the honest exit and
+                // not a dead point button (finding 267). Outlined rather than filled: it ends the
+                // errand, it does not advance it.
+                SheetPlan.Primary.END_CAPTURE -> GloveButton(
+                    label = stringResource(R.string.capture_end),
+                    icon = Icons.Default.Check,
+                    tone = ActionTone.SECONDARY,
+                    onClick = {
+                        Diagnostics.event("ui", "walkthrough ended")
+                        commitCapture()
+                        mode = MeasureMode.MEASURE
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            if (SheetPlan.showsRunActions(mode)) {
+                // Full width and second in the hierarchy: saving is what turns a walk into a
+                // number, and the sentence underneath says what it is still waiting for.
+                GloveButton(
+                    label = stringResource(R.string.ar_finish),
+                    icon = Icons.Default.Save,
+                    tone = ActionTone.SECONDARY,
+                    enabled = routeState.canFinish,
+                    onClick = commitRun,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                // A greyed-out button that says nothing reads as a broken button - that is exactly
+                // how the first device run reported it (finding 258). One sentence, about the
+                // button the operator is reaching for, with the count in it (finding 265).
+                blockRow?.let { (line, text) ->
+                    if (line == GuideLine.BLOCK_RUN) {
+                        Text(
+                            text = text,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = HudStyle.hint,
+                        )
+                    }
+                }
             }
 
             val undoLabel = stringResource(R.string.ar_undo)
             val torchLabel = stringResource(R.string.ar_torch)
-            val scanLabel = stringResource(if (showScanner) R.string.ar_stop_scan else R.string.ar_scan)
             val toolActions = mutableListOf(
                 ArAction(
                     label = undoLabel,
                     icon = Icons.AutoMirrored.Filled.Undo,
-                    enabled = routeState.nodeCount > 0,
-                    onClick = { controller.undo() },
+                    // The state comes from the same object the drawer's tools use (finding 276):
+                    // on a fresh screen this button is grey, and grey without a word is the
+                    // reading the first device report gave a working button (finding 258).
+                    state = ToolsPlan.undo(routeState.nodeCount),
+                    onClick = {
+                        controller.undo()
+                        // The last action on this screen that changed a measurement and said
+                        // nothing (finding 270). Undo is a tap like any other, so its result goes
+                        // in the same slot - and the restart of the timer is the same one.
+                        tapEcho = TapEcho.UNDONE
+                        slotTick++
+                    },
                 ),
             )
             // A torch button that cannot switch anything on is not a button: on a device whose
@@ -1015,70 +1470,150 @@ fun ArMeasureScreen(
                 toolActions += ArAction(
                     label = torchLabel,
                     icon = Icons.Default.FlashlightOn,
+                    state = ToolState(enabled = true),
                     selected = torchOn,
                     onClick = { controller.toggleTorch() },
                 )
             }
-            toolActions += ArAction(
-                label = scanLabel,
-                icon = Icons.Default.Add,
-                selected = showScanner,
-                onClick = { showScanner = !showScanner },
-            )
-            ArActionRow(columns = actionColumns, actions = toolActions)
+            ArActionRow(columns = pairColumns, actions = toolActions, nodeCount = routeState.nodeCount)
 
-            // One conduit spec out of five: a group of radio buttons, so TalkBack says which one
-            // is chosen instead of reading five identical-looking buttons (finding 211). Lower down
-            // than the two measurements buttons, because the spec is chosen once per run and the
-            // point is tapped every metre.
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.selectableGroup(),
-            ) {
-                ConduitPresets.all.forEach { preset ->
-                    SpecChip(
-                        spec = preset,
-                        selected = preset == spec,
-                        onClick = {
-                            spec = preset
-                            controller.setSpec(preset)
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+            // One setting, one chip (finding 268). Six chips at once were five buttons nobody
+            // pressed plus one they could not find; the chip names the cable the run is built
+            // with and hands the choice to a full-size dialog where every option is glove-sized
+            // and the current one is marked.
+            if (SheetPlan.showsCableChip(mode)) {
+                GloveButton(
+                    label = spec.label,
+                    icon = Icons.Default.Settings,
+                    tone = ActionTone.SECONDARY,
+                    onClick = { specOpen = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { stateDescription = changeCableText },
+                )
             }
 
-            // ── Reference calibration ────────────────────────────────────────────────
-            // ARCore's metre is metric on its own; this is the operator's check of it against an
-            // object of known size, and the factor it produces is applied to the metres that are
-            // reported (`.//docs/CALIBRATION.md`), never to the geometry.
-            GloveButton(
-                label = stringResource(R.string.calib_title),
-                icon = Icons.Default.Straighten,
-                tone = ActionTone.SECONDARY,
-                onClick = {
-                    calibrationSweep = CalibrationSweep.Idle
-                    calibrationOpen = true
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (specOpen) {
+                AlertDialog(
+                    onDismissRequest = { specOpen = false },
+                    title = { Text(stringResource(R.string.spec_dialog_title)) },
+                    text = {
+                        Column(
+                            // A group of choices, not five unrelated buttons: the selected cable
+                            // is announced as "chosen out of six" (the rule `SpecChip` followed
+                            // when the six chips were still on the sheet itself).
+                            modifier = Modifier
+                                .selectableGroup()
+                                .semantics { liveRegion = LiveRegionMode.Polite },
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            ConduitPresets.all.forEach { preset ->
+                                GloveButton(
+                                    label = preset.label,
+                                    icon = Icons.Default.Check,
+                                    tone = if (preset == spec) ActionTone.PRIMARY else ActionTone.SECONDARY,
+                                    selected = preset == spec,
+                                    onClick = {
+                                        spec = preset
+                                        controller.setSpec(preset)
+                                        Diagnostics.event("ui", "cable ${preset.label}")
+                                        specOpen = false
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { specOpen = false }) {
+                            Text(stringResource(R.string.export_back))
+                        }
+                    },
+                )
+            }
 
-            // ── Loop closure ────────────────────────────────────────────────────────
-            // The one write in the SLAM path that needs a person: two visits half a metre apart
-            // can be the same doorway or two different corners, and a wrong closure folds the
-            // room without anything looking wrong. Enabled once the graph holds nodes at all;
-            // the policy's own floor decides whether there is anything to ask about.
-            GloveButton(
-                label = stringResource(R.string.loop_check),
-                icon = Icons.Default.Loop,
-                tone = ActionTone.SECONDARY,
-                enabled = graphStatus.nodes > 0,
-                onClick = {
-                    closureOpen = true
-                    controller.lookForClosure()
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            // ── Everything rare, behind one disclosure (finding 268) ─────────────────
+            // Ring closure, calibration, loop check and marker check are used once a week at
+            // most, and each of them was a glove-sized rectangle taken from the two actions
+            // used every metre. Closed by default, and the button says which way it goes.
+            TextButton(onClick = { toolsOpen = !toolsOpen }) {
+                Text(
+                    text = stringResource(if (toolsOpen) R.string.tools_hide else R.string.tools_show),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = HudStyle.hint,
+                )
+            }
+
+            if (toolsOpen) {
+                // The ring lives here rather than next to Save: it is the rare half of the same
+                // decision, and the sentence under it says how many points it still needs.
+                if (mode.setsPoints) {
+                    val ring = ToolsPlan.ring(routeState.nodeCount)
+                    GloveButton(
+                        label = stringResource(R.string.ar_close_loop),
+                        icon = Icons.Default.Loop,
+                        tone = ActionTone.SECONDARY,
+                        enabled = ring.enabled,
+                        onClick = { controller.routeSession.closeLoop() },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    // Every grey tool in this drawer says why (finding 271). The rule was already
+                    // being kept for the ring and broken for the two below it.
+                    ToolReasonLine(ring.reason, routeState.nodeCount)
+                }
+                // ── Reference calibration ────────────────────────────────────────────────
+                // ARCore's metre is metric on its own; this is the operator's check of it against an
+                // object of known size, and the factor it produces is applied to the metres that are
+                // reported (`.//docs/CALIBRATION.md`), never to the geometry.
+                GloveButton(
+                    label = stringResource(R.string.calib_title),
+                    icon = Icons.Default.Straighten,
+                    tone = ActionTone.SECONDARY,
+                    onClick = {
+                        calibrationSweep = CalibrationSweep.Idle
+                        calibrationOpen = true
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                // ── Loop closure ────────────────────────────────────────────────────────
+                // The one write in the SLAM path that needs a person: two visits half a metre apart
+                // can be the same doorway or two different corners, and a wrong closure folds the
+                // room without anything looking wrong. Enabled once the graph holds nodes at all;
+                // the policy's own floor decides whether there is anything to ask about.
+                val loopCheck = ToolsPlan.loopCheck(graphStatus.nodes)
+                GloveButton(
+                    label = stringResource(R.string.loop_check),
+                    icon = Icons.Default.Loop,
+                    tone = ActionTone.SECONDARY,
+                    enabled = loopCheck.enabled,
+                    onClick = {
+                        closureOpen = true
+                        controller.lookForClosure()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                ToolReasonLine(loopCheck.reason, routeState.nodeCount)
+
+                // ── Marker check ────────────────────────────────────────────────────────
+                // A printed tag of known size, measured through the camera: the second tier of
+                // `docs/CALIBRATION.md`, and the only one that needs no tap - the operator aims and
+                // walks, and the sweep counts the sightings. It publishes a factor, never a scale
+                // stored behind the operator's back; `Apply` is the same reporting-layer write the
+                // two-tap sweep uses.
+                val markerTool = ToolsPlan.marker(markerAvailable)
+                GloveButton(
+                    label = stringResource(R.string.marker_title),
+                    icon = Icons.Default.QrCodeScanner,
+                    tone = ActionTone.SECONDARY,
+                    enabled = markerTool.enabled,
+                    onClick = {
+                        if (controller.startMarkerProbe()) markerOpen = true
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                ToolReasonLine(markerTool.reason, routeState.nodeCount)
+            }
 
             if (closureOpen) {
                 LoopClosureDialog(
@@ -1094,23 +1629,6 @@ fun ArMeasureScreen(
                     onClose = { closureOpen = false },
                 )
             }
-
-            // ── Marker check ────────────────────────────────────────────────────────
-            // A printed tag of known size, measured through the camera: the second tier of
-            // `docs/CALIBRATION.md`, and the only one that needs no tap - the operator aims and
-            // walks, and the sweep counts the sightings. It publishes a factor, never a scale
-            // stored behind the operator's back; `Apply` is the same reporting-layer write the
-            // two-tap sweep uses.
-            GloveButton(
-                label = stringResource(R.string.marker_title),
-                icon = Icons.Default.QrCodeScanner,
-                tone = ActionTone.SECONDARY,
-                enabled = markerAvailable,
-                onClick = {
-                    if (controller.startMarkerProbe()) markerOpen = true
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
 
             if (markerOpen) {
                 // The dialog is its own file since finding 242: it is a small state machine
@@ -1270,7 +1788,7 @@ fun ArMeasureScreen(
 
     // The run the last process did not finish. Drawn over the viewfinder so it cannot be
     // scrolled past, and not dismissible by tapping outside: the operator has to decide.
-    recoverable?.let { pending ->
+    if (relocalisation == null) recoverable?.let { pending ->
         Dialog(onDismissRequest = {}) {
             Surface(
                 shape = RoundedCornerShape(20.dp),
@@ -1298,15 +1816,23 @@ fun ArMeasureScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = HudStyle.dialogBody,
                     )
-                    GloveButton(
-                        label = stringResource(R.string.draft_save),
-                        icon = Icons.Default.Save,
+                    if (pending.evidence.size >= 3) {
+                        GloveButton(
+                            label = stringResource(R.string.draft_relocalise),
+                            icon = Icons.Default.Save,
+                            onClick = { controller.beginRelocalisation(pending) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    TextButton(
                         onClick = {
                             recoverable = null
                             onDraftRecovered(pending)
                         },
                         modifier = Modifier.fillMaxWidth(),
-                    )
+                    ) {
+                        Text(stringResource(R.string.draft_save_measurements), color = HudStyle.dialogAction)
+                    }
                     GloveButton(
                         label = stringResource(R.string.draft_discard),
                         icon = Icons.Default.Close,
@@ -1321,6 +1847,41 @@ fun ArMeasureScreen(
             }
         }
     }
+}
+
+/**
+ * The sentence under a grey tool (finding 271).
+ *
+ * One implementation for all three, so that "a disabled control explains itself" cannot be honoured
+ * for the ring and forgotten for the two buttons under it - which is exactly what had happened.
+ */
+@Composable
+private fun ToolReasonLine(reason: ToolReason?, nodeCount: Int) {
+    val text = toolReasonText(reason, nodeCount) ?: return
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = HudStyle.hint,
+        modifier = Modifier.padding(bottom = 4.dp),
+    )
+}
+
+/**
+ * The one place a [ToolReason] becomes a sentence (finding 271).
+ *
+ * There are two ways to print the answer and they are the same answer: the drawer has room for a
+ * line under the button, and the action row - two buttons side by side, on glass, next to the
+ * primary - has none. The row puts the same sentence on the button as its `stateDescription`
+ * instead (finding 276), which is why the resolution is a function both call rather than a `when`
+ * in each of them: a second `when` is how the first one drifted away from the buttons it described.
+ */
+@Composable
+private fun toolReasonText(reason: ToolReason?, nodeCount: Int): String? = when (reason) {
+    null -> null
+    ToolReason.RING_NEEDS_POINTS -> stringResource(R.string.ar_hint_ring_needs, nodeCount)
+    ToolReason.LOOP_NEEDS_ROOM -> stringResource(R.string.loop_needs_room)
+    ToolReason.MARKER_NOT_AVAILABLE -> stringResource(R.string.marker_unavailable)
+    ToolReason.UNDO_NOTHING_TO_REMOVE -> stringResource(R.string.undo_nothing_to_remove)
 }
 
 /** Blocking message with one action: missing permission, unsupported device, failed session. */
@@ -1355,44 +1916,6 @@ private fun GateMessage(
     }
 }
 
-@Composable
-private fun SpecChip(
-    spec: ConduitSpec,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    // A local with a name of its own: inside `semantics { }` an unqualified `selected` resolves to
-    // the receiver's own property, so writing `this.selected = selected` there would read the very
-    // property it assigns and announce nothing - the same shape as finding 204's narrower helper.
-    val chosen = selected
-    Button(
-        onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
-        // The selection used to be a background colour and nothing else. `selected` makes the
-        // button announce "selected" inside its group; the colour stays what a sighted gloved
-        // hand sees (finding 211).
-        modifier = modifier
-            .padding(vertical = 2.dp)
-            .semantics { this.selected = chosen },
-        colors = ButtonDefaults.buttonColors(
-            // The selected chip used to be the spec colour at 90 % under *white* text - white on
-            // gold measures 1.4:1, so the one chip the worker just tapped was the one he could not
-            // read. The spec colours are all light (orange, blue, teal), which is exactly why the
-            // rest of the theme pairs them with Ink; do the same here and keep the fill opaque,
-            // because a label that depends on the camera behind it is not a label.
-            containerColor = if (selected) Color(spec.colorArgb) else HudStyle.panel,
-            contentColor = if (selected) Jamaica.Ink else HudStyle.text,
-        ),
-    ) {
-        Text(
-            text = spec.sizeLabel,
-            style = MaterialTheme.typography.labelMedium,
-            maxLines = 1,
-        )
-    }
-}
-
 /** Unwraps the hosting [Activity] from a (possibly themed) Compose context. */
 private fun Context.findActivity(): Activity? {
     var current: Context? = this
@@ -1421,13 +1944,19 @@ private fun calibrationLabel(reference: CalibrationReference): String = if (refe
     stringResource(R.string.calib_zollstock, shownLengthWithUnit(reference.realMetres.toFloat()))
 }
 
-/** One button of the action sheet, as data: [ArActionRow] decides how many fit side by side. */
+/**
+ * One button of the action sheet, as data: [ArActionRow] decides how many fit side by side.
+ *
+ * The state is a [ToolState] rather than an `enabled` flag (finding 276): a row button cannot be
+ * built grey without a reason any more than a drawer tool can, which is the whole point of having
+ * taught the rule to the type instead of to the three instances that happened to be in the drawer.
+ */
 private data class ArAction(
     val label: String,
     val icon: ImageVector,
+    val state: ToolState,
     val onClick: () -> Unit,
     val tone: ActionTone = ActionTone.SECONDARY,
-    val enabled: Boolean = true,
     val selected: Boolean = false,
 )
 
@@ -1441,22 +1970,14 @@ private data class ArAction(
  * anything.
  */
 @Composable
-private fun ArActionRow(columns: Int, actions: List<ArAction>) {
+private fun ArActionRow(columns: Int, actions: List<ArAction>, nodeCount: Int) {
     if (columns <= 1) {
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             actions.forEach { action ->
-                GloveButton(
-                    label = action.label,
-                    icon = action.icon,
-                    onClick = action.onClick,
-                    modifier = Modifier.fillMaxWidth(),
-                    tone = action.tone,
-                    enabled = action.enabled,
-                    selected = action.selected,
-                )
+                ArActionButton(action, nodeCount, Modifier.fillMaxWidth())
             }
         }
     } else {
@@ -1465,16 +1986,36 @@ private fun ArActionRow(columns: Int, actions: List<ArAction>) {
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             actions.forEach { action ->
-                GloveButton(
-                    label = action.label,
-                    icon = action.icon,
-                    onClick = action.onClick,
-                    modifier = Modifier.weight(1f),
-                    tone = action.tone,
-                    enabled = action.enabled,
-                    selected = action.selected,
-                )
+                ArActionButton(action, nodeCount, Modifier.weight(1f))
             }
         }
     }
+}
+
+/**
+ * One button of the row, with its reason attached to the button itself.
+ *
+ * The row has no room for a line - it is two glove buttons under the primary action - so the
+ * reason is announced rather than printed: `stateDescription` is what a screen reader adds after
+ * the label and the disabled state, and it is the only place a control this size can explain
+ * itself without pushing the next action off the glass (finding 276).
+ */
+@Composable
+private fun ArActionButton(action: ArAction, nodeCount: Int, modifier: Modifier) {
+    // Hoisted: a `semantics { }` lambda is not composable and `stringResource` may not be called
+    // inside it. `null` on a usable button, so an enabled control announces no excuse.
+    val reasonText = toolReasonText(action.state.reason, nodeCount)
+    GloveButton(
+        label = action.label,
+        icon = action.icon,
+        onClick = action.onClick,
+        modifier = if (reasonText == null) {
+            modifier
+        } else {
+            modifier.semantics { stateDescription = reasonText }
+        },
+        tone = action.tone,
+        enabled = action.state.enabled,
+        selected = action.selected,
+    )
 }

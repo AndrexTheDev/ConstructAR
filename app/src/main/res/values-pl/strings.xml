@@ -43,7 +43,7 @@
     <string name="home_export">Eksport</string>
 
     <!-- AR measuring screen -->
-    <string name="scan_instruction">Przesuwaj telefon powoli po ścianach i podłodze, aby zeskanować pomieszczenie.</string>
+    <string name="scan_instruction">Nic jeszcze nie zostało zeskanowane. Przesuwaj telefon powoli po jednej ścianie: wskaźnik szczegółów zacznie rosnąć, gdy pierwszy fragment zostanie przechwycony.</string>
     <string name="tracking_loss">Utracono śledzenie. Skieruj telefon na teksturowaną ścianę lub podłogę i poruszaj się powoli.</string>
     <string name="tracking_searching">Szukam punktów odniesienia. Przesuwaj telefon powoli po powierzchni.</string>
     <string name="tracking_limited">Śledzenie ograniczone. Poruszaj się wolniej.</string>
@@ -82,7 +82,7 @@
     <string name="ar_pose_graph_closures">Zamknięcie: %1$d potwierdzone</string>
     <string name="ar_pose_graph_closure_shift">Ostatnie zamknięcie: przesunięto %1$d z %2$d węzłów, do %3$s</string>
     <string name="ar_pose_graph_closure_unfinished">Ostatnie zamknięcie: brak wyniku (optymalizator zatrzymany)</string>
-    <string name="loop_check">Sprawdź powrót</string>
+    <string name="loop_check">To samo miejsce?</string>
     <string name="loop_title">Zamknij pętlę</string>
     <string name="loop_offer">Trasa jest ponownie %1$s od wcześniejszego punktu. Zamknięcie zakłada, że to to samo miejsce.</string>
     <string name="loop_confirm">To samo miejsce</string>
@@ -91,21 +91,57 @@
     <string name="loop_failed">Nie udało się zoptymalizować grafu.</string>
     <string name="loop_shift">Przesunięto %1$d z %2$d węzłów, do %3$s.</string>
     <string name="loop_unfinished">Optymalizator wykorzystał limit iteracji: krawędź jest dodana, ale nie ma wyniku. Te liczby to stan pośredni, nie korekta.</string>
-    <string name="ar_add_point">Dodaj punkt na środku</string>
-    <string name="ar_undo">Cofnij</string>
-    <string name="ar_close_loop">Zamknij</string>
-    <string name="ar_finish">Zakończ trasę</string>
+    <string name="ar_step_scan">1 Skanuj</string>
+    <string name="ar_step_points">2 Zaznacz punkty</string>
+    <string name="ar_step_finish">3 Zapisz</string>
+    <string name="mode_measure">Punkt po punkcie</string>
+    <string name="mode_capture">Obejście 3D</string>
+    <string name="mode_measure_hint">Pomiar: każdy punkt stawiasz sam - tam później idzie kabel.</string>
+    <string name="mode_capture_hint">Obejście: aplikacja odtwarza pomieszczenie w 3D, ty tylko chodzisz.</string>
+    <string name="scan_legend">Fiolet = zeskanowane</string>
+    <string name="scan_state_none">Nic jeszcze nie zeskanowano</string>
+    <string name="scan_state_growing">%1$d %% · %2$d tys. trójkątów</string>
+    <string name="scan_state_full">Skan pełny - nic już nie dojdzie</string>
+    <string name="scan_state_behind">Telefon nie nadąża</string>
+    <string name="scan_state_unavailable">Brak skanu siatki na tym telefonie</string>
+    <string name="capture_walk">Idź powoli wzdłuż ścian. To, co staje się fioletowe, jest nagrane.</string>
+    <string name="capture_no_points">Podczas obejścia nie zaznacza się punktów. Aby zaznaczać i zapisywać: „Punkt po punkcie”.</string>
+    <string name="ar_add_first_point">Zaznacz pierwszy punkt</string>
+    <string name="capture_end">Zakończ obejście</string>
+    <string name="tools_show">Pokaż narzędzia</string>
+    <string name="tools_hide">Ukryj narzędzia</string>
+    <string name="diag_show">Pokaż diagnostykę</string>
+    <string name="diag_hide">Ukryj diagnostykę</string>
+    <string name="spec_change">Zmień rodzaj kabla</string>
+    <string name="spec_dialog_title">Który kabel?</string>
+    <string name="run_saved">%1$s zapisano · %2$s</string>
+    <string name="step_now">teraz</string>
+    <string name="step_done">gotowe</string>
+    <string name="ar_guide_first">Dwa punkty to odległość: jeden tutaj, drugi na końcu.</string>
+    <string name="ar_guide_second">Pierwszy punkt zaznaczony. Przejdź na drugi koniec i dotknij ponownie - to twoja pierwsza odległość.</string>
+    <string name="ar_guide_distance">Zmierzono %1$s. Każdy kolejny punkt wydłuża odcinek; zapisz, kiedy chcesz.</string>
+    <string name="ar_guide_ring">Pętla zamknięta: %1$s obwodu. Zapisz ją teraz albo idź dalej.</string>
+    <string name="ar_hint_run_needs">Zapis wymaga 2 punktów - zaznaczono %1$d.</string>
+    <string name="ar_hint_ring_needs">Pętla wymaga 3 punktów - zaznaczono %1$d.</string>
+    <string name="loop_needs_room">Najpierw obchód pomieszczenia - bez zeskanowanej przestrzeni nie ma dwóch wizyt do porównania.</string>
+    <string name="marker_unavailable">To urządzenie nie odczytuje znaczników. Kalibracja ręczna nadal działa.</string>
+    <string name="crash_title">Aplikacja zamknęła się ostatnio</string>
+    <string name="crash_body">Raport jest na telefonie. Zapisz go w folderze i odeślij – jest w nim, co aplikacja robiła tuż przed zamknięciem.</string>
+    <string name="crash_dismiss">Odrzuć raport</string>
+    <string name="ar_add_point">Zaznacz punkt tutaj</string>
+    <string name="ar_undo">Usuń ostatni punkt</string>
+    <string name="undo_nothing_to_remove">Nie ma jeszcze punktu - nie ma czego usuwać.</string>
+    <string name="ar_close_loop">Zamknij w pętlę</string>
+    <string name="ar_finish">Zapisz odcinek</string>
     <string name="ar_leave_title">Wyjść z trasy?</string>
     <string name="ar_leave_body">Zmierzono %1$s. Zapisać jako trasę czy odrzucić?</string>
     <string name="ar_leave_save">Zapisz jako trasę</string>
     <string name="ar_leave_discard">Odrzuć</string>
     <string name="draft_title">Nieukończony pomiar</string>
-    <string name="draft_body">%1$s, ostatni zapis o %2$s. Długości i kształtki są dokładne; pozycji 3D nie da się odtworzyć.</string>
+    <string name="draft_body">%1$s, ostatni zapis o %2$s. Ponownie zaobserwuj zapisane kotwy, aby odtworzyć współrzędne 3D, albo zachowaj dokładne długości i kształtki bez pozycji 3D.</string>
     <string name="draft_save">Zapisz jako trasę</string>
     <string name="draft_discard">Odrzuć</string>
     <string name="ar_torch">Latarka</string>
-    <string name="ar_scan">Skanuj pomieszczenie</string>
-    <string name="ar_stop_scan">Zatrzymaj skan</string>
     <string name="ar_closed_loop">zamknięta</string>
     <string name="ar_confidence_weak">Najsłabszy punkt %1$d %% - dotknij go ponownie, aby poprawić trasę</string>
     <string name="ar_no_surface">Nie znaleziono powierzchni. Wyceluj w ścianę lub podłogę.</string>
@@ -202,14 +238,6 @@
         <item quantity="few">%1$d punkty</item>
         <item quantity="many">%1$d punktów</item>
         <item quantity="other">%1$d punktu</item>
-    </plurals>
-    <!-- Why a greyed-out action is greyed out (finding 257): the device showed two dead
-         buttons and no word about what was missing. -->
-    <plurals name="ar_needs_points">
-        <item quantity="one">Od %1$d punktu</item>
-        <item quantity="few">Od %1$d punktów</item>
-        <item quantity="many">Od %1$d punktów</item>
-        <item quantity="other">Od %1$d punktu</item>
     </plurals>
     <string name="plan_free">Darmowa</string>
     <string name="plan_pro">Pro</string>
@@ -317,12 +345,12 @@
     <string name="licences_title">Komponenty firm trzecich</string>
     <string name="licences_intro">Ta aplikacja opiera się na tych komponentach open source. Ich informacje o prawach autorskich są tu powtórzone, zgodnie z wymogami licencji.</string>
     <string name="help_licence_title">Licencja</string>
-    <string name="runs_title">Trasy</string>
     <string name="run_detail">%1$s · %2$s</string>
-    <string name="run_delete">Usuń trasę</string>
+    <string name="run_delete">Usuń trasę: %1$s</string>
     <string name="run_delete_title">Usunąć tę trasę?</string>
     <string name="run_delete_body">%1$s, %2$s. Znika z listy materiałów, z protokołu i z modelu 3D. Nie da się jej przywrócić.</string>
     <string name="run_recovered">Odzyskana po przerwaniu - długości i kształtki są dokładne, pozycja 3D nie</string>
+    <string name="run_review_required">Niepewny pomiar - sprawdź tę trasę przed zamówieniem</string>
     <string name="technician_title">Monter na budowie</string>
     <string name="technician_hint">Nazwisko tak, jak ma być w protokole</string>
     <string name="materials_title">Materiał i zamówienie</string>
@@ -552,8 +580,10 @@
     <string name="pdf_section_photos">Dokumentacja zdjęciowa</string>
     <string name="pdf_note_photos">Tu jest wydrukowanych %1$d z %2$d zdjęć z teczki budowy - pozostałe zostają w aplikacji.</string>
     <string name="ar_hold_steady">Trzymaj nieruchomo</string>
-    <string name="ar_point_locked">Punkt ustalony</string>
+    <string name="tap_placed">Punkt zaznaczony</string>
+    <string name="tap_undone">Punkt usunięty</string>
     <string name="hud_segment">Odcinek %1$.2f m</string>
+    <string name="hud_segment_word">Odcinek</string>
     <string name="route_warning_surface_jump">Ten punkt jest za ostatnią powierzchnią – sprawdź ścianę, zanim przejdziesz dalej</string>
     <string name="paywall_err_untrusted">Nie można potwierdzić tej instalacji. Zainstaluj oficjalną wersję z oryginalnego źródła i spróbuj ponownie.</string>
     <string name="licence_clock_rollback">Zegar urządzenia jest opóźniony względem ostatniej daty widzianej przez aplikację. Ustaw poprawną datę i godzinę – subskrypcja i okres próbny są sprawdzane według ostatniej znanej daty.</string>
@@ -603,4 +633,16 @@
     <string name="pdf_procurement_excluded">Pominięto %1$d tras zbyt niepewnych do wyceny (%2$s) - sumy powyżej ich nie obejmują.</string>
     <string name="field_leave_body">Wpis w dzienniku, usterka lub miejsce wpisane dla „%1$s” nie zostały jeszcze dodane.</string>
     <string name="onboard_back">Wstecz</string>
+    <string name="draft_relocalise">Odtwórz współrzędne</string>
+    <string name="draft_save_measurements">Zapisz tylko wymiary</string>
+    <string name="relocalise_title">Odnajdywanie kotw trasy</string>
+    <string name="relocalise_progress">Zaobserwowano %1$d z %2$d kotw</string>
+    <string name="relocalise_next">Dotknij zapisanej kotwy %1$d w pomieszczeniu. Punkt trasy nie zostanie dodany.</string>
+    <string name="relocalise_finish">Przywróć współrzędne</string>
+    <string name="relocalise_cancel">Wróć do opcji odzyskiwania</string>
+    <string name="relocalise_failed">Odzyskiwanie odrzucone: obserwacje są niespójne. Zaobserwuj kotwy ponownie albo zapisz tylko wymiary.</string>
+    <string name="din_sonderverlegung">Sonderverlegung: poza obowiązującymi strefami DIN; punkt pozostaje bez zmian.</string>
+    <string name="snap_installation_zone">Przyciągnięto o %1$s cm do strefy instalacyjnej DIN</string>
+    <string name="wall_ua_profile">Wzmocnienie UA (2 mm)</string>
+    <string name="wall_ua_value">%1$d profili · %2$s</string>
 </resources>

@@ -57,6 +57,9 @@ enum class SnapFeatureKind {
 
     /** Two horizontal planes - geometrically possible, architecturally meaningless. */
     EDGE,
+
+    /** A DIN 18015 mounting band, snapped on the 5 cm grid. */
+    INSTALLATION_ZONE,
 }
 
 /** A straight architectural feature: a corner or an edge, already clipped to both planes. */
@@ -245,7 +248,7 @@ object ArchitecturalSnap {
     }
 
     private fun rank(kind: SnapFeatureKind?): Int = when (kind) {
-        SnapFeatureKind.CORNER -> 0
+        SnapFeatureKind.CORNER, SnapFeatureKind.INSTALLATION_ZONE -> 0
         SnapFeatureKind.FLOOR_EDGE, SnapFeatureKind.CEILING_EDGE -> 1
         SnapFeatureKind.EDGE -> 2
         null -> 3

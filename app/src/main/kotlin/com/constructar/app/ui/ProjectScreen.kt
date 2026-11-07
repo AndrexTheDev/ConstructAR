@@ -57,6 +57,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -73,6 +75,9 @@ import com.constructar.core.model.ScanCaveat
 import com.constructar.core.model.WorkTime
 import com.constructar.core.price.MoneyFormatter
 import com.constructar.core.price.Pricing
+import com.constructar.core.workflow.ProjectWorkflowEngine
+import com.constructar.core.workflow.ProjectWorkflowState
+import com.constructar.core.workflow.WorkflowAction
 
 /**
  * The project hub — the screen the operator returns to after every run.
@@ -162,6 +167,9 @@ fun ProjectScreen(
 
     val scanned = (project.scan?.meshTriangleCount ?: 0) > 0
     val measured = project.routes.isNotEmpty()
+    // Metrics include every bend and fitting as well as the confidence flag. Compute them when
+    // the project changes, not again when the running clock recomposes this screen (finding 279).
+    val runRows = remember(project) { RunList.rows(project) }
 
     // ── Handover readiness ──────────────────────────────────────────────────────────────
     // Six facts, each of them something the protocol or the bill needs. Shown as chips rather
@@ -380,15 +388,14 @@ fun ProjectScreen(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // The total, printed once. This card used to follow it with "4 Trassen · 12,80 m
+                // gesamt": the same number again in body type, the run count buried in the
+                // sentence, and under a list titled "Strecken" (finding 277). The count heads the
+                // list it counts now, and no screen states this total twice.
                 Text(
                     shownLengthWithUnit(project.totalLengthMeters),
                     style = MaterialTheme.typography.displaySmall,
                     color = SiteColors.accent,
-                )
-                Text(
-                    stringResource(R.string.export_runs_total, project.routes.size, shownLengthWithUnit(project.totalLengthMeters)),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 // How this measurement came to be, assembled in `:core` (finding 254). The
                 // project screen used to decide for itself and got it wrong twice: it said
@@ -464,45 +471,76 @@ fun ProjectScreen(
         }
 
         // ── The runs, individually ──────────────────────────────────────────────────
+        // Headed by the number of runs rather than by the word "Strecken" alone: the count was the
+        // only new fact on the card above and it was inside a sentence that repeated the total
+        // (finding 277). Here it labels the list it counts, so header and rows are one statement.
         if (project.routes.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    stringResource(R.string.runs_title),
+                    pluralStringResource(R.plurals.home_runs, project.routes.size, project.routes.size),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp),
                 )
-                project.routes.forEach { route ->
+                // The rows come from `RunList`: every row carries the run's own stored name, the
+                // one the protocol and the CSV print, so two runs of the same cable cannot render
+                // as two identical rows (finding 278). The metres are the reported ones, which is
+                // what makes the list add up to the total above it (finding 277).
+                runRows.forEach { row ->
                     RouteRow(
-                        kind = route.spec.kind.routingLabel(),
+                        kind = row.route.spec.kind.routingLabel(),
+                        identity = row.identity,
                         detail = stringResource(
                             R.string.run_detail,
-                            route.spec.label,
-                            route.spec.sizeLabel,
+                            row.route.spec.label,
+                            row.route.spec.sizeLabel,
                         ),
-                        length = shownLengthWithUnit(route.polylineLengthMeters),
-                        // A run recovered after an interruption counts in every length and every
-                        // fitting, but its 3D geometry is not in the model. Saying so is the
-                        // difference between a documented limitation and a surprise in a viewer.
-                        badge = if (route.recovered) stringResource(R.string.run_recovered) else null,
-                        onDelete = { routeToRemove = route },
+                        length = shownLengthWithUnit(row.meters),
+                        // Both facts survive saving and both belong to this run. In particular an
+                        // uncertain measurement no longer becomes visually indistinguishable from
+                        // a firm one as soon as the AR screen closes (finding 279).
+                        notices = row.notices,
+                        onDelete = { routeToRemove = row.route },
                     )
                 }
             }
         }
 
-        // ── Next action, chosen for the operator ────────────────────────────────────
+        // ── Next action, chosen from the durable workflow rather than route presence ──
+        val nextAction = ProjectWorkflowEngine.nextAction(project.workflow)
+        Text(
+            text = stringResource(workflowStateLabel(project.workflow)),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
         GloveButton(
-            label = stringResource(if (measured) R.string.project_measure_again else R.string.project_measure),
-            icon = Icons.Default.PlayArrow,
-            onClick = onMeasure,
+            label = stringResource(
+                when (nextAction) {
+                    WorkflowAction.CAPTURE_ROOM -> R.string.mode_capture
+                    WorkflowAction.MEASURE_ROUTE -> if (measured) R.string.project_measure_again else R.string.project_measure
+                    WorkflowAction.CLOSE_PERIMETER -> R.string.wall_open
+                    WorkflowAction.REVIEW_BOM -> R.string.materials_button
+                    WorkflowAction.COMPLETE_DOSSIER -> R.string.project_field_button
+                    WorkflowAction.EXPORT -> R.string.export_title
+                    WorkflowAction.NONE -> R.string.project_measure
+                },
+            ),
+            icon = if (nextAction == WorkflowAction.EXPORT) Icons.Default.Share else Icons.Default.PlayArrow,
+            onClick = when (nextAction) {
+                WorkflowAction.CLOSE_PERIMETER -> onWalls
+                WorkflowAction.REVIEW_BOM -> onMaterials
+                WorkflowAction.COMPLETE_DOSSIER -> onFieldBook
+                WorkflowAction.EXPORT -> onExport
+                else -> onMeasure
+            },
             modifier = Modifier.fillMaxWidth(),
         )
         GloveButton(
             label = stringResource(R.string.export_title),
             icon = Icons.Default.Share,
             tone = ActionTone.SECONDARY,
-            enabled = measured,
+            // Paper export explicitly supports a room with no runs (and the home card already
+            // offers it): the site diary, defects, times and customer block are still a protocol.
             onClick = onExport,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -510,7 +548,8 @@ fun ProjectScreen(
             label = stringResource(R.string.materials_button),
             icon = Icons.Default.ShoppingCart,
             tone = ActionTone.SECONDARY,
-            enabled = measured,
+            // The destination owns its empty state - and the firm-wide rate, waste and clip
+            // settings above it are useful before the first run too (finding 280).
             onClick = onMaterials,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -518,7 +557,8 @@ fun ProjectScreen(
             label = stringResource(R.string.wall_open),
             icon = Icons.Default.Build,
             tone = ActionTone.SECONDARY,
-            enabled = measured,
+            // An open or absent ring already has a sentence and a next step on the wall screen.
+            // Hiding that destination behind a silent grey button answered neither (finding 280).
             onClick = onWalls,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -762,8 +802,14 @@ fun ProjectScreen(
                 Text(
                     stringResource(
                         R.string.run_delete_body,
-                        stringResource(R.string.run_detail, run.spec.label, run.spec.sizeLabel),
-                        shownLengthWithUnit(run.polylineLengthMeters),
+                        // The run's own name, not its cable: this dialog destroys one run, and the
+                        // name is the only string that says which - it is also what the protocol
+                        // prints, so the operator can match the dialog to the page (finding 278).
+                        // The stored label already carries kind and size ("CABLE 20 mm #3"), which
+                        // is why naming it loses nothing the cable line used to say.
+                        run.label,
+                        // The same metres the row above it shows and the total counts (finding 277).
+                        shownLengthWithUnit(project.calibratedMeters(run)),
                     ),
                 )
             },
@@ -827,9 +873,10 @@ private fun PriceLine(label: String, value: String, emphasis: Boolean = false) {
 @Composable
 private fun RouteRow(
     kind: String,
+    identity: String,
     detail: String,
     length: String,
-    badge: String? = null,
+    notices: List<RunList.Notice>,
     onDelete: () -> Unit,
 ) {
     Row(
@@ -839,7 +886,14 @@ private fun RouteRow(
             .padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
+        Column(
+            // The three lines are one thing to a screen reader: "Kabel, CABLE 20 mm #3, NYM-J ...
+            // 20 mm" is a row, and reading it as three unrelated texts was the same defect one
+            // layer down. The delete button stays its own element.
+            modifier = Modifier
+                .weight(1f)
+                .semantics(mergeDescendants = true) {},
+        ) {
             Text(kind, style = MaterialTheme.typography.titleSmall)
             Text(
                 detail,
@@ -848,9 +902,21 @@ private fun RouteRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            badge?.let {
+            // The name the protocol and the CSV print, verbatim and never re-derived: it is the
+            // one string that tells two runs of the same cable apart (finding 278).
+            Text(
+                identity,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            notices.forEach { notice ->
                 Text(
-                    it,
+                    text = when (notice) {
+                        RunList.Notice.UNCERTAIN -> stringResource(R.string.run_review_required)
+                        RunList.Notice.RECOVERED -> stringResource(R.string.run_recovered)
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = SiteColors.warning,
                 )
@@ -860,7 +926,10 @@ private fun RouteRow(
         IconButton(onClick = onDelete, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
             Icon(
                 Icons.Default.Delete,
-                contentDescription = stringResource(R.string.run_delete),
+                // The button is its own element for a screen reader, so it says *which* run it
+                // deletes: four rows with four identical "Delete run" buttons was the same defect
+                // one layer down (finding 278). The name is the one the protocol prints.
+                contentDescription = stringResource(R.string.run_delete, identity),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -919,4 +988,17 @@ private fun ReadinessChip(label: String, done: Boolean, modifier: Modifier = Mod
             modifier = Modifier.padding(start = 6.dp),
         )
     }
+}
+
+/** Existing, localised domain labels keep the persisted milestone visible without a second language model. */
+private fun workflowStateLabel(state: ProjectWorkflowState): Int = when (state) {
+    ProjectWorkflowState.IDLE,
+    ProjectWorkflowState.PROJECT_ACTIVE,
+    -> R.string.step_scan
+    ProjectWorkflowState.SPATIAL_MAPPED -> R.string.step_measure
+    ProjectWorkflowState.TRASSE_MEASURED -> R.string.wall_title
+    ProjectWorkflowState.PERIMETER_CLOSED -> R.string.materials_title
+    ProjectWorkflowState.BOM_CALCULATED -> R.string.field_title
+    ProjectWorkflowState.DOSSIER_COMPLETE -> R.string.signature_title
+    ProjectWorkflowState.EXPORTED -> R.string.export_title
 }

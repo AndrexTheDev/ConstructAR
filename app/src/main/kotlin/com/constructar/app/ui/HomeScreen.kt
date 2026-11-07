@@ -149,6 +149,9 @@ fun HomeScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // First, because "it crashes constantly" cannot be answered by a file three taps away
+            // on the help screen (finding 264). Draws nothing when there is no crash on disk.
+            item { CrashReportCard() }
             if (unreadableProjects > 0) {
                 item {
                     Text(

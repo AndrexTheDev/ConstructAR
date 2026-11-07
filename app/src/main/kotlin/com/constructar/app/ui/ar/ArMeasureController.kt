@@ -16,6 +16,8 @@ import com.constructar.arengine.hit.HitResolution
 import com.constructar.arengine.hit.HitStabilizer
 import com.constructar.arengine.keyframe.ClosureState
 import com.constructar.arengine.keyframe.PoseGraphStatus
+import com.constructar.arengine.relocalisation.AnchorGraphRelocaliser
+import com.constructar.arengine.relocalisation.AnchorObservation
 import com.constructar.arengine.render.RouteSceneController
 import com.constructar.arengine.render.SceneMeshRenderer
 import com.constructar.arengine.render.SceneViewMaterialProvider
@@ -32,13 +34,17 @@ import com.constructar.arengine.session.ArSessionController
 import com.constructar.arengine.session.TorchController
 import com.constructar.arengine.tracking.TrackingMonitor
 import com.constructar.arengine.tracking.TrackingQuality
+import com.constructar.core.calib.CalibrationTransform
 import com.constructar.core.calib.MarkerScaleProposal
 import com.constructar.core.calib.MarkerSweepState
 import com.constructar.core.math.Pose
 import com.constructar.core.math.Quat
 import com.constructar.core.math.Vec3
+import com.constructar.core.model.AnchorEvidence
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.ConduitSpec
+import com.constructar.core.model.FeatureCluster
+import com.constructar.core.model.RouteDraft
 import com.constructar.core.model.ScanClosure
 import com.constructar.core.model.ScanSummary
 import com.google.android.filament.Engine
@@ -60,6 +66,18 @@ class DelegatingAnchorFactory : AnchorFactory {
     var delegate: AnchorFactory? = null
 
     override fun create(position: Vec3, normal: Vec3): AnchorHandle? = delegate?.create(position, normal)
+}
+
+/** Immutable UI projection of an observation-only recovery session. */
+data class RelocalisationProgress(
+    val draft: RouteDraft,
+    val observations: List<AnchorObservation> = emptyList(),
+    val rejection: AnchorGraphRelocaliser.Failure? = null,
+) {
+    val nextNodeId: String? get() = draft.nodes.map { it.id }.firstOrNull { id ->
+        observations.none { it.nodeId == id }
+    }
+    val canFinish: Boolean get() = observations.size >= 3
 }
 
 /**
@@ -236,6 +254,7 @@ class ArMeasureController(private val context: Context) {
      * state a mounting height (findings 214 and 218).
      */
     val floor: MutableStateFlow<com.constructar.arengine.hit.FloorDecision?> = MutableStateFlow(null)
+    val roomHeightMeters: MutableStateFlow<Float?> = MutableStateFlow(null)
 
     /**
      * State of the reticle's sample window: whether the point under the crosshair has settled
@@ -255,6 +274,17 @@ class ArMeasureController(private val context: Context) {
      */
     private val mutableHitEvents = MutableStateFlow<HitResolution?>(null)
     val hitEvents: StateFlow<HitResolution?> = mutableHitEvents
+
+    private val nodeEvidence = LinkedHashMap<String, AnchorEvidence>()
+    private var relocalising: RouteDraft? = null
+    private val relocalisationObservations = mutableListOf<AnchorObservation>()
+    val relocalisation = MutableStateFlow<RelocalisationProgress?>(null)
+
+    @Volatile
+    private var latestFeaturePoints: List<Vec3> = emptyList()
+
+    @Volatile
+    private var calibration: CalibrationTransform = CalibrationTransform.IDENTITY
 
     @Volatile
     private var session: Session? = null
@@ -297,6 +327,10 @@ class ArMeasureController(private val context: Context) {
         // New origin: any sweep still open belongs to the world that just ended, and continuing it
         // would pair a camera position from one room with a tag vector from another.
         sessionEpoch += 1
+        roomHeightMeters.value = null
+        nodeEvidence.clear()
+        latestFeaturePoints = emptyList()
+        cancelRelocalisation()
         markerProbe = null
         markerFrames = 0
         markerState.value = MarkerSweepState.Off
@@ -315,6 +349,9 @@ class ArMeasureController(private val context: Context) {
                 if (decision.status != com.constructar.arengine.hit.FloorReferenceStatus.MISSING) {
                     floor.value = decision
                 }
+            }
+            it.onRoomHeightResolved = { height ->
+                if (height != null) roomHeightMeters.value = height
             }
         }
         if (powerManager == null) {
@@ -493,7 +530,17 @@ class ArMeasureController(private val context: Context) {
         featureCount = try {
             val cloud = frame.acquirePointCloud()
             try {
-                cloud.points.remaining() / FLOATS_PER_POINT
+                val buffer = cloud.points
+                val count = buffer.remaining() / FLOATS_PER_POINT
+                val stride = (count / 512).coerceAtLeast(1)
+                val samples = ArrayList<Vec3>(minOf(count, 512))
+                repeat(count) { index ->
+                    val point = Vec3(buffer.get(), buffer.get(), buffer.get())
+                    val confidence = buffer.get()
+                    if (index % stride == 0 && confidence > 0f && point.isFinite) samples += point
+                }
+                latestFeaturePoints = samples
+                count
             } finally {
                 cloud.release()
             }
@@ -501,6 +548,7 @@ class ArMeasureController(private val context: Context) {
             // Point clouds are off in this session, or this frame is not tracking: no evidence,
             // and the policy reads 0 as "too few features" instead of guessing a number.
             Log.w(TAG, "point cloud unavailable - no keyframe evidence from this frame", expected)
+            latestFeaturePoints = emptyList()
             0
         }
         return featureCount
@@ -562,9 +610,13 @@ class ArMeasureController(private val context: Context) {
             if (poseUsable) {
                 activeInteraction.onFrameEnter(frame, viewWidth, viewHeight, SystemClock.uptimeMillis())
             }
-            // Live preview follows the reticle (throttled inside ArInteraction to 12 Hz).
+            // Live preview follows the reticle (throttled inside ArInteraction to 12 Hz) - but only
+            // while a run is actually being measured (finding 273). In a walkthrough there is no
+            // segment being decided, and feeding the reticle in made the drawn run swing towards
+            // whatever the camera pointed at: a measured line changing shape while the operator
+            // walked the room.
             val reticleHit = activeInteraction.reticle.value
-            routeSession.setLivePoint(reticleHit)
+            routeSession.setLivePoint(if (followReticle) reticleHit else null)
             if (poseUsable) {
                 stability.value = hitStabilizer.sample(reticleHit, SystemClock.uptimeMillis())
             }
@@ -623,6 +675,52 @@ class ArMeasureController(private val context: Context) {
         current.requestTap(x, y, viewWidth, viewHeight)
     }
 
+    /** Starts observation-only recovery. No observation can become a route node in this mode. */
+    fun beginRelocalisation(draft: RouteDraft): Boolean {
+        if (routeSession.state.value.nodes.isNotEmpty() || !draft.isRecoverable) return false
+        relocalising = draft
+        relocalisationObservations.clear()
+        relocalisation.value = RelocalisationProgress(draft)
+        interaction?.previousNode = null
+        routeSession.setLivePoint(null)
+        return true
+    }
+
+    fun cancelRelocalisation() {
+        relocalising = null
+        relocalisationObservations.clear()
+        relocalisation.value = null
+    }
+
+    fun admitRelocalisedRoute(routeId: String) {
+        sessionRouteIds += routeId
+    }
+
+    fun finishRelocalisation(): AnchorGraphRelocaliser.Result? {
+        val draft = relocalising ?: return null
+        val result = AnchorGraphRelocaliser.restore(
+            draft = draft,
+            observations = relocalisationObservations.toList(),
+            newSessionId = routeSession.sessionId,
+        )
+        if (result is AnchorGraphRelocaliser.Result.Success) {
+            cancelRelocalisation()
+        } else {
+            val rejected = result as? AnchorGraphRelocaliser.Result.Rejected
+            relocalisation.value = RelocalisationProgress(
+                draft = draft,
+                observations = relocalisationObservations.toList(),
+                rejection = rejected?.reason,
+            )
+        }
+        return result
+    }
+
+    private fun publishRelocalisation() {
+        val draft = relocalising ?: return
+        relocalisation.value = RelocalisationProgress(draft, relocalisationObservations.toList())
+    }
+
     /** Applies the tap that was resolved on the render thread (main thread only). */
     fun applyPendingHit(): HitResolution? {
         val resolution = mutableHitEvents.value ?: return null
@@ -646,10 +744,57 @@ class ArMeasureController(private val context: Context) {
             stability.value = null
             return resolution
         }
-        if (routeSession.addNode(hitStabilizer.stabilize(hit, SystemClock.uptimeMillis()))) {
-            interaction?.previousNode = routeSession.state.value.nodes.lastOrNull()
+        val stabilized = hitStabilizer.stabilize(hit, SystemClock.uptimeMillis())
+        val recovery = relocalising
+        if (recovery != null) {
+            val expectedId = recovery.nodes.map { it.id }.firstOrNull { id ->
+                relocalisationObservations.none { it.nodeId == id }
+            } ?: return resolution
+            relocalisationObservations += AnchorObservation(
+                nodeId = expectedId,
+                position = stabilized.point,
+                normal = stabilized.normal,
+                featureCluster = featureCluster(expectedId, stabilized.point),
+            )
+            publishRelocalisation()
+            // Deliberately no routeSession.addNode and no previousNode update here: an observation
+            // is evidence for a rigid transform, never a new segment in the route being recovered.
+            return resolution
+        }
+        val previous = routeSession.state.value.nodes.lastOrNull()
+        if (routeSession.addNode(stabilized)) {
+            val node = routeSession.state.value.nodes.last()
+            nodeEvidence[node.id] = AnchorEvidence(
+                nodeId = node.id,
+                previousNodeId = previous?.id,
+                relativeVectorMeters = previous?.let { node.position - it.position },
+                featureCluster = featureCluster(node.id, node.position),
+            )
+            interaction?.previousNode = node
         }
         return resolution
+    }
+
+    private fun featureCluster(nodeId: String, centre: Vec3): FeatureCluster = FeatureCluster(
+        nodeId = nodeId,
+        relativePoints = latestFeaturePoints.asSequence()
+            .filter { it.distanceTo(centre) <= 0.60f }
+            .take(24)
+            .map { it - centre }
+            .toList(),
+    )
+
+    /** The full recoverable draft, including only evidence for nodes that survived undo. */
+    fun makeDraft(projectId: String, state: RouteSession.State): RouteDraft {
+        val ids = state.nodes.mapTo(HashSet()) { it.id }
+        return RouteDraft(
+            projectId = projectId,
+            spec = state.spec,
+            nodes = state.nodes,
+            closedLoop = state.closedLoop,
+            savedAtEpochMs = System.currentTimeMillis(),
+            evidence = nodeEvidence.filterKeys { it in ids }.values.toList(),
+        )
     }
 
     /**
@@ -668,7 +813,7 @@ class ArMeasureController(private val context: Context) {
         val scan = pipeline.mesh.value ?: return
         // Unlit + translucent: the reconstruction must never be mistaken for installed hardware
         // and must not hide the routed services behind it.
-        meshRenderer.upload(SCAN_MESH_KEY, scan.mesh, SceneViewMaterialProvider.SCAN_OVERLAY_ARGB, unlit = true)
+        meshRenderer.upload(SCAN_MESH_KEY, calibration.mesh(scan.mesh), SceneViewMaterialProvider.SCAN_OVERLAY_ARGB, unlit = true)
         meshRenderer.setVisible(SCAN_MESH_KEY, true)
     }
 
@@ -689,28 +834,70 @@ class ArMeasureController(private val context: Context) {
     fun syncLiveRoute() {
         val state = routeSession.state.value
         sceneController?.syncLiveRoute(
-            nodes = state.nodes,
+            nodes = calibration.nodes(state.nodes),
             spec = state.spec,
-            previewGeometry = state.preview?.mesh,
+            previewGeometry = state.preview?.mesh?.let(calibration::mesh),
         )
+        // The points themselves, as dots on the wall (finding 269). The tube needs two nodes, so
+        // until this line existed the first tap of every run - and every tap after a save - drew
+        // nothing at all, and the wall the operator had just measured looked untouched.
+        //
+        // The last point gets its own marker, larger and white (finding 270): it is where the next
+        // segment starts and the one `undo` removes, and six identical dots never said which end
+        // of the run that was. So the lime set is "the run", the white one is "you are here".
+        val points = state.nodes.map { calibration.point(it.position) }
+        sceneController?.syncNodeMarkers(
+            points = points.dropLast(1),
+            argb = SceneViewMaterialProvider.NODE_MARKER_ARGB,
+        )
+        sceneController?.syncCurrentMarker(
+            point = points.lastOrNull(),
+            argb = SceneViewMaterialProvider.NODE_CURRENT_ARGB,
+        )
+    }
+
+    /**
+     * Whether the drawn run follows the reticle (finding 273).
+     *
+     * Set by the screen from its mode, because the mode is a property of the screen and this class
+     * must not know that a "walkthrough" exists. Off, `RouteSession` keeps its last node as the end
+     * of the run: the preview is then built from the nodes alone, which is the committed shape.
+     */
+    @Volatile
+    private var followReticle: Boolean = true
+
+    fun setFollowReticle(follow: Boolean) {
+        followReticle = follow
+        if (!follow) {
+            // One write now rather than on the next frame: the tube has to stop moving when the
+            // operator leaves measuring, not a frame later.
+            routeSession.setLivePoint(null)
+        }
     }
 
     fun setSpec(spec: ConduitSpec) = routeSession.setSpec(spec)
 
+    fun setCalibrationScale(scale: Double) {
+        calibration = CalibrationTransform.of(scale)
+    }
+
     fun undo() {
-        routeSession.undo()
+        routeSession.undo()?.let { nodeEvidence.remove(it.id) }
         hitStabilizer.reset()
         stability.value = null
         interaction?.previousNode = routeSession.state.value.nodes.lastOrNull()
     }
 
     fun finish(label: String): ConduitRoute? {
-        val route = routeSession.finish(label) ?: return null
+        val finished = routeSession.finish(label) ?: return null
+        val ids = finished.nodes.mapTo(HashSet()) { it.id }
+        val route = finished.copy(evidence = nodeEvidence.filterKeys { it in ids }.values.toList())
         sessionRouteIds += route.id
         // `finish()` has already released this run's anchors: the committed geometry is drawn
         // from the node positions it was measured with, and nothing refines those afterwards
         // (finding 164).
         routeSession.startNewRun()
+        nodeEvidence.clear()
         hitStabilizer.reset()
         stability.value = null
         interaction?.previousNode = null
@@ -725,7 +912,9 @@ class ArMeasureController(private val context: Context) {
      * (finding 129).
      */
     fun syncCommittedRoutes(routes: List<ConduitRoute>) {
-        sceneController?.syncCommittedRoutes(SessionRuns.placeable(sessionRouteIds, routes))
+        sceneController?.syncCommittedRoutes(
+            calibration.routes(SessionRuns.placeable(sessionRouteIds, routes)),
+        )
     }
 
     fun toggleTorch(): Boolean {
@@ -740,6 +929,9 @@ class ArMeasureController(private val context: Context) {
 
     fun release() {
         Diagnostics.event("scan", "session released")
+        cancelRelocalisation()
+        nodeEvidence.clear()
+        latestFeaturePoints = emptyList()
         sessionRouteIds.clear()
         routeSession.release()
         (anchors.delegate as? ArCoreAnchorFactory)?.detachAll()
@@ -788,6 +980,7 @@ class ArMeasureController(private val context: Context) {
             meshTriangleCount = state.triangleCount,
             scanLimited = state.hitBlockBudget,
             closures = closure,
+            bounds = pipeline.mesh.value?.mesh?.bounds(),
         )
     }
 

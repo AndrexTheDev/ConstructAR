@@ -184,4 +184,23 @@ class HitStabilizerTest {
         stabilizer.reset()
         assertEquals(0, stabilizer.sample(null, 1_200L).samples)
     }
+
+    @Test
+    fun `the live reading names the snap the reticle is on right now`() {
+        // Finding 274: the ring that tells the operator "this corner is where the point will land"
+        // was driven by the last *tap*, so it never appeared while he aimed and never left once he
+        // had tapped. The reading is the live source - but only if it keeps the snap of the sample
+        // it just took, which is what this pins.
+        val stabilizer = HitStabilizer()
+        val snapped = SnapInfo(kind = SnapFeatureKind.CORNER, distanceM = 0.042f)
+        val onCorner = hit(1f, 0f, 0f).copy(snap = snapped)
+
+        assertEquals("the reticle is on the corner", snapped, stabilizer.sample(onCorner, 1_000L).lastHit?.snap)
+
+        // The reticle moves off it: the ring has to go with it, not stay on the glass.
+        assertEquals(null, stabilizer.sample(hit(1f, 0f, 0f), 1_040L).lastHit?.snap)
+
+        // And a frame with no surface at all ends the window.
+        assertEquals(null, stabilizer.sample(null, 1_080L).lastHit)
+    }
 }

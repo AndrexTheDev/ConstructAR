@@ -100,6 +100,9 @@ class ArInteraction(
     @Volatile
     var onFloorResolved: ((FloorDecision) -> Unit)? = null
 
+    @Volatile
+    var onRoomHeightResolved: ((Float?) -> Unit)? = null
+
     private var lastReticleMillis = 0L
 
     private data class ScreenTap(val x: Float, val y: Float, val width: Int, val height: Int)
@@ -133,6 +136,7 @@ class ArInteraction(
             }
             mutableResults.value = resolution
             resolution.floor?.let { onFloorResolved?.invoke(it) }
+            onRoomHeightResolved?.invoke(resolution.roomHeightMeters)
             onTapResolved?.invoke(resolution)
             return
         }
@@ -156,6 +160,7 @@ class ArInteraction(
         // The reticle is the path that looks at the floor continuously: a room where the operator
         // points at the floor and waits, without tapping, still records a floor (finding 226).
         resolution?.floor?.let { onFloorResolved?.invoke(it) }
+        onRoomHeightResolved?.invoke(resolution?.roomHeightMeters)
         mutableReticle.value = resolution?.hit
     }
 

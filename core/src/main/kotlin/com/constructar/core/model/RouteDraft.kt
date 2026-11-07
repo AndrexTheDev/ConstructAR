@@ -7,7 +7,24 @@
 package com.constructar.core.model
 
 import com.constructar.core.geo.PolylineMetrics
+import com.constructar.core.math.Vec3
 import kotlinx.serialization.Serializable
+
+/** ARCore feature points relative to one route anchor, never absolute session coordinates. */
+@Serializable
+data class FeatureCluster(
+    val nodeId: String,
+    val relativePoints: List<Vec3> = emptyList(),
+)
+
+/** A persisted graph edge and its nearby visual evidence for one route node. */
+@Serializable
+data class AnchorEvidence(
+    val nodeId: String,
+    val previousNodeId: String? = null,
+    val relativeVectorMeters: Vec3? = null,
+    val featureCluster: FeatureCluster? = null,
+)
 
 /**
  * A measurement that is still in progress, written to disk as it grows.
@@ -40,6 +57,8 @@ data class RouteDraft(
     val closedLoop: Boolean = false,
     /** When the draft was last written, so the operator can tell which run this is. */
     val savedAtEpochMs: Long = 0L,
+    /** Session-independent evidence used by the offline Kabsch/anchor-graph relocaliser. */
+    val evidence: List<AnchorEvidence> = emptyList(),
 ) {
 
     /** Two points make a measurement; one tap is a mis-tap. */
@@ -55,8 +74,14 @@ data class RouteDraft(
      * The caller supplies the identity, so a recovered run is stored exactly like a measured one
      * (one id scheme, one label scheme) and differs only in [ConduitRoute.recovered].
      */
-    fun toRoute(id: String, label: String, createdAtEpochMs: Long): ConduitRoute? {
+    fun toRoute(
+        id: String,
+        label: String,
+        createdAtEpochMs: Long,
+        relocalisedNodes: List<RouteNodeRecord>? = null,
+    ): ConduitRoute? {
         if (!isRecoverable) return null
+        if (relocalisedNodes != null && relocalisedNodes.size != nodes.size) return null
         return ConduitRoute(
             id = id,
             label = label,
@@ -65,10 +90,11 @@ data class RouteDraft(
             // the anchors of the session that measured it are gone with it (finding 165). The
             // stripping that used to happen here is now the model's own guarantee, for drafts and
             // for finished runs alike.
-            nodes = nodes,
+            nodes = relocalisedNodes ?: nodes,
             createdAtEpochMs = createdAtEpochMs,
             closedLoop = closedLoop,
-            recovered = true,
+            recovered = relocalisedNodes == null,
+            relocalised = relocalisedNodes != null,
         )
     }
 }

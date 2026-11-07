@@ -11,6 +11,7 @@ import com.constructar.arengine.route.RouteSession
 import com.constructar.core.math.Quat
 import com.constructar.core.math.Vec3
 import com.constructar.core.mesh.MeshData
+import com.constructar.core.mesh.NodeMarkers
 import com.constructar.core.mesh.RouteGeometry
 import com.constructar.core.mesh.RouteGeometryOptions
 import com.constructar.core.model.ConduitRoute
@@ -101,7 +102,14 @@ class RouteSceneController(
      */
     fun syncLiveRoute(nodes: List<RouteNodeRecord>, spec: ConduitSpec, previewGeometry: MeshData?) {
         val key = LIVE_KEY
-        if (nodes.size < 2 || previewGeometry == null) {
+        // Only the *absence of geometry* means "nothing to draw" (finding 270). The old guard also
+        // refused a run of one node, on the reasoning that one node is not a run - which is true of
+        // the run and false of the preview: `RouteGeometry.buildPreview` already builds the segment
+        // from that one point to the reticle, `RouteSession` rebuilds it twelve times a second, and
+        // the HUD printed its length the whole time. So the first segment of every run - the one
+        // from the first point to the second, the only one where the operator is still deciding
+        // where to stop walking - was measured, announced as a number, and not drawn.
+        if (previewGeometry == null) {
             sink.remove(key)
             // No signature bookkeeping for this key: the live preview is tracked by `liveMesh`,
             // and the map's entry for it would be a line nobody reads.
@@ -114,6 +122,84 @@ class RouteSceneController(
             }
         }
         sink.setVisible(key, true)
+    }
+
+    /**
+     * Draws a dot at every point of the live run (finding 269).
+     *
+     * The run's tube only exists from the **second** node onwards, so the first tap of every run -
+     * and every tap after a save - used to be invisible in the world: a number changed in the HUD
+     * and the wall looked untouched. That is the same "nichts passiert" the whole screen has been
+     * fighting since the first device report, and the cure is not another sentence but the point
+     * itself, drawn where it was set.
+     *
+     * All nodes go into **one** mesh under one key: the sink allocates buffers per key, and a run
+     * can hold thirty points. The upload is deduped on a 1 cm quantised signature, so the reticle
+     * moving - which is what calls this, up to twelve times a second - costs a loop over a handful
+     * of floats and no GPU work at all.
+     *
+     * @param points node positions in creation order.
+     * @param argb marker colour; `SceneViewSupport.NODE_MARKER_ARGB` in production.
+     */
+    fun syncNodeMarkers(
+        points: List<Vec3>,
+        argb: Int,
+        radius: Float = NodeMarkers.RADIUS_METERS,
+    ) {
+        if (points.isEmpty()) {
+            if (sink.contains(MARKERS_KEY)) sink.remove(MARKERS_KEY)
+            uploadedSignatures.remove(MARKERS_KEY)
+            return
+        }
+        val signature = markersSignature(points, radius)
+        if (uploadedSignatures[MARKERS_KEY] != signature || !sink.contains(MARKERS_KEY)) {
+            val mesh = NodeMarkers.markers(points, radius)
+            if (mesh.isEmpty) {
+                if (sink.contains(MARKERS_KEY)) sink.remove(MARKERS_KEY)
+                uploadedSignatures.remove(MARKERS_KEY)
+                return
+            }
+            if (sink.upload(MARKERS_KEY, mesh, argb, unlit = true)) {
+                uploadedSignatures[MARKERS_KEY] = signature
+            }
+        }
+        sink.setVisible(MARKERS_KEY, true)
+    }
+
+    /**
+     * Highlights the **current** node: the end of the run, where the next segment starts, and the
+     * point `undo` takes away (finding 270).
+     *
+     * A separate key from [syncNodeMarkers] because it is a different fact - the lime dots are the
+     * run, this one is "you are here" - and because it changes on every tap rather than only when
+     * the node set does. `null` removes it: an empty run has no current point.
+     *
+     * @param point the last node's position, or `null` when the run is empty.
+     * @param argb highlight colour; `SceneViewSupport.NODE_CURRENT_ARGB` in production.
+     */
+    fun syncCurrentMarker(
+        point: Vec3?,
+        argb: Int,
+        radius: Float = NodeMarkers.CURRENT_RADIUS_METERS,
+    ) {
+        if (point == null) {
+            if (sink.contains(CURRENT_KEY)) sink.remove(CURRENT_KEY)
+            uploadedSignatures.remove(CURRENT_KEY)
+            return
+        }
+        val signature = markersSignature(listOf(point), radius)
+        if (uploadedSignatures[CURRENT_KEY] != signature || !sink.contains(CURRENT_KEY)) {
+            val mesh = NodeMarkers.markers(listOf(point), radius)
+            if (mesh.isEmpty) {
+                if (sink.contains(CURRENT_KEY)) sink.remove(CURRENT_KEY)
+                uploadedSignatures.remove(CURRENT_KEY)
+                return
+            }
+            if (sink.upload(CURRENT_KEY, mesh, argb, unlit = true)) {
+                uploadedSignatures[CURRENT_KEY] = signature
+            }
+        }
+        sink.setVisible(CURRENT_KEY, true)
     }
 
     fun clearAll() {
@@ -131,6 +217,18 @@ class RouteSceneController(
     }
 
     private fun keyFor(routeId: String) = "route:$routeId"
+
+    /** Cheap change detector for [syncNodeMarkers]: count, radius and a 1 cm grid of every point. */
+    private fun markersSignature(points: List<Vec3>, radius: Float): Int {
+        var hash = points.size
+        hash = 31 * hash + (radius * 1000f).toInt()
+        for (point in points) {
+            hash = 31 * hash + (point.x * 100f).toInt()
+            hash = 31 * hash + (point.y * 100f).toInt()
+            hash = 31 * hash + (point.z * 100f).toInt()
+        }
+        return hash
+    }
 
     /**
      * Cheap change detector: node count, quantised positions (1 cm), the spec and loop state.
@@ -156,6 +254,12 @@ class RouteSceneController(
         const val REUPLOAD_INTERVAL_MS = 1_000L
 
         const val LIVE_KEY = "route:live"
+
+        /** The measured points of the live run - see [syncNodeMarkers]. */
+        const val MARKERS_KEY = "route:live:nodes"
+
+        /** The point the run is standing on - see [syncCurrentMarker]. */
+        const val CURRENT_KEY = "route:live:current"
 
     }
 }

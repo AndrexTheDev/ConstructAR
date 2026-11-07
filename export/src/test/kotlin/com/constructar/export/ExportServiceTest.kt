@@ -179,6 +179,20 @@ class ExportServiceTest {
     }
 
     @Test
+    fun `route geometry is calibrated exactly once and agrees with reported material metres`() {
+        val project = measuredProject().copy(calibrationScale = 1.10)
+        val mesh = ExportService.routeMeshes(project).parts.single().second
+        val materials = MaterialListBuilder.build(project, nowMs = 0L)
+
+        // The raw centreline ends at 2.50 m. A second application would end at 3.025 m.
+        assertEquals(2.75f, mesh.bounds()!!.max.x, 1e-3f)
+        assertEquals(2.75f, project.totalLengthMeters, 1e-4f)
+        assertEquals(2.75f, materials.lines.single().totalMeters, 1e-4f)
+        // Exporting a calibrated copy must never rewrite the persisted raw measurement.
+        assertEquals(2.50f, project.routes.single().polylineLengthMeters, 1e-4f)
+    }
+
+    @Test
     fun `a run whose two nodes collapsed onto one point is named as well`() {
         val collapsed = route("Bad", ConduitSpec.cable(16f), 0f)
         val project = ProjectRecord.empty("p4", "Neubau", 0L).copy(routes = listOf(collapsed))

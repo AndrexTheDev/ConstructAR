@@ -12,6 +12,7 @@ import com.constructar.core.math.Vec3
 import com.constructar.core.model.HitSource
 import com.constructar.core.model.RouteNodeRecord
 import com.constructar.core.model.SurfaceKind
+import com.constructar.core.wall.Din18015Zones
 
 /**
  * A tracked ARCore plane reduced to what the hit cascade needs.
@@ -88,6 +89,11 @@ data class SurfaceHit(
     val label: String = "",
     /** Set when [ReticleSnap] moved this point onto an architectural corner or edge. */
     val snap: SnapInfo? = null,
+    /** Metric depth uncertainty used by the common confidence formula; null selects the tier prior. */
+    val depthSigmaMeters: Float? = null,
+    val installationZone: Din18015Zones.Horizontal? = null,
+    val verticalInstallationZone: Din18015Zones.Vertical? = null,
+    val sonderverlegung: Boolean = false,
 ) {
     /**
      * @param sessionId the AR session this point is being placed in
@@ -109,6 +115,9 @@ data class SurfaceHit(
         anchorId = anchorId,
         confidence = confidence,
         sessionId = sessionId,
+        installationZone = installationZone,
+        verticalInstallationZone = verticalInstallationZone,
+        sonderverlegung = sonderverlegung,
     )
 }
 
@@ -135,6 +144,8 @@ data class HitResolution(
      * may not print (finding 218).
      */
     val floor: FloorDecision? = null,
+    /** Automatically detected floor-to-ceiling distance in this session, when both planes are usable. */
+    val roomHeightMeters: Float? = null,
 ) {
     /** The floor height alone, for the callers that only need a number. */
     val floorHeightM: Float? get() = floor?.heightM
@@ -195,4 +206,6 @@ data class HitCascadeConfig(
      * are too ragged for the derived edges to be trusted.
      */
     val snapToArchitecturalFeatures: Boolean = true,
+    /** Depth uncertainty at which the depth term becomes zero (5 cm). */
+    val maxDepthSigmaMeters: Float = 0.05f,
 )

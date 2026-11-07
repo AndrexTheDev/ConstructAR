@@ -18,6 +18,7 @@ import org.robolectric.annotation.Config
 import java.util.Locale
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
  * The HUD's decimal mark, on a phone that is not set to English.
@@ -54,9 +55,28 @@ class HudLengthTextTest {
             4,
             german.getString(R.string.hud_length, LengthFormatter.number(28.8f)),
         )
-        assertEquals("4 Trassen · 28.80 m gesamt", total)
+        assertEquals("4 Strecken · 28.80 m gesamt", total)
         assertFalse(run.contains(","), "run length: $run")
         assertFalse(total.contains(","), "room total: $total")
+    }
+
+    @Test
+    fun `the count and the list title call a run by the same name`() {
+        // The list is headed by `home_runs` and the total above it by `export_runs_total`, and on
+        // one screen they said "Strecken" and "Trassen" (finding 277). Spanish had the same split
+        // (trazado/recorrido) and Italian too (tracciato/percorso): a minority noun sitting in
+        // exactly the two counting strings. Pinned here so no translation can reintroduce it
+        // without a test turning red.
+        val german = context(Locale.GERMAN)
+        val counted = german.resources.getQuantityString(R.plurals.home_runs, 4, 4)
+        val sentence = german.getString(R.string.export_runs_total, 4, "28.80 m")
+
+        assertEquals("4 Strecken", counted)
+        assertTrue(
+            sentence.contains("Strecken"),
+            "the total names runs the way the list does: $sentence",
+        )
+        assertFalse(sentence.contains("Trassen"), "a second noun for the same thing: $sentence")
     }
 
     @Test

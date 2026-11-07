@@ -28,7 +28,7 @@ import org.junit.Test
  *
  * The four engines behind it are tested where they live; what is tested here is the assembly,
  * because that is where the wrong answers come from: a ring that is not closed (three walls of
- * four), a calibration factor applied to the nodes instead of the metres, openings that never
+ * four), a calibration factor applied twice or omitted for measured geometry, openings that never
  * reach the subtraction, a mounting height taken from a session other than the floor's.
  */
 class WallPlanTest {
@@ -63,6 +63,7 @@ class WallPlanTest {
         openings: List<PlacedOpening> = emptyList(),
         nodes: List<RouteNodeRecord> = emptyList(),
         wallHeightM: Float? = null,
+        measuredRoomHeightM: Float? = null,
     ): ProjectRecord = ProjectRecord(
         id = "p1",
         name = "Kitchen",
@@ -74,6 +75,7 @@ class WallPlanTest {
         sessionFloorHeights = sessionFloorHeights,
         openings = openings,
         wallHeightM = wallHeightM,
+        measuredRoomHeightM = measuredRoomHeightM,
         routes = if (nodes.isEmpty()) {
             emptyList()
         } else {
@@ -126,6 +128,27 @@ class WallPlanTest {
         assertEquals(15.4f, plan.surface.totalLengthM, 1e-2f)
         assertEquals(38.5f, plan.surface.grossAreaM2, 1e-2f)
         assertEquals(4, plan.walls.size)
+    }
+
+    @Test
+    fun `detected room height feeds quantities and is calibrated once`() {
+        val measured = project(scale = 1.10, measuredRoomHeightM = 2.80f)
+        val plan = wallPlan(measured)
+
+        assertEquals(3.08f, plan.walls.first().heightM, 1e-4f)
+        assertFalse(plan.wallHeightAssumed)
+        // The persisted AR observation remains raw so a later correction can replace the factor.
+        assertEquals(2.80f, measured.measuredRoomHeightM!!, 1e-4f)
+    }
+
+    @Test
+    fun `manual room height takes precedence and is never calibrated again`() {
+        val plan = wallPlan(
+            project(scale = 1.10, wallHeightM = 2.65f, measuredRoomHeightM = 2.80f),
+        )
+
+        assertEquals(2.65f, plan.walls.first().heightM, 1e-4f)
+        assertFalse(plan.wallHeightAssumed)
     }
 
     @Test
@@ -488,6 +511,7 @@ class WallPlanTest {
         val loaded = json.decodeFromString(ProjectRecord.serializer(), legacy)
         assertNull(loaded.floorHeightM)
         assertNull(loaded.wallHeightM)
+        assertNull(loaded.measuredRoomHeightM)
         assertTrue(loaded.sessionFloorHeights.isEmpty())
         assertTrue(loaded.openings.isEmpty())
 
@@ -496,6 +520,7 @@ class WallPlanTest {
             sessionFloorHeights = mapOf("s1" to -1.4f),
             openings = listOf(PlacedOpening.door(0, 1f)),
             wallHeightM = 2.80f,
+            measuredRoomHeightM = 2.75f,
         )
         val reread = json.decodeFromString(
             ProjectRecord.serializer(),
@@ -505,5 +530,6 @@ class WallPlanTest {
         assertEquals(-1.4f, reread.sessionFloorHeights["s1"] ?: 0f, 1e-4f)
         assertEquals(1, reread.openings.size)
         assertEquals(2.80f, reread.wallHeightM ?: 0f, 1e-4f)
+        assertEquals(2.75f, reread.measuredRoomHeightM ?: 0f, 1e-4f)
     }
 }

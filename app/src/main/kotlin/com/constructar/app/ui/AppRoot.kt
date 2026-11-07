@@ -32,6 +32,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.constructar.app.AppIntent
 import com.constructar.app.BuildConfig
 import com.constructar.app.ProjectViewModel
 import com.constructar.app.R
@@ -41,6 +42,7 @@ import com.constructar.app.ui.ar.ArMeasureScreen
 import androidx.compose.runtime.CompositionLocalProvider
 import com.constructar.app.ui.theme.SiteColors
 import com.constructar.core.wall.wallPlan
+import com.constructar.core.workflow.ProjectWorkflowEvent
 
 private object Routes {
     const val ONBOARDING = "onboarding"
@@ -285,10 +287,12 @@ fun AppRoot(viewModel: ProjectViewModel) {
                                 onRouteFinished = { route -> viewModel.upsertRoute(route) },
                                 onScanSummary = { summary -> viewModel.updateScanSummary(summary) },
                                 onFloorplan = { plan -> viewModel.saveFloorplanThumbnail(plan) },
+                                onCaptureFinished = { summary, plan -> viewModel.finishCapture(summary, plan) },
                                 onOpenExport = { navController.navigate(Routes.EXPORT) },
                                 draft = state.pendingDraft,
                                 onDraftChanged = { draft -> viewModel.saveDraft(draft) },
                                 onDraftRecovered = { draft -> viewModel.recoverDraft(draft) },
+                                onDraftRelocalised = { draft, nodes, routeId -> viewModel.recoverRelocalisedDraft(draft, nodes, routeId) },
                                 onDraftDiscarded = { viewModel.discardDraft() },
                                 // The factor lands on the project, which is what the protocol, the
                                 // bill of materials and the room screen read (calibration, tier 3).
@@ -296,6 +300,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                                 onFloorHeight = { sessionId, height ->
                                     viewModel.setFloorHeight(sessionId, height)
                                 },
+                                onRoomHeight = viewModel::setMeasuredRoomHeight,
                             )
                         }
                     }
@@ -317,6 +322,11 @@ fun AppRoot(viewModel: ProjectViewModel) {
                                 clipSpacingOverride = state.clipSpacingOverride,
                                 onBack = { navController.popBackStack() },
                                 onUpgrade = { navController.navigate(Routes.PAYWALL) },
+                                onExportCommitted = { hasSignature, _ ->
+                                    viewModel.dispatch(
+                                        AppIntent.ExportCommitted(project.id, hasSignature, System.currentTimeMillis()),
+                                    )
+                                },
                             )
                         } else {
                             Text(stringResource(R.string.project_none), modifier = Modifier.fillMaxSize())
@@ -326,6 +336,14 @@ fun AppRoot(viewModel: ProjectViewModel) {
                     composable(Routes.MATERIALS) {
                         val project = state.openProject
                         if (project != null) {
+                            LaunchedEffect(project.id) {
+                                viewModel.dispatch(
+                                    AppIntent.Workflow(
+                                        project.id,
+                                        ProjectWorkflowEvent.BomCalculated(System.currentTimeMillis()),
+                                    ),
+                                )
+                            }
                             MaterialsScreen(
                                 projectName = project.name,
                                 materialList = state.materialList,
@@ -371,6 +389,14 @@ fun AppRoot(viewModel: ProjectViewModel) {
                     composable(Routes.FIELD_BOOK) {
                         val project = state.openProject
                         if (project != null) {
+                            LaunchedEffect(project.id) {
+                                viewModel.dispatch(
+                                    AppIntent.Workflow(
+                                        project.id,
+                                        ProjectWorkflowEvent.FieldBookCompleted(System.currentTimeMillis()),
+                                    ),
+                                )
+                            }
                             FieldBookScreen(
                                 project = project,
                                 onBack = { navController.popBackStack() },

@@ -43,7 +43,7 @@
     <string name="home_export">Export</string>
 
     <!-- AR measuring screen -->
-    <string name="scan_instruction">Move the phone slowly across the walls and floor to scan the room.</string>
+    <string name="scan_instruction">Nothing is scanned yet. Move the phone slowly across one wall - the detail figure starts rising as soon as the first piece is captured.</string>
     <string name="tracking_loss">Tracking lost. Aim at a textured wall or the floor and move slowly.</string>
     <string name="tracking_searching">Looking for features. Move the phone slowly across the surface.</string>
     <string name="tracking_limited">Tracking is limited. Move slower.</string>
@@ -82,7 +82,7 @@
     <string name="ar_pose_graph_closures">Closure: %1$d confirmed</string>
     <string name="ar_pose_graph_closure_shift">Last closure: %1$d of %2$d nodes moved, up to %3$s</string>
     <string name="ar_pose_graph_closure_unfinished">Last closure: no result (optimiser stopped)</string>
-    <string name="loop_check">Check return</string>
+    <string name="loop_check">Same place?</string>
     <string name="loop_title">Close the loop</string>
     <string name="loop_offer">The walk is %1$s from an earlier point again. Closing assumes it is the same place.</string>
     <string name="loop_confirm">Same place</string>
@@ -91,21 +91,57 @@
     <string name="loop_failed">The graph could not be optimised.</string>
     <string name="loop_shift">Moved %1$d of %2$d nodes, up to %3$s.</string>
     <string name="loop_unfinished">The optimiser hit its iteration limit: the edge is set, but there is no result. These numbers are a snapshot, not a correction.</string>
-    <string name="ar_add_point">Add point at centre</string>
-    <string name="ar_undo">Undo</string>
-    <string name="ar_close_loop">Close loop</string>
-    <string name="ar_finish">Finish run</string>
+    <string name="ar_step_scan">1 Scan</string>
+    <string name="ar_step_points">2 Set points</string>
+    <string name="ar_step_finish">3 Save</string>
+    <string name="mode_measure">Point by point</string>
+    <string name="mode_capture">Walkthrough 3D</string>
+    <string name="mode_measure_hint">Measuring: you set every point yourself - that is where the cable goes.</string>
+    <string name="mode_capture_hint">Walkthrough: the app reconstructs the room in 3D, you only walk.</string>
+    <string name="scan_legend">Violet = captured by the scan</string>
+    <string name="scan_state_none">Nothing captured yet</string>
+    <string name="scan_state_growing">%1$d %% · %2$d k triangles</string>
+    <string name="scan_state_full">Scan full - nothing more is added</string>
+    <string name="scan_state_behind">The phone is not keeping up</string>
+    <string name="scan_state_unavailable">No mesh scan on this phone</string>
+    <string name="capture_walk">Walk slowly along the walls. Everything that turns violet is captured.</string>
+    <string name="capture_no_points">No points are set during a walkthrough. To set points and save a run, switch to “Point by point”.</string>
+    <string name="ar_add_first_point">Set the first point</string>
+    <string name="capture_end">End walkthrough</string>
+    <string name="tools_show">Show tools</string>
+    <string name="tools_hide">Hide tools</string>
+    <string name="diag_show">Show diagnostics</string>
+    <string name="diag_hide">Hide diagnostics</string>
+    <string name="spec_change">Change the cable type</string>
+    <string name="spec_dialog_title">Which cable?</string>
+    <string name="run_saved">%1$s saved · %2$s</string>
+    <string name="step_now">now</string>
+    <string name="step_done">done</string>
+    <string name="ar_guide_first">Two points make a distance: one here, one at the far end.</string>
+    <string name="ar_guide_second">First point set. Walk to the other end and tap again - that is your first distance.</string>
+    <string name="ar_guide_distance">%1$s measured. Every further point continues the run; save whenever you like.</string>
+    <string name="ar_guide_ring">Ring closed: %1$s around. Save it now, or carry on.</string>
+    <string name="ar_hint_run_needs">Save needs 2 points - %1$d set.</string>
+    <string name="ar_hint_ring_needs">The ring needs 3 points - %1$d set.</string>
+    <string name="loop_needs_room">Needs the room walkthrough first - without a capture there are no two visits to compare.</string>
+    <string name="marker_unavailable">This device cannot read markers. Calibrating by hand still works.</string>
+    <string name="crash_title">The app stopped last time</string>
+    <string name="crash_body">A report of it is on the phone. Save it into a folder and send it back - it says what the app was doing just before it stopped.</string>
+    <string name="crash_dismiss">Discard the report</string>
+    <string name="ar_add_point">Set point here</string>
+    <string name="ar_undo">Remove last point</string>
+    <string name="undo_nothing_to_remove">No point set yet - there is nothing to remove.</string>
+    <string name="ar_close_loop">Close into a ring</string>
+    <string name="ar_finish">Save this run</string>
     <string name="ar_leave_title">Leave this run?</string>
     <string name="ar_leave_body">%1$s measured. Save it as a run, or discard it?</string>
     <string name="ar_leave_save">Save as run</string>
     <string name="ar_leave_discard">Discard</string>
     <string name="draft_title">Unfinished measurement</string>
-    <string name="draft_body">%1$s, last saved at %2$s. Lengths and fittings are exact; the 3D position cannot be restored.</string>
+    <string name="draft_body">%1$s, last saved at %2$s. Relocate the saved anchors to restore 3D coordinates, or keep exact lengths and fittings without a 3D position.</string>
     <string name="draft_save">Save as route</string>
     <string name="draft_discard">Discard</string>
     <string name="ar_torch">Torch</string>
-    <string name="ar_scan">Scan room</string>
-    <string name="ar_stop_scan">Stop scan</string>
     <string name="ar_closed_loop">closed loop</string>
     <string name="ar_confidence_weak">Weakest point %1$d %% - tap it again to improve the run</string>
     <string name="ar_no_surface">No surface found. Aim at a wall or the floor.</string>
@@ -196,12 +232,6 @@
     <plurals name="ar_points">
         <item quantity="one">%1$d point</item>
         <item quantity="other">%1$d points</item>
-    </plurals>
-    <!-- Why a greyed-out action is greyed out (finding 257): the device showed two dead
-         buttons and no word about what was missing. -->
-    <plurals name="ar_needs_points">
-        <item quantity="one">Needs %1$d point</item>
-        <item quantity="other">Needs %1$d points</item>
     </plurals>
     <string name="plan_free">Free</string>
     <string name="plan_pro">Pro</string>
@@ -309,12 +339,12 @@
     <string name="licences_title">Third-party components</string>
     <string name="licences_intro">This app is built on these open-source components. Their copyright notices are reproduced here, as their licences require.</string>
     <string name="help_licence_title">Licence</string>
-    <string name="runs_title">Runs</string>
     <string name="run_detail">%1$s · %2$s</string>
-    <string name="run_delete">Delete run</string>
+    <string name="run_delete">Delete run: %1$s</string>
     <string name="run_delete_title">Delete this run?</string>
     <string name="run_delete_body">%1$s, %2$s. It disappears from the bill of materials, the protocol and the 3D model. Nothing brings it back.</string>
     <string name="run_recovered">Recovered after an interruption - lengths and fittings are exact, the 3D position is not</string>
+    <string name="run_review_required">Uncertain measurement - check this run before ordering</string>
     <string name="technician_title">Fitter on site</string>
     <string name="technician_hint">Name as it should appear on the protocol</string>
     <string name="materials_title">Materials and order</string>
@@ -538,8 +568,10 @@
     <string name="pdf_section_photos">Photo documentation</string>
     <string name="pdf_note_photos">%1$d of %2$d photos from the site file are printed here - the rest stay in the app.</string>
     <string name="ar_hold_steady">Hold steady</string>
-    <string name="ar_point_locked">Point locked</string>
+    <string name="tap_placed">Point set</string>
+    <string name="tap_undone">Point removed</string>
     <string name="hud_segment">Segment %1$.2f m</string>
+    <string name="hud_segment_word">Segment</string>
     <string name="route_warning_surface_jump">That point is behind the last surface - check the wall before you continue</string>
     <string name="paywall_err_untrusted">This installation cannot be confirmed. Install the official build from the original source and try again.</string>
     <string name="licence_clock_rollback">The device clock is behind the last date this app has seen. Set date and time correctly - subscriptions and the trial are checked against the last known date.</string>
@@ -579,4 +611,16 @@
     <string name="pdf_procurement_excluded">%1$d runs too uncertain to price were left out of this procurement table (%2$s) - the totals above do not include them.</string>
     <string name="field_leave_body">The diary line, defect or location you typed for “%1$s” has not been added yet.</string>
     <string name="onboard_back">Back</string>
+    <string name="draft_relocalise">Relocate coordinates</string>
+    <string name="draft_save_measurements">Save measurements only</string>
+    <string name="relocalise_title">Recover route anchors</string>
+    <string name="relocalise_progress">%1$d of %2$d anchors observed</string>
+    <string name="relocalise_next">Tap saved anchor %1$d in the room. No route point will be added.</string>
+    <string name="relocalise_finish">Restore coordinates</string>
+    <string name="relocalise_cancel">Back to recovery options</string>
+    <string name="relocalise_failed">Recovery refused: the observations are not consistent. Observe the anchors again or save measurements only.</string>
+    <string name="din_sonderverlegung">Sonderverlegung — outside the applicable DIN zones; the point was left unchanged.</string>
+    <string name="snap_installation_zone">Snapped to the DIN installation zone by %1$s cm</string>
+    <string name="wall_ua_profile">UA reinforcement (2 mm)</string>
+    <string name="wall_ua_value">%1$d profiles · %2$s</string>
 </resources>
