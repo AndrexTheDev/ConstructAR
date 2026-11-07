@@ -168,6 +168,7 @@
     <!-- Export -->
     <string name="export_title">Export</string>
     <string name="export_back">Back</string>
+    <string name="export_back_to_project">Back to project</string>
     <string name="export_pdf">PDF protocol</string>
     <string name="export_csv">CSV material list</string>
     <string name="export_glb">GLB (BIM)</string>
@@ -240,6 +241,7 @@
     <string name="home_limit_body">Delete this project or unlock Pro to add more rooms.</string>
     <string name="home_continue">Continue</string>
     <string name="home_all_projects">All projects</string>
+    <string name="home_other_projects">Other projects</string>
     <string name="home_help">Help</string>
     <string name="action_rename">Rename</string>
     <string name="action_delete">Delete</string>
@@ -369,11 +371,12 @@
     <string name="wall_gross">Gross</string>
     <string name="wall_openings">Openings deducted</string>
     <string name="wall_net">Net area</string>
-    <string name="wall_openings_none">No doors or windows are recorded for this room yet, so nothing is deducted - the gross area is not what you will board.</string>
+    <string name="wall_openings_none">No doors, passages or windows are recorded for this room yet, so nothing is deducted - the gross area is not what you will board.</string>
     <string name="wall_openings_unplaced">Openings recorded on a wall this room no longer has: %1$d. They are still in the project, but no area is deducted for them - check the outline.</string>
     <string name="wall_elevation_title">Walls as elevations</string>
-    <string name="wall_elevation_hint">Tap a wall to choose the spot, then add a door or a window.</string>
+    <string name="wall_elevation_hint">Tap a wall to choose the spot, then add a door, passage or window.</string>
     <string name="wall_opening_door">Door</string>
+    <string name="wall_opening_passage">Passage</string>
     <string name="wall_opening_window">Window</string>
     <string name="wall_opening_remove">Remove last opening</string>
     <string name="wall_elevation_a11y">Wall %1$d, next opening at %2$d %% along the wall</string>

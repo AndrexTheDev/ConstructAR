@@ -168,6 +168,7 @@
     <!-- Export -->
     <string name="export_title">Exportar</string>
     <string name="export_back">Atrás</string>
+    <string name="export_back_to_project">Volver al proyecto</string>
     <string name="export_pdf">Acta PDF</string>
     <string name="export_csv">Lista de materiales CSV</string>
     <string name="export_glb">GLB (BIM)</string>
@@ -240,6 +241,7 @@
     <string name="home_limit_body">Borra este proyecto o activa Pro para añadir más estancias.</string>
     <string name="home_continue">Continuar</string>
     <string name="home_all_projects">Todos los proyectos</string>
+    <string name="home_other_projects">Otros proyectos</string>
     <string name="home_help">Ayuda</string>
     <string name="action_rename">Renombrar</string>
     <string name="action_delete">Borrar</string>
@@ -369,11 +371,12 @@
     <string name="wall_gross">Bruto</string>
     <string name="wall_openings">Huecos descontados</string>
     <string name="wall_net">Superficie neta</string>
-    <string name="wall_openings_none">Aún no hay puertas ni ventanas registradas en este cuarto, así que no se descuenta nada: la superficie bruta no es la que vas a forrar.</string>
+    <string name="wall_openings_none">Aún no hay puertas, pasos ni ventanas registrados en este cuarto, así que no se descuenta nada: la superficie bruta no es la que vas a forrar.</string>
     <string name="wall_openings_unplaced">Aberturas registradas en una pared que esta sala ya no tiene: %1$d. Siguen en el proyecto, pero no se descuenta superficie por ellas: revisa el contorno.</string>
     <string name="wall_elevation_title">Paredes en alzado</string>
-    <string name="wall_elevation_hint">Toca una pared para elegir el punto y añade una puerta o una ventana.</string>
+    <string name="wall_elevation_hint">Toca una pared para elegir el punto y añade una puerta, un paso o una ventana.</string>
     <string name="wall_opening_door">Puerta</string>
+    <string name="wall_opening_passage">Paso</string>
     <string name="wall_opening_window">Ventana</string>
     <string name="wall_opening_remove">Quitar la última abertura</string>
     <string name="wall_elevation_a11y">Pared %1$d, próxima abertura al %2$d %% de la pared</string>

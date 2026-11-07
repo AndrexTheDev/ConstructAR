@@ -678,7 +678,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /**
-     * Records a door or a window on a wall of the room's ring.
+     * Records a door, an open passage or a window on a wall of the room's ring.
      *
      * The offset is in metres along the wall, computed by `:core` from the tap
      * (`openingOffsetForTap`) - the screen knows where the finger landed, not how long the wall is
@@ -696,8 +696,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         if (wallIndex < 0 || !offsetM.isFinite() || offsetM < 0f) return null
         val opening = when (kind) {
             OpeningKind.WINDOW -> PlacedOpening.window(wallIndex, offsetM)
-            // A passage is a door with no leaf; the trade dimensions of the reveal are the same.
-            OpeningKind.DOOR, OpeningKind.PASSAGE -> PlacedOpening.door(wallIndex, offsetM)
+            OpeningKind.DOOR -> PlacedOpening.door(wallIndex, offsetM)
+            // Same trade dimensions as a door, but the kind must survive: quantities and the
+            // exported project distinguish an open passage from a door with a leaf.
+            OpeningKind.PASSAGE -> PlacedOpening.passage(wallIndex, offsetM)
         }
         val updated = project.copy(openings = project.openings + opening)
         mutate(updated, onSaved)

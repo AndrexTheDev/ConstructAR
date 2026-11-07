@@ -77,6 +77,15 @@ data class PlacedOpening(
             heightM = DOOR_HEIGHT_M,
         )
 
+        fun passage(wallIndex: Int, offsetM: Float = 0f): PlacedOpening = PlacedOpening(
+            wallIndex = wallIndex,
+            kind = OpeningKind.PASSAGE,
+            offsetM = offsetM,
+            widthM = DOOR_WIDTH_M,
+            sillHeightM = 0f,
+            heightM = DOOR_HEIGHT_M,
+        )
+
         fun window(wallIndex: Int, offsetM: Float = 0f): PlacedOpening = PlacedOpening(
             wallIndex = wallIndex,
             kind = OpeningKind.WINDOW,

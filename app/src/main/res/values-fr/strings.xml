@@ -168,6 +168,7 @@
     <!-- Export -->
     <string name="export_title">Exporter</string>
     <string name="export_back">Retour</string>
+    <string name="export_back_to_project">Retour au projet</string>
     <string name="export_pdf">Procès-verbal PDF</string>
     <string name="export_csv">Liste de matériel CSV</string>
     <string name="export_glb">GLB (BIM)</string>
@@ -240,6 +241,7 @@
     <string name="home_limit_body">Supprime ce projet ou active Pro pour ajouter d’autres pièces.</string>
     <string name="home_continue">Continuer</string>
     <string name="home_all_projects">Tous les projets</string>
+    <string name="home_other_projects">Autres projets</string>
     <string name="home_help">Aide</string>
     <string name="action_rename">Renommer</string>
     <string name="action_delete">Supprimer</string>
@@ -369,11 +371,12 @@
     <string name="wall_gross">Brut</string>
     <string name="wall_openings">Ouvertures déduites</string>
     <string name="wall_net">Surface nette</string>
-    <string name="wall_openings_none">Aucune porte ni fenêtre n’est encore relevée dans cette pièce : rien n’est déduit, et la surface brute n’est pas celle que tu vas doubler.</string>
+    <string name="wall_openings_none">Aucune porte, aucun passage ni aucune fenêtre ne sont encore relevés dans cette pièce : rien n’est déduit, et la surface brute n’est pas celle que tu vas doubler.</string>
     <string name="wall_openings_unplaced">Ouvertures enregistrées sur un mur que la pièce n’a plus : %1$d. Elles restent dans le projet, mais aucune surface n’est déduite — vérifie le contour.</string>
     <string name="wall_elevation_title">Murs en élévation</string>
-    <string name="wall_elevation_hint">Touche un mur pour choisir l’emplacement, puis ajoute une porte ou une fenêtre.</string>
+    <string name="wall_elevation_hint">Touche un mur pour choisir l’emplacement, puis ajoute une porte, un passage ou une fenêtre.</string>
     <string name="wall_opening_door">Porte</string>
+    <string name="wall_opening_passage">Passage libre</string>
     <string name="wall_opening_window">Fenêtre</string>
     <string name="wall_opening_remove">Retirer la dernière ouverture</string>
     <string name="wall_elevation_a11y">Mur %1$d, prochaine ouverture à %2$d %% du mur</string>

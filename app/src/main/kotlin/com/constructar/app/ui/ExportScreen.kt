@@ -39,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -107,15 +108,19 @@ fun ExportScreen(
     val scope = rememberCoroutineScope()
     val exportService = remember { ExportService() }
 
-    var includePdf by remember { mutableStateOf(true) }
-    var includeCsv by remember { mutableStateOf(true) }
+    // Format choices are part of the job setup, not transient button state. Keep them across a
+    // rotation/process recreation just like the signature below, and reset them for another room.
+    var includePdf by rememberSaveable(project.id) { mutableStateOf(true) }
+    var includeCsv by rememberSaveable(project.id) { mutableStateOf(true) }
     // Off by default: the full CSV already carries the numbers, and the order list is for the
     // wholesaler - a deliberate second file, not something to hand out by accident.
-    var includeOrderList by remember { mutableStateOf(false) }
+    var includeOrderList by rememberSaveable(project.id) { mutableStateOf(false) }
     // A free build cannot write the BIM formats, so the switches start off rather than promise
     // a file that the licence check would refuse to produce.
-    var includeGlb by remember(entitlements.isPro) { mutableStateOf(entitlements.canExportMesh) }
-    var includePly by remember(entitlements.isPro) { mutableStateOf(false) }
+    var includeGlb by rememberSaveable(project.id, entitlements.isPro) {
+        mutableStateOf(entitlements.canExportMesh)
+    }
+    var includePly by rememberSaveable(project.id, entitlements.isPro) { mutableStateOf(false) }
     var status by remember { mutableStateOf<ExportStatus?>(null) }
     var busy by remember { mutableStateOf(false) }
     val signature = rememberSignaturePadState()
@@ -578,6 +583,15 @@ fun ExportScreen(
                     color = SiteColors.warning,
                 )
             }
+            if (ExportStatus.offersProjectReturn(current)) {
+                GloveButton(
+                    label = stringResource(R.string.export_back_to_project),
+                    icon = Icons.Default.Check,
+                    tone = ActionTone.SECONDARY,
+                    onClick = onBack,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
 
         // Ownership line: the operator always sees whose build this is.
@@ -725,6 +739,9 @@ internal sealed interface ExportStatus {
     )
 
     companion object {
+        /** A complete save has a clear exit; partial/failed attempts stay here for correction. */
+        fun offersProjectReturn(status: ExportStatus): Boolean = status is Saved
+
         /**
          * What to tell the operator after an export attempt.
          *
