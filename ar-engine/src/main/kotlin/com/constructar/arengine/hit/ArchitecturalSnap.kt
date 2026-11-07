@@ -248,7 +248,7 @@ object ArchitecturalSnap {
     }
 
     private fun rank(kind: SnapFeatureKind?): Int = when (kind) {
-        SnapFeatureKind.CORNER -> 0
+        SnapFeatureKind.CORNER, SnapFeatureKind.INSTALLATION_ZONE -> 0
         SnapFeatureKind.FLOOR_EDGE, SnapFeatureKind.CEILING_EDGE -> 1
         SnapFeatureKind.EDGE -> 2
         null -> 3

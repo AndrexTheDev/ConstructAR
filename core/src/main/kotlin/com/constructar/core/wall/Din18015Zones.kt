@@ -51,12 +51,12 @@ object Din18015Zones {
 
     fun assign(heightMeters: Float, roomHeightMeters: Float?): Assignment {
         if (!heightMeters.isFinite()) return Assignment(Horizontal.SONDER, Float.NaN, null, true)
-        if (lower.contains(heightMeters)) return snapped(lower, heightMeters, heightMeters)
-        if (middle.contains(heightMeters)) return snapped(middle, heightMeters, heightMeters)
+        if (lower.contains(heightMeters)) return snapped(lower, heightMeters, 0f)
+        if (middle.contains(heightMeters)) return snapped(middle, heightMeters, 0f)
         val roomHeight = roomHeightMeters?.takeIf { it.isFinite() && it > 0f }
         if (roomHeight != null) {
             val belowCeiling = roomHeight - heightMeters
-            if (upper.contains(belowCeiling)) return snapped(upper, belowCeiling, heightMeters)
+            if (upper.contains(belowCeiling)) return snapped(upper, belowCeiling, roomHeight)
             return Assignment(Horizontal.SONDER, belowCeiling, null, true)
         }
         return Assignment(Horizontal.SONDER, heightMeters, null, true)
@@ -81,7 +81,7 @@ object Din18015Zones {
     }
 
     /** Snaps only inside a standard band; Sonderverlegung is flagged, never silently moved into DIN. */
-    private fun snapped(band: Band, distance: Float, originalHeight: Float): Assignment {
+    private fun snapped(band: Band, distance: Float, referenceHeight: Float): Assignment {
         val snappedDistance = ((distance / SNAP_GRID_METERS).roundToInt()).coerceIn(
             (band.minimumMeters / SNAP_GRID_METERS).roundToInt(),
             (band.maximumMeters / SNAP_GRID_METERS).roundToInt(),
@@ -89,7 +89,7 @@ object Din18015Zones {
         val snappedHeight = if (band.reference == Reference.FINISHED_FLOOR) {
             snappedDistance
         } else {
-            originalHeight + (snappedDistance - distance)
+            referenceHeight - snappedDistance
         }
         return Assignment(band.zone, distance, snappedHeight, false)
     }

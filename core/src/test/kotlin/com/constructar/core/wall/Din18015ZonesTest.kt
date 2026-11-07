@@ -34,7 +34,8 @@ class Din18015ZonesTest {
     fun `snap uses five centimetres without moving a point outside its band`() {
         assertEquals(0.30f, requireNotNull(Din18015Zones.assign(0.324f, 2.6f).snappedHeightMeters), 1e-5f)
         assertEquals(1.15f, requireNotNull(Din18015Zones.assign(1.126f, 2.6f).snappedHeightMeters), 1e-5f)
-        assertEquals(2.30f, requireNotNull(Din18015Zones.assign(2.326f, 2.6f).snappedHeightMeters), 1e-5f)
+        // 27.4 cm below the ceiling rounds to 25 cm: 2.60 m - 0.25 m = 2.35 m.
+        assertEquals(2.35f, requireNotNull(Din18015Zones.assign(2.326f, 2.6f).snappedHeightMeters), 1e-5f)
     }
 
     @Test
