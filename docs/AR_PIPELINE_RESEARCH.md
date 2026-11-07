@@ -126,12 +126,12 @@ Local evidence at the time of writing:
 
 - Current `tools/verify-native.sh`: **369 checks, 0 failures**, in local O1 and O2 builds; the
   separate TSAN run also passed all 369 checks with no race reported.
-- Native CI run **42415387201** passed g++ and clang++, O1 and O2, with **369 checks per cell**,
+- Native CI run **42425772140** passed g++ and clang++, O1 and O2, with **369 checks per cell**,
   plus TSAN, RTAB-Map stub compilation and the layout probe.
-- Android run **42415381887** passed all **1287 JVM tests**, Kotlin/Java compilation, NDK, host
+- Android run **42425769021** passed all **1293 JVM tests**, Kotlin/Java compilation, NDK, host
   C++, debug/release, R8, licence checks and 16 KB alignment.
-- Beta run **42415381803** built and signature-verified the installable APK for this stage.
-- New deterministic cases cover source-pose selection, stale/future/mismatched fusion, fallback
+- New deterministic cases cover explicit Raw/Full acquisition order, source/depth-timestamp
+  propagation, source-pose selection, stale/future/mismatched fusion, fallback
   confidence, 25 % gross calibration contamination, exact repeatability, confidence-scaled stored
   evidence, malformed confidence metadata, newest-loop PCM translation/rotation rejection,
   preservation of consistent companion loops, a five-metre false loop and exact rollback.
