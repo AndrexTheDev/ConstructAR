@@ -164,6 +164,9 @@ fun ProjectScreen(
 
     val scanned = (project.scan?.meshTriangleCount ?: 0) > 0
     val measured = project.routes.isNotEmpty()
+    // Metrics include every bend and fitting as well as the confidence flag. Compute them when
+    // the project changes, not again when the running clock recomposes this screen (finding 279).
+    val runRows = remember(project) { RunList.rows(project) }
 
     // ── Handover readiness ──────────────────────────────────────────────────────────────
     // Six facts, each of them something the protocol or the bill needs. Shown as chips rather
@@ -480,7 +483,7 @@ fun ProjectScreen(
                 // one the protocol and the CSV print, so two runs of the same cable cannot render
                 // as two identical rows (finding 278). The metres are the reported ones, which is
                 // what makes the list add up to the total above it (finding 277).
-                RunList.rows(project).forEach { row ->
+                runRows.forEach { row ->
                     RouteRow(
                         kind = row.route.spec.kind.routingLabel(),
                         identity = row.identity,
@@ -490,10 +493,10 @@ fun ProjectScreen(
                             row.route.spec.sizeLabel,
                         ),
                         length = shownLengthWithUnit(row.meters),
-                        // A run recovered after an interruption counts in every length and every
-                        // fitting, but its 3D geometry is not in the model. Saying so is the
-                        // difference between a documented limitation and a surprise in a viewer.
-                        badge = if (row.route.recovered) stringResource(R.string.run_recovered) else null,
+                        // Both facts survive saving and both belong to this run. In particular an
+                        // uncertain measurement no longer becomes visually indistinguishable from
+                        // a firm one as soon as the AR screen closes (finding 279).
+                        notices = row.notices,
                         onDelete = { routeToRemove = row.route },
                     )
                 }
@@ -845,7 +848,7 @@ private fun RouteRow(
     identity: String,
     detail: String,
     length: String,
-    badge: String? = null,
+    notices: List<RunList.Notice>,
     onDelete: () -> Unit,
 ) {
     Row(
@@ -880,9 +883,12 @@ private fun RouteRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            badge?.let {
+            notices.forEach { notice ->
                 Text(
-                    it,
+                    text = when (notice) {
+                        RunList.Notice.UNCERTAIN -> stringResource(R.string.run_review_required)
+                        RunList.Notice.RECOVERED -> stringResource(R.string.run_recovered)
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = SiteColors.warning,
                 )

@@ -344,6 +344,7 @@
     <string name="run_delete_title">Eliminare questo percorso?</string>
     <string name="run_delete_body">%1$s, %2$s. Sparisce dalla distinta materiali, dal protocollo e dal modello 3D. Non si può recuperare.</string>
     <string name="run_recovered">Recuperata dopo un’interruzione: lunghezze e raccordi sono esatti, la posizione 3D no</string>
+    <string name="run_review_required">Misurazione incerta - controlla questa tratta prima dell’ordine</string>
     <string name="technician_title">Installatore in cantiere</string>
     <string name="technician_hint">Nome come deve comparire sul protocollo</string>
     <string name="materials_title">Materiale e ordine</string>

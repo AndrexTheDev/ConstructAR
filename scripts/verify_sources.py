@@ -1793,9 +1793,11 @@ def check_the_run_row_names_its_run() -> None:
     identical rows, one delete button away from losing the wrong one, and the delete dialog named
     the cable rather than the run.
 
-    Two rules, both cheap to check: the row's identity comes from `RunList` and is the *stored*
-    label (a name derived from the spec would contradict the page), and the confirmation names the
-    run it destroys.
+    The row's identity comes from `RunList` and is the *stored* label (a name derived from the spec
+    would contradict the page), and the confirmation names the run it destroys. Since finding 279
+    the row also carries the review state that used to vanish when the AR screen closed: uncertainty
+    comes from the same metrics as procurement, and recovery is an additional notice rather than an
+    `else` branch that could hide it.
     """
     ui = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui"
     rows = ui / "RunList.kt"
@@ -1810,11 +1812,22 @@ def check_the_run_row_names_its_run() -> None:
     if "meters = project.calibratedMeters(route)" not in row_text:
         add(rows, "the row's metres are no longer the reported ones, so the list stops adding up "
                   "to the project's total (finding 277)")
+    if "PolylineMetrics.measure(route)" not in row_text or "metrics.lowConfidenceNodes > 0" not in row_text:
+        add(rows, "a saved run no longer takes its review flag from procurement's metrics - the "
+                  "AR warning would die at save time again (finding 279)")
+    if "if (route.recovered) add(Notice.RECOVERED)" not in row_text:
+        add(rows, "recovery is no longer an independent row notice, so an uncertain recovered run "
+                  "can lose one of its two warnings (finding 279)")
     screen = ui / "ProjectScreen.kt"
     screen_text = screen.read_text(encoding="utf-8")
     if "RunList.rows(project)" not in screen_text:
         add(screen, "the run list no longer comes from `RunList`, so a row can be built without a "
                     "name - two runs of one cable render as two identical rows (finding 278)")
+    if "notices = row.notices" not in screen_text:
+        add(screen, "the run rows no longer receive their notices, so saving a weak measurement "
+                    "makes it look firm again (finding 279)")
+    if "RunList.Notice.UNCERTAIN" not in screen_text or "R.string.run_review_required" not in screen_text:
+        add(screen, "the uncertain-run notice is decided but never drawn (finding 279)")
     if "identity = row.identity" not in screen_text:
         add(screen, "the run row no longer shows the run's own name (finding 278)")
     if "run.label" not in screen_text:

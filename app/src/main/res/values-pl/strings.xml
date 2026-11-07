@@ -350,6 +350,7 @@
     <string name="run_delete_title">Usunąć tę trasę?</string>
     <string name="run_delete_body">%1$s, %2$s. Znika z listy materiałów, z protokołu i z modelu 3D. Nie da się jej przywrócić.</string>
     <string name="run_recovered">Odzyskana po przerwaniu - długości i kształtki są dokładne, pozycja 3D nie</string>
+    <string name="run_review_required">Niepewny pomiar - sprawdź tę trasę przed zamówieniem</string>
     <string name="technician_title">Monter na budowie</string>
     <string name="technician_hint">Nazwisko tak, jak ma być w protokole</string>
     <string name="materials_title">Materiał i zamówienie</string>
