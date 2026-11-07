@@ -1545,13 +1545,14 @@ def check_licence_diagnostics_reach_the_screen() -> None:
     if not fields:
         add(store, "Diagnostics has no boolean field - the rule would pass without checking anything")
         return
-    view_model = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app"
-                  / "ProjectViewModel.kt").read_text(encoding="utf-8")
-    ui = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui"
+    app_root = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app"
+    view_model = (app_root / "ProjectViewModel.kt").read_text(encoding="utf-8")
+    app_state = (app_root / "AppState.kt").read_text(encoding="utf-8")
+    ui = app_root / "ui"
     screens = "\n".join(path.read_text(encoding="utf-8") for path in ui.rglob("*.kt"))
     for field in fields:
-        if f"val {field}: Boolean" not in view_model:
-            add(store, f"Diagnostics.{field} never reaches UiState - no screen can show it")
+        if f"val {field}: Boolean" not in app_state or field not in view_model:
+            add(store, f"Diagnostics.{field} never reaches AppState - no screen can show it")
         if field not in screens:
             add(store, f"Diagnostics.{field} is printed by no screen in app/ui")
 
@@ -3390,7 +3391,7 @@ THUMBNAIL_CHAIN = (
      "pipeline.floorplan(",
      "the AR controller no longer asks the pipeline for one"),
     ("app/src/main/kotlin/com/constructar/app/ui/ar/ArMeasureScreen.kt",
-     "controller.finalFloorplan()?.let(onFloorplan)",
+     "plan?.let(onFloorplan)",
      "a committed run no longer hands the plan to the caller"),
     ("app/src/main/kotlin/com/constructar/app/ui/AppRoot.kt",
      "onFloorplan = { plan -> viewModel.saveFloorplanThumbnail(plan) }",
@@ -3463,7 +3464,7 @@ CARD_OUTLINE_CHAIN = (
      "val sketch = RoomThumbnail.sketch(plan) ?: return",
      "the view model no longer asks for an outline"),
     ("app/src/main/kotlin/com/constructar/app/ProjectViewModel.kt",
-     "val updated = project.copy(sketch = sketch)",
+     "project.copy(sketch = sketch),",
      "the outline is derived but never stored on the room"),
     ("app/src/main/kotlin/com/constructar/app/data/ProjectRepository.kt",
      "sketch = project.sketch,",
@@ -3746,7 +3747,7 @@ HAND_CLOSED_ROOM_CHAIN = (
      "onCloseRoom = viewModel::closeRoomByHand,",
      "the chip's tap never reaches the view model"),
     ("app/src/main/kotlin/com/constructar/app/ProjectViewModel.kt",
-     "val updated = project.copy(sketch = open)",
+     "project.copy(sketch = open),",
      "the view model no longer writes the hand-closed ring onto the room"),
 )
 

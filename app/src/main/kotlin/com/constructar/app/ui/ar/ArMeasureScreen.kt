@@ -165,6 +165,8 @@ fun ArMeasureScreen(
      * where the volume is still alive.
      */
     onFloorplan: (com.constructar.nativebridge.FloorplanPayload) -> Unit = {},
+    /** Combined commit keeps scan, bounds and sketch in one write; null retains the legacy callbacks. */
+    onCaptureFinished: ((com.constructar.core.model.ScanSummary, com.constructar.nativebridge.FloorplanPayload?) -> Unit)? = null,
     onOpenExport: () -> Unit,
     /** A run a killed process left behind, loaded by the caller. Offered back once per entry. */
     draft: RouteDraft? = null,
@@ -483,6 +485,17 @@ fun ArMeasureScreen(
             controller.requestTap(x, y, viewSize.width, viewSize.height)
         }
     }
+    val commitCapture: () -> Unit = {
+        val summary = controller.scanSummary()
+        val plan = controller.finalFloorplan()
+        val combined = onCaptureFinished
+        if (combined != null) {
+            combined(summary, plan)
+        } else {
+            onScanSummary(summary)
+            plan?.let(onFloorplan)
+        }
+    }
     val commitRun: () -> Unit = {
         // Persisted label: locale-independent and stable across devices, so a run reads the same
         // in the CSV, the PDF and the project file. One implementation, in `RouteLabels`.
@@ -490,13 +503,9 @@ fun ArMeasureScreen(
         controller.finish(label = runLabel)?.let { route ->
             savedRun = runLabel to route.polylineLengthMeters
             onRouteFinished(route)
-            // Snapshot the scan statistics with the first finished run: the protocol header must
-            // describe the room as it was measured.
-            onScanSummary(controller.scanSummary())
-            // The plan comes last: the summary is a measurement and the picture is a convenience,
-            // so if the worker is too busy to answer within its bounded wait, the run still keeps
-            // its statistics.
-            controller.finalFloorplan()?.let(onFloorplan)
+            // A scan is committed even when this block has no route; commitCapture is also the
+            // walkthrough's own save action, so scan bounds and plan never depend on this route.
+            commitCapture()
         }
     }
     val leave: () -> Unit = {
@@ -1326,6 +1335,7 @@ fun ArMeasureScreen(
                     tone = ActionTone.SECONDARY,
                     onClick = {
                         Diagnostics.event("ui", "walkthrough ended")
+                        commitCapture()
                         mode = MeasureMode.MEASURE
                     },
                     modifier = Modifier.fillMaxWidth(),

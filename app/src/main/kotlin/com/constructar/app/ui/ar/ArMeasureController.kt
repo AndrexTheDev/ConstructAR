@@ -827,6 +827,7 @@ class ArMeasureController(private val context: Context) {
             meshTriangleCount = state.triangleCount,
             scanLimited = state.hitBlockBudget,
             closures = closure,
+            bounds = pipeline.mesh.value?.mesh?.bounds(),
         )
     }
 

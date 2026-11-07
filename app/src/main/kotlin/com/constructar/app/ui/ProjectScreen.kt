@@ -75,6 +75,9 @@ import com.constructar.core.model.ScanCaveat
 import com.constructar.core.model.WorkTime
 import com.constructar.core.price.MoneyFormatter
 import com.constructar.core.price.Pricing
+import com.constructar.core.workflow.ProjectWorkflowEngine
+import com.constructar.core.workflow.ProjectWorkflowState
+import com.constructar.core.workflow.WorkflowAction
 
 /**
  * The project hub — the screen the operator returns to after every run.
@@ -503,11 +506,33 @@ fun ProjectScreen(
             }
         }
 
-        // ── Next action, chosen for the operator ────────────────────────────────────
+        // ── Next action, chosen from the durable workflow rather than route presence ──
+        val nextAction = ProjectWorkflowEngine.nextAction(project.workflow)
+        Text(
+            text = stringResource(workflowStateLabel(project.workflow)),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
         GloveButton(
-            label = stringResource(if (measured) R.string.project_measure_again else R.string.project_measure),
-            icon = Icons.Default.PlayArrow,
-            onClick = onMeasure,
+            label = stringResource(
+                when (nextAction) {
+                    WorkflowAction.CAPTURE_ROOM -> R.string.mode_capture
+                    WorkflowAction.MEASURE_ROUTE -> if (measured) R.string.project_measure_again else R.string.project_measure
+                    WorkflowAction.CLOSE_PERIMETER -> R.string.wall_open
+                    WorkflowAction.REVIEW_BOM -> R.string.materials_button
+                    WorkflowAction.COMPLETE_DOSSIER -> R.string.project_field_button
+                    WorkflowAction.EXPORT -> R.string.export_title
+                    WorkflowAction.NONE -> R.string.project_measure
+                },
+            ),
+            icon = if (nextAction == WorkflowAction.EXPORT) Icons.Default.Share else Icons.Default.PlayArrow,
+            onClick = when (nextAction) {
+                WorkflowAction.CLOSE_PERIMETER -> onWalls
+                WorkflowAction.REVIEW_BOM -> onMaterials
+                WorkflowAction.COMPLETE_DOSSIER -> onFieldBook
+                WorkflowAction.EXPORT -> onExport
+                else -> onMeasure
+            },
             modifier = Modifier.fillMaxWidth(),
         )
         GloveButton(
@@ -963,4 +988,17 @@ private fun ReadinessChip(label: String, done: Boolean, modifier: Modifier = Mod
             modifier = Modifier.padding(start = 6.dp),
         )
     }
+}
+
+/** Existing, localised domain labels keep the persisted milestone visible without a second language model. */
+private fun workflowStateLabel(state: ProjectWorkflowState): Int = when (state) {
+    ProjectWorkflowState.IDLE,
+    ProjectWorkflowState.PROJECT_ACTIVE,
+    -> R.string.step_scan
+    ProjectWorkflowState.SPATIAL_MAPPED -> R.string.step_measure
+    ProjectWorkflowState.TRASSE_MEASURED -> R.string.wall_title
+    ProjectWorkflowState.PERIMETER_CLOSED -> R.string.materials_title
+    ProjectWorkflowState.BOM_CALCULATED -> R.string.field_title
+    ProjectWorkflowState.DOSSIER_COMPLETE -> R.string.signature_title
+    ProjectWorkflowState.EXPORTED -> R.string.export_title
 }

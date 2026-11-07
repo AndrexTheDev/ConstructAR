@@ -25,7 +25,6 @@ import com.constructar.core.calib.ReferenceCalibration
 import com.constructar.core.bom.MaterialList
 import com.constructar.core.bom.MaterialListBuilder
 import com.constructar.core.bom.MaterialListOptions
-import com.constructar.core.licence.Entitlements
 import com.constructar.core.licence.LicenceCheck
 import com.constructar.core.model.ConduitRoute
 import com.constructar.core.model.DefectItem
@@ -41,6 +40,8 @@ import com.constructar.core.price.Pricing
 import com.constructar.core.wall.OpeningKind
 import com.constructar.core.wall.PlacedOpening
 import com.constructar.core.wall.statedRoomHeight
+import com.constructar.core.workflow.ProjectWorkflowEngine
+import com.constructar.core.workflow.ProjectWorkflowEvent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -103,83 +104,13 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     /** Submission order for draft writes; see [writeDraft]. */
     private val draftGate = DraftGate()
     private val draftWrites = Mutex()
+    private val projectWriteGate = DraftGate()
+    private val projectWrites = Mutex()
     private val entitlements = EntitlementStore(application)
     private val preferences = UiPreferences(application)
     private val settings = SiteSettings(application)
 
-    data class UiState(
-        val loading: Boolean = true,
-        val projects: List<ProjectRepository.ProjectSummary> = emptyList(),
-        /**
-         * Files in the projects folder that could not be read. They are **kept**, not deleted, so
-         * the app has to say so rather than let a damaged room look like a deleted one.
-         */
-        val unreadableProjects: Int = 0,
-        /**
-         * Those files by name, so the list can offer the one action that frees their room.
-         *
-         * Empty when nothing is damaged; a name is only ever shown with a delete button attached
-         * (finding 150).
-         */
-        val unreadableFiles: List<String> = emptyList(),
-        val openProject: ProjectRecord? = null,
-        val materialList: MaterialList? = null,
-        val lastError: UiMessage? = null,
-        val entitlements: Entitlements = Entitlements.FREE,
-        val deviceTag: String = "",
-        val trialUsed: Boolean = false,
-        val trialDaysLeft: Long = 0L,
-        /**
-         * Whether the licence rules would let this phone start a trial right now.
-         *
-         * Defaults to `true`: an unseeded state must not claim a trial is impossible. The paywall
-         * used to draw its "try Pro for 7 days" button from `trialUsed`, a raw presence check of
-         * the stored key, while `startTrial()` refuses on `trialAvailable` - so after a clock
-         * rollback or on a build that cannot vouch for itself the screen offered a button whose
-         * only outcome was the failure sentence (finding 140).
-         */
-        val trialAvailable: Boolean = true,
-        /** True while the bundled licence key is the demo key — surfaced in a debug build only. */
-        val demoSigningKey: Boolean = false,
-        /** The device clock is behind the last day this install has seen. */
-        val clockRolledBack: Boolean = false,
-        /** The installation could not be confirmed (re-signed APK or an attached debugger). */
-        val integrityFailed: Boolean = false,
-        /**
-         * A sealed value on this phone failed to verify, so the trial counts as used.
-         *
-         * Otherwise the paywall answers that state with "the trial has already been used" - the
-         * app's guess about a trial nobody used (finding 139).
-         */
-        val localStateTampered: Boolean = false,
-        val onboardingDone: Boolean = false,
-        /** Firm-wide waste factor, `null` = each conduit family's default. */
-        val wasteOverride: Float? = null,
-        /** Firm-wide clip spacing in metres, `null` = each conduit family's default. */
-        val clipSpacingOverride: Float? = null,
-        /** Documentation photo of the open project, decoded for screen and protocol. */
-        val photo: Bitmap? = null,
-        /** Firm-wide hourly rate, used when a project does not override it. */
-        val firmHourlyRateCents: Int = Pricing.DEFAULT_HOURLY_RATE_CENTS,
-        /** Decoded thumbnails of the open project's entry photos, by token. */
-        val fieldPhotos: Map<String, Bitmap> = emptyMap(),
-        /**
-         * A run that a killed process left behind, ready to be offered on the AR screen.
-         *
-         * Loaded when the screen is entered, so a cold start never has to read a file on the
-         * way to the viewfinder.
-         */
-        val pendingDraft: RouteDraft? = null,
-        /**
-         * True while a room that was open when the process died is waiting to be shown.
-         *
-         * The navigation host consumes it (see [consumeResume]) so that going home afterwards
-         * stays home instead of bouncing back into the room.
-         */
-        val resumeReady: Boolean = false,
-    )
-
-    private val mutableState = MutableStateFlow(UiState())
+    private val mutableState = MutableStateFlow(AppState())
 
     /** Coalesces the floor writes: the last floor of a burst is the one worth storing. */
     private val floorWrites = SaveCoalescer<FloorSample>(windowMillis = SaveCoalescer.DEFAULT_WINDOW_MS) {
@@ -192,7 +123,22 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     /** One "this session measured this floor" request, on its way to disk. */
     private data class FloorSample(val sessionId: String, val heightM: Float)
-    val state: StateFlow<UiState> = mutableState.asStateFlow()
+    val state: StateFlow<AppState> = mutableState.asStateFlow()
+
+    /** The public write path for central-state intents. No composable mutates [state] directly. */
+    fun dispatch(intent: AppIntent) {
+        when (intent) {
+            AppIntent.Refresh -> refresh()
+            is AppIntent.Workflow -> applyWorkflow(intent.projectId, listOf(intent.event))
+            is AppIntent.ExportCommitted -> applyWorkflow(
+                intent.projectId,
+                buildList {
+                    if (intent.hasSignature) add(ProjectWorkflowEvent.SignatureCaptured(intent.atEpochMs))
+                    add(ProjectWorkflowEvent.ExportCompleted(intent.atEpochMs))
+                },
+            )
+        }
+    }
 
     /** Exposed for the export screen, which builds its own request. */
     val entitlementsStore: EntitlementStore get() = entitlements
@@ -327,7 +273,14 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             }
             // A blank name becomes the operator's own language's word for "room", not English.
             val fallback = getApplication<Application>().getString(R.string.home_default_room_name)
-            val project = repository.create(name, siteName, fallbackName = fallback)
+            val project = ProjectWorkflowEngine.reduce(
+                repository.create(name, siteName, fallbackName = fallback),
+                ProjectWorkflowEvent.ProjectActivated,
+            )
+            if (!repository.save(project)) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_SAVE_FAILED)
+                return@launch
+            }
             preferences.setLastProjectId(project.id)
             mutableState.value = mutableState.value.copy(openProject = project, lastError = null)
             refresh()
@@ -337,9 +290,15 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     fun openProject(id: String, onOpened: (ProjectRecord?) -> Unit = {}) {
         viewModelScope.launch {
-            val project = repository.load(id)
-            if (project == null) {
+            val loaded = repository.load(id)
+            if (loaded == null) {
                 mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_OPEN_FAILED)
+                onOpened(null)
+                return@launch
+            }
+            val project = ProjectWorkflowEngine.reduce(loaded, ProjectWorkflowEvent.ProjectActivated)
+            if (project != loaded && !repository.save(project)) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_SAVE_FAILED)
                 onOpened(null)
                 return@launch
             }
@@ -865,6 +824,32 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
      * rather than whatever the last frame happened to contain.
      */
     /**
+     * Commits a scan-only walkthrough as one durable project write. No route is required: mesh
+     * bounds, scan statistics and the floorplan sketch are first-class project assets.
+     */
+    fun finishCapture(
+        summary: com.constructar.core.model.ScanSummary,
+        plan: com.constructar.nativebridge.FloorplanPayload?,
+    ) {
+        val project = mutableState.value.openProject ?: return
+        val sketch = plan?.let(RoomThumbnail::sketch)
+        val withAssets = project.copy(scan = summary, sketch = sketch ?: project.sketch)
+        val event = if (withAssets.sketch?.isDrawable == true) {
+            ProjectWorkflowEvent.PerimeterClosed
+        } else {
+            ProjectWorkflowEvent.SpatialMapped
+        }
+        val updated = ProjectWorkflowEngine.reduce(withAssets, event)
+        mutate(updated) { saved ->
+            if (saved != null) {
+                saved.sketch?.let(RoomThumbnail::svg)?.let { svg ->
+                    viewModelScope.launch { repository.saveThumbnail(project.id, svg) }
+                }
+            }
+        }
+    }
+
+    /**
      * Stores the room's outline, derived from the plan the AR screen took at commit time.
      *
      * The outline is stored even when the ring did **not** close: a doorway leaves it open, and an
@@ -885,7 +870,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         // The outline goes into the project file as well as the exported SVG: the card draws from
         // the JSON (Android has no SVG renderer and this app has no third-party libraries), and a
         // restored project keeps its picture without the file system having to keep a cache.
-        val updated = project.copy(sketch = sketch)
+        val updated = ProjectWorkflowEngine.reduce(
+            project.copy(sketch = sketch),
+            ProjectWorkflowEvent.PerimeterClosed,
+        )
         mutableState.value = mutableState.value.copy(openProject = updated)
         viewModelScope.launch {
             val written = repository.save(updated)
@@ -914,7 +902,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             val project = repository.load(projectId) ?: return@launch
             val open = project.sketch?.closedByHand() ?: return@launch
             if (open.closure == project.sketch?.closure) return@launch
-            val updated = project.copy(sketch = open)
+            val updated = ProjectWorkflowEngine.reduce(
+                project.copy(sketch = open),
+                ProjectWorkflowEvent.PerimeterClosed,
+            )
             val written = repository.save(updated)
             if (!written) {
                 mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_SAVE_FAILED)
@@ -930,10 +921,15 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     fun updateScanSummary(summary: com.constructar.core.model.ScanSummary) {
         val project = mutableState.value.openProject ?: return
-        val updated = project.copy(scan = summary)
+        val updated = ProjectWorkflowEngine.reduce(
+            project.copy(scan = summary),
+            ProjectWorkflowEvent.SpatialMapped,
+        )
         mutableState.value = mutableState.value.copy(openProject = updated)
         viewModelScope.launch {
-            repository.updateScanSummary(updated.id, summary)
+            if (!repository.save(updated)) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_SAVE_FAILED)
+            }
             refresh()
         }
     }
@@ -1087,18 +1083,49 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private fun applyWorkflow(projectId: String, events: List<ProjectWorkflowEvent>) {
+        viewModelScope.launch {
+            val current = mutableState.value.openProject?.takeIf { it.id == projectId }
+                ?: repository.load(projectId)
+                ?: return@launch
+            val updated = events.fold(current) { project, event ->
+                ProjectWorkflowEngine.reduce(project, event)
+            }
+            if (updated == current) return@launch
+            if (!repository.save(updated)) {
+                mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_SAVE_FAILED)
+                return@launch
+            }
+            if (mutableState.value.openProject?.id == projectId) {
+                mutableState.value = mutableState.value.copy(
+                    openProject = updated,
+                    materialList = buildMaterialList(updated),
+                )
+            }
+            refresh()
+        }
+    }
+
     private fun mutate(updated: ProjectRecord, onSaved: (ProjectRecord?) -> Unit = {}) {
+        val ticket = projectWriteGate.ticket()
+        val reconciled = ProjectWorkflowEngine.reconcile(updated)
         mutableState.value = mutableState.value.copy(
-            openProject = updated,
-            materialList = buildMaterialList(updated),
+            openProject = reconciled,
+            materialList = buildMaterialList(reconciled),
         )
         viewModelScope.launch {
-            val saved = repository.save(updated)
+            val saved = projectWrites.withLock {
+                // A superseded full-project snapshot must not overwrite the newer one; it is not
+                // a storage failure because the newer snapshot already contains this mutation.
+                if (!projectWriteGate.isNewest(ticket)) return@withLock true
+                val written = repository.save(reconciled)
+                written
+            }
             if (!saved) {
                 mutableState.value = mutableState.value.copy(lastError = UiMessage.PROJECT_SAVE_FAILED)
             }
             refresh()
-            onSaved(if (saved) updated else null)
+            onSaved(if (saved) reconciled else null)
         }
     }
 }

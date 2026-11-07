@@ -100,6 +100,8 @@ fun ExportScreen(
     clipSpacingOverride: Float? = null,
     onBack: () -> Unit,
     onUpgrade: () -> Unit,
+    /** Reports durable side effects only after at least one SAF document committed. */
+    onExportCommitted: (hasSignature: Boolean, written: Int) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -322,6 +324,7 @@ fun ExportScreen(
                     "folder=${report.folder} requested=${report.requested} produced=${report.produced} " +
                         "written=${report.written} meshSkipped=${report.meshSkipped}",
                 )
+                if (report.written > 0) onExportCommitted(!signature.isEmpty, report.written)
             }.onFailure { error ->
                 Diagnostics.event("export", "failed: ${error.javaClass.name}: ${error.message}")
             }
