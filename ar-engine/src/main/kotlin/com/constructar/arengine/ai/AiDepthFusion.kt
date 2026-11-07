@@ -79,13 +79,6 @@ object AiDepthFusion {
 
         var measured = 0
         var filled = 0
-        if (!calibration.isUsable) {
-            // No trustworthy calibration: pass ARCore's data through untouched.
-            System.arraycopy(arcoreMm, 0, out, 0, width * height)
-            for (i in 0 until width * height) if (readMm(arcoreMm, i) > 0) measured++
-            return Result(out, measured, 0, usedNetwork = false)
-        }
-
         val hasConfidence = confidence != null && confidenceWidth > 0 && confidenceHeight > 0
         val cxScale = if (hasConfidence) confidenceWidth.toFloat() / width else 1f
         val cyScale = if (hasConfidence) confidenceHeight.toFloat() / height else 1f
@@ -104,6 +97,14 @@ object AiDepthFusion {
                 if (arcoreValue > 0 && arcoreConfidence >= minConfidence) {
                     out[index] = arcoreMm[index]
                     measured++
+                    continue
+                }
+
+                // A hole stays a hole when calibration failed. In particular, a low-confidence
+                // ARCore sample must not be passed through here: the native integrator receives
+                // no separate confidence plane for a fused frame and would accept it as certain.
+                if (!calibration.isUsable) {
+                    out[index] = 0
                     continue
                 }
 

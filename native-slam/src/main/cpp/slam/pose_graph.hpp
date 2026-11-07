@@ -10,7 +10,8 @@
 //   * odometry / keyframe edges (camera → camera between consecutive keyframes) and
 //   * loop-closure edges (a revisited place, verified by RTAB-Map or by the proximity
 //     proposer when RTAB-Map is not compiled in),
-// and returns the globally consistent keyframe poses used to re-anchor every measured node.
+// and returns optimised keyframe poses for diagnostics/provenance. The shipped app deliberately
+// does not retroactively move measured nodes or rewrite the TSDF with these corrected poses.
 //
 // Numerical choice: Jacobians are computed by central differences over the 6 twist
 // dimensions of each incident node instead of hand-derived SE(3) Jacobians. For the graph

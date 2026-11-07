@@ -7,9 +7,9 @@
 # Performance notes and measurements
 
 All numbers below were measured **in this repository's CI sandbox** (x86-64 VM, `g++ -O3`,
-3 worker threads) by running the native code standalone. They are not phone numbers. A modern
-arm64 phone is roughly **1.5–3× slower** per core for this workload, so treat the desktop
-figures as a lower bound and re-measure on the target device before shipping.
+3 worker threads) by running the native code standalone. They are not phone numbers and not a
+lower bound for one. A generic desktop-to-arm64 multiplier would depend on SoC, memory pressure,
+thermals and thread scheduling, so no such estimate is used here; re-measure on each target device.
 
 Reproduce with:
 
@@ -69,12 +69,12 @@ consume 8–14 ms on a mid-range device.
 | Mesh extraction | worker | — | ≤ 3.3 Hz (300 ms), 10–25 ms each |
 | Mesh upload to Filament | main/worker | — | only on change, ~2 ms per 30 k triangles |
 | Measurement + HUD string | main | 0.1 ms | `PolylineMetrics.measure` on ≤ 50 nodes |
-| Monocular depth (optional) | own worker | — | 2 Hz, all copies taken on the render thread (~0.25 ms); inference time is device-dependent and **must be measured on target hardware** (expect 40–90 ms for the int8 graph on XNNPACK with four threads) |
+| Monocular depth (optional) | own worker | — | 2 Hz, all copies taken on the render thread (~0.25 ms); inference time is device-dependent and **must be measured on target hardware**; no unmeasured phone-latency range is claimed |
 
 Consequences that are enforced in code:
 
-* the integration channel holds **one** snapshot and drops the oldest — a slow device lowers
-  scan *coverage*, never frame rate;
+* the integration channel holds **one** snapshot and refuses the newest offer when full — a slow
+  device lowers scan *coverage*, never frame rate, and the refused buffer is released immediately;
 * `ScanState.framesDropped` is surfaced — `ScanHint.BEHIND` above one offered frame in six, with
   the share in the sentence (finding 170) — so "sparse scan" can be diagnosed rather than guessed;
 * nothing in the frame callback allocates after warm-up (pooled depth, cached plane list,

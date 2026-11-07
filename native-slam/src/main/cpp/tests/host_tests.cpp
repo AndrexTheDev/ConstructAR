@@ -663,7 +663,7 @@ void testVoxelFusionUnderConcurrency() {
   // One assertion for the whole sweep, not one per round: `verify_sources.py` holds the README's
   // native count to the number of `check` call sites, which is only honest as long as every call
   // site runs exactly once (finding 99).
-  double worstShortfall = 0.0;
+  double worstDifference = 0.0;
   double countedTotal = 0.0;
   double storedTotal = 0.0;
   int worstRound = -1;
@@ -680,24 +680,26 @@ void testVoxelFusionUnderConcurrency() {
     const double stored = volume.totalVoxelWeightExact();
     countedTotal += counted;
     storedTotal += stored;
-    if (counted - stored > worstShortfall) {
-      worstShortfall = counted - stored;
+    const double difference = std::fabs(counted - stored);
+    if (difference > worstDifference) {
+      worstDifference = difference;
       worstRound = round;
     }
   }
   // The weights are floats summed per voxel and stored as 1/256ths, so the two totals agree to a
-  // rounding error and not to the last bit.
+  // rounding error and not to the last bit. This must be an absolute difference: the old one-sided
+  // check accepted counted == 0 with a populated volume, hiding the worker-reduction bug entirely.
   const double tolerance = 1e-6 * countedTotal + 1e-9;
-  check(worstShortfall <= tolerance,
+  check(worstDifference <= tolerance,
         "every accepted observation's weight is in a voxel: " + std::to_string(storedTotal) +
             " stored of " + std::to_string(countedTotal) + " accepted over " +
             std::to_string(kRounds) + " rounds" +
             (worstRound < 0 ? std::string()
-                            : ", round " + std::to_string(worstRound) + " lost " +
-                                  std::to_string(worstShortfall)));
-  check(storedTotal > countedTotal / 2,
-        "the sweep really exercised the volume: " + std::to_string(storedTotal) +
-            " observations of evidence");
+                            : ", round " + std::to_string(worstRound) + " differs by " +
+                                  std::to_string(worstDifference)));
+  check(countedTotal > 0.0 && storedTotal > 0.0,
+        "the sweep really exercised both sides of the accounting: " + std::to_string(countedTotal) +
+            " accepted and " + std::to_string(storedTotal) + " stored observations of evidence");
 }
 
 /**

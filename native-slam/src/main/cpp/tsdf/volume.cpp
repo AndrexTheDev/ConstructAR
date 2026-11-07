@@ -351,6 +351,7 @@ IntegrationStats TsdfVolume::integrate(const DepthFrameView& frame, int pixelSte
       stats.raysProcessed += p.raysProcessed;
       stats.voxelUpdates += p.voxelUpdates;
       stats.blocksAllocated += p.blocksAllocated;
+      stats.voxelWeight += p.voxelWeight;
     }
   }
 

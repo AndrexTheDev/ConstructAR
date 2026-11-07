@@ -267,18 +267,7 @@ class TsdfScanPipeline(
 
     private var workerJob: kotlinx.coroutines.Job? = null
 
-    private val fusedDepth = java.util.concurrent.atomic.AtomicReference<FusedDepth?>(null)
-
-    /**
-     * Depth produced by the monocular path (AI holes filled), with the moment it was produced.
-     * Copied on submission so the producer can reuse its buffer.
-     */
-    private class FusedDepth(
-        val depthMm: ShortArray,
-        val width: Int,
-        val height: Int,
-        val receivedAtMillis: Long,
-    )
+    private val fusedDepth = java.util.concurrent.atomic.AtomicReference<FusedDepthFrame?>(null)
     private var extractIntervalMs = EXTRACT_INTERVAL_MS
     private var lastExtractNanos = 0L
     private var lastThermalCheckNanos = 0L
@@ -378,9 +367,17 @@ class TsdfScanPipeline(
      * dropped after [FUSION_TTL_MS] so a stale network result can never be integrated into
      * geometry the camera has already moved past.
      */
-    fun submitFusedDepth(depthMm: ShortArray, width: Int, height: Int) {
+    fun submitFusedDepth(depthMm: ShortArray, width: Int, height: Int, source: DepthFrameSnapshot) {
         fusedDepth.set(
-            FusedDepth(depthMm.copyOf(), width, height, android.os.SystemClock.elapsedRealtime()),
+            FusedDepthFrame(
+                depthMm = depthMm.copyOf(),
+                width = width,
+                height = height,
+                timestampNs = source.timestampNs,
+                intrinsics = source.intrinsics,
+                cameraToWorld = source.cameraToWorld.copyOf(),
+                receivedAtMillis = android.os.SystemClock.elapsedRealtime(),
+            ),
         )
     }
 
@@ -409,26 +406,30 @@ class TsdfScanPipeline(
         val startedNanos = System.nanoTime()
         // Read the stride once: the render thread may update `pendingPixelStep` concurrently.
         val pixelStep = pendingPixelStep
-        // Prefer the AI-densified frame when it matches this resolution and is fresh. Its
-        // pixels already passed the confidence filter during fusion, so no confidence image is
-        // applied on top (that would throw away exactly the filled holes).
-        val fusion = fusedDepth.get()?.takeIf {
-            it.width == snapshot.width && it.height == snapshot.height &&
-                android.os.SystemClock.elapsedRealtime() - it.receivedAtMillis < FUSION_TTL_MS
-        }
+        // Prefer the AI-densified frame when it matches this resolution and is fresh. Crucially,
+        // its own timestamp, intrinsics and camera pose win too: inference completes after the
+        // camera has moved, and pairing old pixels with the newest pose creates ghost geometry.
+        // Its pixels already passed the confidence filter during fusion, so no confidence image
+        // is applied on top (that would throw away exactly the filled holes).
+        val selected = DepthIntegrationSelector.select(
+            snapshot = snapshot,
+            fused = fusedDepth.get(),
+            nowMillis = android.os.SystemClock.elapsedRealtime(),
+            fusionTtlMillis = FUSION_TTL_MS,
+        )
         val result = try {
             active.integrateDepth(
-                depthMm = fusion?.depthMm ?: snapshot.depthMm,
-                width = snapshot.width,
-                height = snapshot.height,
-                rowStrideElements = snapshot.rowStride,
-                confidence = if (fusion != null) null else snapshot.confidence,
-                confidenceWidth = if (fusion != null) 0 else snapshot.confidenceWidth,
-                confidenceHeight = if (fusion != null) 0 else snapshot.confidenceHeight,
-                confidenceRowStride = if (fusion != null) 0 else snapshot.confidenceRowStride,
-                intrinsics = snapshot.intrinsics,
-                cameraToWorld = snapshot.cameraToWorld,
-                timestampNs = snapshot.timestampNs,
+                depthMm = selected.depthMm,
+                width = selected.width,
+                height = selected.height,
+                rowStrideElements = selected.rowStrideElements,
+                confidence = selected.confidence,
+                confidenceWidth = selected.confidenceWidth,
+                confidenceHeight = selected.confidenceHeight,
+                confidenceRowStride = selected.confidenceRowStride,
+                intrinsics = selected.intrinsics,
+                cameraToWorld = selected.cameraToWorld,
+                timestampNs = selected.timestampNs,
                 pixelStep = pixelStep,
             )
         } catch (error: Throwable) {

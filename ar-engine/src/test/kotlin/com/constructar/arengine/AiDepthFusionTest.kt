@@ -108,6 +108,32 @@ class AiDepthFusionTest {
     }
 
     @Test
+    fun `an unusable calibration does not smuggle low confidence samples into a fused frame`() {
+        val out = ShortArray(width * height) { (-1).toShort() }
+        val confidence = ByteArray(width * height) { index -> if (index % 2 == 0) 10 else 0xFF.toByte() }
+        val result = AiDepthFusion.fuse(
+            arcoreMm = ShortArray(width * height) { 2_000 },
+            confidence = confidence,
+            confidenceWidth = width,
+            confidenceHeight = height,
+            confidenceRowStride = width,
+            width = width,
+            height = height,
+            relative = flatRelative(),
+            calibration = MetricDepthCalibrator.Calibration.IDENTITY,
+            out = out,
+        )
+
+        assertFalse(result.usedNetwork)
+        assertEquals(width * height / 2, result.measuredPixels)
+        assertEquals(0, result.filledPixels)
+        for (index in out.indices) {
+            val expected = if (index % 2 == 0) 0 else 2_000
+            assertEquals("pixel $index", expected, out[index].toInt() and 0xFFFF)
+        }
+    }
+
+    @Test
     fun `filled depths are clamped to the plausible range`() {
         val out = ShortArray(width * height)
         val farRelative = RelativeDepthMap(FloatArray(width * height) { 0.0001f }, width, height, 12, "test")

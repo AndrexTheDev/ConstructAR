@@ -355,11 +355,16 @@ ARCore's `depthSupported` into one of three states — `AI_FUSED`, `ARCORE_ONLY`
 the HUD prints when the answer is the third one. The weights are not in this repository.
 
 `YuvFrame` copies the camera planes on the render thread (~0.2 ms), the inference worker runs
-Depth Anything V2 Small through LiteRT on XNNPACK, `MetricDepthCalibrator` fits
-`1/z = s·d + t` to ARCore's metric samples on the *same* frame, and `AiDepthFusion` writes a
-densified millimetre frame in which confident ARCore pixels are copied verbatim and only holes
-are filled. `TsdfScanPipeline.submitFusedDepth` accepts it with an 800 ms TTL and integrates it
-with no separate confidence gate (the fusion already applied one).
+Depth Anything V2 Small through LiteRT on XNNPACK, and `MetricDepthCalibrator` fits
+`1/z = s·d + t` to ARCore's metric samples on the *same* frame. Deterministic RANSAC chooses the
+affine basin, MAD supplies the residual scale and Tukey-biweight IRLS rejects gross outliers;
+an unusable inlier ratio/RMS still disables filling. `AiDepthFusion` writes a densified millimetre
+frame in which confident ARCore pixels are copied verbatim and only holes are filled. A failed
+calibration leaves low-confidence pixels empty rather than passing them through as certain.
+`TsdfScanPipeline.submitFusedDepth` accepts the result with an 800 ms TTL and integrates it with
+no separate confidence gate (the fusion already applied one). The `FusedDepthFrame` also carries
+the source timestamp, intrinsics and camera pose, so a late inference can never be projected with
+the newest frame's acquisition geometry.
 
 XNNPACK is the *only* backend, deliberately: ARCore's standalone LiteRT runtime no longer ships
 the NNAPI delegate, and the Vulkan GPU delegate cannot execute the int8 graph that the licence

@@ -23,9 +23,9 @@ import java.util.concurrent.atomic.AtomicReference
  * throttle to every 500 ms            YUV → ARGB → Bitmap
  * copy YUV planes  (memcpy)           Depth Anything V2 (XNNPACK, 4 threads)
  * copy depth + confidence             sample ARCore↔network pairs
- * submit ───────────────────────────► MetricDepthCalibrator (IRLS + Huber)
+ * submit ───────────────────────────► MetricDepthCalibrator (RANSAC + MAD + Tukey IRLS)
  *                                     AiDepthFusion → fused millimetre depth
- *                                     onFused(depth, w, h, timestamp)
+ *                                     onFused(depth, w, h, source geometry)
  * ```
  *
  * Why the copies: the ARCore `Image` and the pipeline's pooled depth buffer both become
@@ -44,8 +44,17 @@ class MonocularDepthSource(
     private val config: MonocularDepthEstimator.Config = MonocularDepthEstimator.Config(),
     private val intervalMillis: Long = 500L,
     private val minConfidence: Int = 96,
-    /** Called on the worker thread when a fused depth frame is ready. */
-    private val onFused: (depthMm: ShortArray, width: Int, height: Int, timestampNs: Long) -> Unit,
+    /**
+     * Called on the worker thread when a fused depth frame is ready. [DepthFrameSnapshot] is the
+     * immutable acquisition metadata of the exact frame used for inference; the consumer copies
+     * its pose/intrinsics before the next integration. Its pooled pixel arrays are not read here.
+     */
+    private val onFused: (
+        depthMm: ShortArray,
+        width: Int,
+        height: Int,
+        source: DepthFrameSnapshot,
+    ) -> Unit,
     /**
      * Called once, on the worker thread, with whether the model loaded.
      *
@@ -199,7 +208,7 @@ class MonocularDepthSource(
         lastFillRatio = result.fillRatio
         isRunning = true
         if (result.usedNetwork) {
-            onFused(fusedBuffer, width, height, yuv.timestampNs)
+            onFused(fusedBuffer, width, height, snapshot)
         }
     }
 

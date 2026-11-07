@@ -831,7 +831,8 @@ Known limitations, deliberately documented rather than hidden:
 The pre-release gate (device matrix, measurement verification against a laser, licensing,
 performance) is [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md). How each layer is run,
 what it can and cannot prove, and the defect log of the systematic beta test are in
-[docs/TESTING.md](docs/TESTING.md).
+[docs/TESTING.md](docs/TESTING.md). The licence-aware open-source survey, candidate matrix and
+staged AR-pipeline plan are in [docs/AR_PIPELINE_RESEARCH.md](docs/AR_PIPELINE_RESEARCH.md).
 
 ---
 
@@ -847,7 +848,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1278 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1284 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 332 checks, 0 failures |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 332 checks, 0 failures, no data race reported |
