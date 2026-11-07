@@ -70,8 +70,9 @@ which said nothing about the worker that was still pinning it.
      `PolygonMath.contains(polygon, point, tolerance = 3 cm)`. Nearest valid plane wins.
      Rejections are recorded with a reason ("ray outside every tracked polygon").
    * *tier 2* — ARCore `HitResult.Type.DEPTH_POINT` from `frame.hitTest`.
-   * *tier 3* — our own march through `acquireDepthImage16Bits()` (`DepthImageMath.raycast`),
-     confidence-filtered, refined between samples.
+   * *tier 3* — our own march through the selected Raw/Full depth snapshot
+     (`DepthImageMath.raycast`), confidence-filtered where Raw Confidence exists, refined between
+     samples.
    * *tier 4* — `HitResult.Type.POINT`, confidence 0.4.
    * A normal is derived per tier (plane normal, least-squares fit of a 5×5 depth patch, or
      flipped towards the camera) and always oriented towards the operator.
@@ -607,10 +608,17 @@ Schema version `1`; `ProjectMigrations` is the place for the next one.
 
 ## 7. Decisions worth knowing about
 
-**Depth units.** ARCore exposes `acquireDepthImage16Bits()` (millimetres) and
-`acquireDepthImageConfidence()`; there is no `acquireDepthImageMeters`. The 16-bit plane is
-used and divided by 1000 — the metric view the brief asks for, without the lossy visualisation
-path.
+**Depth source, units and confidence.** Raw Depth and Full Depth are separate ARCore APIs.
+`DepthCapture` defaults to `PREFER_RAW`: it tries `acquireRawDepthImage16Bits()` and pairs that
+image exclusively with `acquireRawDepthConfidenceImage()`. If Raw Depth is not yet available it
+may fall back to the smoothed/reprojected `acquireDepthImage16Bits()` image; Full Depth has no
+confidence image, so the fallback neither acquires nor fabricates Raw Confidence. `RAW_ONLY` and
+`FULL_ONLY` make controlled A/B runs explicit and never silently substitute the other source. Both
+depth APIs provide millimetres and are divided by 1000; there is no `acquireDepthImageMeters`.
+Each snapshot records the successful source, camera-frame timestamp and actual depth-image
+timestamp. Fusion and integration preserve those values together with the source pose and
+intrinsics, and `ScanState` exposes the last selection for diagnostics. This is a source/lifetime
+correctness contract, not a claim that one source is more accurate on every phone.
 
 **Zero-copy paths.** Three integration entry points exist: pooled `ShortArray` (default,
 `GetShortArrayElements` pins the array), a direct `ByteBuffer` (one copy fewer), and

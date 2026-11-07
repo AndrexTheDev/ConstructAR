@@ -12,6 +12,9 @@ import com.constructar.core.math.Vec3
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.sqrt
 
+/** Which ARCore API produced the depth pixels; confidence is defined only for [RAW]. */
+enum class DepthSource { RAW, FULL }
+
 /**
  * One ARCore depth frame, captured **on the render thread** and then consumed asynchronously by
  * the TSDF pipeline.
@@ -56,6 +59,13 @@ class DepthFrameSnapshot(
     val cameraToWorld: FloatArray = FloatArray(16),
     /** Frame timestamp, nanoseconds (`Frame.timestamp`). */
     val timestampNs: Long = 0L,
+    /**
+     * Timestamp of the actual depth image. To detect new Raw Depth information, compare this with
+     * the previous depth-image timestamp (ARCore reuses it for reprojection), not with the frame.
+     */
+    val depthTimestampNs: Long = timestampNs,
+    /** Actual acquisition API, not the session's requested depth mode. */
+    val source: DepthSource = DepthSource.FULL,
     /** Display rotation at capture; lets the UI map a screen tap back to depth pixels. */
     val displayRotationDegrees: Int = 0,
     /** Minimum depth the sensor reports, millimetres (ARCore: ~0.2 m on most devices). */
@@ -107,7 +117,13 @@ class DepthFrameSnapshot(
         return raw / 1000f
     }
 
-    /** Confidence (0..255) at depth pixel (x, y), or 255 when the device has no confidence image. */
+    /** Raw confidence exists only when the image and its matching Raw Depth were both acquired. */
+    val confidenceAvailable: Boolean get() = source == DepthSource.RAW && confidence != null
+
+    /**
+     * Confidence (0..255) at a depth pixel. A missing Raw Confidence image returns the legacy
+     * neutral 255 sentinel for hit testing; [confidenceAvailable] distinguishes that from evidence.
+     */
     fun confidenceAt(x: Int, y: Int): Int {
         val bytes = confidence ?: return 255
         if (confidenceWidth == 0 || confidenceHeight == 0 || confidenceRowStride == 0) return 255

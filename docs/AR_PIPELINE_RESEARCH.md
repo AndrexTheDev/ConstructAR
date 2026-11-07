@@ -6,7 +6,7 @@
 
 # AR pipeline: open-source research and staged overhaul
 
-Status: **7 November 2026**, branch `arena/fb929cf6-constructar`, baseline `9b3f92a`.
+Status: **8 November 2026**, branch `arena/fb929cf6-constructar`, baseline `9b3f92a`.
 This is an engineering survey, not a claim that ConstructAR is already more accurate than another
 product. Upstream commit ids are recorded so that the licence and capability review is repeatable.
 No third-party source was copied for the changes in this branch.
@@ -41,7 +41,7 @@ wholesale would create two sources of pose and scale without demonstrating a ben
 | Multithreaded integration omitted worker `voxelWeight` in the public statistics | `TsdfVolume.integrate` | Sum every worker's accepted weight; test the absolute accounting identity |
 | RTAB-Map has a bridge but no live RGB-D keyframe feed | `rtabmap_bridge.*`, keyframe pipeline | Feature-flagged integration only after an ID/timestamp/map-correction contract and device benchmark |
 | The shipped closure path proposes by proximity and needs operator confirmation; a wrong edge has no robust verification/rollback stage | `PoseGraphCloser`, `pose_graph.*` | Appearance + geometric verification, consistency checks, robust loss and transactional rollback before automation |
-| Full smoothed depth is used together with raw-depth confidence | `DepthCapture.capture` | A/B raw depth against full depth per device; do not assume denser means more accurate |
+| Full smoothed depth was paired with confidence belonging to Raw Depth | `DepthCapture.capture` | **Source contract fixed:** raw-first acquisition pairs only Raw Depth with Raw Confidence; Full Depth carries none. Explicit `RAW_ONLY`/`FULL_ONLY` modes and source/timestamp metadata enable the still-open per-device A/B experiment |
 | Corrected graph poses do not correct stored measurements or the TSDF | `PoseGraphCloser`, route/TSDF stores | Keep raw observations immutable; if useful, add a separately labelled corrected layer, never silent retroactive edits |
 | Desktop timing and synthetic accuracy are not phone evidence | `docs/PERFORMANCE.md` | On-device replay/benchmark reports with device, build, thermal state and raw metrics |
 
@@ -97,6 +97,10 @@ These are correctness fixes, not benchmark claims:
 - **Frame-conserving AI integration:** `FusedDepthFrame` carries depth, dimensions, source timestamp,
   source intrinsics and source camera-to-world. `DepthIntegrationSelector` accepts only a fresh,
   dimension-matching result. The old “old pixels + newest pose” path is removed.
+- **Source-correct ARCore acquisition:** `PREFER_RAW` attempts Raw Depth before Full Depth, while
+  `RAW_ONLY` and `FULL_ONLY` prevent cross-source fallback during A/B capture. Raw Confidence is
+  acquired only beside Raw Depth. Snapshots, fused frames, integration selection and `ScanState`
+  retain the actual source plus camera/depth timestamps; explicit modes never relabel the result.
 - **Confidence-safe fallback:** when calibration is unusable, confident measured ARCore pixels pass
   through and low-confidence pixels stay zero. The network is not used.
 - **Robust metric calibration:** deterministic two-point RANSAC minimises truncated affine
@@ -153,10 +157,11 @@ and fixture; every subsequent candidate has a control result.
 
 ### Phase 2 — better measurements before more automation
 
-1. **Raw versus full depth A/B** on at least one ToF and one non-ToF ARCore device. Google's Raw
-   Depth documentation reports sparser but more accurate samples and a matching confidence image;
-   the app must measure whether that holds for its wall/pipe workloads. Record depth timestamp and
-   do not silently switch all devices.
+1. **Raw versus full depth A/B** on at least one ToF and one non-ToF ARCore device. The explicit
+   `RAW_ONLY`/`FULL_ONLY` acquisition modes and source/timestamp metadata now make that comparison
+   possible without mismatched confidence or silent fallback. Google's Raw Depth documentation
+   reports sparser but more accurate samples and a matching confidence image; the app must still
+   measure whether that holds for its wall/pipe workloads and must not silently switch all devices.
 2. **Soft confidence delivered:** accepted observations now use `confidence / 255` alongside the
    existing 1/Z² range term and hard floor. Next add incidence-angle weighting from locally
    filtered depth normals, then measure the combined effect rather than assuming it helps.

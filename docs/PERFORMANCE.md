@@ -71,6 +71,10 @@ consume 8–14 ms on a mid-range device.
 | Measurement + HUD string | main | 0.1 ms | `PolylineMetrics.measure` on ≤ 50 nodes |
 | Monocular depth (optional) | own worker | — | 2 Hz, all copies taken on the render thread (~0.25 ms); inference time is device-dependent and **must be measured on target hardware**; no unmeasured phone-latency range is claimed |
 
+Raw/Full acquisition-order lists are allocated once, not per camera frame. Full Depth skips Raw
+Confidence acquisition and its copy entirely; Raw Depth retains the pooled confidence copy. The
+source and image timestamp are scalar metadata and do not add a pixel-buffer allocation.
+
 Consequences that are enforced in code:
 
 * the integration channel holds **one** snapshot and refuses the newest offer when full — a slow

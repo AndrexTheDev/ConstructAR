@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import com.constructar.arengine.depth.DepthFrameSnapshot
+import com.constructar.arengine.depth.DepthSource
 import com.constructar.arengine.keyframe.KeyframeApplier
 import com.constructar.arengine.keyframe.KeyframeFeed
 import com.constructar.arengine.keyframe.KeyframeQueue
@@ -88,6 +89,8 @@ class TsdfScanPipeline(
         .newSingleThreadExecutor { runnable -> Thread(runnable, "tsdf-worker").apply { isDaemon = true } }
         .asCoroutineDispatcher(),
     private val onMesh: ((ScanMesh) -> Unit)? = null,
+    /** Session remains raw-first; explicit source modes are available for controlled A/B runs. */
+    private val depthAcquisitionMode: DepthAcquisitionMode = DepthAcquisitionMode.PREFER_RAW,
 ) {
     /**
      * Live state for the HUD: the detail budget, the frame queue, the volume limit, the thermal
@@ -114,7 +117,15 @@ class TsdfScanPipeline(
         val hitBlockBudget: Boolean = false,
         val throttleMode: ThrottleMode = ThrottleMode.NOMINAL,
         val meshVersion: Int = 0,
+        /** Actual source and image timing of the last selected integration input. */
+        val lastDepthSource: DepthSource? = null,
+        val lastDepthTimestampNs: Long = 0L,
+        val lastFrameTimestampNs: Long = 0L,
     ) {
+        /** Diagnostic timing mismatch only; Raw Depth freshness uses consecutive image timestamps. */
+        val lastDepthTimestampDiffersFromFrame: Boolean
+            get() = lastDepthTimestampNs > 0L && lastFrameTimestampNs > 0L &&
+                lastDepthTimestampNs != lastFrameTimestampNs
         /**
          * How much of the reference **detail** budget the mesh fills, 0..1 (68 k triangles ≈ a
          * busy room).
@@ -322,7 +333,7 @@ class TsdfScanPipeline(
             ThrottleMode.WARM -> DepthCapture.PIXEL_STEP_NOMINAL + 1
             ThrottleMode.THROTTLED -> DepthCapture.PIXEL_STEP_THROTTLED
         }
-        val snapshot = capture.capture(frame, config.minConfidence) ?: return
+        val snapshot = capture.capture(frame, config.minConfidence, depthAcquisitionMode) ?: return
         maybeUpdateThermalStatus(thermalStatus)
 
         // Down-sample in time as well as in space when the device is hot. Counted, not read off
@@ -384,6 +395,8 @@ class TsdfScanPipeline(
                 intrinsics = source.intrinsics,
                 cameraToWorld = source.cameraToWorld.copyOf(),
                 receivedAtMillis = android.os.SystemClock.elapsedRealtime(),
+                depthTimestampNs = source.depthTimestampNs,
+                source = source.source,
             ),
         )
     }
@@ -444,7 +457,11 @@ class TsdfScanPipeline(
             null
         }
         val integrationMillis = ((System.nanoTime() - startedNanos) / 1_000_000L).toInt()
-        mutableState.value = mutableState.value.afterIntegration(result, integrationMillis)
+        mutableState.value = mutableState.value.afterIntegration(result, integrationMillis).copy(
+            lastDepthSource = selected.source,
+            lastDepthTimestampNs = selected.depthTimestampNs,
+            lastFrameTimestampNs = selected.timestampNs,
+        )
 
         // ── Extraction, throttled to 300 ms (700 ms when throttled) ─────────────────────
         val now = System.nanoTime()

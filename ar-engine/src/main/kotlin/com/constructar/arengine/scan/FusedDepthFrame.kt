@@ -7,6 +7,7 @@
 package com.constructar.arengine.scan
 
 import com.constructar.arengine.depth.DepthFrameSnapshot
+import com.constructar.arengine.depth.DepthSource
 import com.constructar.core.geo.DepthIntrinsics
 
 /**
@@ -29,6 +30,8 @@ data class FusedDepthFrame(
     val cameraToWorld: FloatArray,
     /** Monotonic clock at result submission, used only for the bounded result lifetime. */
     val receivedAtMillis: Long,
+    val depthTimestampNs: Long = timestampNs,
+    val source: DepthSource = DepthSource.FULL,
 ) {
     init {
         require(width > 0 && height > 0) { "fused depth dimensions must be positive" }
@@ -52,6 +55,8 @@ internal data class DepthIntegrationSelection(
     val cameraToWorld: FloatArray,
     val timestampNs: Long,
     val usesFusedDepth: Boolean,
+    val depthTimestampNs: Long,
+    val source: DepthSource,
 )
 
 /** Selects a fused result only while its dimensions and bounded lifetime still match. */
@@ -80,6 +85,8 @@ internal object DepthIntegrationSelector {
                     cameraToWorld = fused.cameraToWorld,
                     timestampNs = fused.timestampNs,
                     usesFusedDepth = true,
+                    depthTimestampNs = fused.depthTimestampNs,
+                    source = fused.source,
                 )
             }
         }
@@ -96,6 +103,8 @@ internal object DepthIntegrationSelector {
             cameraToWorld = snapshot.cameraToWorld,
             timestampNs = snapshot.timestampNs,
             usesFusedDepth = false,
+            depthTimestampNs = snapshot.depthTimestampNs,
+            source = snapshot.source,
         )
     }
 }

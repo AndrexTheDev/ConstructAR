@@ -7,6 +7,7 @@
 package com.constructar.arengine.scan
 
 import com.constructar.arengine.depth.DepthFrameSnapshot
+import com.constructar.arengine.depth.DepthSource
 import com.constructar.core.geo.DepthIntrinsics
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -33,6 +34,8 @@ class DepthIntegrationSelectorTest {
         timestampNs: Long,
         cameraX: Float,
         fx: Float,
+        depthTimestampNs: Long = timestampNs,
+        source: DepthSource = DepthSource.RAW,
     ): DepthFrameSnapshot = DepthFrameSnapshot(
         depthMm = ShortArray((width + 2) * height) { 2_000 },
         width = width,
@@ -45,6 +48,8 @@ class DepthIntegrationSelectorTest {
         intrinsics = DepthIntrinsics(fx, fx + 1f, 2f, 2f),
         cameraToWorld = pose(cameraX),
         timestampNs = timestampNs,
+        depthTimestampNs = depthTimestampNs,
+        source = source,
     )
 
     private fun fused(source: DepthFrameSnapshot, receivedAtMillis: Long = 900L) = FusedDepthFrame(
@@ -56,6 +61,8 @@ class DepthIntegrationSelectorTest {
         intrinsics = source.intrinsics,
         cameraToWorld = source.cameraToWorld,
         receivedAtMillis = receivedAtMillis,
+        depthTimestampNs = source.depthTimestampNs,
+        source = source.source,
     )
 
     @Test
@@ -110,6 +117,46 @@ class DepthIntegrationSelectorTest {
             fusionTtlMillis = 200L,
         )
         assertFalse(selected.usesFusedDepth)
+    }
+
+    @Test
+    fun `source and depth timestamp stay bound to the selected acquisition`() {
+        val raw = snapshot(
+            timestampNs = 100L,
+            depthTimestampNs = 80L,
+            cameraX = 1.25f,
+            fx = 100f,
+            source = DepthSource.RAW,
+        )
+        val newestFull = snapshot(
+            timestampNs = 900L,
+            depthTimestampNs = 850L,
+            cameraX = 9f,
+            fx = 999f,
+            source = DepthSource.FULL,
+        )
+
+        val fusedSelection = DepthIntegrationSelector.select(
+            newestFull,
+            fused(raw),
+            nowMillis = 1_000L,
+            fusionTtlMillis = 200L,
+        )
+        assertTrue(fusedSelection.usesFusedDepth)
+        assertEquals(DepthSource.RAW, fusedSelection.source)
+        assertEquals(100L, fusedSelection.timestampNs)
+        assertEquals(80L, fusedSelection.depthTimestampNs)
+
+        val fallback = DepthIntegrationSelector.select(
+            newestFull,
+            fused(raw, receivedAtMillis = 700L),
+            nowMillis = 1_000L,
+            fusionTtlMillis = 200L,
+        )
+        assertFalse(fallback.usesFusedDepth)
+        assertEquals(DepthSource.FULL, fallback.source)
+        assertEquals(900L, fallback.timestampNs)
+        assertEquals(850L, fallback.depthTimestampNs)
     }
 
     @Test
