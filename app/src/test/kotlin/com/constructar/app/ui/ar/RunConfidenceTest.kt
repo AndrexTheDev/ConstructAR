@@ -20,21 +20,17 @@ import org.junit.Test
 /**
  * The one number in the HUD that says whether the run is worth keeping.
  *
- * The threshold is the hit cascade's own tiers (plane 1.0, depth 0.85, raycast 0.7): at or above
- * 0.85 every point came from a surface, below it at least one came from something weaker. Saying
- * it too often would train the operator to ignore it, so an unstarted run and a run the engine
- * reported no confidence for say nothing at all.
+ * The threshold is the shared 0.60 score from type, incidence and depth uncertainty. A source
+ * label alone no longer decides the warning. Saying it too often would train the operator to
+ * ignore it, so an unstarted run and a run with no reported confidence say nothing at all.
  */
 class RunConfidenceTest {
 
     @Test
     fun `the HUD and the order list draw their line at the same number`() {
-        // Finding 47: the HUD warned below 0.85 while the order list flagged below 0.5, so a run
-        // measured off a raycast was questioned on the phone and passed as certain into the
-        // wholesaler's list. One constant, one bar.
         assertEquals(HitConfidence.RUN_TRUSTED, RunConfidence.WEAK_BELOW)
-        // A raycast point (0.7) is exactly the case that used to fall between the two bars.
-        assertEquals(70, RunConfidence.weakPointPercent(nodeCount = 3, worstNodeConfidence = 0.7f))
+        assertEquals(59, RunConfidence.weakPointPercent(nodeCount = 3, worstNodeConfidence = 0.59f))
+        assertNull(RunConfidence.weakPointPercent(nodeCount = 3, worstNodeConfidence = 0.70f))
     }
 
     @Test
@@ -45,8 +41,8 @@ class RunConfidenceTest {
 
     @Test
     fun `a weak point is named as a percentage`() {
-        assertEquals(62, RunConfidence.weakPointPercent(nodeCount = 4, worstNodeConfidence = 0.62f))
-        assertEquals(70, RunConfidence.weakPointPercent(nodeCount = 4, worstNodeConfidence = 0.7f))
+        assertEquals(59, RunConfidence.weakPointPercent(nodeCount = 4, worstNodeConfidence = 0.59f))
+        assertNull(RunConfidence.weakPointPercent(nodeCount = 4, worstNodeConfidence = 0.7f))
     }
 
     @Test

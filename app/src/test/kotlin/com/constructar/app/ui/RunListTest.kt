@@ -133,7 +133,7 @@ class RunListTest {
 
     @Test
     fun `a saved run below the shared confidence bar still asks for review`() {
-        val rows = RunList.rows(project(route("a", "CABLE 20 mm #1", 3f, confidence = 0.70f)))
+        val rows = RunList.rows(project(route("a", "CABLE 20 mm #1", 3f, confidence = 0.59f)))
 
         assertEquals(listOf(RunList.Notice.UNCERTAIN), rows.single().notices)
     }
