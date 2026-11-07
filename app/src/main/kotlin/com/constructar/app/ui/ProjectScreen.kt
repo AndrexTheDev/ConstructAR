@@ -514,7 +514,8 @@ fun ProjectScreen(
             label = stringResource(R.string.export_title),
             icon = Icons.Default.Share,
             tone = ActionTone.SECONDARY,
-            enabled = measured,
+            // Paper export explicitly supports a room with no runs (and the home card already
+            // offers it): the site diary, defects, times and customer block are still a protocol.
             onClick = onExport,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -522,7 +523,8 @@ fun ProjectScreen(
             label = stringResource(R.string.materials_button),
             icon = Icons.Default.ShoppingCart,
             tone = ActionTone.SECONDARY,
-            enabled = measured,
+            // The destination owns its empty state - and the firm-wide rate, waste and clip
+            // settings above it are useful before the first run too (finding 280).
             onClick = onMaterials,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -530,7 +532,8 @@ fun ProjectScreen(
             label = stringResource(R.string.wall_open),
             icon = Icons.Default.Build,
             tone = ActionTone.SECONDARY,
-            enabled = measured,
+            // An open or absent ring already has a sentence and a next step on the wall screen.
+            // Hiding that destination behind a silent grey button answered neither (finding 280).
             onClick = onWalls,
             modifier = Modifier.fillMaxWidth(),
         )

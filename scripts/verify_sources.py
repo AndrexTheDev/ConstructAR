@@ -1838,6 +1838,45 @@ def check_the_run_row_names_its_run() -> None:
                     "(finding 278)")
 
 
+def check_project_destinations_own_their_empty_state() -> None:
+    """A run count is not permission to open paperwork or its explanation (finding 280).
+
+    The project screen greyed Export, Materials and Walls until a run existed, without saying why.
+    That was not merely an accessibility repeat: the export service has an explicit test that a
+    runless project still writes its PDF and CSV, and the home card already offered that path. The
+    material and wall destinations also own useful empty states (and the material screen's firm
+    settings sit above its empty return), so the run gate hid functioning screens, not broken work.
+    """
+    ui = ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui"
+    screen = ui / "ProjectScreen.kt"
+    text = screen.read_text(encoding="utf-8")
+    destinations = (
+        ("R.string.export_title", "export"),
+        ("R.string.materials_button", "materials"),
+        ("R.string.wall_open", "walls"),
+    )
+    for resource, name in destinations:
+        start = text.find(f"label = stringResource({resource})")
+        if start < 0:
+            add(screen, f"the {name} destination is gone; this empty-state rule has nothing to check")
+            continue
+        end = text.find("GloveButton(", start)
+        block = text[start:end if end >= 0 else start + 800]
+        if "enabled = measured" in block or "enabled = project.routes" in block:
+            add(screen, f"the {name} destination is gated by a run again, hiding a screen that "
+                        "already supports and explains its empty state (finding 280)")
+
+    export_test = ROOT / "export" / "src" / "test" / "kotlin" / "com" / "constructar" / "export" / "ExportServiceTest.kt"
+    if "a project with no runs still exports its paper, and no model files" not in export_test.read_text(encoding="utf-8"):
+        add(export_test, "the runless-paper-export contract is no longer tested (finding 280)")
+    for file_name, resource in (("MaterialsScreen.kt", "R.string.materials_empty"),
+                                ("WallScreen.kt", "R.string.wall_empty")):
+        destination = ui / file_name
+        if resource not in destination.read_text(encoding="utf-8"):
+            add(destination, f"the empty destination lost its explanation ({resource}); it must "
+                             "not be made reachable by hiding what it says (finding 280)")
+
+
 def check_csv_headers_name_their_cells() -> None:
     """A column of numbers may not sit under a blank header (finding 155).
 
@@ -4882,6 +4921,7 @@ def main() -> int:
     check_the_plane_fitter_is_reproducible()
     check_totals_are_sums_of_printed_rows()
     check_the_run_row_names_its_run()
+    check_project_destinations_own_their_empty_state()
     check_csv_headers_name_their_cells()
     check_screen_states_the_trade_defaults()
     check_failure_reporter_finds_the_pull_request()
