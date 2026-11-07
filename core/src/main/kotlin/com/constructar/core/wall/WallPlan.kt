@@ -302,7 +302,7 @@ fun wallPlan(project: ProjectRecord, spec: DrywallSpec = DrywallSpec()): WallPla
         installations = installations,
         floorHeightM = project.floorHeightM,
         wallHeightM = wallHeightM,
-        wallHeightAssumed = stated == null,
+        wallHeightAssumed = manualHeight == null && measuredHeight == null,
         openingsRecorded = project.openings.size,
         openings = project.openings,
         openingsUnplaced = project.openings.count { it.wallIndex !in walls.indices },
