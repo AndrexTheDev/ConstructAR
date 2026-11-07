@@ -22,7 +22,7 @@ import com.constructar.core.model.SketchPoint
  * renderer, material calculator and GLB/PLY exporter receives a transformed copy from here. A
  * malformed imported factor fails closed to identity rather than producing NaN geometry.
  */
-data class CalibrationTransform private constructor(val scale: Float) {
+class CalibrationTransform private constructor(val scale: Float) {
     fun point(raw: Vec3): Vec3 = raw * scale
     fun distance(rawMeters: Float): Float = rawMeters * scale
     fun bounds(raw: Aabb): Aabb = Aabb(point(raw.min), point(raw.max))
