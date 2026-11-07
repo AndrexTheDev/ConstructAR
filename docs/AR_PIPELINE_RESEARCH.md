@@ -113,10 +113,11 @@ These are correctness fixes, not benchmark claims:
 
 Local evidence at the time of writing:
 
-- `tools/verify-native.sh`: **348 checks, 0 failures**, in O1 and O2 builds.
-- `tools/verify-native.sh --tsan`: **348 checks, 0 failures**, no race reported.
-- Android run **42398405636** executed the first **1284** JVM tests plus the full release/NDK gate;
-  the source count is now **1286** after the two new closure-contract tests, whose CI run is pending.
+- `tools/verify-native.sh`: **348 checks, 0 failures**, in final local O1 and O2 builds.
+- Native CI run **42407145655**: g++ and clang++, O1 and O2, **348 checks per cell**, plus TSAN,
+  RTAB-Map stub compilation and the layout probe, all green.
+- Android run **42407145562**: all **1286 JVM tests**, Kotlin/Java compilation, NDK, host C++,
+  debug/release, R8, licence checks and 16 KB alignment, all green.
 - New deterministic cases cover source-pose selection, stale/future/mismatched fusion, fallback
   confidence, 25 % gross calibration contamination, exact repeatability, a five-metre false loop
   and exact transactional rollback.
