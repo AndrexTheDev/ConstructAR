@@ -131,7 +131,10 @@ class ProjectRepositoryTest {
     fun `a room written by a newer app is refused instead of half-read`(): Unit = runBlocking {
         repository.save(room())
         val text = repository.backupEntries().single().bytes!!.decodeToString()
-        val newer = text.replace("\"schemaVersion\": 1", "\"schemaVersion\": 2")
+        val newer = text.replace(
+            "\"schemaVersion\": ${ProjectRecord.SCHEMA_VERSION}",
+            "\"schemaVersion\": ${ProjectRecord.SCHEMA_VERSION + 1}",
+        )
         assertTrue(newer != text, "the fixture must carry a bumped schema version")
 
         assertNull(repository.parseProject(newer), "a newer file must not be parsed")
