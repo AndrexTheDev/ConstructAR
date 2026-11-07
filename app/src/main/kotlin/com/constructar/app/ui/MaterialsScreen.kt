@@ -9,6 +9,8 @@ package com.constructar.app.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -64,6 +66,7 @@ import com.constructar.core.units.PercentText
  * The numbers come from `MaterialListBuilder` in `:core` — the same object the CSV and the PDF
  * use, so the phone cannot disagree with the paperwork.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MaterialsScreen(
     projectName: String,
@@ -185,7 +188,11 @@ fun MaterialsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 4.dp),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 WasteChip(
                     label = stringResource(R.string.waste_default),
                     selected = wasteOverride == null,
@@ -224,7 +231,11 @@ fun MaterialsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 4.dp),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 WasteChip(
                     label = stringResource(R.string.clips_default),
                     selected = clipSpacingOverride == null,

@@ -529,21 +529,29 @@ private fun WallElevation(
             strokeWidth = 2.dp.toPx(),
         )
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        GloveButton(
-            label = stringResource(R.string.wall_opening_door),
-            icon = Icons.Default.Add,
-            onClick = { onPlace(spot, OpeningKind.DOOR) },
-            modifier = Modifier.weight(1f),
-            tone = ActionTone.SECONDARY,
-        )
-        GloveButton(
-            label = stringResource(R.string.wall_opening_window),
-            icon = Icons.Default.Add,
-            onClick = { onPlace(spot, OpeningKind.WINDOW) },
-            modifier = Modifier.weight(1f),
-            tone = ActionTone.SECONDARY,
-        )
+    // Two per row keeps the trade words readable on a narrow phone; the less frequent passage
+    // takes the second row instead of squeezing three icon-and-label buttons into one.
+    listOf(OpeningKind.DOOR, OpeningKind.WINDOW, OpeningKind.PASSAGE).chunked(2).forEach { kinds ->
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            kinds.forEach { kind ->
+                GloveButton(
+                    label = stringResource(
+                        when (kind) {
+                            OpeningKind.DOOR -> R.string.wall_opening_door
+                            OpeningKind.WINDOW -> R.string.wall_opening_window
+                            OpeningKind.PASSAGE -> R.string.wall_opening_passage
+                        },
+                    ),
+                    icon = Icons.Default.Add,
+                    onClick = { onPlace(spot, kind) },
+                    modifier = Modifier.weight(1f),
+                    tone = ActionTone.SECONDARY,
+                )
+            }
+        }
     }
 }
 

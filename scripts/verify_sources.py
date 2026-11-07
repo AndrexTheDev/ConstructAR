@@ -4677,8 +4677,11 @@ def check_the_wall_screen_uses_the_core_numbers() -> None:
     gloves_text = gloves.read_text(encoding="utf-8")
     if "R.string.wall_open" not in gloves_text:
         add(gloves, "the project card has no button labelled for the wall screen")
-    if "onClick = onWalls," not in gloves_text:
-        add(gloves, "the wall button is not wired to the navigation callback")
+    if (
+        "onClick = { requestExit(ProjectExit.WALLS) }," not in gloves_text
+        or "ProjectExit.WALLS -> onWalls()" not in gloves_text
+    ):
+        add(gloves, "the wall button is not wired through the unsaved-edit guard to navigation")
 
     required = {
         "wall_title": (),

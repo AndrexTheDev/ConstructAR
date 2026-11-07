@@ -134,7 +134,7 @@ fun HomeScreen(
     val needle = query.trim()
     // Name, site **and customer**: he remembers who the job was for, not what he called the room
     // (finding 144).
-    val filtered = projects.filter { ProjectFilter.matches(needle, it) }
+    val filtered = ProjectFilter.listRows(projects, needle)
 
     Column(modifier = Modifier.fillMaxSize()) {
         Header(
@@ -184,15 +184,7 @@ fun HomeScreen(
                         onExport = { onExport(mostRecent.id) },
                     )
                 }
-                item {
-                    Text(
-                        text = stringResource(R.string.home_all_projects),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp, start = 4.dp),
-                    )
-                }
-                if (projects.size >= 5) {
+                if (projects.size >= 5 || query.isNotBlank()) {
                     item {
                         OutlinedTextField(
                             value = query,
@@ -207,7 +199,19 @@ fun HomeScreen(
                         )
                     }
                 }
-                if (filtered.isEmpty()) {
+                if (filtered.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = stringResource(
+                                if (needle.isEmpty()) R.string.home_other_projects else R.string.home_all_projects,
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp, start = 4.dp),
+                        )
+                    }
+                }
+                if (filtered.isEmpty() && needle.isNotEmpty()) {
                     item {
                         Text(
                             text = stringResource(R.string.home_search_empty, needle),

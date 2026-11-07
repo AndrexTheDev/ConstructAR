@@ -500,6 +500,21 @@ class WallPlanTest {
     }
 
     @Test
+    fun `a passage keeps its own kind and the trade reveal dimensions when saved`() {
+        val passage = PlacedOpening.passage(wallIndex = 2, offsetM = 0.75f)
+
+        assertEquals(OpeningKind.PASSAGE, passage.kind)
+        assertEquals(DOOR_WIDTH_M, passage.widthM)
+        assertEquals(0f, passage.sillHeightM)
+        assertEquals(DOOR_HEIGHT_M, passage.heightM)
+
+        val encoded = Json.encodeToString(PlacedOpening.serializer(), passage)
+        val restored = Json.decodeFromString(PlacedOpening.serializer(), encoded)
+        assertEquals(passage, restored)
+        assertEquals(OpeningKind.PASSAGE, restored.opening.kind)
+    }
+
+    @Test
     fun `a project file written before the floor and openings existed still loads`() {
         val json = Json {
             ignoreUnknownKeys = true

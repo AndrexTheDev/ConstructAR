@@ -168,6 +168,7 @@
     <!-- Export -->
     <string name="export_title">Eksport</string>
     <string name="export_back">Wstecz</string>
+    <string name="export_back_to_project">Wróć do projektu</string>
     <string name="export_pdf">Protokół PDF</string>
     <string name="export_csv">Lista materiałów CSV</string>
     <string name="export_glb">GLB (BIM)</string>
@@ -246,6 +247,7 @@
     <string name="home_limit_body">Usuń ten projekt lub odblokuj Pro, aby dodać kolejne pomieszczenia.</string>
     <string name="home_continue">Kontynuuj</string>
     <string name="home_all_projects">Wszystkie projekty</string>
+    <string name="home_other_projects">Pozostałe projekty</string>
     <string name="home_help">Pomoc</string>
     <string name="action_rename">Zmień nazwę</string>
     <string name="action_delete">Usuń</string>
@@ -375,11 +377,12 @@
     <string name="wall_gross">Brutto</string>
     <string name="wall_openings">Odjęte otwory</string>
     <string name="wall_net">Powierzchnia netto</string>
-    <string name="wall_openings_none">W tym pokoju nie ma jeszcze zarejestrowanych drzwi ani okien, więc nic nie jest odjęte - powierzchnia brutto to nie ta, którą obłożysz.</string>
+    <string name="wall_openings_none">W tym pokoju nie ma jeszcze zarejestrowanych drzwi, przejść ani okien, więc nic nie jest odjęte - powierzchnia brutto to nie ta, którą obłożysz.</string>
     <string name="wall_openings_unplaced">Otwory zapisane na ścianie, której to pomieszczenie już nie ma: %1$d. Pozostają w projekcie, ale nie odlicza się za nie powierzchni - sprawdź obrys.</string>
     <string name="wall_elevation_title">Ściany w elewacji</string>
-    <string name="wall_elevation_hint">Dotknij ściany, aby wybrać miejsce, a następnie dodaj drzwi lub okno.</string>
+    <string name="wall_elevation_hint">Dotknij ściany, aby wybrać miejsce, a następnie dodaj drzwi, przejście lub okno.</string>
     <string name="wall_opening_door">Drzwi</string>
+    <string name="wall_opening_passage">Przejście</string>
     <string name="wall_opening_window">Okno</string>
     <string name="wall_opening_remove">Usuń ostatni otwór</string>
     <string name="wall_elevation_a11y">Ściana %1$d, następny otwór na %2$d %% długości ściany</string>

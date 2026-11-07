@@ -7,6 +7,8 @@
 package com.constructar.app.ui
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -129,5 +131,21 @@ class ExportStatusTest {
             ExportStatus.Partial(saved = 2, expected = 3, folder = "ConstructAR_Bad_20260314-1015"),
             status,
         )
+    }
+
+    @Test
+    fun `only a complete save offers the large return-to-project action`() {
+        val saved = ExportStatus.of(report(requested = 2, produced = 2, written = 2), messages)
+        val partial = ExportStatus.of(report(requested = 2, produced = 2, written = 1), messages)
+        val meshless = ExportStatus.of(
+            report(requested = 3, produced = 2, written = 2, meshSkipped = true),
+            messages,
+        )
+        val failed = ExportStatus.of(report(requested = 2, produced = 2, written = 0), messages)
+
+        assertTrue(ExportStatus.offersProjectReturn(saved))
+        assertFalse(ExportStatus.offersProjectReturn(partial))
+        assertFalse(ExportStatus.offersProjectReturn(meshless))
+        assertFalse(ExportStatus.offersProjectReturn(failed))
     }
 }

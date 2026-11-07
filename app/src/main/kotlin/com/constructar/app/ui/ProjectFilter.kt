@@ -37,4 +37,17 @@ internal object ProjectFilter {
             project.siteName.contains(needle, ignoreCase = true) ||
             project.customerName.contains(needle, ignoreCase = true)
     }
+
+    /**
+     * Rows below the large Continue card. The repository supplies the most recent project first;
+     * showing row zero again on the default screen makes one job look like two. A search still
+     * searches every project, including that one, so typing its customer can never return nothing.
+     */
+    fun listRows(
+        projects: List<ProjectRepository.ProjectSummary>,
+        query: String,
+    ): List<ProjectRepository.ProjectSummary> {
+        val matches = projects.filter { matches(query, it) }
+        return if (query.isBlank()) matches.drop(1) else matches
+    }
 }

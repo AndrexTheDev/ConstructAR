@@ -7,6 +7,7 @@
 package com.constructar.app.ui
 
 import com.constructar.app.data.ProjectRepository
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -57,5 +58,28 @@ class ProjectFilterTest {
         assertTrue(ProjectFilter.matches("", summary()))
         assertTrue(ProjectFilter.matches("   ", summary()))
         assertFalse(ProjectFilter.matches("Meier", summary()))
+    }
+
+    @Test
+    fun `the default list does not repeat the project already on the continue card`() {
+        val projects = listOf(
+            summary(name = "Neuestes").copy(id = "latest"),
+            summary(name = "Älteres").copy(id = "older"),
+        )
+
+        assertEquals(listOf("older"), ProjectFilter.listRows(projects, "").map { it.id })
+        assertEquals(listOf("older"), ProjectFilter.listRows(projects, "   ").map { it.id })
+        assertEquals(emptyList<String>(), ProjectFilter.listRows(projects.take(1), "").map { it.id })
+    }
+
+    @Test
+    fun `search still includes the project on the continue card`() {
+        val projects = listOf(
+            summary(name = "Neuestes", customerName = "Schmidt").copy(id = "latest"),
+            summary(name = "Älteres", customerName = "Meier").copy(id = "older"),
+        )
+
+        assertEquals(listOf("latest"), ProjectFilter.listRows(projects, "schmidt").map { it.id })
+        assertEquals(emptyList<String>(), ProjectFilter.listRows(projects, "unbekannt").map { it.id })
     }
 }

@@ -237,7 +237,38 @@ fun ProjectScreen(
         notesDiffer = notesDirty,
     )
     var confirmLeave by rememberSaveable(project.id) { mutableStateOf(false) }
-    BackHandler(enabled = unsavedEdits) { confirmLeave = true }
+    var pendingExit by rememberSaveable(project.id) { mutableStateOf(ProjectExit.BACK) }
+    val nextAction = ProjectWorkflowEngine.nextAction(project.workflow)
+    val openDefectSuffix = if (project.openDefectCount > 0) {
+        "  ·  " + stringResource(R.string.field_open_count, project.openDefectCount)
+    } else {
+        ""
+    }
+
+    // All exits share the same guard. A destination is stored as data rather than as a callback so
+    // the confirmation still knows where it was going after a rotation or process recreation.
+    fun navigate(exit: ProjectExit) {
+        when (exit) {
+            ProjectExit.BACK -> onBack()
+            ProjectExit.MEASURE -> onMeasure()
+            ProjectExit.EXPORT -> onExport()
+            ProjectExit.MATERIALS -> onMaterials()
+            ProjectExit.WALLS -> onWalls()
+            ProjectExit.FIELD_BOOK -> onFieldBook()
+        }
+    }
+
+    fun requestExit(exit: ProjectExit) {
+        when (val decision = ProjectHubPlan.planExit(exit, unsavedEdits)) {
+            is ProjectHubPlan.ExitDecision.Confirm -> {
+                pendingExit = decision.destination
+                confirmLeave = true
+            }
+            is ProjectHubPlan.ExitDecision.Navigate -> navigate(decision.destination)
+        }
+    }
+
+    BackHandler(enabled = unsavedEdits) { requestExit(ProjectExit.BACK) }
 
     Column(
         modifier = Modifier
@@ -248,7 +279,7 @@ fun ProjectScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { if (unsavedEdits) confirmLeave = true else onBack() }, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
+            IconButton(onClick = { requestExit(ProjectExit.BACK) }, modifier = Modifier.size(SiteColors.gloveTouchTarget)) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.paywall_back),
@@ -297,8 +328,47 @@ fun ProjectScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             StepChip(stringResource(R.string.step_scan), number = 1, done = scanned, modifier = Modifier.weight(1f))
             StepChip(stringResource(R.string.step_measure), number = 2, done = measured, modifier = Modifier.weight(1f))
-            StepChip(stringResource(R.string.step_export), number = 3, done = false, modifier = Modifier.weight(1f))
+            StepChip(
+                stringResource(R.string.step_export),
+                number = 3,
+                done = ProjectHubPlan.exportCompleted(project.workflow),
+                modifier = Modifier.weight(1f),
+            )
         }
+
+        // The workflow's one next step belongs before photos, totals and the run list: it must be
+        // visible when the hub opens, not earned by scrolling past evidence that cannot be acted on.
+        Text(
+            text = stringResource(workflowStateLabel(project.workflow)),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        GloveButton(
+            label = stringResource(
+                when (nextAction) {
+                    WorkflowAction.CAPTURE_ROOM -> R.string.mode_capture
+                    WorkflowAction.MEASURE_ROUTE -> if (measured) R.string.project_measure_again else R.string.project_measure
+                    WorkflowAction.CLOSE_PERIMETER -> R.string.wall_open
+                    WorkflowAction.REVIEW_BOM -> R.string.materials_button
+                    WorkflowAction.COMPLETE_DOSSIER -> R.string.project_field_button
+                    WorkflowAction.EXPORT -> R.string.export_title
+                    WorkflowAction.NONE -> R.string.project_measure
+                },
+            ) + if (nextAction == WorkflowAction.COMPLETE_DOSSIER) openDefectSuffix else "",
+            icon = if (nextAction == WorkflowAction.EXPORT) Icons.Default.Share else Icons.Default.PlayArrow,
+            onClick = {
+                requestExit(
+                    when (nextAction) {
+                        WorkflowAction.CLOSE_PERIMETER -> ProjectExit.WALLS
+                        WorkflowAction.REVIEW_BOM -> ProjectExit.MATERIALS
+                        WorkflowAction.COMPLETE_DOSSIER -> ProjectExit.FIELD_BOOK
+                        WorkflowAction.EXPORT -> ProjectExit.EXPORT
+                        else -> ProjectExit.MEASURE
+                    },
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
 
         // ── What is still missing before the customer signs ────────────────────────
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -506,74 +576,49 @@ fun ProjectScreen(
             }
         }
 
-        // ── Next action, chosen from the durable workflow rather than route presence ──
-        val nextAction = ProjectWorkflowEngine.nextAction(project.workflow)
-        Text(
-            text = stringResource(workflowStateLabel(project.workflow)),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        GloveButton(
-            label = stringResource(
-                when (nextAction) {
-                    WorkflowAction.CAPTURE_ROOM -> R.string.mode_capture
-                    WorkflowAction.MEASURE_ROUTE -> if (measured) R.string.project_measure_again else R.string.project_measure
-                    WorkflowAction.CLOSE_PERIMETER -> R.string.wall_open
-                    WorkflowAction.REVIEW_BOM -> R.string.materials_button
-                    WorkflowAction.COMPLETE_DOSSIER -> R.string.project_field_button
-                    WorkflowAction.EXPORT -> R.string.export_title
-                    WorkflowAction.NONE -> R.string.project_measure
-                },
-            ),
-            icon = if (nextAction == WorkflowAction.EXPORT) Icons.Default.Share else Icons.Default.PlayArrow,
-            onClick = when (nextAction) {
-                WorkflowAction.CLOSE_PERIMETER -> onWalls
-                WorkflowAction.REVIEW_BOM -> onMaterials
-                WorkflowAction.COMPLETE_DOSSIER -> onFieldBook
-                WorkflowAction.EXPORT -> onExport
-                else -> onMeasure
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        GloveButton(
-            label = stringResource(R.string.export_title),
-            icon = Icons.Default.Share,
-            tone = ActionTone.SECONDARY,
-            // Paper export explicitly supports a room with no runs (and the home card already
-            // offers it): the site diary, defects, times and customer block are still a protocol.
-            onClick = onExport,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        GloveButton(
-            label = stringResource(R.string.materials_button),
-            icon = Icons.Default.ShoppingCart,
-            tone = ActionTone.SECONDARY,
-            // The destination owns its empty state - and the firm-wide rate, waste and clip
-            // settings above it are useful before the first run too (finding 280).
-            onClick = onMaterials,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        GloveButton(
-            label = stringResource(R.string.wall_open),
-            icon = Icons.Default.Build,
-            tone = ActionTone.SECONDARY,
-            // An open or absent ring already has a sentence and a next step on the wall screen.
-            // Hiding that destination behind a silent grey button answered neither (finding 280).
-            onClick = onWalls,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        GloveButton(
-            label = stringResource(R.string.project_field_button) +
-                if (project.openDefectCount > 0) {
-                    "  ·  " + stringResource(R.string.field_open_count, project.openDefectCount)
-                } else {
-                    ""
-                },
-            icon = Icons.Default.Timer,
-            tone = ActionTone.SECONDARY,
-            onClick = onFieldBook,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        // ── Other destinations, without repeating the primary action above ──────────
+        if (ProjectHubPlan.showsSecondaryDestination(nextAction, WorkflowAction.EXPORT)) {
+            GloveButton(
+                label = stringResource(R.string.export_title),
+                icon = Icons.Default.Share,
+                tone = ActionTone.SECONDARY,
+                // Paper export explicitly supports a room with no runs (and the home card already
+                // offers it): the site diary, defects, times and customer block are still a protocol.
+                onClick = { requestExit(ProjectExit.EXPORT) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (ProjectHubPlan.showsSecondaryDestination(nextAction, WorkflowAction.REVIEW_BOM)) {
+            GloveButton(
+                label = stringResource(R.string.materials_button),
+                icon = Icons.Default.ShoppingCart,
+                tone = ActionTone.SECONDARY,
+                // The destination owns its empty state - and the firm-wide rate, waste and clip
+                // settings above it are useful before the first run too (finding 280).
+                onClick = { requestExit(ProjectExit.MATERIALS) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (ProjectHubPlan.showsSecondaryDestination(nextAction, WorkflowAction.CLOSE_PERIMETER)) {
+            GloveButton(
+                label = stringResource(R.string.wall_open),
+                icon = Icons.Default.Build,
+                tone = ActionTone.SECONDARY,
+                // An open or absent ring already has a sentence and a next step on the wall screen.
+                // Hiding that destination behind a silent grey button answered neither (finding 280).
+                onClick = { requestExit(ProjectExit.WALLS) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (ProjectHubPlan.showsSecondaryDestination(nextAction, WorkflowAction.COMPLETE_DOSSIER)) {
+            GloveButton(
+                label = stringResource(R.string.project_field_button) + openDefectSuffix,
+                icon = Icons.Default.Timer,
+                tone = ActionTone.SECONDARY,
+                onClick = { requestExit(ProjectExit.FIELD_BOOK) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         // ── Who the protocol is for ────────────────────────────────────────────────
         Card(
@@ -782,7 +827,7 @@ fun ProjectScreen(
                 TextButton(
                     onClick = {
                         confirmLeave = false
-                        onBack()
+                        navigate(pendingExit)
                     },
                 ) { Text(stringResource(R.string.project_leave_discard)) }
             },
