@@ -415,7 +415,9 @@ void testPoseGraphLoopClosure() {
         "a consistent closure remains a full-weight inlier (failure=" +
             std::to_string(static_cast<int>(report.failure)) + ", iterations=" +
             std::to_string(report.iterations) + ", weight=" +
-            std::to_string(report.residuals.back().robustWeight) + ")");
+            std::to_string(report.residuals.back().robustWeight) + ", rejectedBase=" +
+            std::to_string(report.rejectedCostBaseline) + ", rejectedDelta=" +
+            std::to_string(report.rejectedCostIncrease) + ")");
 
   const Vec3 lastTranslation = graph.poses().back().translation();
   check(lastTranslation.length() < 0.10f,

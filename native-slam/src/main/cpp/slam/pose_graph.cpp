@@ -430,6 +430,8 @@ OptimizationReport PoseGraph::optimizeInPlace(const std::vector<double>& edgeWei
 
     report.iterations = iteration + 1;
     if (!std::isfinite(newCost) || newCost > currentCost + 1e-9) {
+      report.rejectedCostBaseline = currentCost;
+      report.rejectedCostIncrease = newCost - currentCost;
       for (size_t i = 0; i < nodes_.size(); ++i) nodes_[i].pose = before[i];
       // Finite-difference Jacobians and float poses eventually make a descent direction
       // indistinguishable from numerical noise. A rejected step whose relative cost increase

@@ -82,6 +82,9 @@ struct OptimizationReport {
   /** True when no candidate pose was committed and the measured input was restored. */
   bool rolledBack = false;
   OptimizationFailure failure = OptimizationFailure::NONE;
+  /** Last rejected line-search trial, for cross-compiler convergence diagnostics. */
+  double rejectedCostBaseline = 0.0;
+  double rejectedCostIncrease = 0.0;
   std::vector<EdgeResidual> residuals;
 };
 
