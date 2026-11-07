@@ -59,27 +59,27 @@ internal object DepthIntegrationSelector {
         nowMillis: Long,
         fusionTtlMillis: Long,
     ): DepthIntegrationSelection {
-        val age = fused?.let { nowMillis - it.receivedAtMillis } ?: Long.MAX_VALUE
-        val useFused = fused != null &&
-            fused.width == snapshot.width && fused.height == snapshot.height &&
-            age >= 0L && age < fusionTtlMillis
-        if (useFused && fused != null) {
-            return DepthIntegrationSelection(
-                depthMm = fused.depthMm,
-                width = fused.width,
-                height = fused.height,
-                // AiDepthFusion emits a tightly packed buffer, independent of the camera's stride.
-                rowStrideElements = fused.width,
-                // Low-confidence measured pixels have already become holes or network fills.
-                confidence = null,
-                confidenceWidth = 0,
-                confidenceHeight = 0,
-                confidenceRowStride = 0,
-                intrinsics = fused.intrinsics,
-                cameraToWorld = fused.cameraToWorld,
-                timestampNs = fused.timestampNs,
-                usesFusedDepth = true,
-            )
+        if (fused != null) {
+            val age = nowMillis - fused.receivedAtMillis
+            val fresh = age >= 0L && age < fusionTtlMillis
+            if (fused.width == snapshot.width && fused.height == snapshot.height && fresh) {
+                return DepthIntegrationSelection(
+                    depthMm = fused.depthMm,
+                    width = fused.width,
+                    height = fused.height,
+                    // AiDepthFusion emits a tightly packed buffer, independent of the camera's stride.
+                    rowStrideElements = fused.width,
+                    // Low-confidence measured pixels have already become holes or network fills.
+                    confidence = null,
+                    confidenceWidth = 0,
+                    confidenceHeight = 0,
+                    confidenceRowStride = 0,
+                    intrinsics = fused.intrinsics,
+                    cameraToWorld = fused.cameraToWorld,
+                    timestampNs = fused.timestampNs,
+                    usesFusedDepth = true,
+                )
+            }
         }
         return DepthIntegrationSelection(
             depthMm = snapshot.depthMm,
