@@ -59,6 +59,17 @@ struct EdgeResidual {
   double robustWeight = 1.0;
 };
 
+enum class OptimizationFailure {
+  NONE,
+  INVALID_INPUT,
+  NOT_CONVERGED,
+  NON_FINITE_RESULT,
+  COST_INCREASE,
+  AMBIGUOUS_GNC,
+  DEFORMATION,
+  REJECTED_LOOP,
+};
+
 struct OptimizationReport {
   double initialCost = 0.0;
   double finalCost = 0.0;
@@ -70,6 +81,7 @@ struct OptimizationReport {
   double milliseconds = 0.0;
   /** True when no candidate pose was committed and the measured input was restored. */
   bool rolledBack = false;
+  OptimizationFailure failure = OptimizationFailure::NONE;
   std::vector<EdgeResidual> residuals;
 };
 

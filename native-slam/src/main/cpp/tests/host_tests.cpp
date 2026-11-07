@@ -412,7 +412,10 @@ void testPoseGraphLoopClosure() {
             " m)");
   check(report.finalCost > 0.0, "cost reflects the closure constraint");
   check(!report.rolledBack && report.residuals.back().robustWeight > 0.999,
-        "a consistent closure remains a full-weight inlier");
+        "a consistent closure remains a full-weight inlier (failure=" +
+            std::to_string(static_cast<int>(report.failure)) + ", iterations=" +
+            std::to_string(report.iterations) + ", weight=" +
+            std::to_string(report.residuals.back().robustWeight) + ")");
 
   const Vec3 lastTranslation = graph.poses().back().translation();
   check(lastTranslation.length() < 0.10f,
@@ -467,7 +470,9 @@ void testPoseGraphRollback() {
   // One improving step with a zero convergence threshold necessarily exhausts the budget.
   // The old API exposed that half-descent; the transactional API must restore the input exactly.
   const auto report = graph.optimize(1, 0.0);
-  check(!report.converged && report.rolledBack, "an exhausted solve is explicitly rolled back");
+  check(!report.converged && report.rolledBack &&
+            report.failure == constructar::OptimizationFailure::NOT_CONVERGED,
+        "an exhausted solve is explicitly rolled back");
   check(std::memcmp(before[1].m, graph.poses()[1].m, sizeof(before[1].m)) == 0,
         "rollback restores every pose value, not just the gauge node");
   checkNear(report.finalCost, report.initialCost, 1e-12,
@@ -492,7 +497,9 @@ void testLastLoopTransaction() {
   graph.addEdge(0, 2, Mat4::identity(), 100.0, 100.0, true);
   const auto report = graph.optimizeLastLoop(60, 1e-9);
 
-  check(!report.converged && report.rolledBack, "a zero-weight app closure is a failed attempt");
+  check(!report.converged && report.rolledBack &&
+            report.failure == constructar::OptimizationFailure::REJECTED_LOOP,
+        "a zero-weight app closure is a failed attempt");
   check(graph.edgeCount() == edgesBefore && !graph.edges().back().loopClosure,
         "the rejected hypothesis is removed instead of poisoning a later attempt");
   bool exactPoses = true;

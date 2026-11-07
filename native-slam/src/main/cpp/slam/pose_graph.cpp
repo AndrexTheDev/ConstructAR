@@ -472,17 +472,19 @@ OptimizationReport PoseGraph::optimize(int iterations, double convergenceCostDel
                .count() /
            1000.0;
   };
-  auto rollback = [&]() {
+  auto rollback = [&](OptimizationFailure failure) {
     for (size_t i = 0; i < nodes_.size(); ++i) nodes_[i].pose = original[i];
     report.initialCost = initialCost;
     report.finalCost = cost();
     report.converged = false;
     report.rolledBack = true;
+    report.failure = failure;
     report.milliseconds = elapsedMilliseconds();
     fillResiduals(report, weights);
     return report;
   };
-  if (!std::isfinite(initialCost) || iterations <= 0) return rollback();
+  if (!std::isfinite(initialCost)) return rollback(OptimizationFailure::NON_FINITE_RESULT);
+  if (iterations <= 0) return rollback(OptimizationFailure::INVALID_INPUT);
   if (nodes_.size() < 2 || edges_.empty()) {
     report.converged = true;
     fillResiduals(report, weights);
@@ -550,7 +552,10 @@ OptimizationReport PoseGraph::optimize(int iterations, double convergenceCostDel
                             std::isfinite(report.rmsRotationRadians);
   const bool nonWorsening = report.finalCost <=
                             initialCost + std::max(1e-6, std::fabs(initialCost) * 1e-6);
-  if (!report.converged || !binaryWeights || !finiteResult || !nonWorsening) return rollback();
+  if (!report.converged) return rollback(OptimizationFailure::NOT_CONVERGED);
+  if (!binaryWeights) return rollback(OptimizationFailure::AMBIGUOUS_GNC);
+  if (!finiteResult) return rollback(OptimizationFailure::NON_FINITE_RESULT);
+  if (!nonWorsening) return rollback(OptimizationFailure::COST_INCREASE);
 
   // Robust loss alone can converge to a folded local minimum. Bound the physical damage to
   // measured odometry as an independent gate. Existing odometry noise raises the allowance;
@@ -580,9 +585,10 @@ OptimizationReport PoseGraph::optimize(int iterations, double convergenceCostDel
                                 std::isfinite(report.rmsRotationRadians);
     const bool fallbackNonWorsening =
         report.finalCost <= initialCost + std::max(1e-6, std::fabs(initialCost) * 1e-6);
-    if (!report.converged || !fallbackFinite || !fallbackNonWorsening || excessiveDeformation()) {
-      return rollback();
-    }
+    if (!report.converged) return rollback(OptimizationFailure::NOT_CONVERGED);
+    if (!fallbackFinite) return rollback(OptimizationFailure::NON_FINITE_RESULT);
+    if (!fallbackNonWorsening) return rollback(OptimizationFailure::COST_INCREASE);
+    if (excessiveDeformation()) return rollback(OptimizationFailure::DEFORMATION);
   }
 
   report.converged = true;
@@ -599,6 +605,7 @@ OptimizationReport PoseGraph::optimizeLastLoop(int iterations, double convergenc
   const bool rejected = !report.residuals.empty() && report.residuals.back().loopClosure &&
                         report.residuals.back().robustWeight <= 1e-4;
   if (!report.rolledBack && !rejected) return report;
+  if (!report.rolledBack) report.failure = OptimizationFailure::REJECTED_LOOP;
 
   for (size_t i = 0; i < nodes_.size(); ++i) nodes_[i].pose = original[i];
   edges_.pop_back();
