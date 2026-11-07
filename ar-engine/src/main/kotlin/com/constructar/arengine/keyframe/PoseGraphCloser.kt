@@ -52,6 +52,8 @@ interface NodeHistory {
 data class ClosureOptimisation(
     val initialCost: Float,
     val finalCost: Float,
+    val rmsTranslationMeters: Float = 0f,
+    val rmsRotationRadians: Float = 0f,
     val converged: Boolean,
     /** Column-major camera-to-world, one per node, as the optimiser left them. */
     val poses: List<FloatArray> = emptyList(),

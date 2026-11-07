@@ -44,6 +44,8 @@ class NativePoseGraphSource(private val engine: NativeSlamEngine) : PoseGraphSou
             ClosureOptimisation(
                 initialCost = it.initialCost,
                 finalCost = it.finalCost,
+                rmsTranslationMeters = it.rmsTranslationMeters,
+                rmsRotationRadians = it.rmsRotationRadians,
                 converged = it.converged,
                 poses = it.poses,
             )
