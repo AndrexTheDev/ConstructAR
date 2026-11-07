@@ -59,10 +59,10 @@ internal object DepthIntegrationSelector {
         nowMillis: Long,
         fusionTtlMillis: Long,
     ): DepthIntegrationSelection {
-        val age = fused?.let { nowMillis - it.receivedAtMillis }
+        val age = fused?.let { nowMillis - it.receivedAtMillis } ?: Long.MAX_VALUE
         val useFused = fused != null &&
             fused.width == snapshot.width && fused.height == snapshot.height &&
-            age != null && age >= 0L && age < fusionTtlMillis
+            age >= 0L && age < fusionTtlMillis
         if (useFused && fused != null) {
             return DepthIntegrationSelection(
                 depthMm = fused.depthMm,
