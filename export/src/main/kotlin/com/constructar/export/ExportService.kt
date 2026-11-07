@@ -8,6 +8,7 @@ package com.constructar.export
 
 import android.graphics.Bitmap
 import com.constructar.core.bom.MaterialList
+import com.constructar.core.calib.CalibrationTransform
 import com.constructar.core.math.Mat4
 import com.constructar.core.mesh.MeshData
 import com.constructar.core.mesh.RouteGeometry
@@ -158,6 +159,7 @@ class ExportService(
         val timestampLabel = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ROOT)
             .format(Date(atMillis))
         val artifacts = ArrayList<ExportArtifact>(4)
+        val calibration = CalibrationTransform.of(request.project.calibrationScale)
 
         if (request.includePdf) {
             artifacts += ExportArtifact(
@@ -234,7 +236,7 @@ class ExportService(
                     // The same violet the operator walked through on the glass (finding 267):
                     // the room in the file has to be recognisable as the room he captured, not as
                     // a grey lump that happens to be in the same place.
-                    add(GlbWriter.GlbPart("Room scan", it, 0xFFA25BFF.toInt()))
+                    add(GlbWriter.GlbPart("Room scan", calibration.mesh(it), 0xFFA25BFF.toInt()))
                 }
             }
         }
@@ -319,7 +321,8 @@ class ExportService(
         fun routeMeshes(project: ProjectRecord): RouteMeshes {
             val parts = ArrayList<Pair<String, MeshData>>(project.routes.size)
             val unbuildable = ArrayList<String>(0)
-            for (route in project.routes) {
+            val calibratedRoutes = CalibrationTransform.of(project.calibrationScale).routes(project.routes)
+            for (route in calibratedRoutes) {
                 if (!route.isRoutable) continue
                 // A recovered run's node coordinates are relative to an ARCore session that no
                 // longer exists: its lengths belong in the paperwork, its geometry does not

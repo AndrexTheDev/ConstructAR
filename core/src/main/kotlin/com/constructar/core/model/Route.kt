@@ -7,6 +7,7 @@
 package com.constructar.core.model
 
 import com.constructar.core.math.Vec3
+import com.constructar.core.wall.Din18015Zones
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 
@@ -120,6 +121,12 @@ data class RouteNodeRecord(
      * and the rule that does so lives in `:core` (`relativeNodes`), not in the screen.
      */
     val sessionId: String = "",
+    /** DIN band assigned from this session's measured floor/ceiling references. */
+    val installationZone: Din18015Zones.Horizontal? = null,
+    /** Vertical corner-zone classification, retained independently of the horizontal band. */
+    val verticalInstallationZone: Din18015Zones.Vertical? = null,
+    /** True when the point lies outside both the horizontal bands and a vertical corner zone. */
+    val sonderverlegung: Boolean = false,
 ) {
     fun withPosition(newPosition: Vec3) = copy(position = newPosition)
 }

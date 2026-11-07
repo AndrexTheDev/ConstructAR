@@ -6,6 +6,7 @@
 
 package com.constructar.core.bom
 
+import com.constructar.core.calib.CalibrationTransform
 import com.constructar.core.geo.RouteMetrics
 import com.constructar.core.model.ConduitKind
 import com.constructar.core.model.ConduitSpec
@@ -154,15 +155,11 @@ object MaterialListBuilder {
         val groups = LinkedHashMap<String, MutableList<Pair<ConduitSpec, RouteMetrics>>>()
         var excludedRuns = 0
         var excludedMeters = 0f
-        // The operator's reference calibration (1.0 when there is none). Applied to the *metres*
-        // only, and here rather than in the geometry: a run's nodes are what the overlay and the
-        // anchors are built from, and a factor multiplied into them could not be corrected by a
-        // better one later. The fitting counts need no correction - clips are "one per spacing",
-        // and both length and spacing were measured in the same (equally short) metre, so the
-        // ratio, and therefore the count, is unchanged.
-        val metresScale = project.calibrationScale.toFloat()
+        // Every raw point crosses the central calibration boundary before any metric, bend or
+        // material quantity is computed. No downstream total is scaled a second time.
+        val calibratedRoutes = CalibrationTransform.of(project.calibrationScale).routes(project.routes)
 
-        for (route in project.routes) {
+        for (route in calibratedRoutes) {
             if (!route.isRoutable) continue
             val spec = route.spec
             // Both overrides go into the measurement, not just into the line arithmetic below:
@@ -181,7 +178,7 @@ object MaterialListBuilder {
                 // Recorded before the drop, not after: the run is gone from every total on the
                 // page, so this counter is the only thing left that says it existed (finding 161).
                 excludedRuns += 1
-                excludedMeters += metrics.totalMeters * metresScale
+                excludedMeters += metrics.totalMeters
                 continue
             }
             groups.getOrPut(spec.bomKey) { mutableListOf() }.add(spec to metrics)
@@ -191,7 +188,7 @@ object MaterialListBuilder {
             val spec = entries.first().first
             val waste = options.wasteFactorOverride
                 ?: com.constructar.core.geo.PolylineMetrics.defaultWasteFactor(spec)
-            val total = (entries.sumOf { it.second.totalMeters.toDouble() } * metresScale).toFloat()
+            val total = entries.sumOf { it.second.totalMeters.toDouble() }.toFloat()
             MaterialLine(
                 bomKey = key,
                 kind = spec.kind,

@@ -300,6 +300,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                                 onFloorHeight = { sessionId, height ->
                                     viewModel.setFloorHeight(sessionId, height)
                                 },
+                                onRoomHeight = viewModel::setMeasuredRoomHeight,
                             )
                         }
                     }

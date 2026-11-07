@@ -34,6 +34,7 @@ import com.constructar.arengine.session.ArSessionController
 import com.constructar.arengine.session.TorchController
 import com.constructar.arengine.tracking.TrackingMonitor
 import com.constructar.arengine.tracking.TrackingQuality
+import com.constructar.core.calib.CalibrationTransform
 import com.constructar.core.calib.MarkerScaleProposal
 import com.constructar.core.calib.MarkerSweepState
 import com.constructar.core.math.Pose
@@ -253,6 +254,7 @@ class ArMeasureController(private val context: Context) {
      * state a mounting height (findings 214 and 218).
      */
     val floor: MutableStateFlow<com.constructar.arengine.hit.FloorDecision?> = MutableStateFlow(null)
+    val roomHeightMeters: MutableStateFlow<Float?> = MutableStateFlow(null)
 
     /**
      * State of the reticle's sample window: whether the point under the crosshair has settled
@@ -280,6 +282,9 @@ class ArMeasureController(private val context: Context) {
 
     @Volatile
     private var latestFeaturePoints: List<Vec3> = emptyList()
+
+    @Volatile
+    private var calibration: CalibrationTransform = CalibrationTransform.IDENTITY
 
     @Volatile
     private var session: Session? = null
@@ -322,6 +327,7 @@ class ArMeasureController(private val context: Context) {
         // New origin: any sweep still open belongs to the world that just ended, and continuing it
         // would pair a camera position from one room with a tag vector from another.
         sessionEpoch += 1
+        roomHeightMeters.value = null
         nodeEvidence.clear()
         latestFeaturePoints = emptyList()
         cancelRelocalisation()
@@ -343,6 +349,9 @@ class ArMeasureController(private val context: Context) {
                 if (decision.status != com.constructar.arengine.hit.FloorReferenceStatus.MISSING) {
                     floor.value = decision
                 }
+            }
+            it.onRoomHeightResolved = { height ->
+                if (height != null) roomHeightMeters.value = height
             }
         }
         if (powerManager == null) {
@@ -804,7 +813,7 @@ class ArMeasureController(private val context: Context) {
         val scan = pipeline.mesh.value ?: return
         // Unlit + translucent: the reconstruction must never be mistaken for installed hardware
         // and must not hide the routed services behind it.
-        meshRenderer.upload(SCAN_MESH_KEY, scan.mesh, SceneViewMaterialProvider.SCAN_OVERLAY_ARGB, unlit = true)
+        meshRenderer.upload(SCAN_MESH_KEY, calibration.mesh(scan.mesh), SceneViewMaterialProvider.SCAN_OVERLAY_ARGB, unlit = true)
         meshRenderer.setVisible(SCAN_MESH_KEY, true)
     }
 
@@ -825,9 +834,9 @@ class ArMeasureController(private val context: Context) {
     fun syncLiveRoute() {
         val state = routeSession.state.value
         sceneController?.syncLiveRoute(
-            nodes = state.nodes,
+            nodes = calibration.nodes(state.nodes),
             spec = state.spec,
-            previewGeometry = state.preview?.mesh,
+            previewGeometry = state.preview?.mesh?.let(calibration::mesh),
         )
         // The points themselves, as dots on the wall (finding 269). The tube needs two nodes, so
         // until this line existed the first tap of every run - and every tap after a save - drew
@@ -836,7 +845,7 @@ class ArMeasureController(private val context: Context) {
         // The last point gets its own marker, larger and white (finding 270): it is where the next
         // segment starts and the one `undo` removes, and six identical dots never said which end
         // of the run that was. So the lime set is "the run", the white one is "you are here".
-        val points = state.nodes.map { it.position }
+        val points = state.nodes.map { calibration.point(it.position) }
         sceneController?.syncNodeMarkers(
             points = points.dropLast(1),
             argb = SceneViewMaterialProvider.NODE_MARKER_ARGB,
@@ -867,6 +876,10 @@ class ArMeasureController(private val context: Context) {
     }
 
     fun setSpec(spec: ConduitSpec) = routeSession.setSpec(spec)
+
+    fun setCalibrationScale(scale: Double) {
+        calibration = CalibrationTransform.of(scale)
+    }
 
     fun undo() {
         routeSession.undo()?.let { nodeEvidence.remove(it.id) }
@@ -899,7 +912,9 @@ class ArMeasureController(private val context: Context) {
      * (finding 129).
      */
     fun syncCommittedRoutes(routes: List<ConduitRoute>) {
-        sceneController?.syncCommittedRoutes(SessionRuns.placeable(sessionRouteIds, routes))
+        sceneController?.syncCommittedRoutes(
+            calibration.routes(SessionRuns.placeable(sessionRouteIds, routes)),
+        )
     }
 
     fun toggleTorch(): Boolean {

@@ -57,6 +57,9 @@ enum class SnapFeatureKind {
 
     /** Two horizontal planes - geometrically possible, architecturally meaningless. */
     EDGE,
+
+    /** A DIN 18015 mounting band, snapped on the 5 cm grid. */
+    INSTALLATION_ZONE,
 }
 
 /** A straight architectural feature: a corner or an edge, already clipped to both planes. */

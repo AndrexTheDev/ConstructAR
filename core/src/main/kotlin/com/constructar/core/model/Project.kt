@@ -6,6 +6,7 @@
 
 package com.constructar.core.model
 
+import com.constructar.core.calib.CalibrationTransform
 import com.constructar.core.math.Aabb
 import com.constructar.core.workflow.ProjectWorkflowState
 import kotlinx.serialization.Serializable
@@ -217,6 +218,8 @@ data class ProjectRecord(
      * tallest point in a room is not its ceiling.
      */
     val wallHeightM: Float? = null,
+    /** Automatically detected floor-to-ceiling distance; used when no manual override is stated. */
+    val measuredRoomHeightM: Float? = null,
     /**
      * Doors, windows and passages the operator placed on the room's walls.
      *
@@ -268,7 +271,7 @@ data class ProjectRecord(
      * rows add up by construction.
      */
     fun reportedMeters(measuredMeters: Float): Float =
-        (measuredMeters.toDouble() * calibrationScale).toFloat()
+        CalibrationTransform.of(calibrationScale).distance(measuredMeters)
 
     /** One run's length as it is reported: measured by the phone, corrected by the calibration. */
     fun calibratedMeters(route: ConduitRoute): Float = reportedMeters(route.polylineLengthMeters)

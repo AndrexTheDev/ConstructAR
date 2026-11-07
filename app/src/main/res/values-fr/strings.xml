@@ -619,4 +619,8 @@
     <string name="relocalise_finish">Rétablir les coordonnées</string>
     <string name="relocalise_cancel">Retour aux options de récupération</string>
     <string name="relocalise_failed">Récupération refusée : les observations ne sont pas cohérentes. Observe de nouveau les ancres ou enregistre seulement les mesures.</string>
+    <string name="din_sonderverlegung">Sonderverlegung : hors des zones DIN applicables ; le point reste inchangé.</string>
+    <string name="snap_installation_zone">Aligné de %1$s cm sur la zone d’installation DIN</string>
+    <string name="wall_ua_profile">Renfort UA (2 mm)</string>
+    <string name="wall_ua_value">%1$d profils · %2$s</string>
 </resources>

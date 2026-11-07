@@ -641,4 +641,8 @@
     <string name="relocalise_finish">Przywróć współrzędne</string>
     <string name="relocalise_cancel">Wróć do opcji odzyskiwania</string>
     <string name="relocalise_failed">Odzyskiwanie odrzucone: obserwacje są niespójne. Zaobserwuj kotwy ponownie albo zapisz tylko wymiary.</string>
+    <string name="din_sonderverlegung">Sonderverlegung: poza obowiązującymi strefami DIN; punkt pozostaje bez zmian.</string>
+    <string name="snap_installation_zone">Przyciągnięto o %1$s cm do strefy instalacyjnej DIN</string>
+    <string name="wall_ua_profile">Wzmocnienie UA (2 mm)</string>
+    <string name="wall_ua_value">%1$d profili · %2$s</string>
 </resources>

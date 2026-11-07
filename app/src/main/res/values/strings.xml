@@ -619,4 +619,8 @@
     <string name="relocalise_finish">Restore coordinates</string>
     <string name="relocalise_cancel">Back to recovery options</string>
     <string name="relocalise_failed">Recovery refused: the observations are not consistent. Observe the anchors again or save measurements only.</string>
+    <string name="din_sonderverlegung">Sonderverlegung — outside the applicable DIN zones; the point was left unchanged.</string>
+    <string name="snap_installation_zone">Snapped to the DIN installation zone by %1$s cm</string>
+    <string name="wall_ua_profile">UA reinforcement (2 mm)</string>
+    <string name="wall_ua_value">%1$d profiles · %2$s</string>
 </resources>

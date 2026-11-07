@@ -200,6 +200,7 @@ fun ArMeasureScreen(
      * had been measured from today's floor (finding 217).
      */
     onFloorHeight: (String, Float) -> Unit = { _, _ -> },
+    onRoomHeight: (Float) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -328,6 +329,7 @@ fun ArMeasureScreen(
     val lastHit by controller.lastHit.collectAsStateWithLifecycle()
     val stability by controller.stability.collectAsStateWithLifecycle()
     val floorDecision by controller.floor.collectAsStateWithLifecycle()
+    val measuredRoomHeight by controller.roomHeightMeters.collectAsStateWithLifecycle()
     // A table top is upward-facing, below the phone and higher than the floor: the one case
     // "highest plane wins" got wrong (finding 218). When the evaluator is not sure, the HUD says
     // so instead of the app quietly recording a floor it will later print mounting heights from -
@@ -386,6 +388,9 @@ fun ArMeasureScreen(
         val decision = floorDecision ?: return@LaunchedEffect
         if (!decision.usable) return@LaunchedEffect
         decision.heightM?.let { if (it.isFinite()) onFloorHeight(controller.sessionId, it) }
+    }
+    LaunchedEffect(measuredRoomHeight) {
+        measuredRoomHeight?.let { if (it.isFinite()) onRoomHeight(it) }
     }
 
     var spec by remember { mutableStateOf(ConduitPresets.all.first()) }
@@ -497,7 +502,7 @@ fun ArMeasureScreen(
         // in the CSV, the PDF and the project file. One implementation, in `RouteLabels`.
         val runLabel = RouteLabels.next(spec, project.routes.map { it.label })
         controller.finish(label = runLabel)?.let { route ->
-            savedRun = runLabel to route.polylineLengthMeters
+            savedRun = runLabel to project.reportedMeters(route.polylineLengthMeters)
             onRouteFinished(route)
             // A scan is committed even when this block has no route; commitCapture is also the
             // walkthrough's own save action, so scan bounds and plan never depend on this route.
@@ -573,6 +578,14 @@ fun ArMeasureScreen(
     LaunchedEffect(scanState.meshVersion, mode) {
         controller.syncScanMesh(mode.showsRoomOverlay)
     }
+    LaunchedEffect(project.calibrationScale) {
+        // One ordered refresh prevents live/scan meshes from retaining the previous factor while
+        // committed routes already use the new one.
+        controller.setCalibrationScale(project.calibrationScale)
+        controller.syncLiveRoute()
+        controller.syncScanMesh(mode.showsRoomOverlay)
+        controller.syncCommittedRoutes(project.routes)
+    }
     // Committed runs are re-meshed when a new one is added (and at most once per second).
     LaunchedEffect(project.routes.size) {
         // Only this session's runs can be placed: a recovered run - and one measured on an
@@ -581,11 +594,11 @@ fun ArMeasureScreen(
         controller.syncCommittedRoutes(project.routes)
     }
 
-    val lengthText = stringResource(R.string.hud_length, shownLength(routeState.lengthMeters))
-    // The segment under the crosshair, while walking: the number that tells the operator when
-    // to stop and tap, rather than tapping and then reading the result.
+    val lengthText = stringResource(R.string.hud_length, shownLength(project.reportedMeters(routeState.lengthMeters)))
+    // Every displayed metre is derived from the same central calibration as the rendered route,
+    // the material list and the export. Stored ARCore coordinates remain untouched.
     val liveSegmentText = if (routeState.nodeCount > 0 && routeState.liveSegmentMeters >= 0.05f) {
-        stringResource(R.string.hud_segment, routeState.liveSegmentMeters)
+        stringResource(R.string.hud_segment, shownLength(project.reportedMeters(routeState.liveSegmentMeters)))
     } else {
         null
     }
@@ -605,16 +618,12 @@ fun ArMeasureScreen(
     // The room, not just the run: the operator's real question on site. It reuses the export
     // screen's own "N runs · X total" line, so the number on the phone and on the protocol come
     // from one sentence and one formatter.
-    //
-    // Measured metres, not reported ones, and that is `docs/CALIBRATION.md`'s boundary rather than
-    // an oversight: the factor is applied where the paperwork is written (the project screen, the
-    // protocol, the CSV), never on the HUD, because the operator measures what the phone sees. The
-    // list on the project screen is the other half of that rule (finding 277) and `verify_sources`
-    // refuses a calibration factor in this file.
+    // The room total is the sum of the exact same calibrated values as the per-run rows above;
+    // it must never be calculated from raw coordinates and scaled a second time.
     val roomTotals = RunSummary.of(
-        committedMeters = project.routes.map { it.polylineLengthMeters },
+        committedMeters = project.routes.map { project.reportedMeters(it.polylineLengthMeters) },
         liveNodes = routeState.nodeCount,
-        liveMeters = routeState.lengthMeters,
+        liveMeters = project.reportedMeters(routeState.lengthMeters),
     )
     val roomTotalText = if (roomTotals.runs > 0) {
         stringResource(
@@ -701,10 +710,14 @@ fun ArMeasureScreen(
     val snapEchoText = lastHit?.hit?.snap?.let { snap ->
         SnapReading.moved(snap, decimalMarkForEcho)?.let { stringResource(snap.kind.snapMovedRes(), it) }
     }
+    val sonderverlegung = lastHit?.hit?.sonderverlegung == true &&
+        (tapEcho == TapEcho.PLACED || tapEcho == TapEcho.SNAPPED)
     val slotText: String? = when (tapSlot) {
         TapSlot.NONE -> null
         TapSlot.HOLD -> stringResource(R.string.ar_hold_steady)
-        TapSlot.RESULT -> when (tapEcho) {
+        TapSlot.RESULT -> if (sonderverlegung) {
+            stringResource(R.string.din_sonderverlegung)
+        } else when (tapEcho) {
             TapEcho.PLACED -> stringResource(R.string.tap_placed)
             TapEcho.SNAPPED -> snapEchoText
             TapEcho.MISS -> stringResource(R.string.ar_no_surface)
@@ -717,9 +730,10 @@ fun ArMeasureScreen(
     }
     // Lime for a point that exists, amber for everything that is asking something of the operator:
     // a miss, a refusal, and "hold steady" are all "act before the next tap".
-    val slotColor = when (tapEcho) {
-        TapEcho.PLACED, TapEcho.SNAPPED -> SiteColors.accent
-        TapEcho.UNDONE, TapEcho.MISS, TapEcho.REFUSED, null -> SiteColors.warning
+    val slotColor = when {
+        sonderverlegung -> SiteColors.warning
+        tapEcho == TapEcho.PLACED || tapEcho == TapEcho.SNAPPED -> SiteColors.accent
+        else -> SiteColors.warning
     }
     val guideRows = MeasureGuide.lines(guideState).mapNotNull { line ->
         val text = when (line) {
@@ -962,7 +976,7 @@ fun ArMeasureScreen(
                             text = when (headline) {
                                 HudHeadline.SEGMENT -> stringResource(
                                     R.string.hud_length,
-                                    shownLength(routeState.liveSegmentMeters),
+                                    shownLength(project.reportedMeters(routeState.liveSegmentMeters)),
                                 )
                                 HudHeadline.TOTAL -> lengthText
                             },

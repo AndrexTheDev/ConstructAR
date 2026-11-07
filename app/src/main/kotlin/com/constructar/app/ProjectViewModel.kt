@@ -644,6 +644,17 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         return updated
     }
 
+    /** Stores an automatically detected floor-to-ceiling height without overriding a manual one. */
+    fun setMeasuredRoomHeight(heightM: Float) {
+        val project = mutableState.value.openProject ?: return
+        val measured = statedRoomHeight(heightM) ?: return
+        val knownHeight = project.measuredRoomHeightM
+        if (knownHeight != null && kotlin.math.abs(knownHeight - measured) < FLOOR_TOLERANCE_M) {
+            return
+        }
+        mutate(project.copy(measuredRoomHeightM = measured))
+    }
+
     /** The project with one session's floor recorded, leaving the other sessions' floors alone. */
     private fun withFloor(project: ProjectRecord, sessionId: String, heightM: Float) = project.copy(
         floorHeightM = heightM,

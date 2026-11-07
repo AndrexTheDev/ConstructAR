@@ -619,4 +619,8 @@
     <string name="relocalise_finish">Restaurar coordenadas</string>
     <string name="relocalise_cancel">Volver a las opciones de recuperación</string>
     <string name="relocalise_failed">Recuperación rechazada: las observaciones no son coherentes. Observa los anclajes de nuevo o guarda solo las medidas.</string>
+    <string name="din_sonderverlegung">Sonderverlegung: fuera de las zonas DIN aplicables; el punto permanece sin cambios.</string>
+    <string name="snap_installation_zone">Ajustado %1$s cm a la zona de instalación DIN</string>
+    <string name="wall_ua_profile">Refuerzo UA (2 mm)</string>
+    <string name="wall_ua_value">%1$d perfiles · %2$s</string>
 </resources>

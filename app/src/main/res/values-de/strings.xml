@@ -619,4 +619,8 @@
     <string name="relocalise_finish">Koordinaten wiederherstellen</string>
     <string name="relocalise_cancel">Zurück zu den Wiederherstellungsoptionen</string>
     <string name="relocalise_failed">Wiederherstellung abgelehnt: Die Beobachtungen sind nicht konsistent. Beobachte die Anker erneut oder stelle nur die Maße wieder her.</string>
+    <string name="din_sonderverlegung">Sonderverlegung: außerhalb der zutreffenden DIN-Zonen; der Punkt bleibt unverändert.</string>
+    <string name="snap_installation_zone">Um %1$s cm auf die DIN-Installationszone ausgerichtet</string>
+    <string name="wall_ua_profile">UA-Aussteifung (2 mm)</string>
+    <string name="wall_ua_value">%1$d Profile · %2$s</string>
 </resources>

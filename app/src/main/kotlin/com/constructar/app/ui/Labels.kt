@@ -67,6 +67,7 @@ fun SnapFeatureKind.snapMovedRes(): Int = when (this) {
     SnapFeatureKind.FLOOR_EDGE -> R.string.snap_floor_edge
     SnapFeatureKind.CEILING_EDGE -> R.string.snap_ceiling_edge
     SnapFeatureKind.EDGE -> R.string.snap_edge
+    SnapFeatureKind.INSTALLATION_ZONE -> R.string.snap_installation_zone
 }
 
 /** "Cable" / "Pipe" / "Duct" — the service being routed. */

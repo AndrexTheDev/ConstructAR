@@ -24,9 +24,9 @@ drifts.
 ## Tier 3 — the arithmetic
 
 ```
-S = d_real / ||P2 - P1||                     the factor every measured metre is multiplied by
+S = d_real / ||P2 - P1||                     the factor derived from the reference sweep
 accepted  ⟺  S ∈ [0.85, 1.15]                both ends included
-P' = P_ref + S · (P - P_ref)                 a correction about the reference, not the origin
+P_calibrated = S · P_raw                     the one transform used by every consumer
 ```
 
 **References.** `CalibrationReference` holds the only copies of the physical sizes:
@@ -44,32 +44,34 @@ nobody checked. The window is deliberately the one the specification asked for, 
 ARCore's own error is far smaller — tightening it to ±3 % would be a product decision, not an
 implementation detail, and it is not taken here.
 
-**The anchor matters.** Scaling about the world origin moves a node 20 m from the reference by
-`20 m x (S - 1)`: at S = 1.05 that is a metre of drift in a room, on geometry nobody re-measured.
-`P' = P_ref + S · (P - P_ref)` leaves the measured object where it stands and moves only what was
-measured relative to it. `apply` returns the point unchanged to the bit when `S == 1.0`, so a
-project that never calibrated cannot pick up rounding noise on its way out.
+**Raw evidence remains correctable.** `route.nodes` and the scan stored in the project stay in raw
+ARCore coordinates. Calibration does not rewrite them: a better reference measurement tomorrow can
+replace the factor without first trying to undo yesterday's. `CalibrationTransform` is the single
+boundary that creates transformed copies with `p_calibrated = k_calib × p_raw`; identity returns the
+original geometry and a malformed imported factor fails closed to identity rather than creating NaN
+vertices. The reference-relative arithmetic inside `ReferenceCalibration` is only how the two sweep
+taps determine their measured separation and hence `S`; it is not a second output-coordinate rule.
 
-**Where the factor is applied — and where it is not.** `ProjectRecord.calibrationScale` (default
-`1.0`) is the stored factor. It is multiplied into exactly two places, both of them *reporting*:
-`ProjectRecord.totalLengthMeters` / `calibratedMeters(route)` (the room screen, the protocol tables,
-the CSV run details) and the metre totals in `MaterialListBuilder.build`. It is deliberately **not**
-applied to:
+**Where the factor is applied.** `ProjectRecord.calibrationScale` (default `1.0`) is the stored
+factor. `CalibrationTransform` feeds transformed points to all three consumers that must agree:
 
-* `route.nodes` — the geometry is what the anchors, the overlay and the 3D export are built from,
-  and a factor multiplied in could not be corrected by a better one tomorrow;
-* the fitting counts — a clip is "one per spacing", and length and spacing were measured in the
-  same, equally short, metre, so the ratio and therefore the count is unchanged. A certified
-  calibration changes what the customer is charged for in metres, not how many clips are needed;
-* the AR HUD while measuring — the operator measures what the phone sees; the paperwork is where
-  the correction belongs, and the room screen says so in words when a factor is in force. The
-  HUD's own "N runs · X total" line (`RunSummary.of`) is part of the HUD, not of the paperwork: it
-  adds up the same measured metres the run readouts above it show, so the running total on the
-  glass and the corrected total on the project screen differ by exactly the factor the project
-  screen names. `verify_sources.py` refuses `calibratedMeters`/`reportedMeters` in
-  `ArMeasureScreen.kt` for that reason. What finding 277 fixed is the other side of the rule: a
-  surface that *does* report corrected metres (the project screen's list, the protocol's runs
-  table) must take them from `Project.reportedMeters`, or its rows do not add up to its own sum.
+* AR committed routes, live routes, node markers and the scan overlay;
+* material and wall quantities, including route lengths, bend geometry, spacing thresholds,
+  floorplan dimensions and an automatically measured room height;
+* GLB/PLY route sweeps and the exported scan mesh.
+
+`ProjectRecord.reportedMeters` delegates its distance arithmetic to the same transform, so PDF and
+CSV rows, the room screen and the AR HUD report the same calibrated length as the geometry. No
+consumer multiplies an already transformed route or metre total by the factor again. A manually
+entered wall height or opening dimension is already a physical dimension and is not calibrated;
+it takes precedence over the automatically measured height. The default 2.50 m trade assumption is
+not a measurement and likewise remains unchanged.
+
+The fitting counts are **calculated after** point transformation, not protected from it. Uniform
+scaling preserves bend angles, but a calibrated length can cross a clip-spacing or stock-length
+threshold and therefore change the count. That is the direct consequence of using the same physical
+metre for route geometry and procurement; scaling only the final metre total would order the wrong
+number of fittings at the threshold.
 
 **What the paperwork says.** When a factor is in force the protocol prints one line under its
 header — *Calibrated: factor 1.053* — and the full CSV and the wholesaler's order list print a

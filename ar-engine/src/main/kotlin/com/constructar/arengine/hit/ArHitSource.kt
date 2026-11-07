@@ -141,11 +141,18 @@ class ArHitSource(
         // The floor is only visible here, where the frame's planes are: everything above this
         // layer sees points, not planes. Carried on the resolution so the app can store it and
         // later say what a node's height means (finding 214).
+        val floor = FloorReference.decide(
+            planes = request.planes,
+            viewerHeightM = request.viewerPosition.y,
+        )
+        val roomHeight = RoomReference.roomHeightMeters(request.planes, floor, request.viewerPosition.y)
+        val zoned = snapped.hit?.let {
+            InstallationZoneSnap.apply(it, request.planes, floor, roomHeight)
+        }
         return snapped.copy(
-            floor = FloorReference.decide(
-                planes = request.planes,
-                viewerHeightM = request.viewerPosition.y,
-            ),
+            hit = zoned,
+            floor = floor,
+            roomHeightMeters = roomHeight,
         )
     }
 

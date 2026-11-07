@@ -63,6 +63,9 @@ data class DrywallWallLine(
     val studProfileMeters: Float,
     /** UW track to buy for this run: floor + ceiling, with waste. */
     val trackProfileMeters: Float,
+    /** CW studs replaced by 2 mm UA reinforcement at doors/passages. */
+    val uaStuds: Int = 0,
+    val uaProfileMeters: Float = 0f,
 )
 
 /** The whole take-off. */
@@ -78,6 +81,9 @@ data class DrywallEstimate(
     val studs: Int,
     val studProfileMeters: Float,
     val trackProfileMeters: Float,
+    val uaStuds: Int = 0,
+    val uaProfileMeters: Float = 0f,
+    val uaProfileThicknessMm: Int = 2,
     val screws: Int,
     /** Tallest wall: the board cutting height a fitter has to plan for. */
     val wallHeightM: Float,
@@ -100,6 +106,7 @@ private const val EPS = 1e-4
 fun estimateDrywall(
     surface: WallSurfaceReport,
     spec: DrywallSpec = DrywallSpec(),
+    openings: Map<Int, List<WallOpening>> = emptyMap(),
 ): DrywallEstimate {
     if (!spec.valid || surface.lines.isEmpty()) {
         return DrywallEstimate(
@@ -121,18 +128,32 @@ fun estimateDrywall(
     }
 
     val walls = surface.lines.map { line ->
-        val studs = if (line.lengthM <= EPS.toFloat()) {
+        val baseStuds = if (line.lengthM <= EPS.toFloat()) {
             0
         } else {
             max(2, floor((line.lengthM / spec.studSpacingM).toDouble()).toInt() + 1)
         }
+        val reinforcementRanges = openings[line.wallIndex].orEmpty()
+            .filter { it.kind != OpeningKind.WINDOW && it.widthM > 0f }
+            .map {
+                val start = it.offsetM.coerceIn(0f, line.lengthM)
+                val end = (it.offsetM + it.widthM).coerceIn(0f, line.lengthM)
+                start..end
+            }
+        val uaStuds = (0 until baseStuds).count { index ->
+            val position = (index * spec.studSpacingM).coerceAtMost(line.lengthM)
+            reinforcementRanges.any { position in it }
+        }
+        val cwStuds = baseStuds - uaStuds
         DrywallWallLine(
             wallIndex = line.wallIndex,
             lengthM = line.lengthM,
             heightM = line.heightM,
-            studs = studs,
-            studProfileMeters = studs * line.heightM * (1f + spec.wasteFraction),
+            studs = cwStuds,
+            studProfileMeters = cwStuds * line.heightM * (1f + spec.wasteFraction),
             trackProfileMeters = 2f * line.lengthM * (1f + spec.wasteFraction),
+            uaStuds = uaStuds,
+            uaProfileMeters = uaStuds * line.heightM * (1f + spec.wasteFraction),
         )
     }
 
@@ -157,6 +178,8 @@ fun estimateDrywall(
         studs = walls.sumOf { it.studs },
         studProfileMeters = walls.sumOf { it.studProfileMeters.toDouble() }.toFloat(),
         trackProfileMeters = walls.sumOf { it.trackProfileMeters.toDouble() }.toFloat(),
+        uaStuds = walls.sumOf { it.uaStuds },
+        uaProfileMeters = walls.sumOf { it.uaProfileMeters.toDouble() }.toFloat(),
         screws = screws,
         wallHeightM = heights.maxOrNull() ?: 0f,
         mixedHeights = heights.size > 1,

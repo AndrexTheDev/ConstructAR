@@ -3193,10 +3193,13 @@ def check_the_calibration_has_one_home() -> None:
     # and the protocol's runs table printed the raw measurement under a corrected sum, so a
     # calibrated project's list read 12.80 m under a 13.44 m total, on the page the customer signs.
     multiplications = model_text.count("* calibrationScale")
-    if multiplications != 1:
-        add(project_model, f"the calibration factor is multiplied into metres in {multiplications} "
-                           "places - `reportedMeters` has to be the only one, or a list and the sum "
-                           "above it disagree (finding 277)")
+    if multiplications != 0:
+        add(project_model, f"the calibration factor is multiplied directly into metres in "
+                           f"{multiplications} places - `reportedMeters` must delegate to "
+                           "CalibrationTransform so points, routes and distances share one rule")
+    if "CalibrationTransform.of(calibrationScale).distance(measuredMeters)" not in model_text:
+        add(project_model, "`reportedMeters` no longer uses CalibrationTransform - PDF and material "
+                           "distances could drift from the calibrated route points")
     if "fun reportedMeters(measuredMeters: Float): Float" not in model_text:
         add(project_model, "`reportedMeters` is gone - every surface that prints a per-run length "
                            "would have to decide for itself whether to apply the factor, which is "
@@ -3216,17 +3219,18 @@ def check_the_calibration_has_one_home() -> None:
         if "calibrationScale" in source and path.name in ("Route.kt", "RouteGeometry.kt",
                                                           "TubeMeshGenerator.kt",
                                                           "DuctMeshGenerator.kt"):
-            add(path, "the calibration factor has reached the geometry - it must only ever scale "
-                      "reported metres, or a better calibration could not correct the project")
+            add(path, "geometry reads the calibration factor independently - transform raw points "
+                      "through CalibrationTransform instead, or a second scaling path can drift")
     hud = (ROOT / "app" / "src" / "main" / "kotlin" / "com" / "constructar" / "app" / "ui" / "ar" /
            "ArMeasureScreen.kt")
     if hud.exists():
         hud_text = hud.read_text(encoding="utf-8")
-        for name in ("calibratedMeters", "reportedMeters"):
-            if name in hud_text:
-                add(hud, f"`{name}` on the measure screen puts the correction into the HUD - "
-                         "`docs/CALIBRATION.md` keeps the factor in the paperwork, where it can be "
-                         "named, and the operator measures what the phone sees (finding 277)")
+        if "project.reportedMeters(routeState.lengthMeters)" not in hud_text:
+            add(hud, "the live route length no longer uses the project's central calibrated-distance "
+                     "rule, so the HUD can disagree with the PDF and material list")
+        if "* project.calibrationScale" in hud_text or "project.calibrationScale *" in hud_text:
+            add(hud, "the measure screen multiplies the factor itself - route displays must delegate "
+                     "to `reportedMeters` or calibration could be applied twice")
     for path in kotlin_sources("app") + kotlin_sources("ar-engine") + kotlin_sources("export"):
         source = path.read_text(encoding="utf-8")
         for literal in ("0.0856", "0.05398"):
@@ -3242,6 +3246,57 @@ def check_the_calibration_has_one_home() -> None:
             if f'name="{key}"' not in path.read_text(encoding="utf-8"):
                 add(path, f"'{key}' is missing - the calibration dialog of one language would "
                           f"fall back to English mid-sentence")
+
+
+def check_phase3_din_and_calibration() -> None:
+    """The DIN zoning/reinforcement and calibrated-geometry contracts, at their integration points."""
+    zones = ROOT / "core/src/main/kotlin/com/constructar/core/wall/Din18015Zones.kt"
+    zone_text = zones.read_text(encoding="utf-8")
+    for token in ("0.15f", "0.45f", "1.00f", "1.30f", "SNAP_GRID_METERS: Float = 0.05f"):
+        if token not in zone_text:
+            add(zones, f"DIN 18015 boundary/grid token `{token}` is missing")
+    if "return Assignment(Horizontal.SONDER, belowCeiling, null, true)" not in zone_text:
+        add(zones, "an outside point can acquire a snapped height instead of explicit Sonderverlegung")
+
+    room = ROOT / "ar-engine/src/main/kotlin/com/constructar/arengine/hit/RoomReference.kt"
+    room_text = room.read_text(encoding="utf-8")
+    for token in ("floor.usable", "it.normal.y < -0.6f", "it.center.y > viewerHeightMeters + 0.20f",
+                  "it in 2.0f..4.5f"):
+        if token not in room_text:
+            add(room, f"automatic room height lost its usable-floor/downward-ceiling guard: {token}")
+
+    hit_source = ROOT / "ar-engine/src/main/kotlin/com/constructar/arengine/hit/ArHitSource.kt"
+    hit_text = hit_source.read_text(encoding="utf-8")
+    if "RoomReference.roomHeightMeters" not in hit_text or "InstallationZoneSnap.apply" not in hit_text:
+        add(hit_source, "resolved hits no longer receive the session room reference and DIN assignment")
+    elif hit_text.index("RoomReference.roomHeightMeters") > hit_text.index("InstallationZoneSnap.apply"):
+        add(hit_source, "DIN assignment runs before this session's floor/ceiling reference is resolved")
+
+    drywall = ROOT / "core/src/main/kotlin/com/constructar/core/wall/DrywallEstimator.kt"
+    drywall_text = drywall.read_text(encoding="utf-8")
+    for token in ("it.kind != OpeningKind.WINDOW", "val cwStuds = baseStuds - uaStuds",
+                  "uaProfileThicknessMm: Int = 2"):
+        if token not in drywall_text:
+            add(drywall, f"DIN 18181 CW/UA separation is missing: {token}")
+
+    for relative in (
+        "core/src/main/kotlin/com/constructar/core/bom/MaterialList.kt",
+        "core/src/main/kotlin/com/constructar/core/wall/WallPlan.kt",
+        "export/src/main/kotlin/com/constructar/export/ExportService.kt",
+        "app/src/main/kotlin/com/constructar/app/ui/ar/ArMeasureController.kt",
+    ):
+        path = ROOT / relative
+        if "CalibrationTransform" not in path.read_text(encoding="utf-8"):
+            add(path, "this raw-point consumer bypasses the central calibration transform")
+
+    screen = ROOT / "app/src/main/kotlin/com/constructar/app/ui/ar/ArMeasureScreen.kt"
+    screen_text = screen.read_text(encoding="utf-8")
+    if "R.string.din_sonderverlegung" not in screen_text:
+        add(screen, "Sonderverlegung is persisted but never explicitly shown to the operator")
+    for folder in LOCALES:
+        path = RES_DIR / folder / "strings.xml"
+        if path.exists() and 'name="din_sonderverlegung"' not in path.read_text(encoding="utf-8"):
+            add(path, "the explicit Sonderverlegung warning would fall back to another language")
 
 
 FUN_DECLARATION = re.compile(
@@ -4914,6 +4969,7 @@ def main() -> int:
     check_the_draft_choice_is_saved()
     check_the_camera_answer_survives_a_reclaim()
     check_the_calibration_has_one_home()
+    check_phase3_din_and_calibration()
     check_the_frame_solver_is_built_everywhere()
     check_the_squared_wall_keeps_its_distance()
     check_the_native_cmake_is_spelled_out()
