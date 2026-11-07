@@ -363,14 +363,21 @@ class TsdfScanPipeline(
      * Hands a densified depth frame to the integrator.
      *
      * ARCore's own depth stays authoritative *inside* the fused frame (the fusion only fills
-     * holes), so this is a strictly larger measured region, not a replacement. The frame is
-     * dropped after [FUSION_TTL_MS] so a stale network result can never be integrated into
-     * geometry the camera has already moved past.
+     * holes). Filled pixels travel with floor-level confidence, so their larger coverage never
+     * masquerades as equally strong measured evidence. The frame is dropped after [FUSION_TTL_MS]
+     * so a stale network result cannot be integrated into geometry the camera has moved past.
      */
-    fun submitFusedDepth(depthMm: ShortArray, width: Int, height: Int, source: DepthFrameSnapshot) {
+    fun submitFusedDepth(
+        depthMm: ShortArray,
+        confidence: ByteArray,
+        width: Int,
+        height: Int,
+        source: DepthFrameSnapshot,
+    ) {
         fusedDepth.set(
             FusedDepthFrame(
                 depthMm = depthMm.copyOf(),
+                confidence = confidence.copyOf(),
                 width = width,
                 height = height,
                 timestampNs = source.timestampNs,
@@ -409,8 +416,8 @@ class TsdfScanPipeline(
         // Prefer the AI-densified frame when it matches this resolution and is fresh. Crucially,
         // its own timestamp, intrinsics and camera pose win too: inference completes after the
         // camera has moved, and pairing old pixels with the newest pose creates ghost geometry.
-        // Its pixels already passed the confidence filter during fusion, so no confidence image
-        // is applied on top (that would throw away exactly the filled holes).
+        // Its fused confidence plane preserves measured ARCore values and marks network fills at
+        // the acceptance floor, so native soft weighting can discount them without discarding them.
         val selected = DepthIntegrationSelector.select(
             snapshot = snapshot,
             fused = fusedDepth.get(),

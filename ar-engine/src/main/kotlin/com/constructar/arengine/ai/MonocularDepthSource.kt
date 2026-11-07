@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicReference
  * copy depth + confidence             sample ARCore↔network pairs
  * submit ───────────────────────────► MetricDepthCalibrator (RANSAC + MAD + Tukey IRLS)
  *                                     AiDepthFusion → fused millimetre depth
- *                                     onFused(depth, w, h, source geometry)
+ *                                     onFused(depth, confidence, w, h, source geometry)
  * ```
  *
  * Why the copies: the ARCore `Image` and the pipeline's pooled depth buffer both become
@@ -51,6 +51,7 @@ class MonocularDepthSource(
      */
     private val onFused: (
         depthMm: ShortArray,
+        confidence: ByteArray,
         width: Int,
         height: Int,
         source: DepthFrameSnapshot,
@@ -75,6 +76,7 @@ class MonocularDepthSource(
     /** Reused copies of the frame's depth and confidence planes (finding 173). */
     private val scratch = ScratchPlanes()
     @Volatile private var fusedBuffer = ShortArray(640 * 480)
+    @Volatile private var fusedConfidenceBuffer = ByteArray(640 * 480)
 
     @Volatile private var lastRunMillis = 0L
 
@@ -188,8 +190,9 @@ class MonocularDepthSource(
         }
 
         if (fusedBuffer.size < width * height) {
-            // Only reallocates when the device switches depth resolution; then it keeps it.
+            // Only reallocates when the device switches depth resolution; then it keeps both.
             fusedBuffer = ShortArray(width * height)
+            fusedConfidenceBuffer = ByteArray(width * height)
         }
 
         val result = AiDepthFusion.fuse(
@@ -203,12 +206,13 @@ class MonocularDepthSource(
             relative = relative,
             calibration = calibration,
             out = fusedBuffer,
+            confidenceOut = fusedConfidenceBuffer,
             minConfidence = minConfidence,
         )
         lastFillRatio = result.fillRatio
         isRunning = true
         if (result.usedNetwork) {
-            onFused(fusedBuffer, width, height, snapshot)
+            onFused(fusedBuffer, fusedConfidenceBuffer, width, height, snapshot)
         }
     }
 

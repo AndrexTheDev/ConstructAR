@@ -94,7 +94,8 @@ sealed interface ClosureState {
  *    apart and be different corners of the same doorway - and a closure that is wrong cannot be
  *    seen afterwards: the optimiser simply distributes the error over the whole loop.
  *  * **The confirmation is an assumption and is treated as one.** The closure edge says "these
- *    nodes coincide"; GNC/TLS and an odometry-deformation gate can still reject that hypothesis.
+ *    nodes coincide"; pairwise cycle consistency, GNC/TLS and an odometry-deformation gate can
+ *    still reject that hypothesis without deleting older accepted loops.
  *  * **What the optimiser produced is reported, not stored.** The corrected poses are *not*
  *    written back into the measured runs here: a run's metres were measured with taps the
  *    operator made, and silently moving them would replace a measurement with an inference

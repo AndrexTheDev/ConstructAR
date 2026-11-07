@@ -514,6 +514,79 @@ void testLastLoopTransaction() {
             "the app report describes the restored graph without the rejected edge");
 }
 
+void testPairwiseLoopConsistency() {
+  section("Pose graph: PCM rejects only the inconsistent newcomer");
+  const auto atX = [](float x) {
+    return Mat4::fromRotationTranslation(Mat3(), Vec3(x, 0.f, 0.f));
+  };
+
+  PoseGraph graph;
+  for (int i = 0; i < 5; ++i) graph.addNode(atX(static_cast<float>(i)), i == 0);
+  for (int i = 0; i + 1 < 5; ++i) graph.addEdge(i, i + 1, atX(1.f));
+  // An already accepted, exactly odometry-consistent relative-pose constraint.
+  graph.addEdge(0, 4, atX(4.f), 100.0, 100.0, true);
+  const auto before = graph.poses();
+  const size_t edgesBefore = graph.edgeCount();
+
+  // The newcomer disagrees with the measured 0→2 path and the accepted 0→4 constraint by 2 m.
+  graph.addEdge(0, 2, Mat4::identity(), 100.0, 100.0, true);
+  const auto rejected = graph.optimizeLastLoop(60, 1e-9);
+  check(!rejected.converged && rejected.rolledBack &&
+            rejected.failure == constructar::OptimizationFailure::REJECTED_LOOP &&
+            rejected.pairwiseChecks == 1 && rejected.pairwiseRejections == 1,
+        "the inconsistent newcomer is rejected by one pairwise cycle");
+  check(graph.edgeCount() == edgesBefore && graph.edges().back().loopClosure &&
+            std::fabs(graph.edges().back().measurement.translation().x - 4.f) < 1e-6f,
+        "the accepted older loop survives with its measurement unchanged");
+  bool exactPoses = true;
+  const auto restored = graph.poses();
+  for (size_t i = 0; i < before.size(); ++i) {
+    exactPoses = exactPoses && std::memcmp(before[i].m, restored[i].m, sizeof(before[i].m)) == 0;
+  }
+  check(exactPoses, "PCM rejection leaves every pre-attempt pose bit-for-bit intact");
+  checkNear(rejected.worstPairwiseTranslationMeters, 2.0, 1e-3,
+            "the pairwise cycle reports the actual two-metre contradiction");
+
+  // A different newcomer closes the same measured cycles exactly and must not be collateral damage.
+  graph.addEdge(1, 3, atX(2.f), 100.0, 100.0, true);
+  const auto accepted = graph.optimizeLastLoop(60, 1e-9);
+  check(accepted.converged && !accepted.rolledBack && accepted.pairwiseChecks == 1 &&
+            accepted.pairwiseRejections == 0,
+        "a consistent companion passes PCM and the robust solve");
+  bool fullWeightLoops = accepted.residuals.size() == graph.edgeCount();
+  for (const auto& residual : accepted.residuals) {
+    if (residual.loopClosure) fullWeightLoops = fullWeightLoops && residual.robustWeight > 0.999;
+  }
+  check(graph.edgeCount() == edgesBefore + 1 && fullWeightLoops,
+        "both consistent loops remain active at full weight");
+  float largestMove = 0.f;
+  const auto acceptedPoses = graph.poses();
+  for (size_t i = 0; i < before.size(); ++i) {
+    largestMove = std::max(largestMove,
+                           (acceptedPoses[i].translation() - before[i].translation()).length());
+  }
+  checkNear(accepted.worstPairwiseTranslationMeters, 0.0, 1e-3,
+            "the consistent pair has zero cycle translation");
+  check(largestMove < 1e-5f, "an already consistent graph is not moved by PCM acceptance");
+
+  // Rotation is checked independently: two coincident nodes make every odometry translation zero.
+  PoseGraph rotational;
+  rotational.addNode(Mat4::identity(), true);
+  rotational.addNode(Mat4::identity());
+  rotational.addEdge(0, 1, Mat4::identity());
+  rotational.addEdge(0, 1, Mat4::identity(), 100.0, 100.0, true);
+  const Mat4 quarterTurn = Mat4::fromRotationTranslation(
+      constructar::Quat::fromAxisAngle(Vec3(0.f, 1.f, 0.f), constructar::kPi * 0.5f).toMat3(), Vec3());
+  rotational.addEdge(0, 1, quarterTurn, 100.0, 100.0, true);
+  const auto rotationRejected = rotational.optimizeLastLoop(60, 1e-9);
+  check(rotationRejected.pairwiseRejections == 1 &&
+            rotationRejected.worstPairwiseRotationRadians > 1.5 &&
+            rotationRejected.worstPairwiseTranslationMeters < 1e-3,
+        "a ninety-degree cycle error is rejected even with zero translation error");
+  check(rotational.edgeCount() == 2 && rotational.edges().back().loopClosure,
+        "rotation rejection also preserves the older accepted loop");
+}
+
 void testProximityDetector() {
   section("Proximity loop-closure proposer");
   constructar::ProximityLoopClosureDetector detector;
@@ -2126,6 +2199,78 @@ void testObservationWeight() {
   checkNear(evidencePerWrite(1.f), 1.0, 1e-4, "and a frame at 1 m deposits one");
 }
 
+/** Confidence is both a hard acceptance floor and a soft amount of stored evidence. */
+void testConfidenceWeight() {
+  section("TSDF: confidence scales accepted evidence");
+  checkNear(TsdfVolume::confidenceWeight(255), 1.0, 1e-6, "certain evidence keeps unit weight");
+  checkNear(TsdfVolume::confidenceWeight(0), 0.0, 1e-6, "zero confidence has zero weight");
+  checkNear(TsdfVolume::confidenceWeight(96), 96.0 / 255.0, 1e-6,
+            "the acceptance floor is discounted rather than promoted to certain");
+  bool monotone = true;
+  for (int confidence = 0; confidence < 255; ++confidence) {
+    monotone = monotone && TsdfVolume::confidenceWeight(static_cast<uint8_t>(confidence)) <=
+                               TsdfVolume::confidenceWeight(static_cast<uint8_t>(confidence + 1));
+  }
+  check(monotone, "soft evidence never decreases as ARCore confidence rises");
+
+  SyntheticCamera camera;
+  const std::vector<uint16_t> depth(static_cast<size_t>(camera.width * camera.height), 2000);
+  std::vector<uint8_t> confidence(static_cast<size_t>(camera.width * camera.height), 255);
+  struct Evidence {
+    constructar::IntegrationStats stats;
+    double stored = 0.0;
+  };
+  const auto integrateWithConfidence = [&](uint8_t value) {
+    std::fill(confidence.begin(), confidence.end(), value);
+    TsdfConfig config;
+    config.voxelSize = 0.02f;
+    config.minConfidence = 96;
+    config.workerThreads = 1;
+    TsdfVolume volume(config);
+    DepthFrameView frame = makeFrame(camera, depth, Mat4::identity());
+    frame.confidence = confidence.data();
+    frame.confidenceWidth = camera.width;
+    frame.confidenceHeight = camera.height;
+    frame.confidenceRowStride = camera.width;
+    const auto stats = volume.integrate(frame, 2);
+    return Evidence{stats, volume.totalVoxelWeightExact()};
+  };
+  const Evidence certain = integrateWithConfidence(255);
+  const Evidence half = integrateWithConfidence(128);
+  const Evidence floor = integrateWithConfidence(96);
+  const Evidence rejected = integrateWithConfidence(95);
+
+  check(certain.stats.raysProcessed > 0 && half.stats.raysProcessed == certain.stats.raysProcessed &&
+            floor.stats.raysProcessed == certain.stats.raysProcessed,
+        "soft weighting changes evidence, not which accepted rays exist");
+  checkNear(half.stored / certain.stored, 128.0 / 255.0, 0.02,
+            "128/255 confidence stores half the evidence of the identical certain frame");
+  check(floor.stored < half.stored && floor.stored > 0.0,
+        "an AI-fill-style floor sample remains usable but carries less evidence");
+  check(rejected.stats.raysProcessed == 0 && rejected.stored == 0.0,
+        "the hard 95 < 96 confidence floor still rejects the complete frame");
+
+  TsdfConfig config;
+  config.voxelSize = 0.02f;
+  config.minConfidence = 96;
+  config.workerThreads = 1;
+  TsdfVolume withoutConfidence(config);
+  const auto baseline = withoutConfidence.integrate(makeFrame(camera, depth, Mat4::identity()), 2);
+  checkNear(withoutConfidence.totalVoxelWeightExact(), certain.stored, 1e-9,
+            "a missing confidence plane preserves the legacy unit multiplier");
+  check(baseline.voxelUpdates == certain.stats.voxelUpdates,
+        "certain and absent confidence produce identical voxel updates");
+
+  TsdfVolume invalidVolume(config);
+  DepthFrameView invalid = makeFrame(camera, depth, Mat4::identity());
+  invalid.confidence = confidence.data();
+  invalid.confidenceWidth = 0;
+  invalid.confidenceHeight = camera.height;
+  invalid.confidenceRowStride = camera.width;
+  check(invalidVolume.integrate(invalid, 2).raysProcessed == 0,
+        "a non-null confidence plane with invalid dimensions fails closed");
+}
+
 /**
  * Semantic masking: a waist-height slice keeps the walls and drops what a cup could stand on.
  *
@@ -2273,6 +2418,7 @@ int main() {
   testPoseGraphRejectsFalseLoop();
   testPoseGraphRollback();
   testLastLoopTransaction();
+  testPairwiseLoopConsistency();
   testProximityDetector();
   testTriangleBudgetAndReset();
   testBlockBudget();
@@ -2290,6 +2436,7 @@ int main() {
   testFloorplanManhattan();
   testFloorplanManhattanFromPlanes();
   testObservationWeight();
+  testConfidenceWeight();
   testSurfaceMask();
   testInvalidInput();
 

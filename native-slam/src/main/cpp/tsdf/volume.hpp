@@ -67,8 +67,13 @@ struct DepthFrameView {
   int64_t timestampNs = 0;
 
   bool isValid() const {
+    // A non-null confidence pointer with impossible geometry is not "no confidence": accepting
+    // it would either read outside the plane or silently promote uncertain samples to weight 1.
+    const bool confidenceValid =
+        confidence == nullptr ||
+        (confidenceWidth > 0 && confidenceHeight > 0 && confidenceRowStride >= confidenceWidth);
     return depth != nullptr && width > 0 && height > 0 && rowStrideElements >= width &&
-           intrinsics.isValid() && cameraToWorld.isFinite();
+           confidenceValid && intrinsics.isValid() && cameraToWorld.isFinite();
   }
 };
 
@@ -209,6 +214,13 @@ class TsdfVolume {
    * something, and a reading at half a metre cannot outvote the whole frame.
    */
   static float observationWeight(float depthMetres);
+
+  /**
+   * Soft evidence multiplier for an already accepted confidence sample (0…1).
+   * The hard `minConfidence` gate remains separate; frames without a confidence plane retain
+   * their historical unit multiplier rather than inventing a confidence value.
+   */
+  static float confidenceWeight(uint8_t confidence);
 
   void reset();
 

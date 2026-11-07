@@ -19,6 +19,8 @@ import com.constructar.core.geo.DepthIntrinsics
  */
 data class FusedDepthFrame(
     val depthMm: ShortArray,
+    /** Tightly packed integration confidence: measured ARCore value, fill floor, or zero for a hole. */
+    val confidence: ByteArray,
     val width: Int,
     val height: Int,
     val timestampNs: Long,
@@ -31,6 +33,7 @@ data class FusedDepthFrame(
     init {
         require(width > 0 && height > 0) { "fused depth dimensions must be positive" }
         require(depthMm.size >= width * height) { "fused depth buffer is shorter than width×height" }
+        require(confidence.size >= width * height) { "fused confidence is shorter than width×height" }
         require(cameraToWorld.size == 16) { "cameraToWorld must contain 16 values" }
     }
 }
@@ -69,11 +72,10 @@ internal object DepthIntegrationSelector {
                     height = fused.height,
                     // AiDepthFusion emits a tightly packed buffer, independent of the camera's stride.
                     rowStrideElements = fused.width,
-                    // Low-confidence measured pixels have already become holes or network fills.
-                    confidence = null,
-                    confidenceWidth = 0,
-                    confidenceHeight = 0,
-                    confidenceRowStride = 0,
+                    confidence = fused.confidence,
+                    confidenceWidth = fused.width,
+                    confidenceHeight = fused.height,
+                    confidenceRowStride = fused.width,
                     intrinsics = fused.intrinsics,
                     cameraToWorld = fused.cameraToWorld,
                     timestampNs = fused.timestampNs,

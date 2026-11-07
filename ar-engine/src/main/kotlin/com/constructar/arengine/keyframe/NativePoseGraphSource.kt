@@ -15,8 +15,9 @@ import com.constructar.nativebridge.NativeSlamEngine
  *
  * Three delegations and one number that is not a delegation: the weight of the closure edge.
  * Loop closures start with 100× the odometry weight so a consistent revisit can remove drift.
- * That weight is a hypothesis, not a command: native GNC/TLS can reject a closure, and an
- * independent odometry-deformation gate falls back to the measured chain rather than folding it.
+ * That weight is a hypothesis, not a command: newest-loop pairwise cycle checks and native
+ * GNC/TLS can reject a closure, and an independent odometry-deformation gate falls back to the
+ * measured chain rather than folding it. PCM removes only the inconsistent newcomer.
  *
  * **Worker thread only** - `NativeSlamEngine` requires every pose-graph call to be serialised by
  * the pipeline's single worker, and [PoseGraphCloser] is run there.

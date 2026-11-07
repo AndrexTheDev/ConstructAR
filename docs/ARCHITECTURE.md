@@ -178,16 +178,21 @@ Unmeasured points are *not* admitted - letting them through would reintroduce ex
 the mask exists to remove - and the counts are published so a slice made mostly of them is visible
 as such.
 
-**Distance-weighted fusion.** Every observation is weighted by 1/Z² (`observationWeight`, clamped
-to [1/36, 4]), because a depth camera's error grows with range: without it, one frame taken from
-across the room pulls as hard on a voxel as fifty frames taken at arm's length. The weight is
-applied inside `fuseVoxel`, under the shard lock, and the running average uses it - so the
-observations that are worth more are the ones that decide where the surface is. Two consequences
-worth naming: the voxel weight array stopped being a count and became 16-bit fixed point in
-1/256ths (`TsdfVolume::kWeightScale`), since a flat array would have truncated a 0.0625 observation
-to zero; and `IntegrationStats::voxelWeight` reports the evidence a frame added, so the volume's
-`totalVoxelWeightExact()` is exactly the sum of it over every frame - the accounting identity that
-catches a fusion which is counted but not stored (finding 181's guard).
+**Distance- and confidence-weighted fusion.** Every observation is weighted by 1/Z²
+(`observationWeight`, clamped to [1/36, 4]), because a depth camera's error grows with range:
+without it, one frame taken from across the room pulls as hard on a voxel as fifty frames taken at
+arm's length. When a confidence plane exists, the hard `minConfidence` gate still runs first and
+the accepted observation is then multiplied by `confidence / 255`. Frames without one retain the
+legacy unit multiplier. Fused frames carry their own tightly packed confidence: measured ARCore
+pixels keep their source value, calibrated network fills use the acceptance floor and holes are
+zero. The weight is applied inside `fuseVoxel`, under the shard lock, and the running average uses
+it - so the observations that are worth more are the ones that decide where the surface is. Two
+consequences worth naming: the voxel weight array stopped being a count and became 16-bit fixed
+point in 1/256ths (`TsdfVolume::kWeightScale`), since a flat array would have truncated a 0.0625
+observation to zero; and `IntegrationStats::voxelWeight` reports the evidence a frame added, so
+the volume's `totalVoxelWeightExact()` is exactly the sum of it over every frame - the accounting
+identity that catches a fusion which is counted but not stored (finding 181's guard). Invalid
+confidence dimensions fail closed instead of being mistaken for an absent plane.
 
 **Net wall area and the drywall take-off** (`core/.../wall`). The first `:core` package that
 turns geometry into a *purchase order*. `wallSurface` subtracts each wall's openings as a **union**
@@ -325,11 +330,16 @@ is still reached from nowhere, and no stored metre depends on a marker today.
 **Pose graph** (`slam/pose_graph.cpp`). Gauss–Newton on SE(3) with central-difference Jacobians,
 block-sparse Hessian solved by preconditioned conjugate gradient and backtracking line search.
 Only loop hypotheses are reweighted, by super-linear GNC/TLS; measured odometry keeps weight 1.
-An independent odometry-deformation gate disables all loops and recovers the measured chain if a
-local minimum would fold it. Every attempt is transactional: non-finite, non-converged or
-cost-worsening work restores every input pose. The app's `optimizeLastLoop` also removes a failed
-or zero-weight new hypothesis, so it cannot poison the next attempt. Loops start at 100× odometry,
-but that is a strong prior rather than permission to win. The graph is fed since finding 243: `KeyframeFeed` decides on each placed
+Before the app's newest-loop solve, pairwise cycle consistency compares that hypothesis with every
+comparable accepted loop: `A · O(b→c) · B · O(d→a)` must be identity within a bounded, per-hop
+noise envelope. Only measured odometry composes those cycles; optimised poses cannot grade their
+own evidence. An inconsistent newcomer is removed without touching older loops or any pose. This
+is deliberately newest-loop PCM, not a maximum-clique batch solver. The independent
+odometry-deformation gate still disables all loops for an irreducibly folded batch and recovers
+the measured chain. Every attempt is transactional: non-finite, non-converged or cost-worsening
+work restores every input pose. `optimizeLastLoop` also removes a failed or zero-weight new
+hypothesis, so it cannot poison the next attempt. Loops start at 100× odometry, but that is a
+strong prior rather than permission to win. The graph is fed since finding 243: `KeyframeFeed` decides on each placed
 frame which pose is worth a node (`KeyframeSelector`, `:core`), the render thread enqueues, and
 the scan worker writes the node and the odometry edge to the previous one. Since finding 245 it
 can be corrected too, but only on a human's word: `ProximityLoopClosureDetector` proposes a
@@ -364,10 +374,11 @@ affine basin, MAD supplies the residual scale and Tukey-biweight IRLS rejects gr
 an unusable inlier ratio/RMS still disables filling. `AiDepthFusion` writes a densified millimetre
 frame in which confident ARCore pixels are copied verbatim and only holes are filled. A failed
 calibration leaves low-confidence pixels empty rather than passing them through as certain.
-`TsdfScanPipeline.submitFusedDepth` accepts the result with an 800 ms TTL and integrates it with
-no separate confidence gate (the fusion already applied one). The `FusedDepthFrame` also carries
-the source timestamp, intrinsics and camera pose, so a late inference can never be projected with
-the newest frame's acquisition geometry.
+`TsdfScanPipeline.submitFusedDepth` accepts the result with an 800 ms TTL. Its parallel confidence
+plane keeps measured ARCore values, marks network fills at the hard floor and clears holes to
+zero, so the native soft gate discounts fills without throwing their coverage away. The
+`FusedDepthFrame` also carries the source timestamp, intrinsics and camera pose, so a late
+inference can never be projected with the newest frame's acquisition geometry.
 
 XNNPACK is the *only* backend, deliberately: ARCore's standalone LiteRT runtime no longer ships
 the NNAPI delegate, and the Vulkan GPU delegate cannot execute the int8 graph that the licence

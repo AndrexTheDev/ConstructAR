@@ -586,23 +586,23 @@ Known limitations, deliberately documented rather than hidden:
   is measured on. How much of the *room* was captured is what the scan-limit warning in the HUD
   (finding 97) and the protocol's scan note (finding 100) report; the app never computes a room's
   total surface, so it does not print a room percentage anywhere.
-* **Drift.** ARCore drift is ~1 % of travelled distance and the shipped pipeline does not
-  correct it: the pose graph that would redistribute a closure over the whole trajectory is
-  host-tested but never fed (see *Optional pieces*), so a long run accumulates the error instead
-  of folding it back. Re-measure a run longer than ~8 m, or measure it as two runs from a shared
-  corner.
+* **Drift.** ARCore trajectories can accumulate drift. The fed pose graph can report a verified
+  closure correction, but it deliberately does not rewrite measured taps, stored routes or the
+  TSDF. A long measured run therefore keeps its original acquisition error rather than silently
+  becoming an inferred one. Re-measure a long run, or split it at a shared surveyed corner.
 
 ---
 
 ## Testing
 
-* **Native (C++) — 344 assertions, all green**, exercised with plain `g++` (no Android SDK; the
-  binary reports 348 passes because four of them sit inside the loop over the tag's rotations):
+* **Native (C++) — 365 assertions, all green**, exercised with plain `g++` (no Android SDK; the
+  binary reports 369 passes because four of them sit inside the loop over the tag's rotations):
   SE(3) exp/log round trip, TSDF integration on synthetic depth, sphere/wall reconstruction
   areas and extents, a 30°-tilted plane (which pins the depth convention), free-space carving
   (a ghost disappears, the real wall does not), triangle budget, invalid input, pose-graph
-  closure, proximity loop closure, every observation the integration counted is still in the
-  volume's weights, and the Manhattan-World frame (finding 187): a 4 x 3 x 2.5 m room with one
+  closure, newest-loop pairwise cycle consistency (including exact rollback and a 90° outlier),
+  confidence-scaled TSDF evidence, proximity loop closure, every observation the integration
+  counted is still in the volume's weights, and the Manhattan-World frame (finding 187): a 4 x 3 x 2.5 m room with one
   wall 8° off square and a 35° bay window comes back square to a fifth of a degree, the crooked
   wall is squared and stays where its points are, the bay is returned untouched, a set of parallel
   walls is refused rather than guessed at, and a room turned 30° yields the turned frame.
@@ -647,7 +647,7 @@ Known limitations, deliberately documented rather than hidden:
   `ArMeasureController.finalFloorplan()` hands the payload on, and
   `ProjectViewModel.saveFloorplanThumbnail` writes the room's outline and its SVG (see *Room
   thumbnails* above and ARCHITECTURE §5b for the four links of that chain).
-* **Semantic masking and distance-weighted fusion** — two pieces the slice needs to be usable. A
+* **Semantic masking and evidence-weighted fusion** — two pieces the slice needs to be usable. A
   waist-height cut crosses tables, counters and workbenches as well as walls, and a horizontal
   patch drawn as a wall puts a partition through the middle of the room: `maskVerticalSurfaces`
   keeps a point only when the surface normal is within 20° of vertical, which is the SDF gradient
@@ -656,10 +656,12 @@ Known limitations, deliberately documented rather than hidden:
   synthetic frame: a vertical wall keeps all 2 580 of its points, the same plane seen by a camera
   looking straight up is 100 % dropped. And observations are now weighted by **1/Z²**, so a reading
   at 1 m carries sixteen times the authority of the same pixel at 4 m in the voxel's running
-  average (clamped to [1/36, 4]); the evidence a frame deposits per voxel write is asserted to be
-  exactly that number, so a helper that never reaches the integrator fails. Fractional weights are
-  why the block's 16-bit weight array became fixed point in 1/256ths (`kWeightScale`) instead of a
-  count. Both are host-tested and **not yet wired**: no JNI symbol, no caller.
+  average (clamped to [1/36, 4]). Accepted samples with a confidence plane are additionally
+  scaled by **confidence / 255**; network fills stay at the acceptance floor and missing confidence
+  keeps the legacy unit multiplier. The evidence a frame deposits per voxel write is asserted, so
+  a helper that never reaches the integrator fails. Fractional weights are why the block's 16-bit
+  weight array became fixed point in 1/256ths (`kWeightScale`) instead of a count. These are native
+  pipeline contracts with synthetic host regressions, not a claim of measured phone accuracy.
 * **AprilTag — the decoder is vendored, the wiring is not.** AprilTag 3.1.0's C core (BSD-2-Clause,
   unmodified, one family: tag36h11) sits in `native-slam/src/main/cpp/third_party/apriltag/` with
   its `VENDORED.md`, its entry in `NOTICE`, its licence text in `licenses/` and its row on the Help
@@ -848,10 +850,10 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1286 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1287 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
-| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 344 checks, 0 failures (348 runtime executions) |
-| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 344 checks, 0 failures, no data race reported (348 runtime executions) |
+| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 365 checks, 0 failures (369 runtime executions) |
+| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 365 checks, 0 failures, no data race reported (369 runtime executions) |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
 | APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |

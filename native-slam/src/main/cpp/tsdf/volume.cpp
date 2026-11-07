@@ -149,6 +149,10 @@ float TsdfVolume::observationWeight(float depthMetres) {
   return std::min(std::max(weight, 1.f / 36.f), 4.f);
 }
 
+float TsdfVolume::confidenceWeight(uint8_t confidence) {
+  return static_cast<float>(confidence) / 255.f;
+}
+
 const TsdfVolume::Block* TsdfVolume::findBlock(int32_t bx, int32_t by, int32_t bz) const {
   const int64_t key = blockKey(bx, by, bz);
   const Shard& shard = *shards_[shardFor(key)];
@@ -238,10 +242,15 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
       if (rawDepth == 0) continue;
       const float d = static_cast<float>(rawDepth) * 0.001f;
       if (d < minDepth || d > maxDepth) continue;
+      float confidenceScale = 1.f;
       if (confRow) {
         const int confX = std::min(frame.confidenceWidth - 1, static_cast<int>(static_cast<float>(u) * confScaleX));
-        if (confRow[confX] < config_.minConfidence) continue;
+        const uint8_t confidence = confRow[confX];
+        if (confidence < config_.minConfidence) continue;
+        confidenceScale = confidenceWeight(confidence);
       }
+      const float weight = observationWeight(d) * confidenceScale;
+      if (!(weight > 0.f)) continue;
       ++rays;
 
       // Camera-space ray through the pixel centre. ARCore's camera looks down −Z and raw
@@ -271,7 +280,7 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
           // behaviour - spent 40 % of the voxels in the volume on empty air: 444 blocks for a
           // single wall became 1 196 and every later gather walked them (finding 111).
           // Free space is fully outside: sdf = +1 in normalised units.
-          if (fuseVoxel(ix, iy, iz, 1.f, 1.f, /*existingOnly=*/true).written) ++updates;
+          if (fuseVoxel(ix, iy, iz, 1.f, weight, /*existingOnly=*/true).written) ++updates;
         }
       }
       const int steps = std::max(2, static_cast<int>(std::ceil((zEnd - zStart) / vs)));
@@ -299,10 +308,10 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
         const float sdf = d - z;
         const float clamped = clampf(sdf / trunc, -1.f, 1.f);
 
-        const float weight = observationWeight(d);
-        // Lookup, allocation and fusion in one locked step (finding 181). The observation is
-        // weighted by its range: a depth reading's error grows with Z, so the same pixel at 4 m
-        // is worth a sixteenth of one at 1 m in the running average.
+        // Lookup, allocation and fusion in one locked step (finding 181). Range and source
+        // confidence both scale the observation: a pixel at 4 m is worth a sixteenth of one at
+        // 1 m, and a calibrated AI fill at the 96/255 floor carries less evidence than a certain
+        // ARCore hit. Without a confidence plane, the historical range-only weight is unchanged.
         const Fusion fused = fuseVoxel(ix, iy, iz, clamped, weight);
         if (fused.allocated) ++allocated;
         if (fused.written) {

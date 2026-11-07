@@ -49,6 +49,7 @@ class DepthIntegrationSelectorTest {
 
     private fun fused(source: DepthFrameSnapshot, receivedAtMillis: Long = 900L) = FusedDepthFrame(
         depthMm = ShortArray(width * height) { 1_000 },
+        confidence = ByteArray(width * height) { if (it % 2 == 0) 0x60 else 0x7f },
         width = width,
         height = height,
         timestampNs = source.timestampNs,
@@ -71,7 +72,10 @@ class DepthIntegrationSelectorTest {
         assertEquals(100f, selected.intrinsics.fx)
         assertArrayEquals(pose(1.25f), selected.cameraToWorld, 0f)
         assertEquals(width, selected.rowStrideElements)
-        assertEquals(null, selected.confidence)
+        assertSame(fused.confidence, selected.confidence)
+        assertEquals(width, selected.confidenceWidth)
+        assertEquals(height, selected.confidenceHeight)
+        assertEquals(width, selected.confidenceRowStride)
     }
 
     @Test
@@ -112,7 +116,11 @@ class DepthIntegrationSelectorTest {
     fun `a resolution mismatch cannot mix pixels and geometry`() {
         val source = snapshot(timestampNs = 100L, cameraX = 1.25f, fx = 100f)
         val newest = snapshot(timestampNs = 900L, cameraX = 9f, fx = 999f)
-        val mismatched = fused(source).copy(width = width + 1, depthMm = ShortArray((width + 1) * height))
+        val mismatched = fused(source).copy(
+            width = width + 1,
+            depthMm = ShortArray((width + 1) * height),
+            confidence = ByteArray((width + 1) * height),
+        )
         val selected = DepthIntegrationSelector.select(newest, mismatched, 1_000L, 200L)
         assertFalse(selected.usesFusedDepth)
         assertSame(newest.depthMm, selected.depthMm)

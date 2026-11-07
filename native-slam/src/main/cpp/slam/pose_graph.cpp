@@ -12,6 +12,8 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <optional>
+#include <queue>
 #include <unordered_map>
 #include <utility>
 
@@ -113,6 +115,90 @@ std::pair<double, double> odometryRms(const std::vector<PoseGraphEdge>& edges,
   }
   const double divisor = static_cast<double>(std::max<size_t>(1, count));
   return {std::sqrt(translationSum / divisor), std::sqrt(rotationSum / divisor)};
+}
+
+struct OdometryPath {
+  Mat4 relative = Mat4::identity();
+  int steps = 0;
+  bool found = false;
+};
+
+/** Shortest-hop measured path, treating odometry edges as traversable in either direction. */
+OdometryPath findOdometryPath(int from, int to, size_t nodeCount,
+                              const std::vector<PoseGraphEdge>& edges) {
+  OdometryPath result;
+  if (from < 0 || to < 0 || from >= static_cast<int>(nodeCount) ||
+      to >= static_cast<int>(nodeCount)) {
+    return result;
+  }
+  std::vector<Mat4> relativeFromSource(nodeCount, Mat4::identity());
+  std::vector<int> stepsFromSource(nodeCount, -1);
+  std::queue<int> pending;
+  stepsFromSource[static_cast<size_t>(from)] = 0;
+  pending.push(from);
+  while (!pending.empty()) {
+    const int current = pending.front();
+    pending.pop();
+    if (current == to) {
+      result.relative = relativeFromSource[static_cast<size_t>(current)];
+      result.steps = stepsFromSource[static_cast<size_t>(current)];
+      result.found = true;
+      return result;
+    }
+    const Mat4& sourceToCurrent = relativeFromSource[static_cast<size_t>(current)];
+    for (const auto& edge : edges) {
+      if (edge.loopClosure) continue;
+      int next = -1;
+      Mat4 currentToNext = Mat4::identity();
+      if (edge.from == current) {
+        next = edge.to;
+        currentToNext = edge.measurement;
+      } else if (edge.to == current) {
+        next = edge.from;
+        currentToNext = edge.measurement.inverseRigid();
+      }
+      if (next < 0 || stepsFromSource[static_cast<size_t>(next)] >= 0) continue;
+      relativeFromSource[static_cast<size_t>(next)] = sourceToCurrent * currentToNext;
+      stepsFromSource[static_cast<size_t>(next)] =
+          stepsFromSource[static_cast<size_t>(current)] + 1;
+      pending.push(next);
+    }
+  }
+  return result;
+}
+
+struct PairwiseCycleResidual {
+  double translationMeters = 0.0;
+  double rotationRadians = 0.0;
+  int odometrySteps = 0;
+};
+
+/**
+ * PCM cycle for loop A(a→b) and loop B(c→d):
+ * A · O(b→c) · B · O(d→a) == I. No optimised pose participates in this evidence check.
+ */
+std::optional<PairwiseCycleResidual> pairwiseCycleResidual(
+    const PoseGraphEdge& a, const PoseGraphEdge& b, size_t nodeCount,
+    const std::vector<PoseGraphEdge>& edges) {
+  const OdometryPath bToC = findOdometryPath(a.to, b.from, nodeCount, edges);
+  const OdometryPath dToA = findOdometryPath(b.to, a.from, nodeCount, edges);
+  if (!bToC.found || !dToA.found) return std::nullopt;
+  const Mat4 cycle = a.measurement * bToC.relative * b.measurement * dToA.relative;
+  const Twist residual = se3Log(cycle);
+  const double translation = residual.upsilon.length();
+  const double rotation = residual.omega.length();
+  if (!std::isfinite(translation) || !std::isfinite(rotation)) return std::nullopt;
+  return PairwiseCycleResidual{translation, rotation, bToC.steps + dToA.steps};
+}
+
+bool inconsistentCycle(const PairwiseCycleResidual& residual) {
+  // No covariance reaches this graph yet. These deliberately generous noise envelopes cover
+  // accumulated room-scale drift while still rejecting metre-scale perceptual aliases. They are
+  // cycle gates, not accuracy claims; pairwise ambiguity falls back to the existing robust solve.
+  const double translationLimit = 0.35 + 0.05 * residual.odometrySteps;
+  const double rotationLimit = 0.50 + 0.03 * residual.odometrySteps;
+  return residual.translationMeters > translationLimit ||
+         residual.rotationRadians > rotationLimit;
 }
 
 }  // namespace
@@ -605,7 +691,43 @@ OptimizationReport PoseGraph::optimize(int iterations, double convergenceCostDel
 OptimizationReport PoseGraph::optimizeLastLoop(int iterations, double convergenceCostDelta) {
   if (edges_.empty() || !edges_.back().loopClosure) return optimize(iterations, convergenceCostDelta);
   const std::vector<Mat4> original = poses();
+
+  // PCM before optimisation: a new hypothesis must agree with every comparable, previously
+  // accepted loop. Only the newcomer is removable here, so an inconsistency never wipes out the
+  // older consistent set (the conservative all-loops fallback is still needed for batch solves).
+  int pairwiseChecks = 0;
+  double worstPairwiseTranslation = 0.0;
+  double worstPairwiseRotation = 0.0;
+  const PoseGraphEdge candidate = edges_.back();
+  for (size_t i = 0; i + 1 < edges_.size(); ++i) {
+    if (!edges_[i].loopClosure) continue;
+    const auto cycle = pairwiseCycleResidual(candidate, edges_[i], nodes_.size(), edges_);
+    if (!cycle.has_value()) continue;
+    ++pairwiseChecks;
+    worstPairwiseTranslation = std::max(worstPairwiseTranslation, cycle->translationMeters);
+    worstPairwiseRotation = std::max(worstPairwiseRotation, cycle->rotationRadians);
+    if (!inconsistentCycle(*cycle)) continue;
+
+    OptimizationReport rejected;
+    rejected.pairwiseChecks = pairwiseChecks;
+    rejected.pairwiseRejections = 1;
+    rejected.worstPairwiseTranslationMeters = worstPairwiseTranslation;
+    rejected.worstPairwiseRotationRadians = worstPairwiseRotation;
+    rejected.failure = OptimizationFailure::REJECTED_LOOP;
+    rejected.converged = false;
+    rejected.rolledBack = true;
+    edges_.pop_back();  // poses were never touched; remove only the inconsistent new evidence
+    const std::vector<double> restoredWeights(edges_.size(), 1.0);
+    rejected.initialCost = cost();
+    rejected.finalCost = rejected.initialCost;
+    fillResiduals(rejected, restoredWeights);
+    return rejected;
+  }
+
   auto report = optimize(iterations, convergenceCostDelta);
+  report.pairwiseChecks = pairwiseChecks;
+  report.worstPairwiseTranslationMeters = worstPairwiseTranslation;
+  report.worstPairwiseRotationRadians = worstPairwiseRotation;
   const bool rejected = !report.residuals.empty() && report.residuals.back().loopClosure &&
                         report.residuals.back().robustWeight <= 1e-4;
   if (!report.rolledBack && !rejected) return report;

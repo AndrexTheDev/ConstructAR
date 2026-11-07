@@ -82,8 +82,8 @@ review before any actual import.
 
 | Candidate | Role in ConstructAR | Validation and decision |
 | --- | --- | --- |
-| Robust losses / Graduated Non-Convexity (GNC) | Limit a bad loop's influence, then move from a convex start towards near-binary inlier decisions | **GNC/TLS implemented for loop edges only.** An independent odometry-deformation gate and rollback are still required: the adversarial five-metre test otherwise converges to a folded local minimum. Broader 0–50 % false-loop benchmarks and PCM remain open |
-| PCM / pairwise cycle consistency | Reject loops that disagree with odometry or accepted closures | **Before automatic closure.** A single loop has no mutually supporting group, so it still needs appearance/depth-backed PnP and conservative thresholds |
+| Robust losses / Graduated Non-Convexity (GNC) | Limit a bad loop's influence, then move from a convex start towards near-binary inlier decisions | **GNC/TLS implemented for loop edges only.** An independent odometry-deformation gate and rollback are still required: the adversarial five-metre test otherwise converges to a folded local minimum. Broader 0–50 % false-loop benchmarks and full batch PCM remain open |
+| PCM / pairwise cycle consistency | Reject loops that disagree with odometry or accepted closures | **Newest-loop PCM implemented.** A candidate is checked against comparable accepted loops through measured-odometry cycles; only the inconsistent newcomer is removed. A single loop still needs GNC/deformation checks, and automatic acceptance still needs appearance/depth-backed PnP. Maximum-clique/batch set selection is not implemented |
 | Deformation graphs / submaps, as used by Kimera-PGMO ([paper](https://ar5iv.labs.arxiv.org/html/2101.06894)) | Apply accepted global corrections to a derived mesh without “de-integrating” history | **Long term.** Store raw and corrected geometry separately with source graph revision. Benchmark extra solve/memory and preserve raw measured runs |
 | Multi-model RANSAC + region growing | Separate intersecting walls, floors, ceilings and clutter before Manhattan regularisation | **Targeted improvement.** Report plane residual/support and leave unsupported/open/non-Manhattan geometry unchanged |
 | [evo](https://github.com/MichaelGrupp/evo) `146b6291a7b7` (GPL-3.0) | External ATE/RPE tooling; never linked into the APK | **Development-only.** Record TUM-format trajectories, timestamp association and SE(3) alignment. No Sim(3) scale correction for an already metric ARCore trace |
@@ -104,23 +104,31 @@ These are correctness fixes, not benchmark claims:
   weight. Final usability still requires positive bounded scale, inlier ratio and inlier RMS gates.
 - **Complete native evidence accounting:** multithreaded reductions include `voxelWeight`; the test
   compares absolute counted/stored difference and rejects a zero-on-one-side pass.
+- **Confidence-weighted integration:** fused depth now carries a parallel confidence plane.
+  Measured pixels keep ARCore's value, calibrated fills use the acceptance floor and pooled holes
+  are cleared to zero. Native fusion retains the hard floor, then multiplies accepted range weight
+  by `confidence / 255`; absent confidence preserves the previous unit multiplier and malformed
+  confidence geometry fails closed.
 - **Robust, transactional loop attempts:** super-linear GNC/TLS affects loop hypotheses only. An
   independent odometry-deformation gate catches the folded local minimum that GNC alone accepted
   in a five-metre adversarial fixture. The fallback disables loops and recovers measured odometry;
   non-converged/non-finite/cost-worsening runs restore every input pose and become `Failed` in the
   operator conversation. `optimizeLastLoop` additionally removes a failed or zero-weight new edge.
-  This is not pairwise PCM or automatic appearance verification.
+  Newest-loop PCM now checks measured-odometry cycles against accepted older loops and removes only
+  an inconsistent newcomer, preserving valid companions. It is not maximum-clique batch PCM or
+  automatic appearance verification.
 
 Local evidence at the time of writing:
 
-- `tools/verify-native.sh`: **348 checks, 0 failures**, in final local O1 and O2 builds.
-- Native CI run **42407145655**: g++ and clang++, O1 and O2, **348 checks per cell**, plus TSAN,
-  RTAB-Map stub compilation and the layout probe, all green.
-- Android run **42407145562**: all **1286 JVM tests**, Kotlin/Java compilation, NDK, host C++,
-  debug/release, R8, licence checks and 16 KB alignment, all green.
+- Current `tools/verify-native.sh`: **369 checks, 0 failures**, in local O1 and O2 builds.
+- The new confidence/PCM stage still needs its own Android/compiler-matrix CI run.
+- Previous-stage native CI run **42407145655** passed g++/clang++, O1/O2, TSAN, RTAB-Map stubs and
+  the layout probe at 348 checks per cell; Android run **42407145562** passed all 1286 JVM tests
+  and the complete NDK/release/packaging gate. Those runs predate this stage's additions.
 - New deterministic cases cover source-pose selection, stale/future/mismatched fusion, fallback
-  confidence, 25 % gross calibration contamination, exact repeatability, a five-metre false loop
-  and exact transactional rollback.
+  confidence, 25 % gross calibration contamination, exact repeatability, confidence-scaled stored
+  evidence, malformed confidence metadata, newest-loop PCM translation/rotation rejection,
+  preservation of consistent companion loops, a five-metre false loop and exact rollback.
 
 These tests prove software contracts and synthetic robustness. They do **not** establish phone
 tracking accuracy, relocalisation rate, thermal stability or a universal depth-error percentage.
@@ -147,8 +155,9 @@ and fixture; every subsequent candidate has a control result.
    Depth documentation reports sparser but more accurate samples and a matching confidence image;
    the app must measure whether that holds for its wall/pipe workloads. Record depth timestamp and
    do not silently switch all devices.
-2. Add confidence as a **soft TSDF weight**, then incidence-angle weighting from locally filtered
-   depth normals. Preserve the existing 1/Z² range term and hard confidence floor.
+2. **Soft confidence delivered:** accepted observations now use `confidence / 255` alongside the
+   existing 1/Z² range term and hard floor. Next add incidence-angle weighting from locally
+   filtered depth normals, then measure the combined effect rather than assuming it helps.
 3. Reject fills at temporal disocclusions and inconsistent calibration regions. A network hole fill
    receives lower weight than measured depth and never becomes a high-confidence hit tier.
 4. Benchmark Video Depth Anything Small against frame-wise V2 on recorded sequences. Keep it only
@@ -164,9 +173,10 @@ integration p50/p95, RSS and thermal throttle onset.
    keyframe IDs, optical-frame rotations, strides, timestamps and `map→odom` semantics.
 2. Require appearance support **and** depth-backed geometric verification. Proximity remains only a
    proposal. Ambiguous results keep the existing operator conversation.
-3. **Delivered first guard:** GNC/TLS, an odometry-deformation fallback and graph transactions.
-   **Still required before automation:** pairwise cycle consistency among multiple loops,
-   appearance/depth-backed verification and a benchmark matrix with more than one false loop.
+3. **Delivered guards:** GNC/TLS, an odometry-deformation fallback, graph transactions and
+   newest-loop pairwise cycle consistency against accepted companions.
+   **Still required before automation:** appearance/depth-backed verification, full batch/maximum-
+   clique consistency where needed, and a benchmark matrix with broader multi-false-loop rates.
 4. Persist only bounded descriptors/keyframe metadata needed for relocalisation. Compare ORB/SIFT
    with DISK/ALIKED+LightGlue after model and weight licence checks.
 

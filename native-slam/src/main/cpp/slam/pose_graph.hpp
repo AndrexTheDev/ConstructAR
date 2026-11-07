@@ -85,6 +85,11 @@ struct OptimizationReport {
   /** Last rejected line-search trial, for cross-compiler convergence diagnostics. */
   double rejectedCostBaseline = 0.0;
   double rejectedCostIncrease = 0.0;
+  /** Newest-loop PCM evidence; zero when there was no accepted loop to compare against. */
+  int pairwiseChecks = 0;
+  int pairwiseRejections = 0;
+  double worstPairwiseTranslationMeters = 0.0;
+  double worstPairwiseRotationRadians = 0.0;
   std::vector<EdgeResidual> residuals;
 };
 
@@ -105,9 +110,10 @@ class PoseGraph {
   OptimizationReport optimize(int iterations = 12, double convergenceCostDelta = 1e-7);
 
   /**
-   * App transaction for a newly appended loop hypothesis. On failure, or when that loop receives
-   * zero robust weight, restores the pre-attempt poses and removes that edge before reporting
-   * `converged=false`. Accepted older edges and their measured evidence are otherwise untouched.
+   * App transaction for a newly appended loop hypothesis. First checks its pairwise cycle
+   * consistency against accepted older loops using measured odometry only. On inconsistency,
+   * failure, or zero robust weight, restores the pre-attempt poses and removes only that edge
+   * before reporting `converged=false`. Accepted older edges and their evidence stay untouched.
    */
   OptimizationReport optimizeLastLoop(int iterations = 12, double convergenceCostDelta = 1e-7);
 
