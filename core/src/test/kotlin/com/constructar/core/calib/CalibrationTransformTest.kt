@@ -40,6 +40,7 @@ class CalibrationTransformTest {
         assertEquals(3.15f, transformed.nodes[0].position.z, 1e-5f)
         assertEquals(3.15f, transformed.nodes[1].position.x, 1e-5f)
         assertEquals(2.10f, transformed.polylineLengthMeters, 1e-5f)
+        assertEquals(3.15f, CalibrationTransform.of(1.05).distance(3f))
         assertEquals(Vec3(1f, 2f, 3f), route.nodes[0].position)
         assertEquals(2f, route.polylineLengthMeters, 1e-5f)
     }

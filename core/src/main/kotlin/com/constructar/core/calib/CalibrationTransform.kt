@@ -22,25 +22,27 @@ import com.constructar.core.model.SketchPoint
  * renderer, material calculator and GLB/PLY exporter receives a transformed copy from here. A
  * malformed imported factor fails closed to identity rather than producing NaN geometry.
  */
-class CalibrationTransform private constructor(val scale: Float) {
-    fun point(raw: Vec3): Vec3 = raw * scale
-    fun distance(rawMeters: Float): Float = rawMeters * scale
+class CalibrationTransform private constructor(private val scale: Double) {
+    private val pointScale: Float get() = scale.toFloat()
+
+    fun point(raw: Vec3): Vec3 = raw * pointScale
+    fun distance(rawMeters: Float): Float = (rawMeters.toDouble() * scale).toFloat()
     fun bounds(raw: Aabb): Aabb = Aabb(point(raw.min), point(raw.max))
 
     fun sketch(raw: FloorplanSketch): FloorplanSketch = raw.copy(
-        points = raw.points.map { SketchPoint(it.xMeters * scale, it.zMeters * scale) },
+        points = raw.points.map { SketchPoint(it.xMeters * pointScale, it.zMeters * pointScale) },
     )
 
-    fun mesh(raw: MeshData): MeshData = if (scale == 1f) {
+    fun mesh(raw: MeshData): MeshData = if (scale == 1.0) {
         raw
     } else {
-        raw.transformed(Mat4.scale(Vec3(scale, scale, scale)))
+        raw.transformed(Mat4.scale(Vec3(pointScale, pointScale, pointScale)))
     }
 
     fun nodes(raw: List<RouteNodeRecord>): List<RouteNodeRecord> =
         raw.map { node -> node.copy(position = point(node.position)) }
 
-    fun route(raw: ConduitRoute): ConduitRoute = if (scale == 1f) {
+    fun route(raw: ConduitRoute): ConduitRoute = if (scale == 1.0) {
         raw
     } else {
         raw.copy(
@@ -59,14 +61,18 @@ class CalibrationTransform private constructor(val scale: Float) {
     fun routes(raw: List<ConduitRoute>): List<ConduitRoute> = map(raw)
 
     private fun map(raw: List<ConduitRoute>): List<ConduitRoute> =
-        if (scale == 1f) raw else raw.map(::route)
+        if (scale == 1.0) raw else raw.map(::route)
 
     companion object {
-        val IDENTITY = CalibrationTransform(1f)
+        val IDENTITY = CalibrationTransform(1.0)
 
         fun of(scale: Double): CalibrationTransform {
-            val value = scale.toFloat()
-            return if (value.isFinite() && value > 0f) CalibrationTransform(value) else IDENTITY
+            val pointScale = scale.toFloat()
+            return if (scale.isFinite() && scale > 0.0 && pointScale.isFinite() && pointScale > 0f) {
+                CalibrationTransform(scale)
+            } else {
+                IDENTITY
+            }
         }
     }
 }
