@@ -138,7 +138,7 @@
     <string name="ar_leave_save">Zapisz jako trasę</string>
     <string name="ar_leave_discard">Odrzuć</string>
     <string name="draft_title">Nieukończony pomiar</string>
-    <string name="draft_body">%1$s, ostatni zapis o %2$s. Długości i kształtki są dokładne; pozycji 3D nie da się odtworzyć.</string>
+    <string name="draft_body">%1$s, ostatni zapis o %2$s. Ponownie zaobserwuj zapisane kotwy, aby odtworzyć współrzędne 3D, albo zachowaj dokładne długości i kształtki bez pozycji 3D.</string>
     <string name="draft_save">Zapisz jako trasę</string>
     <string name="draft_discard">Odrzuć</string>
     <string name="ar_torch">Latarka</string>
@@ -633,4 +633,12 @@
     <string name="pdf_procurement_excluded">Pominięto %1$d tras zbyt niepewnych do wyceny (%2$s) - sumy powyżej ich nie obejmują.</string>
     <string name="field_leave_body">Wpis w dzienniku, usterka lub miejsce wpisane dla „%1$s” nie zostały jeszcze dodane.</string>
     <string name="onboard_back">Wstecz</string>
+    <string name="draft_relocalise">Odtwórz współrzędne</string>
+    <string name="draft_save_measurements">Zapisz tylko wymiary</string>
+    <string name="relocalise_title">Odnajdywanie kotw trasy</string>
+    <string name="relocalise_progress">Zaobserwowano %1$d z %2$d kotw</string>
+    <string name="relocalise_next">Dotknij zapisanej kotwy %1$d w pomieszczeniu. Punkt trasy nie zostanie dodany.</string>
+    <string name="relocalise_finish">Przywróć współrzędne</string>
+    <string name="relocalise_cancel">Wróć do opcji odzyskiwania</string>
+    <string name="relocalise_failed">Odzyskiwanie odrzucone: obserwacje są niespójne. Zaobserwuj kotwy ponownie albo zapisz tylko wymiary.</string>
 </resources>

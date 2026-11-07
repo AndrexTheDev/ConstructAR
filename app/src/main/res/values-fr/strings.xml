@@ -138,7 +138,7 @@
     <string name="ar_leave_save">Enregistrer comme tracé</string>
     <string name="ar_leave_discard">Abandonner</string>
     <string name="draft_title">Mesure inachevée</string>
-    <string name="draft_body">%1$s, enregistrée pour la dernière fois à %2$s. Les longueurs et les raccords sont exacts ; la position 3D ne peut pas être rétablie.</string>
+    <string name="draft_body">%1$s, enregistrée pour la dernière fois à %2$s. Observe les ancres enregistrées pour rétablir les coordonnées 3D, ou conserve les longueurs et raccords exacts sans position 3D.</string>
     <string name="draft_save">Enregistrer comme tracé</string>
     <string name="draft_discard">Abandonner</string>
     <string name="ar_torch">Torche</string>
@@ -611,4 +611,12 @@
     <string name="pdf_procurement_excluded">%1$d tracés trop incertains pour être chiffrés ont été écartés de ce tableau d’achat (%2$s) : les totaux ci-dessus ne les incluent pas.</string>
     <string name="field_leave_body">La ligne de journal, l’anomalie ou l’emplacement que tu as saisi pour « %1$s » n’ont pas encore été ajoutés.</string>
     <string name="onboard_back">Retour</string>
+    <string name="draft_relocalise">Rétablir les coordonnées</string>
+    <string name="draft_save_measurements">Enregistrer seulement les mesures</string>
+    <string name="relocalise_title">Retrouver les ancres du tracé</string>
+    <string name="relocalise_progress">%1$d ancres observées sur %2$d</string>
+    <string name="relocalise_next">Touche l’ancre enregistrée %1$d dans la pièce. Aucun point ne sera ajouté au tracé.</string>
+    <string name="relocalise_finish">Rétablir les coordonnées</string>
+    <string name="relocalise_cancel">Retour aux options de récupération</string>
+    <string name="relocalise_failed">Récupération refusée : les observations ne sont pas cohérentes. Observe de nouveau les ancres ou enregistre seulement les mesures.</string>
 </resources>

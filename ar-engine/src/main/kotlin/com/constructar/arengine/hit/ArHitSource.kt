@@ -100,6 +100,8 @@ class ArHitSource(
                     source = HitSource.DIRECT_DEPTH_RAYCAST,
                     confidence = hit.confidence,
                     distanceMeters = hit.distanceMeters,
+                    depthSigmaMeters = cascade.maxDepthSigmaMeters *
+                        (1f - (hit.confidence / HitSource.DIRECT_DEPTH_RAYCAST.reliability).coerceIn(0f, 1f)),
                     surfaceKind = SurfaceKind.fromNormal(hit.normal),
                     label = "Depth surface",
                 )

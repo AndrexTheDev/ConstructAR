@@ -88,6 +88,8 @@ data class SurfaceHit(
     val label: String = "",
     /** Set when [ReticleSnap] moved this point onto an architectural corner or edge. */
     val snap: SnapInfo? = null,
+    /** Metric depth uncertainty used by the common confidence formula; null selects the tier prior. */
+    val depthSigmaMeters: Float? = null,
 ) {
     /**
      * @param sessionId the AR session this point is being placed in
@@ -195,4 +197,6 @@ data class HitCascadeConfig(
      * are too ragged for the derived edges to be trusted.
      */
     val snapToArchitecturalFeatures: Boolean = true,
+    /** Depth uncertainty at which the depth term becomes zero (5 cm). */
+    val maxDepthSigmaMeters: Float = 0.05f,
 )

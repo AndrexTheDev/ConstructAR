@@ -47,15 +47,16 @@ class SurfaceHitResolver(private val config: HitCascadeConfig = HitCascadeConfig
             attempts += TierOutcome(HitSource.AR_DEPTH_POINT, considered = false, accepted = false, reason = "disabled")
         } else {
             val candidate = request.depthPoint
-            val rejection = reject(candidate, request)
+            val scored = candidate?.let { HitTestCascadeEngine.score(it, request.ray, config) }
+            val rejection = reject(scored, request)
             attempts += TierOutcome(
                 HitSource.AR_DEPTH_POINT,
                 considered = true,
                 accepted = rejection == null,
                 reason = rejection ?: "accepted",
             )
-            if (candidate != null && rejection == null) {
-                return HitResolution(candidate, attempts, distanceFromPrevious(candidate, request))
+            if (scored != null && rejection == null) {
+                return HitResolution(scored, attempts, distanceFromPrevious(scored, request))
             }
         }
 
@@ -64,15 +65,16 @@ class SurfaceHitResolver(private val config: HitCascadeConfig = HitCascadeConfig
             attempts += TierOutcome(HitSource.DIRECT_DEPTH_RAYCAST, considered = false, accepted = false, reason = "disabled")
         } else {
             val candidate = request.directDepthHit
-            val rejection = reject(candidate, request)
+            val scored = candidate?.let { HitTestCascadeEngine.score(it, request.ray, config) }
+            val rejection = reject(scored, request)
             attempts += TierOutcome(
                 HitSource.DIRECT_DEPTH_RAYCAST,
                 considered = true,
                 accepted = rejection == null,
                 reason = rejection ?: "accepted",
             )
-            if (candidate != null && rejection == null) {
-                return HitResolution(candidate, attempts, distanceFromPrevious(candidate, request))
+            if (scored != null && rejection == null) {
+                return HitResolution(scored, attempts, distanceFromPrevious(scored, request))
             }
         }
 
@@ -81,15 +83,16 @@ class SurfaceHitResolver(private val config: HitCascadeConfig = HitCascadeConfig
             attempts += TierOutcome(HitSource.FEATURE_POINT, considered = false, accepted = false, reason = "disabled")
         } else {
             val candidate = request.featurePoint
-            val rejection = reject(candidate, request)
+            val scored = candidate?.let { HitTestCascadeEngine.score(it, request.ray, config) }
+            val rejection = reject(scored, request)
             attempts += TierOutcome(
                 HitSource.FEATURE_POINT,
                 considered = true,
                 accepted = rejection == null,
                 reason = rejection ?: "accepted",
             )
-            if (candidate != null && rejection == null) {
-                return HitResolution(candidate, attempts, distanceFromPrevious(candidate, request))
+            if (scored != null && rejection == null) {
+                return HitResolution(scored, attempts, distanceFromPrevious(scored, request))
             }
         }
 
@@ -163,11 +166,12 @@ class SurfaceHitResolver(private val config: HitCascadeConfig = HitCascadeConfig
                 .let { if (it == SurfaceKind.UNKNOWN) SurfaceKind.WALL else it },
             label = if (plane.isVertical) "Wall" else if (plane.normal.y > 0f) "Floor" else "Ceiling",
         )
-        val rejection = rejectDomain(hit, request)
+        val scored = HitTestCascadeEngine.score(hit, request.ray, config)
+        val rejection = rejectDomain(scored, request)
         if (rejection != null) {
             return TierOutcome(HitSource.PLANE_POLYGON, true, false, rejection) to null
         }
-        return TierOutcome(HitSource.PLANE_POLYGON, true, true, "accepted (plane ${plane.id})") to hit
+        return TierOutcome(HitSource.PLANE_POLYGON, true, true, "accepted (plane ${plane.id})") to scored
     }
 
     /** Common validity checks for tiers 2–4. */

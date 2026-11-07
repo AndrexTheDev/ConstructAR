@@ -397,6 +397,24 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         upsertRoute(route)
     }
 
+    /** Stores coordinates only after the offline relocaliser accepted their rigid transform. */
+    fun recoverRelocalisedDraft(
+        draft: RouteDraft,
+        nodes: List<com.constructar.core.model.RouteNodeRecord>,
+        routeId: String,
+    ) {
+        val project = mutableState.value.openProject ?: return
+        val route = draft.toRoute(
+            id = routeId,
+            label = RouteLabels.next(draft.spec, project.routes.map { it.label }),
+            createdAtEpochMs = System.currentTimeMillis(),
+            relocalisedNodes = nodes,
+        ) ?: return
+        mutableState.value = mutableState.value.copy(pendingDraft = null)
+        writeDraft(project.id, null)
+        upsertRoute(route)
+    }
+
     /** Forgets the interrupted run, because the operator said so. */
     fun discardDraft() {
         val project = mutableState.value.openProject ?: return

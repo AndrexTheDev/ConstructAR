@@ -138,7 +138,7 @@
     <string name="ar_leave_save">Als Strecke speichern</string>
     <string name="ar_leave_discard">Verwerfen</string>
     <string name="draft_title">Nicht beendete Messung</string>
-    <string name="draft_body">%1$s, zuletzt gespeichert um %2$s. Längen und Fittings stimmen; die 3D-Position lässt sich nicht wiederherstellen.</string>
+    <string name="draft_body">%1$s, zuletzt gespeichert um %2$s. Beobachte die gespeicherten Anker erneut, um die 3D-Koordinaten wiederherzustellen, oder behalte exakte Längen und Fittings ohne 3D-Position.</string>
     <string name="draft_save">Als Strecke speichern</string>
     <string name="draft_discard">Verwerfen</string>
     <string name="ar_torch">Lampe</string>
@@ -611,4 +611,12 @@
     <string name="pdf_procurement_excluded">%1$d zu unsichere Strecken wurden aus dieser Beschaffungstabelle ausgelassen (%2$s) - die Summen oben enthalten sie nicht.</string>
     <string name="field_leave_body">Der Tagebucheintrag, die Mängelnotiz oder der Ort, den du für „%1$s“ eingegeben hast, wurde noch nicht hinzugefügt.</string>
     <string name="onboard_back">Zurück</string>
+    <string name="draft_relocalise">Koordinaten neu lokalisieren</string>
+    <string name="draft_save_measurements">Nur Maße wiederherstellen</string>
+    <string name="relocalise_title">Routenanker wiederfinden</string>
+    <string name="relocalise_progress">%1$d von %2$d Ankern beobachtet</string>
+    <string name="relocalise_next">Gespeicherten Anker %1$d im Raum antippen. Es wird kein Routenpunkt hinzugefügt.</string>
+    <string name="relocalise_finish">Koordinaten wiederherstellen</string>
+    <string name="relocalise_cancel">Zurück zu den Wiederherstellungsoptionen</string>
+    <string name="relocalise_failed">Wiederherstellung abgelehnt: Die Beobachtungen sind nicht konsistent. Beobachte die Anker erneut oder stelle nur die Maße wieder her.</string>
 </resources>

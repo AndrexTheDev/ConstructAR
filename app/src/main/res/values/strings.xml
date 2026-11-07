@@ -138,7 +138,7 @@
     <string name="ar_leave_save">Save as run</string>
     <string name="ar_leave_discard">Discard</string>
     <string name="draft_title">Unfinished measurement</string>
-    <string name="draft_body">%1$s, last saved at %2$s. Lengths and fittings are exact; the 3D position cannot be restored.</string>
+    <string name="draft_body">%1$s, last saved at %2$s. Relocate the saved anchors to restore 3D coordinates, or keep exact lengths and fittings without a 3D position.</string>
     <string name="draft_save">Save as route</string>
     <string name="draft_discard">Discard</string>
     <string name="ar_torch">Torch</string>
@@ -611,4 +611,12 @@
     <string name="pdf_procurement_excluded">%1$d runs too uncertain to price were left out of this procurement table (%2$s) - the totals above do not include them.</string>
     <string name="field_leave_body">The diary line, defect or location you typed for “%1$s” has not been added yet.</string>
     <string name="onboard_back">Back</string>
+    <string name="draft_relocalise">Relocate coordinates</string>
+    <string name="draft_save_measurements">Save measurements only</string>
+    <string name="relocalise_title">Recover route anchors</string>
+    <string name="relocalise_progress">%1$d of %2$d anchors observed</string>
+    <string name="relocalise_next">Tap saved anchor %1$d in the room. No route point will be added.</string>
+    <string name="relocalise_finish">Restore coordinates</string>
+    <string name="relocalise_cancel">Back to recovery options</string>
+    <string name="relocalise_failed">Recovery refused: the observations are not consistent. Observe the anchors again or save measurements only.</string>
 </resources>

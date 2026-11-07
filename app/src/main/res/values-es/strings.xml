@@ -138,7 +138,7 @@
     <string name="ar_leave_save">Guardar como tramo</string>
     <string name="ar_leave_discard">Descartar</string>
     <string name="draft_title">Medición sin terminar</string>
-    <string name="draft_body">%1$s, guardada por última vez a las %2$s. Las longitudes y los accesorios son exactos; la posición 3D no se puede recuperar.</string>
+    <string name="draft_body">%1$s, guardada por última vez a las %2$s. Observa los anclajes guardados para recuperar las coordenadas 3D o conserva las longitudes y los accesorios exactos sin posición 3D.</string>
     <string name="draft_save">Guardar como tramo</string>
     <string name="draft_discard">Descartar</string>
     <string name="ar_torch">Linterna</string>
@@ -611,4 +611,12 @@
     <string name="pdf_procurement_excluded">%1$d recorridos demasiado inciertos para valorarlos se han excluido de esta tabla de compra (%2$s): los totales de arriba no los incluyen.</string>
     <string name="field_leave_body">La entrada del diario, la incidencia o la ubicación que escribiste para «%1$s» todavía no se ha añadido.</string>
     <string name="onboard_back">Atrás</string>
+    <string name="draft_relocalise">Recuperar coordenadas</string>
+    <string name="draft_save_measurements">Guardar solo las medidas</string>
+    <string name="relocalise_title">Recuperar anclajes del tramo</string>
+    <string name="relocalise_progress">%1$d de %2$d anclajes observados</string>
+    <string name="relocalise_next">Toca el anclaje guardado %1$d en la habitación. No se añadirá ningún punto al tramo.</string>
+    <string name="relocalise_finish">Restaurar coordenadas</string>
+    <string name="relocalise_cancel">Volver a las opciones de recuperación</string>
+    <string name="relocalise_failed">Recuperación rechazada: las observaciones no son coherentes. Observa los anclajes de nuevo o guarda solo las medidas.</string>
 </resources>

@@ -115,6 +115,7 @@ import com.constructar.app.ui.tierLabel
 import com.constructar.arengine.hit.FloorHudLine
 import com.constructar.arengine.hit.floorHudLine
 import com.constructar.arengine.keyframe.ClosureState
+import com.constructar.arengine.relocalisation.AnchorGraphRelocaliser
 import com.constructar.arengine.keyframe.PoseGraphStanding
 import com.constructar.arengine.render.ArScene
 import com.constructar.arengine.session.ArReadiness
@@ -133,6 +134,7 @@ import com.constructar.core.units.LengthUnit
 import com.constructar.core.units.PercentText
 import com.constructar.core.model.RouteDraft
 import com.constructar.core.model.RouteLabels
+import java.util.UUID
 
 /**
  * The AR measuring screen.
@@ -173,6 +175,7 @@ fun ArMeasureScreen(
     /** `null` clears the stored draft; anything else is the run as it stands. */
     onDraftChanged: (RouteDraft?) -> Unit = {},
     onDraftRecovered: (RouteDraft) -> Unit = {},
+    onDraftRelocalised: (RouteDraft, List<com.constructar.core.model.RouteNodeRecord>, String) -> Unit = { _, _, _ -> },
     onDraftDiscarded: () -> Unit = {},
     /**
      * Stores the factor a reference calibration produced, or refuses it (the view model asks
@@ -313,6 +316,7 @@ fun ArMeasureScreen(
     }
 
     val routeState by controller.routeSession.state.collectAsStateWithLifecycle()
+    val relocalisation by controller.relocalisation.collectAsStateWithLifecycle()
     val tracking by controller.tracking.status.collectAsStateWithLifecycle()
     val scanState by controller.pipeline.state.collectAsStateWithLifecycle()
     val torchOn by controller.torchOn.collectAsStateWithLifecycle()
@@ -433,15 +437,7 @@ fun ArMeasureScreen(
     LaunchedEffect(project.id, routeState.nodeCount, routeState.closedLoop) {
         val state = routeState
         if (state.nodeCount >= LeaveGuard.MIN_NODES_FOR_A_RUN) {
-            onDraftChanged(
-                RouteDraft(
-                    projectId = project.id,
-                    spec = state.spec,
-                    nodes = state.nodes,
-                    closedLoop = state.closedLoop,
-                    savedAtEpochMs = System.currentTimeMillis(),
-                ),
-            )
+            onDraftChanged(controller.makeDraft(project.id, state))
             draftWritten = true
         } else if (draftWritten) {
             // Everything was undone: there is no run left to recover.
@@ -1237,7 +1233,73 @@ fun ArMeasureScreen(
         }
 
         // ── Bottom controls ──────────────────────────────────────────────────────────────
-        Column(
+        relocalisation?.let { progress ->
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .heightIn(max = sheetMaxHeight)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.relocalise_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                )
+                Text(
+                    text = stringResource(
+                        R.string.relocalise_progress,
+                        progress.observations.size,
+                        progress.draft.nodes.size,
+                    ),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = HudStyle.text,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+                progress.nextNodeId?.let { id ->
+                    val index = progress.draft.nodes.indexOfFirst { it.id == id } + 1
+                    Text(
+                        text = stringResource(R.string.relocalise_next, index),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SiteColors.accent,
+                    )
+                }
+                if (progress.rejection != null) {
+                    Text(
+                        text = stringResource(R.string.relocalise_failed),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SiteColors.danger,
+                    )
+                }
+                GloveButton(
+                    label = stringResource(R.string.relocalise_finish),
+                    icon = Icons.Default.Save,
+                    enabled = progress.canFinish,
+                    onClick = {
+                        when (val result = controller.finishRelocalisation()) {
+                            is AnchorGraphRelocaliser.Result.Success -> {
+                                val routeId = "route-${UUID.randomUUID()}"
+                                controller.admitRelocalisedRoute(routeId)
+                                recoverable = null
+                                onDraftRelocalised(progress.draft, result.nodes, routeId)
+                            }
+                            else -> Unit
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                TextButton(
+                    onClick = controller::cancelRelocalisation,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.relocalise_cancel), color = HudStyle.dialogAction)
+                }
+            }
+        }
+        if (relocalisation == null) Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
@@ -1712,7 +1774,7 @@ fun ArMeasureScreen(
 
     // The run the last process did not finish. Drawn over the viewfinder so it cannot be
     // scrolled past, and not dismissible by tapping outside: the operator has to decide.
-    recoverable?.let { pending ->
+    if (relocalisation == null) recoverable?.let { pending ->
         Dialog(onDismissRequest = {}) {
             Surface(
                 shape = RoundedCornerShape(20.dp),
@@ -1740,15 +1802,23 @@ fun ArMeasureScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = HudStyle.dialogBody,
                     )
-                    GloveButton(
-                        label = stringResource(R.string.draft_save),
-                        icon = Icons.Default.Save,
+                    if (pending.evidence.size >= 3) {
+                        GloveButton(
+                            label = stringResource(R.string.draft_relocalise),
+                            icon = Icons.Default.Save,
+                            onClick = { controller.beginRelocalisation(pending) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    TextButton(
                         onClick = {
                             recoverable = null
                             onDraftRecovered(pending)
                         },
                         modifier = Modifier.fillMaxWidth(),
-                    )
+                    ) {
+                        Text(stringResource(R.string.draft_save_measurements), color = HudStyle.dialogAction)
+                    }
                     GloveButton(
                         label = stringResource(R.string.draft_discard),
                         icon = Icons.Default.Close,

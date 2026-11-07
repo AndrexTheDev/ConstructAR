@@ -138,7 +138,7 @@
     <string name="ar_leave_save">Salva come tratta</string>
     <string name="ar_leave_discard">Scarta</string>
     <string name="draft_title">Misurazione non terminata</string>
-    <string name="draft_body">%1$s, salvata l’ultima volta alle %2$s. Le lunghezze e i raccordi sono esatti; la posizione 3D non è recuperabile.</string>
+    <string name="draft_body">%1$s, salvata l’ultima volta alle %2$s. Osserva di nuovo gli ancoraggi salvati per ripristinare le coordinate 3D oppure conserva lunghezze e raccordi esatti senza posizione 3D.</string>
     <string name="draft_save">Salva come tratta</string>
     <string name="draft_discard">Scarta</string>
     <string name="ar_torch">Torcia</string>
@@ -611,4 +611,12 @@
     <string name="pdf_procurement_excluded">%1$d percorsi troppo incerti per essere quotati sono stati esclusi da questa tabella di acquisto (%2$s): i totali sopra non li includono.</string>
     <string name="field_leave_body">La voce del diario, il difetto o la posizione che hai scritto per «%1$s» non sono ancora stati aggiunti.</string>
     <string name="onboard_back">Indietro</string>
+    <string name="draft_relocalise">Ripristina coordinate</string>
+    <string name="draft_save_measurements">Salva solo le misure</string>
+    <string name="relocalise_title">Recupero degli ancoraggi della tratta</string>
+    <string name="relocalise_progress">%1$d di %2$d ancoraggi osservati</string>
+    <string name="relocalise_next">Tocca l’ancoraggio salvato %1$d nella stanza. Non verrà aggiunto alcun punto alla tratta.</string>
+    <string name="relocalise_finish">Ripristina coordinate</string>
+    <string name="relocalise_cancel">Torna alle opzioni di recupero</string>
+    <string name="relocalise_failed">Recupero rifiutato: le osservazioni non sono coerenti. Osserva di nuovo gli ancoraggi o salva solo le misure.</string>
 </resources>

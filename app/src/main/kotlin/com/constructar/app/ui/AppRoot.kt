@@ -292,6 +292,7 @@ fun AppRoot(viewModel: ProjectViewModel) {
                                 draft = state.pendingDraft,
                                 onDraftChanged = { draft -> viewModel.saveDraft(draft) },
                                 onDraftRecovered = { draft -> viewModel.recoverDraft(draft) },
+                                onDraftRelocalised = { draft, nodes, routeId -> viewModel.recoverRelocalisedDraft(draft, nodes, routeId) },
                                 onDraftDiscarded = { viewModel.discardDraft() },
                                 // The factor lands on the project, which is what the protocol, the
                                 // bill of materials and the room screen read (calibration, tier 3).
