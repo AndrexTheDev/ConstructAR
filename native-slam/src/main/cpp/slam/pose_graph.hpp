@@ -55,17 +55,21 @@ struct EdgeResidual {
   double rotationErrorRadians = 0.0;
   double translationErrorMeters = 0.0;
   bool loopClosure = false;
+  /** GNC/TLS weight used by the accepted solve; odometry always remains 1. */
+  double robustWeight = 1.0;
 };
 
 struct OptimizationReport {
   double initialCost = 0.0;
   double finalCost = 0.0;
-  /** RMS translation residual over all edges, metres. */
+  /** RMS residual over active edges (rejected loops are excluded), metres/radians. */
   double rmsTranslationMeters = 0.0;
   double rmsRotationRadians = 0.0;
   int iterations = 0;
   bool converged = false;
   double milliseconds = 0.0;
+  /** True when no candidate pose was committed and the measured input was restored. */
+  bool rolledBack = false;
   std::vector<EdgeResidual> residuals;
 };
 
@@ -78,8 +82,19 @@ class PoseGraph {
   void addEdge(int from, int to, const Mat4& measurement, double rotationWeight = 1.0,
                double translationWeight = 1.0, bool loopClosure = false);
 
-  /** Runs up to [iterations] Gauss-Newton steps. Mutates the stored node poses. */
+  /**
+   * Runs bounded Gauss-Newton steps, with graduated TLS weights on loop edges only.
+   * A candidate is committed only after a finite, converged, non-worsening solve; otherwise
+   * every input pose is restored. Corrected poses remain diagnostic/provenance output.
+   */
   OptimizationReport optimize(int iterations = 12, double convergenceCostDelta = 1e-7);
+
+  /**
+   * App transaction for a newly appended loop hypothesis. On failure, or when that loop receives
+   * zero robust weight, restores the pre-attempt poses and removes that edge before reporting
+   * `converged=false`. Accepted older edges and their measured evidence are otherwise untouched.
+   */
+  OptimizationReport optimizeLastLoop(int iterations = 12, double convergenceCostDelta = 1e-7);
 
   size_t nodeCount() const { return nodes_.size(); }
   size_t edgeCount() const { return edges_.size(); }
@@ -91,7 +106,7 @@ class PoseGraph {
   /** T_from⁻¹ · T_to using the current (optimised) poses. */
   Mat4 relativePose(int from, int to) const;
 
-  /** Sum of squared weighted residuals — the objective minimised by [optimize]. */
+  /** Unmodified measurement cost over every edge, including a rejected loop. */
   double cost() const;
 
   void reset();
@@ -100,6 +115,11 @@ class PoseGraph {
   /** Residual vector (6) of one edge, `[rotation, translation]`, in the tangent space. */
   Twist residual(int from, int to, const Mat4& measurement) const;
   double edgeCost(const PoseGraphEdge& edge) const;
+  double weightedCost(const std::vector<double>& edgeWeights) const;
+  OptimizationReport optimizeInPlace(const std::vector<double>& edgeWeights, int iterations,
+                                     double convergenceCostDelta);
+  void fillResiduals(OptimizationReport& report,
+                     const std::vector<double>& edgeWeights) const;
 
   std::vector<PoseGraphNode> nodes_;
   std::vector<PoseGraphEdge> edges_;

@@ -365,10 +365,9 @@ class NativeSlamEngine internal constructor(
     }
 
     /**
-     * Runs the optimiser and returns the refreshed world poses.
-     *
-     * Not called by the scan pipeline yet (finding 98): the graph is empty in the shipped app,
-     * so this returns a report that carries no poses. See docs/SETUP.md §5.2.
+     * Runs the robust optimiser after an operator-confirmed closure and returns diagnostic poses.
+     * Native GNC/TLS reweights loop edges only; a failed or zero-weight new loop restores all poses,
+     * removes that edge and reports `converged=false`. Corrected poses never re-anchor measured runs.
      */
     fun optimizePoseGraph(iterations: Int = 20): PoseGraphResult? {
         val active = handle

@@ -82,7 +82,7 @@ review before any actual import.
 
 | Candidate | Role in ConstructAR | Validation and decision |
 | --- | --- | --- |
-| Robust losses / Graduated Non-Convexity (GNC) | Limit a bad loop's influence, then move from a convex start towards near-binary inlier decisions | **After verification gates.** Compare ordinary least squares, Huber and GNC on graphs with 0–50 % false loops. Require correct loops to reduce ATE and false loops not to fold the room |
+| Robust losses / Graduated Non-Convexity (GNC) | Limit a bad loop's influence, then move from a convex start towards near-binary inlier decisions | **GNC/TLS implemented for loop edges only.** An independent odometry-deformation gate and rollback are still required: the adversarial five-metre test otherwise converges to a folded local minimum. Broader 0–50 % false-loop benchmarks and PCM remain open |
 | PCM / pairwise cycle consistency | Reject loops that disagree with odometry or accepted closures | **Before automatic closure.** A single loop has no mutually supporting group, so it still needs appearance/depth-backed PnP and conservative thresholds |
 | Deformation graphs / submaps, as used by Kimera-PGMO ([paper](https://ar5iv.labs.arxiv.org/html/2101.06894)) | Apply accepted global corrections to a derived mesh without “de-integrating” history | **Long term.** Store raw and corrected geometry separately with source graph revision. Benchmark extra solve/memory and preserve raw measured runs |
 | Multi-model RANSAC + region growing | Separate intersecting walls, floors, ceilings and clutter before Manhattan regularisation | **Targeted improvement.** Report plane residual/support and leave unsupported/open/non-Manhattan geometry unchanged |
@@ -104,14 +104,22 @@ These are correctness fixes, not benchmark claims:
   weight. Final usability still requires positive bounded scale, inlier ratio and inlier RMS gates.
 - **Complete native evidence accounting:** multithreaded reductions include `voxelWeight`; the test
   compares absolute counted/stored difference and rejects a zero-on-one-side pass.
+- **Robust, transactional loop attempts:** super-linear GNC/TLS affects loop hypotheses only. An
+  independent odometry-deformation gate catches the folded local minimum that GNC alone accepted
+  in a five-metre adversarial fixture. The fallback disables loops and recovers measured odometry;
+  non-converged/non-finite/cost-worsening runs restore every input pose and become `Failed` in the
+  operator conversation. `optimizeLastLoop` additionally removes a failed or zero-weight new edge.
+  This is not pairwise PCM or automatic appearance verification.
 
 Local evidence at the time of writing:
 
-- `tools/verify-native.sh`: **336 checks, 0 failures**, in O1 and O2 builds.
-- `tools/verify-native.sh --tsan`: **336 checks, 0 failures**, no race reported.
-- JVM source count: **1284 tests**; execution requires the Android/JDK CI environment.
+- `tools/verify-native.sh`: **348 checks, 0 failures**, in O1 and O2 builds.
+- `tools/verify-native.sh --tsan`: **348 checks, 0 failures**, no race reported.
+- Android run **42398405636** executed the first **1284** JVM tests plus the full release/NDK gate;
+  the source count is now **1286** after the two new closure-contract tests, whose CI run is pending.
 - New deterministic cases cover source-pose selection, stale/future/mismatched fusion, fallback
-  confidence, 25 % gross calibration contamination and exact repeatability.
+  confidence, 25 % gross calibration contamination, exact repeatability, a five-metre false loop
+  and exact transactional rollback.
 
 These tests prove software contracts and synthetic robustness. They do **not** establish phone
 tracking accuracy, relocalisation rate, thermal stability or a universal depth-error percentage.
@@ -155,8 +163,9 @@ integration p50/p95, RSS and thermal throttle onset.
    keyframe IDs, optical-frame rotations, strides, timestamps and `map→odom` semantics.
 2. Require appearance support **and** depth-backed geometric verification. Proximity remains only a
    proposal. Ambiguous results keep the existing operator conversation.
-3. Add odometry/pairwise consistency, a robust loss and graph transactions: snapshot poses/edges,
-   optimise, inspect convergence and residual gates, and roll back a rejected/non-converged attempt.
+3. **Delivered first guard:** GNC/TLS, an odometry-deformation fallback and graph transactions.
+   **Still required before automation:** pairwise cycle consistency among multiple loops,
+   appearance/depth-backed verification and a benchmark matrix with more than one false loop.
 4. Persist only bounded descriptors/keyframe metadata needed for relocalisation. Compare ORB/SIFT
    with DISK/ALIKED+LightGlue after model and weight licence checks.
 

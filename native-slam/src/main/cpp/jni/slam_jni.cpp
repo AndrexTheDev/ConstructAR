@@ -490,13 +490,14 @@ Java_com_constructar_nativebridge_NativeSlamEngine_nativePoseGraphOptimize(JNIEn
                                                                           jint iterations) {
   EngineContext* context = contextFrom(handle);
   if (context == nullptr) return nullptr;
-  const constructar::OptimizationReport report = context->poseGraph.optimize(iterations);
-  const auto poses = context->poseGraph.poses();
-
-  const jsize size = static_cast<jsize>(7 + poses.size() * 16);
+  // Allocate before optimising: an allocation failure must not hide an already-mutated graph
+  // behind a null return. The single pipeline worker keeps the node count stable meanwhile.
+  const jsize size = static_cast<jsize>(7 + context->poseGraph.nodeCount() * 16);
   jfloatArray result = env->NewFloatArray(size);
   if (result == nullptr) return nullptr;
 
+  const constructar::OptimizationReport report = context->poseGraph.optimizeLastLoop(iterations);
+  const auto poses = context->poseGraph.poses();
   std::vector<float> payload(static_cast<size_t>(size));
   payload[0] = static_cast<float>(report.initialCost);
   payload[1] = static_cast<float>(report.finalCost);

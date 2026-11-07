@@ -11,7 +11,9 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <unordered_map>
+#include <utility>
 
 namespace constructar {
 namespace {
@@ -95,6 +97,24 @@ inline int64_t blockKey(int i, int j) {
   return (static_cast<int64_t>(i) << 32) | static_cast<uint32_t>(j);
 }
 
+std::pair<double, double> odometryRms(const std::vector<PoseGraphEdge>& edges,
+                                      const std::vector<Mat4>& poses) {
+  double translationSum = 0.0;
+  double rotationSum = 0.0;
+  size_t count = 0;
+  for (const auto& edge : edges) {
+    if (edge.loopClosure) continue;
+    const Mat4 relative = poses[static_cast<size_t>(edge.from)].inverseRigid() *
+                          poses[static_cast<size_t>(edge.to)];
+    const Twist r = se3Log(edge.measurement.inverseRigid() * relative);
+    translationSum += r.upsilon.lengthSquared();
+    rotationSum += r.omega.lengthSquared();
+    ++count;
+  }
+  const double divisor = static_cast<double>(std::max<size_t>(1, count));
+  return {std::sqrt(translationSum / divisor), std::sqrt(rotationSum / divisor)};
+}
+
 }  // namespace
 
 int PoseGraph::addNode(const Mat4& pose, bool fixed) {
@@ -147,12 +167,44 @@ double PoseGraph::cost() const {
   return sum;
 }
 
+double PoseGraph::weightedCost(const std::vector<double>& edgeWeights) const {
+  double sum = 0.0;
+  for (size_t i = 0; i < edges_.size(); ++i) sum += edgeWeights[i] * edgeCost(edges_[i]);
+  return sum;
+}
+
+void PoseGraph::fillResiduals(OptimizationReport& report,
+                              const std::vector<double>& edgeWeights) const {
+  double translationSum = 0.0;
+  double rotationSum = 0.0;
+  size_t activeEdges = 0;
+  report.residuals.clear();
+  report.residuals.reserve(edges_.size());
+  for (size_t edgeIndex = 0; edgeIndex < edges_.size(); ++edgeIndex) {
+    const auto& edge = edges_[edgeIndex];
+    const Twist r = residual(edge.from, edge.to, edge.measurement);
+    const double translation = r.upsilon.length();
+    const double rotation = r.omega.length();
+    if (edgeWeights[edgeIndex] > 0.0) {
+      translationSum += translation * translation;
+      rotationSum += rotation * rotation;
+      ++activeEdges;
+    }
+    report.residuals.push_back(EdgeResidual{edge.from, edge.to, rotation, translation,
+                                            edge.loopClosure, edgeWeights[edgeIndex]});
+  }
+  const double count = static_cast<double>(std::max<size_t>(1, activeEdges));
+  report.rmsTranslationMeters = std::sqrt(translationSum / count);
+  report.rmsRotationRadians = std::sqrt(rotationSum / count);
+}
+
 void PoseGraph::reset() {
   nodes_.clear();
   edges_.clear();
 }
 
-OptimizationReport PoseGraph::optimize(int iterations, double convergenceCostDelta) {
+OptimizationReport PoseGraph::optimizeInPlace(const std::vector<double>& edgeWeights,
+                                               int iterations, double convergenceCostDelta) {
   OptimizationReport report;
   const auto started = std::chrono::steady_clock::now();
   if (nodes_.size() < 2 || edges_.empty()) {
@@ -172,7 +224,7 @@ OptimizationReport PoseGraph::optimize(int iterations, double convergenceCostDel
   }
 
   const int dim = variableCount * 6;
-  double currentCost = cost();
+  double currentCost = weightedCost(edgeWeights);
   report.initialCost = currentCost;
 
   constexpr double kEpsilon = 1e-5;  // central-difference step (radians / metres)
@@ -182,13 +234,18 @@ OptimizationReport PoseGraph::optimize(int iterations, double convergenceCostDel
     hessian.reserve(edges_.size() * 3);
     std::vector<double> gradient(static_cast<size_t>(dim), 0.0);
 
-    for (const auto& edge : edges_) {
+    for (size_t edgeIndex = 0; edgeIndex < edges_.size(); ++edgeIndex) {
+      const auto& edge = edges_[edgeIndex];
+      const double robustWeight = edgeWeights[edgeIndex];
+      if (robustWeight <= 0.0) continue;
       const int vi = variableOf[static_cast<size_t>(edge.from)];
       const int vj = variableOf[static_cast<size_t>(edge.to)];
       if (vi < 0 && vj < 0) continue;
 
-      const double weights[6] = {edge.rotationWeight, edge.rotationWeight, edge.rotationWeight,
-                                 edge.translationWeight, edge.translationWeight, edge.translationWeight};
+      const double weights[6] = {
+          edge.rotationWeight * robustWeight, edge.rotationWeight * robustWeight,
+          edge.rotationWeight * robustWeight, edge.translationWeight * robustWeight,
+          edge.translationWeight * robustWeight, edge.translationWeight * robustWeight};
 
       Mat4& poseFrom = nodes_[static_cast<size_t>(edge.from)].pose;
       Mat4& poseTo = nodes_[static_cast<size_t>(edge.to)].pose;
@@ -366,7 +423,7 @@ OptimizationReport PoseGraph::optimize(int iterations, double convergenceCostDel
         }
         nodes_[i].pose = before[i] * se3Exp(twistFromArray(delta.data()));
       }
-      newCost = cost();
+      newCost = weightedCost(edgeWeights);
       if (std::isfinite(newCost) && newCost <= currentCost + 1e-9) break;
       stepScale *= 0.5;
     }
@@ -374,6 +431,13 @@ OptimizationReport PoseGraph::optimize(int iterations, double convergenceCostDel
     report.iterations = iteration + 1;
     if (!std::isfinite(newCost) || newCost > currentCost + 1e-9) {
       for (size_t i = 0; i < nodes_.size(); ++i) nodes_[i].pose = before[i];
+      // Finite-difference Jacobians and float poses eventually make a descent direction
+      // indistinguishable from numerical noise. A rejected step whose relative cost increase
+      // is below 1 ppm is stationarity, not a diverged graph; a material increase still fails.
+      const double stationaryTolerance = std::max(1e-6, std::fabs(currentCost) * 1e-6);
+      if (std::isfinite(newCost) && newCost - currentCost <= stationaryTolerance) {
+        report.converged = true;
+      }
       break;
     }
     const double improvement = currentCost - newCost;
@@ -385,24 +449,165 @@ OptimizationReport PoseGraph::optimize(int iterations, double convergenceCostDel
   }
 
   report.finalCost = currentCost;
-  double translationSum = 0.0;
-  double rotationSum = 0.0;
-  report.residuals.reserve(edges_.size());
-  for (const auto& edge : edges_) {
-    const Twist r = residual(edge.from, edge.to, edge.measurement);
-    const double translation = r.upsilon.length();
-    const double rotation = r.omega.length();
-    translationSum += translation * translation;
-    rotationSum += rotation * rotation;
-    report.residuals.push_back(EdgeResidual{edge.from, edge.to, rotation, translation, edge.loopClosure});
-  }
-  const double count = static_cast<double>(std::max<size_t>(1, edges_.size()));
-  report.rmsTranslationMeters = std::sqrt(translationSum / count);
-  report.rmsRotationRadians = std::sqrt(rotationSum / count);
+  fillResiduals(report, edgeWeights);
 
   const auto finished = std::chrono::steady_clock::now();
   report.milliseconds =
       std::chrono::duration_cast<std::chrono::microseconds>(finished - started).count() / 1000.0;
+  return report;
+}
+
+OptimizationReport PoseGraph::optimize(int iterations, double convergenceCostDelta) {
+  const auto started = std::chrono::steady_clock::now();
+  const std::vector<Mat4> original = poses();
+  const double initialCost = cost();
+  std::vector<double> weights(edges_.size(), 1.0);
+  OptimizationReport report;
+  report.initialCost = initialCost;
+  report.finalCost = initialCost;
+
+  auto elapsedMilliseconds = [&started]() {
+    return std::chrono::duration_cast<std::chrono::microseconds>(
+               std::chrono::steady_clock::now() - started)
+               .count() /
+           1000.0;
+  };
+  auto rollback = [&]() {
+    for (size_t i = 0; i < nodes_.size(); ++i) nodes_[i].pose = original[i];
+    report.initialCost = initialCost;
+    report.finalCost = cost();
+    report.converged = false;
+    report.rolledBack = true;
+    report.milliseconds = elapsedMilliseconds();
+    fillResiduals(report, weights);
+    return report;
+  };
+  if (!std::isfinite(initialCost) || iterations <= 0) return rollback();
+  if (nodes_.size() < 2 || edges_.empty()) {
+    report.converged = true;
+    fillResiduals(report, weights);
+    return report;
+  }
+
+  // GNC-TLS, super-linear schedule. `error` follows the conventional 0.5*r²
+  // convention; c=50 therefore admits a combined 0.1 m/rad residual at the
+  // closure's normal weight of 100. Odometry is a known inlier and never scaled.
+  constexpr double kInlierCost = 50.0;
+  constexpr double kLambdaStep = 1.4;
+  constexpr int kMaxOuterIterations = 16;
+  double lambda = std::numeric_limits<double>::infinity();
+  bool hasLoop = false;
+  for (const auto& edge : edges_) {
+    if (!edge.loopClosure) continue;
+    hasLoop = true;
+    const double error = 0.5 * edgeCost(edge);
+    const double denominator = 2.0 * error - kInlierCost;
+    if (denominator > 0.0) lambda = std::min(lambda, kInlierCost / denominator);
+  }
+  const bool robust = hasLoop && std::isfinite(lambda) && lambda > 0.0;
+  if (robust) lambda = std::max(lambda, 1e-6);
+
+  auto updateWeights = [&]() {
+    const double mu = robust ? lambda / (1.0 + lambda) : 0.0;
+    bool binary = true;
+    for (size_t i = 0; i < edges_.size(); ++i) {
+      if (!edges_[i].loopClosure || !robust) {
+        weights[i] = 1.0;
+        continue;
+      }
+      const double error = 0.5 * edgeCost(edges_[i]);
+      double weight = 0.0;
+      if (error <= kInlierCost) {
+        weight = 1.0;
+      } else if (mu < 1.0 && error < kInlierCost / (mu * mu)) {
+        weight = (std::sqrt(kInlierCost / error) - mu) / (1.0 - mu);
+        weight = std::max(0.0, std::min(1.0, weight));
+      }
+      weights[i] = weight;
+      if (std::fabs(weight - std::round(weight)) > 1e-4) binary = false;
+    }
+    return binary;
+  };
+
+  int totalIterations = 0;
+  bool binaryWeights = !robust;
+  const int outerCount = robust ? kMaxOuterIterations : 1;
+  for (int outer = 0; outer < outerCount; ++outer) {
+    binaryWeights = updateWeights();
+    report = optimizeInPlace(weights, iterations, convergenceCostDelta);
+    totalIterations += report.iterations;
+    if (binaryWeights || !robust) break;
+    // Super-linear GNC schedule: sqrt below one, ordinary multiplication above it.
+    lambda = lambda < 1.0 ? std::sqrt(lambda) * kLambdaStep : lambda * kLambdaStep;
+    lambda = std::min(lambda, 1e12);
+  }
+
+  report.initialCost = initialCost;
+  report.finalCost = weightedCost(weights);
+  report.iterations = totalIterations;
+  const bool finiteResult = std::isfinite(report.finalCost) &&
+                            std::isfinite(report.rmsTranslationMeters) &&
+                            std::isfinite(report.rmsRotationRadians);
+  const bool nonWorsening = report.finalCost <=
+                            initialCost + std::max(1e-6, std::fabs(initialCost) * 1e-6);
+  if (!report.converged || !binaryWeights || !finiteResult || !nonWorsening) return rollback();
+
+  // Robust loss alone can converge to a folded local minimum. Bound the physical damage to
+  // measured odometry as an independent gate. Existing odometry noise raises the allowance;
+  // a clean chain permits at most 0.35 m / 0.5 rad RMS after all accepted closures.
+  const auto baselineOdometry = odometryRms(edges_, original);
+  const double translationLimit = std::max(0.35, baselineOdometry.first * 1.5 + 0.05);
+  const double rotationLimit = std::max(0.5, baselineOdometry.second * 1.5 + 0.05);
+  auto excessiveDeformation = [&]() {
+    const auto current = odometryRms(edges_, poses());
+    return !std::isfinite(current.first) || !std::isfinite(current.second) ||
+           current.first > translationLimit || current.second > rotationLimit;
+  };
+  if (hasLoop && excessiveDeformation()) {
+    // Conservative first implementation: without pairwise consistency there is no defensible
+    // way to blame one of several loops, so disable all of them and recover measured odometry.
+    for (size_t i = 0; i < edges_.size(); ++i) {
+      if (edges_[i].loopClosure) weights[i] = 0.0;
+    }
+    binaryWeights = true;
+    report = optimizeInPlace(weights, iterations, convergenceCostDelta);
+    totalIterations += report.iterations;
+    report.initialCost = initialCost;
+    report.finalCost = weightedCost(weights);
+    report.iterations = totalIterations;
+    const bool fallbackFinite = std::isfinite(report.finalCost) &&
+                                std::isfinite(report.rmsTranslationMeters) &&
+                                std::isfinite(report.rmsRotationRadians);
+    const bool fallbackNonWorsening =
+        report.finalCost <= initialCost + std::max(1e-6, std::fabs(initialCost) * 1e-6);
+    if (!report.converged || !fallbackFinite || !fallbackNonWorsening || excessiveDeformation()) {
+      return rollback();
+    }
+  }
+
+  report.converged = true;
+  report.rolledBack = false;
+  report.milliseconds = elapsedMilliseconds();
+  fillResiduals(report, weights);
+  return report;
+}
+
+OptimizationReport PoseGraph::optimizeLastLoop(int iterations, double convergenceCostDelta) {
+  if (edges_.empty() || !edges_.back().loopClosure) return optimize(iterations, convergenceCostDelta);
+  const std::vector<Mat4> original = poses();
+  auto report = optimize(iterations, convergenceCostDelta);
+  const bool rejected = !report.residuals.empty() && report.residuals.back().loopClosure &&
+                        report.residuals.back().robustWeight <= 1e-4;
+  if (!report.rolledBack && !rejected) return report;
+
+  for (size_t i = 0; i < nodes_.size(); ++i) nodes_[i].pose = original[i];
+  edges_.pop_back();
+  const std::vector<double> restoredWeights(edges_.size(), 1.0);
+  report.initialCost = cost();
+  report.finalCost = report.initialCost;
+  report.converged = false;
+  report.rolledBack = true;
+  fillResiduals(report, restoredWeights);
   return report;
 }
 

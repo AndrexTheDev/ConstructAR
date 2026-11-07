@@ -88,9 +88,8 @@
     <string name="loop_confirm">Stesso luogo</string>
     <string name="loop_none">Nessun ciclo trovato.</string>
     <string name="loop_closed">Ciclo chiuso: errore residuo %1$s → %2$s.</string>
-    <string name="loop_failed">Non è stato possibile ottimizzare il grafo.</string>
+    <string name="loop_failed">Chiusura rifiutata. Il grafo originale è stato ripristinato.</string>
     <string name="loop_shift">Spostati %1$d di %2$d nodi, fino a %3$s.</string>
-    <string name="loop_unfinished">L’ottimizzatore ha esaurito le iterazioni: l’arco è inserito, ma non c’è un risultato. Questi numeri sono uno stato intermedio, non una correzione.</string>
     <string name="ar_step_scan">1 Scansiona</string>
     <string name="ar_step_points">2 Segna i punti</string>
     <string name="ar_step_finish">3 Salva</string>

@@ -672,14 +672,15 @@ class TsdfScanPipeline(
                 ClosureAction.DISMISS -> closer.dismiss(now)
             }
             if (next is ClosureState.Closed) {
-                // The edge is in the graph whether or not the solver finished, so the count is
-                // every confirmation - but only a converged run has a report to keep, and the
-                // report of an *earlier* closure must not stand in for this one's (finding 252:
-                // assigning through `let` left the previous numbers on screen as if they were
-                // the last closure's).
+                // Only an accepted, converged transaction reaches this state. A failed or rejected
+                // hypothesis has already been removed by `optimizeLastLoop` and is not counted.
                 closedLoops += 1
                 lastClosureConverged = next.optimisation.converged
                 lastCorrection = next.correction
+            } else if (next is ClosureState.Failed) {
+                // Do not leave an earlier correction looking like the result of this failed attempt.
+                lastClosureConverged = false
+                lastCorrection = null
             }
             mutableClosureState.value = next
         }

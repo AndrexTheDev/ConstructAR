@@ -323,10 +323,13 @@ proposal's own flag, so the two dialogs cannot disagree about the window. `estim
 is still reached from nowhere, and no stored metre depends on a marker today.
 
 **Pose graph** (`slam/pose_graph.cpp`). Gauss–Newton on SE(3) with central-difference Jacobians,
-block-sparse Hessian solved by preconditioned conjugate gradient, backtracking line search (a
-full step overshoots on a room with one closure), snapshot/rollback so a diverging iteration can
-never corrupt the trajectory. Loop closures carry 100× the odometry weight because they are
-appearance-verified. The graph is fed since finding 243: `KeyframeFeed` decides on each placed
+block-sparse Hessian solved by preconditioned conjugate gradient and backtracking line search.
+Only loop hypotheses are reweighted, by super-linear GNC/TLS; measured odometry keeps weight 1.
+An independent odometry-deformation gate disables all loops and recovers the measured chain if a
+local minimum would fold it. Every attempt is transactional: non-finite, non-converged or
+cost-worsening work restores every input pose. The app's `optimizeLastLoop` also removes a failed
+or zero-weight new hypothesis, so it cannot poison the next attempt. Loops start at 100× odometry,
+but that is a strong prior rather than permission to win. The graph is fed since finding 243: `KeyframeFeed` decides on each placed
 frame which pose is worth a node (`KeyframeSelector`, `:core`), the render thread enqueues, and
 the scan worker writes the node and the odometry edge to the previous one. Since finding 245 it
 can be corrected too, but only on a human's word: `ProximityLoopClosureDetector` proposes a
@@ -335,9 +338,9 @@ the edge at 100x the odometry weight and optimises on the worker. The corrected 
 reported, not written back - a run's metres were measured with taps, and finding 217's rule
 applies to the graph too. What is reported is a `CorrectionReport` (`:core`): the nodes the
 optimiser and the app both know, how many of them moved, the largest and the mean shift in metres
-(findings 246, 249). A run
-that stopped without converging has no report at all - `ClosureState.Closed.correction` is null -
-because its poses are a snapshot halfway down the cost curve (finding 247). The count of
+(findings 246, 249). A run that stops without converging, produces non-finite poses or worsens
+its cost is `ClosureState.Failed`; the native transaction has already restored its input poses,
+so no half-descent is reported as a correction. The count of
 confirmed closures and the last report travel on `PoseGraphStatus`, so the HUD keeps saying what
 the dialog said after the dialog is gone (finding 250); committing the run copies them into
 `ScanSummary.closures` and the protocol prints them, so the document says the geometry was folded

@@ -381,12 +381,12 @@ Six locales ship as resources, and **no user-facing text is hardcoded**: the eng
 
 | Directory | Locale | Keys |
 |-----------|--------|------|
-| `app/src/main/res/values/` | English (default) | 552 strings + 13 plurals |
-| `app/src/main/res/values-de/` | Deutsch | 552 strings + 13 plurals |
-| `app/src/main/res/values-es/` | Español | 552 strings + 13 plurals |
-| `app/src/main/res/values-fr/` | Français | 552 strings + 13 plurals |
-| `app/src/main/res/values-it/` | Italiano | 552 strings + 13 plurals |
-| `app/src/main/res/values-pl/` | Polski | 552 strings + 13 plurals (`few`/`many` included) |
+| `app/src/main/res/values/` | English (default) | 551 strings + 13 plurals |
+| `app/src/main/res/values-de/` | Deutsch | 551 strings + 13 plurals |
+| `app/src/main/res/values-es/` | Español | 551 strings + 13 plurals |
+| `app/src/main/res/values-fr/` | Français | 551 strings + 13 plurals |
+| `app/src/main/res/values-it/` | Italiano | 551 strings + 13 plurals |
+| `app/src/main/res/values-pl/` | Polski | 551 strings + 13 plurals (`few`/`many` included) |
 
 `scripts/verify_sources.py` fails on a missing key, an untranslated extra key, or a mismatched
 format placeholder — so a half-translated release cannot ship. That includes the exported
@@ -596,8 +596,8 @@ Known limitations, deliberately documented rather than hidden:
 
 ## Testing
 
-* **Native (C++) — 332 assertions, all green**, exercised with plain `g++` (no Android SDK; the
-  binary reports 336 passes because four of them sit inside the loop over the tag's rotations):
+* **Native (C++) — 344 assertions, all green**, exercised with plain `g++` (no Android SDK; the
+  binary reports 348 passes because four of them sit inside the loop over the tag's rotations):
   SE(3) exp/log round trip, TSDF integration on synthetic depth, sphere/wall reconstruction
   areas and extents, a 30°-tilted plane (which pins the depth convention), free-space carving
   (a ghost disappears, the real wall does not), triangle budget, invalid input, pose-graph
@@ -848,10 +848,10 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1284 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1286 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
-| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 332 checks, 0 failures |
-| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 332 checks, 0 failures, no data race reported |
+| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 344 checks, 0 failures (348 runtime executions) |
+| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 344 checks, 0 failures, no data race reported (348 runtime executions) |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
 | APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |

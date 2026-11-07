@@ -411,11 +411,98 @@ void testPoseGraphLoopClosure() {
             std::to_string(report.residuals.empty() ? -1.0 : report.residuals.back().translationErrorMeters) +
             " m)");
   check(report.finalCost > 0.0, "cost reflects the closure constraint");
+  check(!report.rolledBack && report.residuals.back().robustWeight > 0.999,
+        "a consistent closure remains a full-weight inlier");
 
   const Vec3 lastTranslation = graph.poses().back().translation();
   check(lastTranslation.length() < 0.10f,
         "final keyframe pulled back to the start (" + std::to_string(lastTranslation.length()) + " m)");
   check(graph.poses().front().translation().length() < 1e-6f, "gauge node not moved");
+}
+
+void testPoseGraphRejectsFalseLoop() {
+  section("Pose graph: a gross false closure cannot fold measured odometry");
+
+  PoseGraph graph;
+  std::vector<Mat4> measured;
+  for (int i = 0; i < 6; ++i) {
+    measured.push_back(Mat4::fromRotationTranslation(
+        Mat3(), Vec3(static_cast<float>(i), 0.f, 0.f)));
+    graph.addNode(measured.back(), i == 0);
+  }
+  for (int i = 0; i + 1 < 6; ++i) {
+    graph.addEdge(i, i + 1, measured[static_cast<size_t>(i)].inverseRigid() *
+                                 measured[static_cast<size_t>(i + 1)],
+                  1.0, 1.0, false);
+  }
+  // Five metres away is not the origin. A least-squares closure with weight 100 folds this
+  // line towards zero; GNC must instead reject the single inconsistent loop hypothesis.
+  graph.addEdge(0, 5, Mat4::identity(), 100.0, 100.0, true);
+  const auto report = graph.optimize(60, 1e-9);
+
+  check(report.converged && !report.rolledBack, "the odometry-only solution is a valid robust optimum");
+  check(!report.residuals.empty() && report.residuals.back().robustWeight < 1e-3,
+        "the gross false loop receives zero robust weight (got " +
+            std::to_string(report.residuals.back().robustWeight) + ")");
+  check(std::fabs(graph.poses().back().translation().x - 5.f) < 0.05f,
+        "the last measured keyframe remains near x=5 m (got " +
+            std::to_string(graph.poses().back().translation().x) + ")");
+  check(report.rmsTranslationMeters < 0.05,
+        "rejecting one loop does not distribute its error across odometry (RMS " +
+            std::to_string(report.rmsTranslationMeters) + ")");
+}
+
+void testPoseGraphRollback() {
+  section("Pose graph: an unfinished solve is transactional");
+
+  PoseGraph graph;
+  const Mat4 origin = Mat4::identity();
+  const Mat4 displaced = Mat4::fromRotationTranslation(Mat3(), Vec3(2.f, 0.f, 0.f));
+  const Mat4 measurement = Mat4::fromRotationTranslation(Mat3(), Vec3(1.f, 0.f, 0.f));
+  graph.addNode(origin, true);
+  graph.addNode(displaced);
+  graph.addEdge(0, 1, measurement);
+  const auto before = graph.poses();
+
+  // One improving step with a zero convergence threshold necessarily exhausts the budget.
+  // The old API exposed that half-descent; the transactional API must restore the input exactly.
+  const auto report = graph.optimize(1, 0.0);
+  check(!report.converged && report.rolledBack, "an exhausted solve is explicitly rolled back");
+  check(std::memcmp(before[1].m, graph.poses()[1].m, sizeof(before[1].m)) == 0,
+        "rollback restores every pose value, not just the gauge node");
+  checkNear(report.finalCost, report.initialCost, 1e-12,
+            "a rolled-back report describes the restored graph");
+}
+
+void testLastLoopTransaction() {
+  section("Pose graph: a rejected app closure restores poses and edges");
+
+  PoseGraph graph;
+  std::vector<Mat4> measured;
+  for (int i = 0; i < 3; ++i) {
+    measured.push_back(Mat4::fromRotationTranslation(Mat3(), Vec3(i, 0.f, 0.f)));
+    graph.addNode(measured.back(), i == 0);
+  }
+  for (int i = 0; i + 1 < 3; ++i) {
+    graph.addEdge(i, i + 1, measured[static_cast<size_t>(i)].inverseRigid() *
+                                 measured[static_cast<size_t>(i + 1)]);
+  }
+  const auto before = graph.poses();
+  const size_t edgesBefore = graph.edgeCount();
+  graph.addEdge(0, 2, Mat4::identity(), 100.0, 100.0, true);
+  const auto report = graph.optimizeLastLoop(60, 1e-9);
+
+  check(!report.converged && report.rolledBack, "a zero-weight app closure is a failed attempt");
+  check(graph.edgeCount() == edgesBefore && !graph.edges().back().loopClosure,
+        "the rejected hypothesis is removed instead of poisoning a later attempt");
+  bool exactPoses = true;
+  const auto restored = graph.poses();
+  for (size_t i = 0; i < before.size(); ++i) {
+    exactPoses = exactPoses && std::memcmp(before[i].m, restored[i].m, sizeof(before[i].m)) == 0;
+  }
+  check(exactPoses, "the app transaction restores every pre-closure pose exactly");
+  checkNear(report.finalCost, report.initialCost, 1e-12,
+            "the app report describes the restored graph without the rejected edge");
 }
 
 void testProximityDetector() {
@@ -2174,6 +2261,9 @@ int main() {
   testTiltedPlane();
   testCarveFreeSpace();
   testPoseGraphLoopClosure();
+  testPoseGraphRejectsFalseLoop();
+  testPoseGraphRollback();
+  testLastLoopTransaction();
   testProximityDetector();
   testTriangleBudgetAndReset();
   testBlockBudget();

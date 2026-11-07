@@ -14,10 +14,9 @@ import com.constructar.nativebridge.NativeSlamEngine
  * [PoseGraphSource] over the JNI pose graph.
  *
  * Three delegations and one number that is not a delegation: the weight of the closure edge.
- * `docs/ARCHITECTURE.md` documents that loop closures carry 100× the odometry weight because they
- * are the constraint that is supposed to win; the odometry edges the keyframe feed writes use the
- * default 1.0, so a closure at 1.0 would be a suggestion among equals and the optimiser would
- * distribute its error back into the loop instead of removing it.
+ * Loop closures start with 100× the odometry weight so a consistent revisit can remove drift.
+ * That weight is a hypothesis, not a command: native GNC/TLS can reject a closure, and an
+ * independent odometry-deformation gate falls back to the measured chain rather than folding it.
  *
  * **Worker thread only** - `NativeSlamEngine` requires every pose-graph call to be serialised by
  * the pipeline's single worker, and [PoseGraphCloser] is run there.
