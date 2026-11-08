@@ -155,10 +155,15 @@ Local evidence at the time of writing:
 
 - Current `tools/verify-native.sh`: **381 checks, 0 failures**, in local O1 and O2 builds; the
   separate TSAN run also passed all 381 checks with no race reported.
-- Native CI run **42509196672** passed g++ and clang++, O1 and O2, with **381 checks per cell**,
+- Native CI run **42535658564** passed g++ and clang++, O1 and O2, with **381 checks per cell**,
   plus TSAN, RTAB-Map stub compilation and the layout probe.
-- Android run **42509192164** passed the **1304-method JVM suite**, Kotlin/Java compilation, NDK, host
+- Android run **42535654975** passed the **1305-method JVM suite**, Kotlin/Java compilation, NDK, host
   C++, debug/release, R8, licence checks and 16 KB alignment.
+- Its parsed `depth-guard-benchmark` artifact reports **192/192** known regional false fills
+  suppressed with zero healthy fills or measured pixels lost. The temporal control accepted 4/4
+  stale candidates; the guarded run accepted two consistent candidates, then recorded one
+  contradiction rejection and one terminal measured fallback, with zero consistent-frame rejections.
+  These are fixture counts only, not phone error-reduction percentages.
 - New deterministic cases cover explicit Raw/Full acquisition order, source/depth-timestamp
   propagation, pose-correct temporal agreement, nearer/farther disocclusions, conflict-count/ratio
   gates, missing-overlap neutrality, spatial regional rejection, sparse/isolated-outlier neutrality,
