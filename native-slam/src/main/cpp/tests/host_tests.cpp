@@ -2189,6 +2189,8 @@ void testObservationWeight() {
     TsdfConfig config;
     config.voxelSize = 0.02f;
     config.minConfidence = 0;
+    // Isolate 1/Z² here; incidence has its own analytic fixture below.
+    config.weightByIncidence = false;
     config.workerThreads = 1;
     TsdfVolume volume(config);
     const auto stats = volume.integrate(makeFrame(camera, depth, Mat4::identity()), 2);
@@ -2269,6 +2271,97 @@ void testConfidenceWeight() {
   invalid.confidenceRowStride = camera.width;
   check(invalidVolume.integrate(invalid, 2).raysProcessed == 0,
         "a non-null confidence plane with invalid dimensions fails closed");
+}
+
+/** Local depth normals discount grazing evidence without turning unknown geometry into a gate. */
+void testIncidenceWeight() {
+  section("TSDF: local incidence scales accepted evidence");
+  checkNear(TsdfVolume::incidenceWeight(1.f), 1.0, 1e-6, "a fronto-parallel observation keeps unit weight");
+  checkNear(TsdfVolume::incidenceWeight(0.f), 0.2, 1e-6, "a true graze reaches the soft floor, not rejection");
+  checkNear(TsdfVolume::incidenceWeight(-0.5f), 0.5, 1e-6, "normal orientation does not change incidence");
+  checkNear(TsdfVolume::incidenceWeight(std::nanf("")), 1.0, 1e-6, "an unknown angle is neutral");
+  checkNear(TsdfVolume::incidenceWeight(0.1f, 0.7f), 0.7, 1e-6, "the configured evidence floor is honoured");
+
+  struct Evidence {
+    constructar::IntegrationStats stats;
+    double stored = 0.0;
+    double perWrite() const { return stats.voxelUpdates > 0 ? stored / stats.voxelUpdates : 0.0; }
+  };
+  const auto integrate = [](const DepthFrameView& frame, int pixelStep, bool enabled) {
+    TsdfConfig config;
+    config.voxelSize = 0.02f;
+    config.minConfidence = 96;
+    // The enabled case deliberately uses the production struct default; only the control opts out.
+    if (!enabled) config.weightByIncidence = false;
+    config.workerThreads = 1;
+    TsdfVolume volume(config);
+    const auto stats = volume.integrate(frame, pixelStep);
+    return Evidence{stats, volume.totalVoxelWeightExact()};
+  };
+
+  // One optical-axis ray through a padded 3x3 image. The analytic plane is 60 degrees to that ray;
+  // its right/down neighbours provide a one-sided local basis. At 4 m the range factor is 1/16,
+  // so incidence must make the deposited evidence about 1/16 * cos(60) = 1/32 per voxel write.
+  SyntheticCamera camera;
+  camera.width = 3;
+  camera.height = 3;
+  camera.fx = 1000.f;
+  camera.fy = 1000.f;
+  camera.cx = 0.5f;
+  camera.cy = 0.5f;
+  constexpr int stride = 5;
+  std::vector<uint16_t> plane(static_cast<size_t>(stride * camera.height), 0);
+  const float sine = std::sin(60.0 * constructar::kPi / 180.0);
+  const float cosine = std::cos(60.0 * constructar::kPi / 180.0);
+  for (int v = 0; v < camera.height; ++v) {
+    for (int u = 0; u < camera.width; ++u) {
+      const float px = (static_cast<float>(u) + 0.5f - camera.cx) / camera.fx;
+      // Rotation about Y: depth does not depend on v.
+      const float z = 2.f / (cosine - sine * px);  // normal=(sin,0,cos), plane offset=-2
+      plane[static_cast<size_t>(v * stride + u)] = static_cast<uint16_t>(z * 1000.f);
+    }
+  }
+  DepthFrameView planeFrame = makeFrame(camera, plane, Mat4::identity());
+  planeFrame.rowStrideElements = stride;
+  const Evidence angled = integrate(planeFrame, 3, true);
+  const Evidence control = integrate(planeFrame, 3, false);
+  check(angled.stats.raysProcessed == 1 && control.stats.raysProcessed == 1 &&
+            angled.stats.voxelUpdates == control.stats.voxelUpdates,
+        "incidence discounts the same accepted ray and voxel writes");
+  checkNear(control.perWrite(), 1.0 / 16.0, 1e-6, "the disabled control retains only the 4 m range factor");
+  // One fixed-point quantum is 1/256, so allow one quantum around the analytic 1/32.
+  checkNear(angled.perWrite(), 1.0 / 32.0, 1.0 / 256.0 + 1e-6,
+            "a padded-stride 60 degree plane deposits range times cosine evidence");
+  check(angled.perWrite() < control.perWrite() && angled.perWrite() > 0.0,
+        "the analytic graze is softer, not a hidden hard rejection");
+
+  // With no neighbours there is no defensible normal. Both modes must agree exactly.
+  SyntheticCamera isolatedCamera = camera;
+  isolatedCamera.width = 1;
+  isolatedCamera.height = 1;
+  const std::vector<uint16_t> isolatedDepth(1, 4000);
+  const DepthFrameView isolated = makeFrame(isolatedCamera, isolatedDepth, Mat4::identity());
+  checkNear(integrate(isolated, 1, true).perWrite(), integrate(isolated, 1, false).perWrite(), 1e-9,
+            "an isolated pixel keeps neutral incidence instead of inventing a normal");
+
+  // A foreground centre surrounded by a distant background has no local tangent across the jump.
+  std::vector<uint16_t> discontinuity(static_cast<size_t>(stride * camera.height), 6000);
+  discontinuity[0] = 4000;
+  DepthFrameView jump = makeFrame(camera, discontinuity, Mat4::identity());
+  jump.rowStrideElements = stride;
+  checkNear(integrate(jump, 3, true).perWrite(), integrate(jump, 3, false).perWrite(), 1e-9,
+            "a depth discontinuity cannot manufacture a grazing normal");
+
+  // The same plane, but only the centre passes confidence. Rejected neighbours cannot contribute
+  // derivatives; the accepted centre remains usable with the neutral multiplier.
+  std::vector<uint8_t> sparseConfidence(static_cast<size_t>(camera.width * camera.height), 0);
+  sparseConfidence[0] = 255;
+  planeFrame.confidence = sparseConfidence.data();
+  planeFrame.confidenceWidth = camera.width;
+  planeFrame.confidenceHeight = camera.height;
+  planeFrame.confidenceRowStride = camera.width;
+  checkNear(integrate(planeFrame, 3, true).perWrite(), control.perWrite(), 1e-9,
+            "low-confidence neighbours cannot bend an accepted centre's normal");
 }
 
 /**
@@ -2437,6 +2530,7 @@ int main() {
   testFloorplanManhattanFromPlanes();
   testObservationWeight();
   testConfidenceWeight();
+  testIncidenceWeight();
   testSurfaceMask();
   testInvalidInput();
 

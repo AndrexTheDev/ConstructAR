@@ -179,16 +179,29 @@ Unmeasured points are *not* admitted - letting them through would reintroduce ex
 the mask exists to remove - and the counts are published so a slice made mostly of them is visible
 as such.
 
-**Distance- and confidence-weighted fusion.** Every observation is weighted by 1/Z²
+**Distance-, confidence- and incidence-weighted fusion.** Every observation starts with 1/Z²
 (`observationWeight`, clamped to [1/36, 4]), because a depth camera's error grows with range:
 without it, one frame taken from across the room pulls as hard on a voxel as fifty frames taken at
 arm's length. When a confidence plane exists, the hard `minConfidence` gate still runs first and
-the accepted observation is then multiplied by `confidence / 255`. Frames without one retain the
-legacy unit multiplier. Fused frames carry their own tightly packed confidence: measured ARCore
-pixels keep their source value, calibrated network fills use the acceptance floor and holes are
-zero. The weight is applied inside `fuseVoxel`, under the shard lock, and the running average uses
-it - so the observations that are worth more are the ones that decide where the surface is. Two
-consequences worth naming: the voxel weight array stopped being a count and became 16-bit fixed
+the accepted observation is then multiplied by `confidence / 255`. Frames without one retain a
+neutral unit confidence multiplier. Fused frames carry their own tightly packed confidence:
+measured ARCore pixels keep their source value, calibrated network fills use the acceptance floor
+and holes are zero.
+
+The third factor is local incidence. For each accepted pixel, `incidenceCosine` reconstructs at
+most four immediate neighbours with the frame's real row stride. Opposite pairs average their
+derivative, one-sided pairs cover plain image borders, and neighbours are refused when they fail
+the depth range/confidence gate or cross a jump larger than two truncation bands (with a 5 %-of-
+depth minimum). The absolute dot product of the resulting normal and the *actual pixel ray* becomes
+`max(cosine, minIncidenceWeight)`; the default floor is 0.20, so this is soft evidence rather than
+a hidden grazing-angle rejection. Missing tangent axes, degenerate/non-finite normals and isolated
+pixels return neutral 1.0. `weightByIncidence=false` provides an exact native control. No normal
+buffer is allocated and all source reads are immutable, so worker threads share the same frame
+without another lifetime owner.
+
+The combined weight is applied inside `fuseVoxel`, under the shard lock, and the running average
+uses it - so the observations that are worth more are the ones that decide where the surface is.
+Two consequences worth naming: the voxel weight array stopped being a count and became 16-bit fixed
 point in 1/256ths (`TsdfVolume::kWeightScale`), since a flat array would have truncated a 0.0625
 observation to zero; and `IntegrationStats::voxelWeight` reports the evidence a frame added, so
 the volume's `totalVoxelWeightExact()` is exactly the sum of it over every frame - the accounting

@@ -95,6 +95,7 @@ Consequences that are enforced in code:
 | `TsdfConfig.maxBlocks` | 160 000 | ≈ 655 m³ of mapped volume at 2 cm (160 000 blocks × 8³ voxels × 0.02³ m³ = 655.36 m³); the budget hit is reported in the HUD |
 | integration `pixelStep` | 3 (2 at 3 cm voxels) | Linear cost; 3 keeps 640×480 at ~34 k rays (214 × 160 samples) |
 | `TsdfConfig.minConfidence` | 96 | Hard rejection below the floor; accepted evidence scales by confidence/255 in the existing fusion loop. AI fills use the floor; absent confidence keeps unit weight |
+| Native `weightByIncidence` / `minIncidenceWeight` | true / 0.20 | At most four immediate depth neighbours and their confidence samples per accepted ray; no normal buffer or allocation. Grazing evidence is softened, unknown normals stay neutral. Measure target-SoC integration p50/p95 against `weightByIncidence=false`; no phone timing is asserted here |
 | `TsdfConfig.carveFreeSpace` | false | Ghost removal (one-shot clean-up pass): 7.3 ms → 55.9 ms per 320×240 frame at `pixelStep = 2`, single worker, i.e. ~7.7× — sampled per voxel, because a coarser stride shreds a ghost into stripes instead of removing it (finding 111). Never allocates a block |
 | `EXTRACT_INTERVAL_MS` | 300 | Required by the brief; below 150 ms it dominates the worker |
 | Thermal mode | auto | SEVERE → 700 ms extraction, stride 5, every other frame |

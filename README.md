@@ -595,13 +595,14 @@ Known limitations, deliberately documented rather than hidden:
 
 ## Testing
 
-* **Native (C++) — 365 assertions, all green**, exercised with plain `g++` (no Android SDK; the
-  binary reports 369 passes because four of them sit inside the loop over the tag's rotations):
+* **Native (C++) — 377 assertions, all green**, exercised with plain `g++` (no Android SDK; the
+  binary reports 381 passes because four of them sit inside the loop over the tag's rotations):
   SE(3) exp/log round trip, TSDF integration on synthetic depth, sphere/wall reconstruction
   areas and extents, a 30°-tilted plane (which pins the depth convention), free-space carving
   (a ghost disappears, the real wall does not), triangle budget, invalid input, pose-graph
   closure, newest-loop pairwise cycle consistency (including exact rollback and a 90° outlier),
-  confidence-scaled TSDF evidence, proximity loop closure, every observation the integration
+  confidence- and local-incidence-scaled TSDF evidence (including an analytic 60° plane, padded
+  stride, discontinuities and unknown-normal fallbacks), proximity loop closure, every observation the integration
   counted is still in the volume's weights, and the Manhattan-World frame (finding 187): a 4 x 3 x 2.5 m room with one
   wall 8° off square and a 35° bay window comes back square to a fifth of a degree, the crooked
   wall is squared and stays where its points are, the bay is returned untouched, a set of parallel
@@ -658,7 +659,12 @@ Known limitations, deliberately documented rather than hidden:
   at 1 m carries sixteen times the authority of the same pixel at 4 m in the voxel's running
   average (clamped to [1/36, 4]). Accepted samples with a confidence plane are additionally
   scaled by **confidence / 255**; network fills stay at the acceptance floor and missing confidence
-  keeps the legacy unit multiplier. The evidence a frame deposits per voxel write is asserted, so
+  keeps a neutral unit confidence multiplier. A bounded four-neighbour depth normal adds the third
+  factor **max(|normal · cameraRay|, 0.20)**: opposite pairs average noise, one-sided pairs handle
+  plain borders, and depth jumps or low-confidence neighbours cannot manufacture a tangent. An
+  isolated pixel or otherwise unknown normal stays neutral rather than being rejected. The native
+  `weightByIncidence=false` control isolates this factor in tests and future device benchmarks.
+  The evidence a frame deposits per voxel write is asserted, so
   a helper that never reaches the integrator fails. Fractional weights are why the block's 16-bit
   weight array became fixed point in 1/256ths (`kWeightScale`) instead of a count. These are native
   pipeline contracts with synthetic host regressions, not a claim of measured phone accuracy.
@@ -852,8 +858,8 @@ errors:
 | `:ar-engine` unit tests | pass |
 | `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1293 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
-| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 365 checks, 0 failures (369 runtime executions) |
-| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 365 checks, 0 failures, no data race reported (369 runtime executions) |
+| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 377 checks, 0 failures (381 runtime executions) |
+| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 377 checks, 0 failures, no data race reported (381 runtime executions) |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
 | APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |

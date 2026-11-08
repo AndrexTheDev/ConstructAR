@@ -113,6 +113,14 @@ These are correctness fixes, not benchmark claims:
   are cleared to zero. Native fusion retains the hard floor, then multiplies accepted range weight
   by `confidence / 255`; absent confidence preserves the previous unit multiplier and malformed
   confidence geometry fails closed.
+- **Local-incidence integration:** accepted observations now also multiply by
+  `max(|dot(localNormal, pixelRay)|, 0.20)`. Four immediate, range/confidence-qualified depth
+  neighbours provide a bounded tangent basis with padded-stride support. Opposite pairs average
+  noise, one-sided pairs handle borders, depth jumps cannot create false tangents, and unknown
+  normals stay neutral. `weightByIncidence=false` is the native A/B control. An analytic padded
+  3×3 plane at 4 m and 60° verifies deposited evidence of approximately `1/16 × 1/2`, including
+  fixed-point quantization; isolated, discontinuous and low-confidence-neighbour cases remain
+  neutral. This is one directional weight, not six directional TSDF volumes or a device accuracy claim.
 - **Robust, transactional loop attempts:** super-linear GNC/TLS affects loop hypotheses only. An
   independent odometry-deformation gate catches the folded local minimum that GNC alone accepted
   in a five-metre adversarial fixture. The fallback disables loops and recovers measured odometry;
@@ -124,16 +132,17 @@ These are correctness fixes, not benchmark claims:
 
 Local evidence at the time of writing:
 
-- Current `tools/verify-native.sh`: **369 checks, 0 failures**, in local O1 and O2 builds; the
-  separate TSAN run also passed all 369 checks with no race reported.
+- Current `tools/verify-native.sh`: **381 checks, 0 failures**, in local O1 and O2 builds; the
+  separate TSAN run also passed all 381 checks with no race reported.
 - Native CI run **42425772140** passed g++ and clang++, O1 and O2, with **369 checks per cell**,
   plus TSAN, RTAB-Map stub compilation and the layout probe.
 - Android run **42425769021** passed all **1293 JVM tests**, Kotlin/Java compilation, NDK, host
   C++, debug/release, R8, licence checks and 16 KB alignment.
 - New deterministic cases cover explicit Raw/Full acquisition order, source/depth-timestamp
   propagation, source-pose selection, stale/future/mismatched fusion, fallback
-  confidence, 25 % gross calibration contamination, exact repeatability, confidence-scaled stored
-  evidence, malformed confidence metadata, newest-loop PCM translation/rotation rejection,
+  confidence, 25 % gross calibration contamination, exact repeatability, confidence- and
+  incidence-scaled stored evidence, padded-stride local normals, discontinuity/isolation fallback,
+  malformed confidence metadata, newest-loop PCM translation/rotation rejection,
   preservation of consistent companion loops, a five-metre false loop and exact rollback.
 
 These tests prove software contracts and synthetic robustness. They do **not** establish phone
@@ -162,9 +171,10 @@ and fixture; every subsequent candidate has a control result.
    possible without mismatched confidence or silent fallback. Google's Raw Depth documentation
    reports sparser but more accurate samples and a matching confidence image; the app must still
    measure whether that holds for its wall/pipe workloads and must not silently switch all devices.
-2. **Soft confidence delivered:** accepted observations now use `confidence / 255` alongside the
-   existing 1/Z² range term and hard floor. Next add incidence-angle weighting from locally
-   filtered depth normals, then measure the combined effect rather than assuming it helps.
+2. **Soft confidence and local incidence delivered:** accepted observations now use
+   `confidence / 255` and a bounded local-normal cosine alongside the existing 1/Z² range term and
+   hard floor. Next measure the combined effect against `weightByIncidence=false` on grazing walls,
+   thin pipes, corners and opposing surfaces rather than assuming the extra factor helps.
 3. Reject fills at temporal disocclusions and inconsistent calibration regions. A network hole fill
    receives lower weight than measured depth and never becomes a high-confidence hit tier.
 4. Benchmark Video Depth Anything Small against frame-wise V2 on recorded sequences. Keep it only
