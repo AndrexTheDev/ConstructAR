@@ -121,6 +121,10 @@ class TsdfScanPipeline(
         val lastDepthSource: DepthSource? = null,
         val lastDepthTimestampNs: Long = 0L,
         val lastFrameTimestampNs: Long = 0L,
+        /** Bounded reprojection diagnostics and terminal rejection count for fused candidates. */
+        val fusedDepthTemporalRejections: Int = 0,
+        val lastTemporalComparedSamples: Int = 0,
+        val lastTemporalConflictingSamples: Int = 0,
     ) {
         /** Diagnostic timing mismatch only; Raw Depth freshness uses consecutive image timestamps. */
         val lastDepthTimestampDiffersFromFrame: Boolean
@@ -431,12 +435,19 @@ class TsdfScanPipeline(
         // camera has moved, and pairing old pixels with the newest pose creates ghost geometry.
         // Its fused confidence plane preserves measured ARCore values and marks network fills at
         // the acceptance floor, so native soft weighting can discount them without discarding them.
+        val fusedCandidate = fusedDepth.get()
         val selected = DepthIntegrationSelector.select(
             snapshot = snapshot,
-            fused = fusedDepth.get(),
+            fused = fusedCandidate,
             nowMillis = android.os.SystemClock.elapsedRealtime(),
             fusionTtlMillis = FUSION_TTL_MS,
+            minConfidence = config.minConfidence,
         )
+        // Contradiction is terminal for this candidate: do not let the same stale inference return
+        // on a later camera view while it is still inside the wall-clock TTL.
+        if (selected.temporalReport?.rejected == true) {
+            fusedDepth.compareAndSet(fusedCandidate, null)
+        }
         val result = try {
             active.integrateDepth(
                 depthMm = selected.depthMm,
@@ -457,10 +468,16 @@ class TsdfScanPipeline(
             null
         }
         val integrationMillis = ((System.nanoTime() - startedNanos) / 1_000_000L).toInt()
-        mutableState.value = mutableState.value.afterIntegration(result, integrationMillis).copy(
+        val previousState = mutableState.value
+        val temporalReport = selected.temporalReport
+        mutableState.value = previousState.afterIntegration(result, integrationMillis).copy(
             lastDepthSource = selected.source,
             lastDepthTimestampNs = selected.depthTimestampNs,
             lastFrameTimestampNs = selected.timestampNs,
+            fusedDepthTemporalRejections = previousState.fusedDepthTemporalRejections +
+                if (temporalReport?.rejected == true) 1 else 0,
+            lastTemporalComparedSamples = temporalReport?.comparedSamples ?: 0,
+            lastTemporalConflictingSamples = temporalReport?.conflictingSamples ?: 0,
         )
 
         // ── Extraction, throttled to 300 ms (700 ms when throttled) ─────────────────────

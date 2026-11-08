@@ -75,6 +75,11 @@ Raw/Full acquisition-order lists are allocated once, not per camera frame. Full 
 Confidence acquisition and its copy entirely; Raw Depth retains the pooled confidence copy. The
 source and image timestamp are scalar metadata and do not add a pixel-buffer allocation.
 
+Temporal fused-depth rejection runs on the scan worker, not the render thread. Its source grid is
+bounded to 32×24 samples (768 maximum), uses scalar reprojection arithmetic and allocates neither
+world-point lists nor another depth/confidence image. Current-depth lookups reuse the published
+snapshot. This bounds work and garbage; it does not assert an unmeasured phone-latency figure.
+
 Consequences that are enforced in code:
 
 * the integration channel holds **one** snapshot and refuses the newest offer when full — a slow

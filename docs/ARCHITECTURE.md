@@ -394,6 +394,19 @@ zero, so the native soft gate discounts fills without throwing their coverage aw
 `FusedDepthFrame` also carries the source timestamp, intrinsics and camera pose, so a late
 inference can never be projected with the newest frame's acquisition geometry.
 
+Freshness alone is not enough for a changing view. `TemporalDepthConsistency` therefore unprojects
+a bounded 32×24 maximum grid of source pixels with the *source* intrinsics/pose and rigidly
+reprojects each world point into the newest camera. Only a non-zero current ARCore sample at that
+projected pixel with `minConfidence` can vote. Its z-depth must agree within
+`max(0.08 m, 0.03 × expectedDepth)`; both a nearer occluder and a farther newly exposed background
+can contradict the old hypothesis. The candidate is rejected only with at least six comparisons,
+at least three conflicts and a ratio strictly above 20 %. Sparse overlap produces zero comparisons,
+not a claim of temporal verification. Invalid/non-finite source geometry fails closed to the
+current acquisition. A contradiction is terminal: `TsdfScanPipeline` atomically removes that exact
+candidate without deleting a newer submission, and `ScanState` reports comparisons, conflicts and
+the cumulative rejection count. Scalar arithmetic avoids per-sample `Vec3` allocation. This blocks
+new stale evidence; it does not retroactively deform the TSDF or rewrite measured runs.
+
 XNNPACK is the *only* backend, deliberately: ARCore's standalone LiteRT runtime no longer ships
 the NNAPI delegate, and the Vulkan GPU delegate cannot execute the int8 graph that the licence
 allows us to ship (Apache-2.0 Small). The estimator reads the graph's own tensor dtypes and

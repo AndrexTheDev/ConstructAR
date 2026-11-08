@@ -97,6 +97,14 @@ These are correctness fixes, not benchmark claims:
 - **Frame-conserving AI integration:** `FusedDepthFrame` carries depth, dimensions, source timestamp,
   source intrinsics and source camera-to-world. `DepthIntegrationSelector` accepts only a fresh,
   dimension-matching result. The old “old pixels + newest pose” path is removed.
+- **Temporal disocclusion rejection:** before a fresh fused result is integrated, a bounded 32×24
+  source grid is reprojected through both acquisition poses into the newest ARCore frame. Only
+  current confidence-qualified measurements vote, using `max(8 cm, 3 % of expected depth)` as a
+  conservative tolerance. At least six comparisons, three conflicts and a ratio above 20 % reject
+  the whole old candidate in either depth direction and remove it terminally; invalid geometry fails
+  closed. Missing overlap remains explicitly unverified rather than becoming acceptance evidence.
+  The current complete acquisition is integrated instead. Existing meshes and measured runs are not
+  rewritten, and no device-level ghost-reduction percentage is claimed.
 - **Source-correct ARCore acquisition:** `PREFER_RAW` attempts Raw Depth before Full Depth, while
   `RAW_ONLY` and `FULL_ONLY` prevent cross-source fallback during A/B capture. Raw Confidence is
   acquired only beside Raw Depth. Snapshots, fused frames, integration selection and `ScanState`
@@ -139,7 +147,9 @@ Local evidence at the time of writing:
 - Android run **42448116895** passed all **1293 JVM tests**, Kotlin/Java compilation, NDK, host
   C++, debug/release, R8, licence checks and 16 KB alignment.
 - New deterministic cases cover explicit Raw/Full acquisition order, source/depth-timestamp
-  propagation, source-pose selection, stale/future/mismatched fusion, fallback
+  propagation, pose-correct temporal agreement, nearer/farther disocclusions, conflict-count/ratio
+  gates, missing-overlap neutrality, invalid-geometry fallback, source-pose selection,
+  stale/future/mismatched fusion, fallback
   confidence, 25 % gross calibration contamination, exact repeatability, confidence- and
   incidence-scaled stored evidence, padded-stride local normals, discontinuity/isolation fallback,
   malformed confidence metadata, newest-loop PCM translation/rotation rejection,
@@ -175,8 +185,11 @@ and fixture; every subsequent candidate has a control result.
    `confidence / 255` and a bounded local-normal cosine alongside the existing 1/Z² range term and
    hard floor. Next measure the combined effect against `weightByIncidence=false` on grazing walls,
    thin pipes, corners and opposing surfaces rather than assuming the extra factor helps.
-3. Reject fills at temporal disocclusions and inconsistent calibration regions. A network hole fill
-   receives lower weight than measured depth and never becomes a high-confidence hit tier.
+3. **Temporal disocclusion guard delivered:** bounded pose-correct reprojection now rejects a
+   sufficiently contradicted fused candidate in both depth directions and keeps missing overlap
+   explicitly unverified. Next reject spatially inconsistent calibration regions and measure ghost
+   reduction on recorded moving-object sequences. A network hole fill still receives lower weight
+   than measured depth and never becomes a high-confidence hit tier.
 4. Benchmark Video Depth Anything Small against frame-wise V2 on recorded sequences. Keep it only
    if temporal error improves within the phone's latency/RSS/thermal budget.
 

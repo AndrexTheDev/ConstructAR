@@ -57,54 +57,74 @@ internal data class DepthIntegrationSelection(
     val usesFusedDepth: Boolean,
     val depthTimestampNs: Long,
     val source: DepthSource,
+    /** Null when no fresh fused candidate existed; zero comparisons is not a verification claim. */
+    val temporalReport: TemporalConsistencyReport? = null,
 )
 
-/** Selects a fused result only while its dimensions and bounded lifetime still match. */
+/** Selects a fresh, dimension-matching fused result only while new measured evidence does not contradict it. */
 internal object DepthIntegrationSelector {
     fun select(
         snapshot: DepthFrameSnapshot,
         fused: FusedDepthFrame?,
         nowMillis: Long,
         fusionTtlMillis: Long,
+        minConfidence: Int = 96,
+        temporalPolicy: TemporalConsistencyPolicy = TemporalConsistencyPolicy(),
     ): DepthIntegrationSelection {
         if (fused != null) {
             val age = nowMillis - fused.receivedAtMillis
             val fresh = age >= 0L && age < fusionTtlMillis
             if (fused.width == snapshot.width && fused.height == snapshot.height && fresh) {
-                return DepthIntegrationSelection(
-                    depthMm = fused.depthMm,
-                    width = fused.width,
-                    height = fused.height,
-                    // AiDepthFusion emits a tightly packed buffer, independent of the camera's stride.
-                    rowStrideElements = fused.width,
-                    confidence = fused.confidence,
-                    confidenceWidth = fused.width,
-                    confidenceHeight = fused.height,
-                    confidenceRowStride = fused.width,
-                    intrinsics = fused.intrinsics,
-                    cameraToWorld = fused.cameraToWorld,
-                    timestampNs = fused.timestampNs,
-                    usesFusedDepth = true,
-                    depthTimestampNs = fused.depthTimestampNs,
-                    source = fused.source,
+                val temporalReport = TemporalDepthConsistency.evaluate(
+                    fused = fused,
+                    current = snapshot,
+                    minConfidence = minConfidence,
+                    policy = temporalPolicy,
                 )
+                if (!temporalReport.rejected) {
+                    return DepthIntegrationSelection(
+                        depthMm = fused.depthMm,
+                        width = fused.width,
+                        height = fused.height,
+                        // AiDepthFusion emits a tightly packed buffer, independent of the camera's stride.
+                        rowStrideElements = fused.width,
+                        confidence = fused.confidence,
+                        confidenceWidth = fused.width,
+                        confidenceHeight = fused.height,
+                        confidenceRowStride = fused.width,
+                        intrinsics = fused.intrinsics,
+                        cameraToWorld = fused.cameraToWorld,
+                        timestampNs = fused.timestampNs,
+                        usesFusedDepth = true,
+                        depthTimestampNs = fused.depthTimestampNs,
+                        source = fused.source,
+                        temporalReport = temporalReport,
+                    )
+                }
+                return currentAcquisition(snapshot, temporalReport)
             }
         }
-        return DepthIntegrationSelection(
-            depthMm = snapshot.depthMm,
-            width = snapshot.width,
-            height = snapshot.height,
-            rowStrideElements = snapshot.rowStride,
-            confidence = snapshot.confidence,
-            confidenceWidth = snapshot.confidenceWidth,
-            confidenceHeight = snapshot.confidenceHeight,
-            confidenceRowStride = snapshot.confidenceRowStride,
-            intrinsics = snapshot.intrinsics,
-            cameraToWorld = snapshot.cameraToWorld,
-            timestampNs = snapshot.timestampNs,
-            usesFusedDepth = false,
-            depthTimestampNs = snapshot.depthTimestampNs,
-            source = snapshot.source,
-        )
+        return currentAcquisition(snapshot)
     }
+
+    private fun currentAcquisition(
+        snapshot: DepthFrameSnapshot,
+        temporalReport: TemporalConsistencyReport? = null,
+    ) = DepthIntegrationSelection(
+        depthMm = snapshot.depthMm,
+        width = snapshot.width,
+        height = snapshot.height,
+        rowStrideElements = snapshot.rowStride,
+        confidence = snapshot.confidence,
+        confidenceWidth = snapshot.confidenceWidth,
+        confidenceHeight = snapshot.confidenceHeight,
+        confidenceRowStride = snapshot.confidenceRowStride,
+        intrinsics = snapshot.intrinsics,
+        cameraToWorld = snapshot.cameraToWorld,
+        timestampNs = snapshot.timestampNs,
+        usesFusedDepth = false,
+        depthTimestampNs = snapshot.depthTimestampNs,
+        source = snapshot.source,
+        temporalReport = temporalReport,
+    )
 }

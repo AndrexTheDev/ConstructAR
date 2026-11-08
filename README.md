@@ -198,9 +198,15 @@ room measured".
 **Depth fusion policy.** ARCore depth is metric but holey; the network is dense but only
 relative. `AiDepthFusion` therefore lets the network **fill holes only** — a confident ARCore
 sample is never overwritten — after `MetricDepthCalibrator` fits `1/z = s·d + t` against
-ARCore's metric samples with IRLS + Huber weights. If the fit's inlier ratio is below 55 % the
-fusion is refused and the app uses ARCore depth alone. A fused frame older than 800 ms is
-discarded rather than integrated into geometry the camera has already left.
+ARCore's metric samples with deterministic RANSAC, MAD scale and Tukey-biweight IRLS. If the fit's
+inlier ratio is below 55 % the fusion is refused and the app uses ARCore depth alone. A fused frame
+older than 800 ms is discarded rather than integrated into geometry the camera has already left.
+Before that deadline, a bounded reprojection check compares the old hypothesis with the newest
+confident ARCore samples in 3D. At least six comparisons, three conflicts and a conflict ratio over
+20 % reject the complete stale candidate (8 cm minimum tolerance, plus 3 % of depth); an isolated
+outlier or a view with no overlapping measurements does not claim a temporal verdict. Rejection is
+terminal for that candidate and falls back to the complete current acquisition. It does not rewrite
+an already integrated mesh or a measured run.
 
 ---
 
@@ -856,7 +862,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1293 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1299 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 377 checks, 0 failures (381 runtime executions) |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 377 checks, 0 failures, no data race reported (381 runtime executions) |
