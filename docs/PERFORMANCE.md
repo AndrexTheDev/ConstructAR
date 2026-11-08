@@ -86,6 +86,11 @@ worker. It adds two tightly sized integer coordinate arrays and fixed 4×3 accum
 before the already scheduled fusion pass; target-device inference and total worker latency still
 require measurement rather than an estimate.
 
+`DepthGuardBenchmarkTest` deliberately emits deterministic functional counts, not elapsed time.
+Shared host CI cannot establish phone latency or thermal behaviour. Its JSON therefore sets both
+`deviceMeasurement=false` and `wallClockBenchmark=false`; device runtime/RSS/thermal A/B remains a
+separate acceptance measurement with the same guard-on and guard-off scenes.
+
 Consequences that are enforced in code:
 
 * the integration channel holds **one** snapshot and refuses the newest offer when full — a slow

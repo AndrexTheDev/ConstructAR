@@ -418,6 +418,16 @@ candidate without deleting a newer submission, and `ScanState` reports compariso
 the cumulative rejection count. Scalar arithmetic avoids per-sample `Vec3` allocation. This blocks
 new stale evidence; it does not retroactively deform the TSDF or rewrite measured runs.
 
+**Deterministic guard A/B.** `DepthGuardBenchmarkTest` executes fixture `depth-guard-ab-v1` through
+the production `MetricDepthCalibrator`, `SpatialCalibrationGuard`, `AiDepthFusion` and
+`DepthIntegrationSelector`. The spatial fixture contaminates one of twelve regions and compares
+fusion with a null mask against the computed mask. The temporal fixture moves the camera through
+two consistent frames, a vanished foreground and a new occluder, comparing the selector's explicit
+`temporalGuardEnabled=false` control with the default guard and terminal candidate removal. Two full
+runs must produce byte-identical JSON. Android CI parses and uploads that report as
+`depth-guard-benchmark`, including `GITHUB_SHA` and `GITHUB_RUN_ID`; no timing values are recorded.
+This is a functional synthetic baseline, not a physical-device accuracy or performance measurement.
+
 XNNPACK is the *only* backend, deliberately: ARCore's standalone LiteRT runtime no longer ships
 the NNAPI delegate, and the Vulkan GPU delegate cannot execute the int8 graph that the licence
 allows us to ship (Apache-2.0 Small). The estimator reads the graph's own tensor dtypes and

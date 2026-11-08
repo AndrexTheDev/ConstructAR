@@ -121,6 +121,12 @@ These are correctness fixes, not benchmark claims:
   `max(0.06 m⁻¹, 2 × global inlier RMS)`. Sparse regions and isolated outliers stay neutral.
   Measured ARCore pixels are copied before the veto; malformed geometry fails closed for fills.
   This limits local network hallucinations without asserting a device-level error reduction.
+- **Deterministic guard A/B baseline:** fixture `depth-guard-ab-v1` runs the production calibrator,
+  fusion and selector with guard-off controls beside guard-on results. A spatially contaminated
+  64×48 frame and a four-frame moving-camera sequence cover local false fills, consistent views,
+  vanished foreground, a new occluder and terminal removal. Two runs must be byte-identical; CI
+  parses and publishes the JSON with exact commit/run metadata. It deliberately contains no timing
+  or physical-device accuracy claim.
 - **Complete native evidence accounting:** multithreaded reductions include `voxelWeight`; the test
   compares absolute counted/stored difference and rejects a zero-on-one-side pass.
 - **Confidence-weighted integration:** fused depth now carries a parallel confidence plane.
@@ -157,7 +163,8 @@ Local evidence at the time of writing:
   propagation, pose-correct temporal agreement, nearer/farther disocclusions, conflict-count/ratio
   gates, missing-overlap neutrality, spatial regional rejection, sparse/isolated-outlier neutrality,
   exact inlier-ratio boundaries, mismatched-mask and non-finite fail-closed behaviour,
-  source-pose selection, stale/future/mismatched fusion, fallback
+  byte-identical guard-on/off A/B metrics, healthy-fill/measured-pixel preservation and terminal
+  temporal fallback, source-pose selection, stale/future/mismatched fusion, fallback
   confidence, 25 % gross calibration contamination, exact repeatability, confidence- and
   incidence-scaled stored evidence, padded-stride local normals, discontinuity/isolation fallback,
   malformed confidence metadata, newest-loop PCM translation/rotation rejection,
@@ -176,8 +183,10 @@ tracking accuracy, relocalisation rate, thermal stability or a universal depth-e
    integration/extraction p50/p95, dropped frames, graph revision and peak RSS. Images stay opt-in;
    no network permission is introduced.
 3. Export original and optimised trajectories in TUM format with explicit frame conventions.
-4. Build a small deterministic benchmark runner: moving synthetic camera, flat/grazing walls,
-   openings, thin pipes, crossed views, contaminated depth and false loop closures.
+4. **Depth-guard portion delivered:** `depth-guard-ab-v1` provides a moving synthetic camera,
+   regionally contaminated depth, a consistent control case and temporal disocclusions, with exact
+   build metadata and guard-off controls in CI JSON. Extend the same baseline discipline to the
+   broader native flat/grazing-wall, opening, thin-pipe, crossed-view and false-loop matrix.
 
 **Exit gate:** green full CI; no frame/pose mix in replay; baseline JSON published with exact build
 and fixture; every subsequent candidate has a control result.
@@ -196,9 +205,11 @@ and fixture; every subsequent candidate has a control result.
 3. **Spatial and temporal guards delivered:** regional residual voting vetoes only locally
    contradicted network fills while preserving measured pixels; bounded pose-correct reprojection
    rejects a sufficiently contradicted fused candidate in both depth directions and keeps missing
-   overlap explicitly unverified. Next measure regional false-fill suppression and ghost reduction
-   on recorded moving-object sequences against both guards disabled. A network hole fill still
-   receives lower weight than measured depth and never becomes a high-confidence hit tier.
+   overlap explicitly unverified. The deterministic `depth-guard-ab-v1` artifact now records the
+   guard-off controls beside regional false-fill suppression and temporal ghost-selection counts.
+   Next run equivalent guard-on/off comparisons on recorded moving-object sequences and phones.
+   A network hole fill still receives lower weight than measured depth and never becomes a
+   high-confidence hit tier.
 4. Benchmark Video Depth Anything Small against frame-wise V2 on recorded sequences. Keep it only
    if temporal error improves within the phone's latency/RSS/thermal budget.
 

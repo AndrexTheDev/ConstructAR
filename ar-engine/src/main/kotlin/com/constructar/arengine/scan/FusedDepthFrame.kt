@@ -70,18 +70,24 @@ internal object DepthIntegrationSelector {
         fusionTtlMillis: Long,
         minConfidence: Int = 96,
         temporalPolicy: TemporalConsistencyPolicy = TemporalConsistencyPolicy(),
+        /** Explicit deterministic A/B control; production integration keeps the guard enabled. */
+        temporalGuardEnabled: Boolean = true,
     ): DepthIntegrationSelection {
         if (fused != null) {
             val age = nowMillis - fused.receivedAtMillis
             val fresh = age >= 0L && age < fusionTtlMillis
             if (fused.width == snapshot.width && fused.height == snapshot.height && fresh) {
-                val temporalReport = TemporalDepthConsistency.evaluate(
-                    fused = fused,
-                    current = snapshot,
-                    minConfidence = minConfidence,
-                    policy = temporalPolicy,
-                )
-                if (!temporalReport.rejected) {
+                val temporalReport = if (temporalGuardEnabled) {
+                    TemporalDepthConsistency.evaluate(
+                        fused = fused,
+                        current = snapshot,
+                        minConfidence = minConfidence,
+                        policy = temporalPolicy,
+                    )
+                } else {
+                    null
+                }
+                if (temporalReport?.rejected != true) {
                     return DepthIntegrationSelection(
                         depthMm = fused.depthMm,
                         width = fused.width,

@@ -212,6 +212,15 @@ outlier or a view with no overlapping measurements does not claim a temporal ver
 terminal for that candidate and falls back to the complete current acquisition. It does not rewrite
 an already integrated mesh or a measured run.
 
+**Deterministic guard A/B.** `gradle :ar-engine:testDebugUnitTest --tests
+"com.constructar.arengine.scan.DepthGuardBenchmarkTest"` runs the actual calibrator, fusion and
+integration selector twice on fixture `depth-guard-ab-v1`, requiring byte-identical metrics. The
+spatial case has one locally wrong region among twelve; the moving-camera case covers two consistent
+views, vanished foreground and a new occluder, including terminal candidate removal. Each publishes
+its guard-disabled control beside the guarded result in `build/reports/tests/depth-guard-benchmark.json`.
+Android CI parses that JSON and uploads the `depth-guard-benchmark` artifact with the exact commit
+and run ID. These are functional synthetic counts, not wall-clock, device-accuracy or thermal results.
+
 ---
 
 ## How it is used
@@ -866,7 +875,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1304 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1305 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 377 checks, 0 failures (381 runtime executions) |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 377 checks, 0 failures, no data race reported (381 runtime executions) |

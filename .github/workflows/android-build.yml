@@ -432,6 +432,32 @@ jobs:
           path: "**/build/reports/tests/**"
           if-no-files-found: ignore
 
+      - name: Validate deterministic depth-guard A/B benchmark
+        if: success()
+        run: |
+          python3 - <<'PY'
+          import glob, json
+          paths = glob.glob('**/build/reports/tests/depth-guard-benchmark.json', recursive=True)
+          assert len(paths) == 1, paths
+          with open(paths[0], encoding='utf-8') as source:
+              report = json.load(source)
+          assert report['fixture'] == 'depth-guard-ab-v1'
+          assert report['deviceMeasurement'] is False
+          assert report['wallClockBenchmark'] is False
+          for scenario in ('spatialRegionalContamination', 'temporalMovingObjectSequence'):
+              assert 'control' in report['scenarios'][scenario]
+              assert 'guarded' in report['scenarios'][scenario]
+          print(f"validated {paths[0]} for {report['build']['commit']}")
+          PY
+
+      - name: Upload deterministic depth-guard A/B benchmark
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: depth-guard-benchmark
+          path: "**/build/reports/tests/depth-guard-benchmark.json"
+          if-no-files-found: error
+
       - name: Upload debug APK
         if: success()
         uses: actions/upload-artifact@v4
