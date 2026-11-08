@@ -51,7 +51,7 @@ class DepthGuardBenchmarkTest {
         assertEquals(0, first.temporal.consistentFramesRejected)
 
         val output = File("build/reports/tests/depth-guard-benchmark.json")
-        output.parentFile.mkdirs()
+        output.parentFile?.mkdirs()
         output.writeText(first.json)
         assertTrue(output.isFile)
         println("Deterministic depth-guard A/B report: ${output.absolutePath}")
