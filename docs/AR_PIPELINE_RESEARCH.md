@@ -114,6 +114,13 @@ These are correctness fixes, not benchmark claims:
 - **Robust metric calibration:** deterministic two-point RANSAC minimises truncated affine
   inverse-depth cost; MAD supplies a residual scale; Tukey-biweight IRLS gives gross outliers zero
   weight. Final usability still requires positive bounded scale, inlier ratio and inlier RMS gates.
+- **Spatial calibration-region rejection:** the same confidence-qualified calibration anchors retain
+  their source coordinates and vote in a bounded 4×3 grid against the final global affine model.
+  A region needs 12 anchors, six conflicts, strictly fewer than 50 % inliers and RMS above
+  `0.08 m⁻¹` before its network fills are vetoed. Per-anchor tolerance is
+  `max(0.06 m⁻¹, 2 × global inlier RMS)`. Sparse regions and isolated outliers stay neutral.
+  Measured ARCore pixels are copied before the veto; malformed geometry fails closed for fills.
+  This limits local network hallucinations without asserting a device-level error reduction.
 - **Complete native evidence accounting:** multithreaded reductions include `voxelWeight`; the test
   compares absolute counted/stored difference and rejects a zero-on-one-side pass.
 - **Confidence-weighted integration:** fused depth now carries a parallel confidence plane.
@@ -148,8 +155,9 @@ Local evidence at the time of writing:
   C++, debug/release, R8, licence checks and 16 KB alignment.
 - New deterministic cases cover explicit Raw/Full acquisition order, source/depth-timestamp
   propagation, pose-correct temporal agreement, nearer/farther disocclusions, conflict-count/ratio
-  gates, missing-overlap neutrality, invalid-geometry fallback, source-pose selection,
-  stale/future/mismatched fusion, fallback
+  gates, missing-overlap neutrality, spatial regional rejection, sparse/isolated-outlier neutrality,
+  exact inlier-ratio boundaries, mismatched-mask and non-finite fail-closed behaviour,
+  source-pose selection, stale/future/mismatched fusion, fallback
   confidence, 25 % gross calibration contamination, exact repeatability, confidence- and
   incidence-scaled stored evidence, padded-stride local normals, discontinuity/isolation fallback,
   malformed confidence metadata, newest-loop PCM translation/rotation rejection,
@@ -185,11 +193,12 @@ and fixture; every subsequent candidate has a control result.
    `confidence / 255` and a bounded local-normal cosine alongside the existing 1/Z² range term and
    hard floor. Next measure the combined effect against `weightByIncidence=false` on grazing walls,
    thin pipes, corners and opposing surfaces rather than assuming the extra factor helps.
-3. **Temporal disocclusion guard delivered:** bounded pose-correct reprojection now rejects a
-   sufficiently contradicted fused candidate in both depth directions and keeps missing overlap
-   explicitly unverified. Next reject spatially inconsistent calibration regions and measure ghost
-   reduction on recorded moving-object sequences. A network hole fill still receives lower weight
-   than measured depth and never becomes a high-confidence hit tier.
+3. **Spatial and temporal guards delivered:** regional residual voting vetoes only locally
+   contradicted network fills while preserving measured pixels; bounded pose-correct reprojection
+   rejects a sufficiently contradicted fused candidate in both depth directions and keeps missing
+   overlap explicitly unverified. Next measure regional false-fill suppression and ghost reduction
+   on recorded moving-object sequences against both guards disabled. A network hole fill still
+   receives lower weight than measured depth and never becomes a high-confidence hit tier.
 4. Benchmark Video Depth Anything Small against frame-wise V2 on recorded sequences. Keep it only
    if temporal error improves within the phone's latency/RSS/thermal budget.
 

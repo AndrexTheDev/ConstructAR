@@ -47,6 +47,8 @@ object AiDepthFusion {
         val filledPixels: Int,
         /** True when the fusion actually contributed (some pixels filled). */
         val usedNetwork: Boolean,
+        /** Holes left empty because their locally measured region contradicted the network fit. */
+        val spatiallyRejectedPixels: Int = 0,
     ) {
         val fillRatio: Float
             get() = if (measuredPixels + filledPixels == 0) 0f else filledPixels.toFloat() / (measuredPixels + filledPixels)
@@ -82,6 +84,7 @@ object AiDepthFusion {
         minConfidence: Int = 96,
         minDepthMm: Int = 250,
         maxDepthMm: Int = 8_000,
+        spatialMask: SpatialCalibrationMask? = null,
     ): Result {
         require(out.size >= width * height) { "output buffer is smaller than the depth frame" }
         require(confidenceOut.size >= width * height) { "confidence output is smaller than the depth frame" }
@@ -94,6 +97,7 @@ object AiDepthFusion {
 
         var measured = 0
         var filled = 0
+        var spatiallyRejected = 0
         val hasConfidence = confidence != null && confidenceWidth > 0 && confidenceHeight > 0
         val cxScale = if (hasConfidence) confidenceWidth.toFloat() / width else 1f
         val cyScale = if (hasConfidence) confidenceHeight.toFloat() / height else 1f
@@ -123,6 +127,13 @@ object AiDepthFusion {
                     out[index] = 0
                     continue
                 }
+                // Local contradictions veto only a network hypothesis. Confident ARCore samples
+                // were already copied above and remain authoritative even in a rejected region.
+                if (spatialMask?.rejectsPixel(x, y, width, height) == true) {
+                    out[index] = 0
+                    spatiallyRejected++
+                    continue
+                }
 
                 // Hole: ask the network, in metric terms via the calibrated affine map.
                 val relativeValue = relative.sampleNormalized((x + 0.5f) / width, v)
@@ -139,7 +150,14 @@ object AiDepthFusion {
                 filled++
             }
         }
-        return Result(out, confidenceOut, measured, filled, usedNetwork = filled > 0)
+        return Result(
+            depthMm = out,
+            confidence = confidenceOut,
+            measuredPixels = measured,
+            filledPixels = filled,
+            usedNetwork = filled > 0,
+            spatiallyRejectedPixels = spatiallyRejected,
+        )
     }
 
     /**
@@ -160,11 +178,15 @@ object AiDepthFusion {
         relative: RelativeDepthMap,
         minConfidence: Int = 96,
         stride: Int = 8,
-    ): Pair<FloatArray, FloatArray> {
+    ): CalibrationSampleSet {
+        require(width > 0 && height > 0 && stride > 0) { "invalid calibration sampling geometry" }
+        require(arcoreMm.size >= width * height) { "depth buffer is smaller than the frame" }
         requireConfidenceLayout(confidence, confidenceWidth, confidenceHeight, confidenceRowStride)
         val maxSamples = ((width + stride - 1) / stride) * ((height + stride - 1) / stride)
         val relativeValues = FloatArray(maxSamples)
         val metricValues = FloatArray(maxSamples)
+        val pixelX = IntArray(maxSamples)
+        val pixelY = IntArray(maxSamples)
         var count = 0
 
         val hasConfidence = confidence != null && confidenceWidth > 0 && confidenceHeight > 0
@@ -181,10 +203,19 @@ object AiDepthFusion {
                 }
                 relativeValues[count] = relative.sampleNormalized((x + 0.5f) / width, (y + 0.5f) / height)
                 metricValues[count] = mm / 1000f
+                pixelX[count] = x
+                pixelY[count] = y
                 count++
             }
         }
-        return relativeValues.copyOf(count) to metricValues.copyOf(count)
+        return CalibrationSampleSet(
+            relativeValues = relativeValues.copyOf(count),
+            metricMeters = metricValues.copyOf(count),
+            pixelX = pixelX.copyOf(count),
+            pixelY = pixelY.copyOf(count),
+            frameWidth = width,
+            frameHeight = height,
+        )
     }
 
     /** A non-null but malformed plane must not silently become "no confidence". */

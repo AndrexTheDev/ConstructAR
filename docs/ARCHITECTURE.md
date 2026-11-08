@@ -394,6 +394,17 @@ zero, so the native soft gate discounts fills without throwing their coverage aw
 `FusedDepthFrame` also carries the source timestamp, intrinsics and camera pose, so a late
 inference can never be projected with the newest frame's acquisition geometry.
 
+A globally robust fit can still conceal a locally wrong network scale. `SpatialCalibrationGuard`
+therefore keeps each confidence-qualified calibration sample's source coordinate and accumulates
+its final affine residual in a bounded 4×3 grid. A region vetoes network fills only with at least
+12 valid local anchors, six residual conflicts, strictly fewer than 50 % inliers and regional RMS
+above `0.08 m⁻¹`. The per-anchor residual tolerance is `max(0.06 m⁻¹, 2 × global inlier RMS)`.
+Insufficient local evidence and the exact 50 % boundary remain neutral rather than manufacturing a
+verdict. `AiDepthFusion` copies confident ARCore pixels before consulting the mask, so even a
+rejected region retains every real measurement; only its holes remain empty. A mask with another
+frame geometry or non-finite supposedly usable calibration fails closed for fills. Rejected pixel
+and region counts are diagnostics on `MonocularDepthSource`, not an accuracy claim.
+
 Freshness alone is not enough for a changing view. `TemporalDepthConsistency` therefore unprojects
 a bounded 32×24 maximum grid of source pixels with the *source* intrinsics/pose and rigidly
 reprojects each world point into the newest camera. Only a non-zero current ARCore sample at that

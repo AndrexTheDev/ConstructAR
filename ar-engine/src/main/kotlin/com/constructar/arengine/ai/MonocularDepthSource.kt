@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicReference
  * copy YUV planes  (memcpy)           Depth Anything V2 (XNNPACK, 4 threads)
  * copy depth + confidence             sample ARCore↔network pairs
  * submit ───────────────────────────► MetricDepthCalibrator (RANSAC + MAD + Tukey IRLS)
+ *                                     SpatialCalibrationGuard → regional fill veto
  *                                     AiDepthFusion → fused millimetre depth
  *                                     onFused(depth, confidence, w, h, source geometry)
  * ```
@@ -85,6 +86,12 @@ class MonocularDepthSource(
         private set
 
     @Volatile var lastFillRatio: Float = 0f
+        private set
+
+    @Volatile var lastSpatiallyRejectedPixels: Int = 0
+        private set
+
+    @Volatile var lastSpatialRejectedRegions: Int = 0
         private set
 
     /** True once the model has been loaded and at least one inference succeeded. */
@@ -170,7 +177,7 @@ class MonocularDepthSource(
             bitmap.recycle()
         } ?: return
 
-        val (relativeSamples, metricSamples) = AiDepthFusion.calibrationSamples(
+        val samples = AiDepthFusion.calibrationSamples(
             arcoreMm = arcoreMm,
             confidence = confidence,
             confidenceWidth = snapshot.confidenceWidth,
@@ -182,12 +189,17 @@ class MonocularDepthSource(
             minConfidence = minConfidence,
         )
 
-        val calibration = MetricDepthCalibrator().calibrate(relativeSamples, metricSamples)
+        val calibration = MetricDepthCalibrator().calibrate(samples.relativeValues, samples.metricMeters)
         lastCalibration = calibration
         if (!calibration.isUsable) {
+            lastFillRatio = 0f
+            lastSpatiallyRejectedPixels = 0
+            lastSpatialRejectedRegions = 0
             Log.i(TAG, "calibration refused (inliers=${(calibration.inlierRatio * 100).toInt()} %) — ARCore depth only")
             return
         }
+        val spatialMask = SpatialCalibrationGuard.evaluate(samples, calibration)
+        lastSpatialRejectedRegions = spatialMask.rejectedRegionCount
 
         if (fusedBuffer.size < width * height) {
             // Only reallocates when the device switches depth resolution; then it keeps both.
@@ -208,8 +220,10 @@ class MonocularDepthSource(
             out = fusedBuffer,
             confidenceOut = fusedConfidenceBuffer,
             minConfidence = minConfidence,
+            spatialMask = spatialMask,
         )
         lastFillRatio = result.fillRatio
+        lastSpatiallyRejectedPixels = result.spatiallyRejectedPixels
         isRunning = true
         if (result.usedNetwork) {
             onFused(fusedBuffer, fusedConfidenceBuffer, width, height, snapshot)

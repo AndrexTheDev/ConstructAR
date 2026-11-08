@@ -199,7 +199,11 @@ room measured".
 relative. `AiDepthFusion` therefore lets the network **fill holes only** — a confident ARCore
 sample is never overwritten — after `MetricDepthCalibrator` fits `1/z = s·d + t` against
 ARCore's metric samples with deterministic RANSAC, MAD scale and Tukey-biweight IRLS. If the fit's
-inlier ratio is below 55 % the fusion is refused and the app uses ARCore depth alone. A fused frame
+inlier ratio is below 55 % the fusion is refused and the app uses ARCore depth alone. A separate
+4×3 regional guard then vetoes network fills only where at least 12 local anchors, six conflicts,
+a strict minority of inliers and regional RMS above 0.08 m⁻¹ demonstrate local model failure;
+per-anchor tolerance is `max(0.06, 2 × global inlier RMS)`. Sparse regions and the exact 50 % boundary
+stay neutral, and confident ARCore pixels are always preserved before this veto. A fused frame
 older than 800 ms is discarded rather than integrated into geometry the camera has already left.
 Before that deadline, a bounded reprojection check compares the old hypothesis with the newest
 confident ARCore samples in 3D. At least six comparisons, three conflicts and a conflict ratio over
@@ -862,7 +866,7 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1299 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1304 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
 | Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 377 checks, 0 failures (381 runtime executions) |
 | Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 377 checks, 0 failures, no data race reported (381 runtime executions) |

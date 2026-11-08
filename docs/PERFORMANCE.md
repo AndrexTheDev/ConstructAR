@@ -80,6 +80,12 @@ bounded to 32×24 samples (768 maximum), uses scalar reprojection arithmetic and
 world-point lists nor another depth/confidence image. Current-depth lookups reuse the published
 snapshot. This bounds work and garbage; it does not assert an unmeasured phone-latency figure.
 
+Spatial calibration rejection reuses the existing strided ARCore/network sample pass on the inference
+worker. It adds two tightly sized integer coordinate arrays and fixed 4×3 accumulators, then a
+12-entry Boolean veto mask — no second camera image, depth image or per-pixel mask. The guard runs
+before the already scheduled fusion pass; target-device inference and total worker latency still
+require measurement rather than an estimate.
+
 Consequences that are enforced in code:
 
 * the integration channel holds **one** snapshot and refuses the newest offer when full — a slow
