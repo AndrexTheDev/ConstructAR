@@ -362,7 +362,9 @@ class ArMeasureController(private val context: Context) {
             monocularDepth = com.constructar.arengine.ai.MonocularDepthSource(
                 context = context,
                 config = depthConfig,
-                onFused = { depth, width, height, _ -> pipeline.submitFusedDepth(depth, width, height) },
+                onFused = { depth, confidence, width, height, source ->
+                    pipeline.submitFusedDepth(depth, confidence, width, height, source)
+                },
                 onModelState = { loaded ->
                     aiDepthRunningState.value = loaded
                     aiDepthSettledState.value = true

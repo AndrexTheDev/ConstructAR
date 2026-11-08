@@ -70,8 +70,9 @@ which said nothing about the worker that was still pinning it.
      `PolygonMath.contains(polygon, point, tolerance = 3 cm)`. Nearest valid plane wins.
      Rejections are recorded with a reason ("ray outside every tracked polygon").
    * *tier 2* — ARCore `HitResult.Type.DEPTH_POINT` from `frame.hitTest`.
-   * *tier 3* — our own march through `acquireDepthImage16Bits()` (`DepthImageMath.raycast`),
-     confidence-filtered, refined between samples.
+   * *tier 3* — our own march through the selected Raw/Full depth snapshot
+     (`DepthImageMath.raycast`), confidence-filtered where Raw Confidence exists, refined between
+     samples.
    * *tier 4* — `HitResult.Type.POINT`, confidence 0.4.
    * A normal is derived per tier (plane normal, least-squares fit of a 5×5 depth patch, or
      flipped towards the camera) and always oriented towards the operator.
@@ -178,16 +179,34 @@ Unmeasured points are *not* admitted - letting them through would reintroduce ex
 the mask exists to remove - and the counts are published so a slice made mostly of them is visible
 as such.
 
-**Distance-weighted fusion.** Every observation is weighted by 1/Z² (`observationWeight`, clamped
-to [1/36, 4]), because a depth camera's error grows with range: without it, one frame taken from
-across the room pulls as hard on a voxel as fifty frames taken at arm's length. The weight is
-applied inside `fuseVoxel`, under the shard lock, and the running average uses it - so the
-observations that are worth more are the ones that decide where the surface is. Two consequences
-worth naming: the voxel weight array stopped being a count and became 16-bit fixed point in
-1/256ths (`TsdfVolume::kWeightScale`), since a flat array would have truncated a 0.0625 observation
-to zero; and `IntegrationStats::voxelWeight` reports the evidence a frame added, so the volume's
-`totalVoxelWeightExact()` is exactly the sum of it over every frame - the accounting identity that
-catches a fusion which is counted but not stored (finding 181's guard).
+**Distance-, confidence- and incidence-weighted fusion.** Every observation starts with 1/Z²
+(`observationWeight`, clamped to [1/36, 4]), because a depth camera's error grows with range:
+without it, one frame taken from across the room pulls as hard on a voxel as fifty frames taken at
+arm's length. When a confidence plane exists, the hard `minConfidence` gate still runs first and
+the accepted observation is then multiplied by `confidence / 255`. Frames without one retain a
+neutral unit confidence multiplier. Fused frames carry their own tightly packed confidence:
+measured ARCore pixels keep their source value, calibrated network fills use the acceptance floor
+and holes are zero.
+
+The third factor is local incidence. For each accepted pixel, `incidenceCosine` reconstructs at
+most four immediate neighbours with the frame's real row stride. Opposite pairs average their
+derivative, one-sided pairs cover plain image borders, and neighbours are refused when they fail
+the depth range/confidence gate or cross a jump larger than two truncation bands (with a 5 %-of-
+depth minimum). The absolute dot product of the resulting normal and the *actual pixel ray* becomes
+`max(cosine, minIncidenceWeight)`; the default floor is 0.20, so this is soft evidence rather than
+a hidden grazing-angle rejection. Missing tangent axes, degenerate/non-finite normals and isolated
+pixels return neutral 1.0. `weightByIncidence=false` provides an exact native control. No normal
+buffer is allocated and all source reads are immutable, so worker threads share the same frame
+without another lifetime owner.
+
+The combined weight is applied inside `fuseVoxel`, under the shard lock, and the running average
+uses it - so the observations that are worth more are the ones that decide where the surface is.
+Two consequences worth naming: the voxel weight array stopped being a count and became 16-bit fixed
+point in 1/256ths (`TsdfVolume::kWeightScale`), since a flat array would have truncated a 0.0625
+observation to zero; and `IntegrationStats::voxelWeight` reports the evidence a frame added, so
+the volume's `totalVoxelWeightExact()` is exactly the sum of it over every frame - the accounting
+identity that catches a fusion which is counted but not stored (finding 181's guard). Invalid
+confidence dimensions fail closed instead of being mistaken for an absent plane.
 
 **Net wall area and the drywall take-off** (`core/.../wall`). The first `:core` package that
 turns geometry into a *purchase order*. `wallSurface` subtracts each wall's openings as a **union**
@@ -323,10 +342,18 @@ proposal's own flag, so the two dialogs cannot disagree about the window. `estim
 is still reached from nowhere, and no stored metre depends on a marker today.
 
 **Pose graph** (`slam/pose_graph.cpp`). Gauss–Newton on SE(3) with central-difference Jacobians,
-block-sparse Hessian solved by preconditioned conjugate gradient, backtracking line search (a
-full step overshoots on a room with one closure), snapshot/rollback so a diverging iteration can
-never corrupt the trajectory. Loop closures carry 100× the odometry weight because they are
-appearance-verified. The graph is fed since finding 243: `KeyframeFeed` decides on each placed
+block-sparse Hessian solved by preconditioned conjugate gradient and backtracking line search.
+Only loop hypotheses are reweighted, by super-linear GNC/TLS; measured odometry keeps weight 1.
+Before the app's newest-loop solve, pairwise cycle consistency compares that hypothesis with every
+comparable accepted loop: `A · O(b→c) · B · O(d→a)` must be identity within a bounded, per-hop
+noise envelope. Only measured odometry composes those cycles; optimised poses cannot grade their
+own evidence. An inconsistent newcomer is removed without touching older loops or any pose. This
+is deliberately newest-loop PCM, not a maximum-clique batch solver. The independent
+odometry-deformation gate still disables all loops for an irreducibly folded batch and recovers
+the measured chain. Every attempt is transactional: non-finite, non-converged or cost-worsening
+work restores every input pose. `optimizeLastLoop` also removes a failed or zero-weight new
+hypothesis, so it cannot poison the next attempt. Loops start at 100× odometry, but that is a
+strong prior rather than permission to win. The graph is fed since finding 243: `KeyframeFeed` decides on each placed
 frame which pose is worth a node (`KeyframeSelector`, `:core`), the render thread enqueues, and
 the scan worker writes the node and the odometry edge to the previous one. Since finding 245 it
 can be corrected too, but only on a human's word: `ProximityLoopClosureDetector` proposes a
@@ -335,9 +362,9 @@ the edge at 100x the odometry weight and optimises on the worker. The corrected 
 reported, not written back - a run's metres were measured with taps, and finding 217's rule
 applies to the graph too. What is reported is a `CorrectionReport` (`:core`): the nodes the
 optimiser and the app both know, how many of them moved, the largest and the mean shift in metres
-(findings 246, 249). A run
-that stopped without converging has no report at all - `ClosureState.Closed.correction` is null -
-because its poses are a snapshot halfway down the cost curve (finding 247). The count of
+(findings 246, 249). A run that stops without converging, produces non-finite poses or worsens
+its cost is `ClosureState.Failed`; the native transaction has already restored its input poses,
+so no half-descent is reported as a correction. The count of
 confirmed closures and the last report travel on `PoseGraphStatus`, so the HUD keeps saying what
 the dialog said after the dialog is gone (finding 250); committing the run copies them into
 `ScanSummary.closures` and the protocol prints them, so the document says the geometry was folded
@@ -355,11 +382,51 @@ ARCore's `depthSupported` into one of three states — `AI_FUSED`, `ARCORE_ONLY`
 the HUD prints when the answer is the third one. The weights are not in this repository.
 
 `YuvFrame` copies the camera planes on the render thread (~0.2 ms), the inference worker runs
-Depth Anything V2 Small through LiteRT on XNNPACK, `MetricDepthCalibrator` fits
-`1/z = s·d + t` to ARCore's metric samples on the *same* frame, and `AiDepthFusion` writes a
-densified millimetre frame in which confident ARCore pixels are copied verbatim and only holes
-are filled. `TsdfScanPipeline.submitFusedDepth` accepts it with an 800 ms TTL and integrates it
-with no separate confidence gate (the fusion already applied one).
+Depth Anything V2 Small through LiteRT on XNNPACK, and `MetricDepthCalibrator` fits
+`1/z = s·d + t` to ARCore's metric samples on the *same* frame. Deterministic RANSAC chooses the
+affine basin, MAD supplies the residual scale and Tukey-biweight IRLS rejects gross outliers;
+an unusable inlier ratio/RMS still disables filling. `AiDepthFusion` writes a densified millimetre
+frame in which confident ARCore pixels are copied verbatim and only holes are filled. A failed
+calibration leaves low-confidence pixels empty rather than passing them through as certain.
+`TsdfScanPipeline.submitFusedDepth` accepts the result with an 800 ms TTL. Its parallel confidence
+plane keeps measured ARCore values, marks network fills at the hard floor and clears holes to
+zero, so the native soft gate discounts fills without throwing their coverage away. The
+`FusedDepthFrame` also carries the source timestamp, intrinsics and camera pose, so a late
+inference can never be projected with the newest frame's acquisition geometry.
+
+A globally robust fit can still conceal a locally wrong network scale. `SpatialCalibrationGuard`
+therefore keeps each confidence-qualified calibration sample's source coordinate and accumulates
+its final affine residual in a bounded 4×3 grid. A region vetoes network fills only with at least
+12 valid local anchors, six residual conflicts, strictly fewer than 50 % inliers and regional RMS
+above `0.08 m⁻¹`. The per-anchor residual tolerance is `max(0.06 m⁻¹, 2 × global inlier RMS)`.
+Insufficient local evidence and the exact 50 % boundary remain neutral rather than manufacturing a
+verdict. `AiDepthFusion` copies confident ARCore pixels before consulting the mask, so even a
+rejected region retains every real measurement; only its holes remain empty. A mask with another
+frame geometry or non-finite supposedly usable calibration fails closed for fills. Rejected pixel
+and region counts are diagnostics on `MonocularDepthSource`, not an accuracy claim.
+
+Freshness alone is not enough for a changing view. `TemporalDepthConsistency` therefore unprojects
+a bounded 32×24 maximum grid of source pixels with the *source* intrinsics/pose and rigidly
+reprojects each world point into the newest camera. Only a non-zero current ARCore sample at that
+projected pixel with `minConfidence` can vote. Its z-depth must agree within
+`max(0.08 m, 0.03 × expectedDepth)`; both a nearer occluder and a farther newly exposed background
+can contradict the old hypothesis. The candidate is rejected only with at least six comparisons,
+at least three conflicts and a ratio strictly above 20 %. Sparse overlap produces zero comparisons,
+not a claim of temporal verification. Invalid/non-finite source geometry fails closed to the
+current acquisition. A contradiction is terminal: `TsdfScanPipeline` atomically removes that exact
+candidate without deleting a newer submission, and `ScanState` reports comparisons, conflicts and
+the cumulative rejection count. Scalar arithmetic avoids per-sample `Vec3` allocation. This blocks
+new stale evidence; it does not retroactively deform the TSDF or rewrite measured runs.
+
+**Deterministic guard A/B.** `DepthGuardBenchmarkTest` executes fixture `depth-guard-ab-v1` through
+the production `MetricDepthCalibrator`, `SpatialCalibrationGuard`, `AiDepthFusion` and
+`DepthIntegrationSelector`. The spatial fixture contaminates one of twelve regions and compares
+fusion with a null mask against the computed mask. The temporal fixture moves the camera through
+two consistent frames, a vanished foreground and a new occluder, comparing the selector's explicit
+`temporalGuardEnabled=false` control with the default guard and terminal candidate removal. Two full
+runs must produce byte-identical JSON. Android CI parses and uploads that report as
+`depth-guard-benchmark`, including `GITHUB_SHA` and `GITHUB_RUN_ID`; no timing values are recorded.
+This is a functional synthetic baseline, not a physical-device accuracy or performance measurement.
 
 XNNPACK is the *only* backend, deliberately: ARCore's standalone LiteRT runtime no longer ships
 the NNAPI delegate, and the Vulkan GPU delegate cannot execute the int8 graph that the licence
@@ -588,10 +655,17 @@ Schema version `1`; `ProjectMigrations` is the place for the next one.
 
 ## 7. Decisions worth knowing about
 
-**Depth units.** ARCore exposes `acquireDepthImage16Bits()` (millimetres) and
-`acquireDepthImageConfidence()`; there is no `acquireDepthImageMeters`. The 16-bit plane is
-used and divided by 1000 — the metric view the brief asks for, without the lossy visualisation
-path.
+**Depth source, units and confidence.** Raw Depth and Full Depth are separate ARCore APIs.
+`DepthCapture` defaults to `PREFER_RAW`: it tries `acquireRawDepthImage16Bits()` and pairs that
+image exclusively with `acquireRawDepthConfidenceImage()`. If Raw Depth is not yet available it
+may fall back to the smoothed/reprojected `acquireDepthImage16Bits()` image; Full Depth has no
+confidence image, so the fallback neither acquires nor fabricates Raw Confidence. `RAW_ONLY` and
+`FULL_ONLY` make controlled A/B runs explicit and never silently substitute the other source. Both
+depth APIs provide millimetres and are divided by 1000; there is no `acquireDepthImageMeters`.
+Each snapshot records the successful source, camera-frame timestamp and actual depth-image
+timestamp. Fusion and integration preserve those values together with the source pose and
+intrinsics, and `ScanState` exposes the last selection for diagnostics. This is a source/lifetime
+correctness contract, not a claim that one source is more accurate on every phone.
 
 **Zero-copy paths.** Three integration entry points exist: pooled `ShortArray` (default,
 `GetShortArrayElements` pins the array), a direct `ByteBuffer` (one copy fewer), and

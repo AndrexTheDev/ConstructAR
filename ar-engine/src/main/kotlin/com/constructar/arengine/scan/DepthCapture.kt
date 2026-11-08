@@ -6,73 +6,101 @@
 
 package com.constructar.arengine.scan
 
+import android.media.Image
 import android.util.Log
 import com.constructar.arengine.depth.DepthBufferPool
 import com.constructar.arengine.depth.DepthFrameSnapshot
+import com.constructar.arengine.depth.DepthSource
 import com.constructar.core.geo.DepthIntrinsics
 import com.google.ar.core.Camera
 import com.google.ar.core.Frame
 import com.google.ar.core.exceptions.NotYetAvailableException
 import java.nio.ByteBuffer
 
+/** Requested acquisition policy; the snapshot still records which source actually succeeded. */
+enum class DepthAcquisitionMode { PREFER_RAW, RAW_ONLY, FULL_ONLY }
+
+private val rawThenFull = listOf(DepthSource.RAW, DepthSource.FULL)
+private val rawOnly = listOf(DepthSource.RAW)
+private val fullOnly = listOf(DepthSource.FULL)
+
+/** Raw is attempted first only for the production default; explicit modes never cross APIs. */
+internal fun acquisitionOrder(mode: DepthAcquisitionMode): List<DepthSource> = when (mode) {
+    DepthAcquisitionMode.PREFER_RAW -> rawThenFull
+    DepthAcquisitionMode.RAW_ONLY -> rawOnly
+    DepthAcquisitionMode.FULL_ONLY -> fullOnly
+}
+
 /**
- * Copies ARCore's raw-depth frame into a stable [DepthFrameSnapshot] **on the render thread**.
+ * Copies an ARCore depth image into a stable [DepthFrameSnapshot] **on the render thread**.
  *
- * ## Why the copy is unavoidable (and why it is cheap)
+ * Raw Depth and Full Depth are different APIs. `acquireRawDepthImage16Bits()` is the only source
+ * paired with `acquireRawDepthConfidenceImage()`. Full Depth is acquired through
+ * `acquireDepthImage16Bits()` and carries no fabricated or mismatched Raw Confidence. Raw Depth is
+ * sparse; Full Depth is ARCore's smoothed/reprojected image and may have an older image timestamp
+ * than the camera frame. Both timestamps and the successful source are retained in the snapshot.
  *
- * ARCore's `Image` is only valid until the next `Frame.update()`; the TSDF worker runs on a
- * different thread and may still be busy. We therefore copy the depth plane (640×480×2 B ≈
- * 600 kB) into a pooled `ShortArray`, and the confidence plane (160×120 B ≈ 19 kB) into a pooled
- * `ByteArray` — both out of [DepthBufferPool]. That is a `memcpy` of ~0.15 ms — an order of
- * magnitude cheaper than the integration it enables — and it never allocates after the first few
- * frames. The confidence plane was the exception until finding 172: 19 kB per frame, 30 times a
- * second, is 0.6 MB/s of garbage in the render loop this class exists to keep clean.
- *
- * ## Why not `acquireDepthImageMeters`
- *
- * ARCore has no `acquireDepthImageMeters`; the API is `Frame.acquireDepthImage16Bits()`
- * (raw, millimetre, matches the confidence image) or `acquireDepthImage()` (visualised
- * DEPTH16 range). This class uses the 16-bit one and divides by 1000 — the "metres" view the
- * specification asks for, without the lossy visualisation path.
+ * The ARCore `Image` is valid only until the next `Frame.update()`, while the TSDF worker runs
+ * asynchronously. The depth plane is therefore copied into a pooled `ShortArray`, and matching Raw
+ * Confidence (when present) into a pooled `ByteArray`. Both are released by the snapshot's final
+ * owner, so no render-loop allocation or ARCore-image lifetime crosses into the worker.
  */
 class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity = 3)) {
 
-    /**
-     * Reusable stats container — the UI reads [meanConfidence], no allocation per frame.
-     *
-     * `usableRatio` used to sit here as "the share of the frame with usable depth". Nothing read
-     * it: it was passed into the tracking monitor as `scanCoverage`, stored in the status under a
-     * doc claiming it "drives the scan quality gauge", shown nowhere - and because it changes on
-     * every frame, it also defeated the monitor's compare-first guard (finding 103).
-     */
+    /** Reusable stats container; [meanConfidence] is the legacy neutral 255 fallback without Raw Confidence. */
     data class Stats(
         val width: Int = 0,
         val height: Int = 0,
         val meanConfidence: Int = 0,
         val validPixels: Int = 0,
         val bestDepthMeters: Float = 0f,
-    )
+        val source: DepthSource? = null,
+        val confidenceAvailable: Boolean = false,
+        val frameTimestampNs: Long = 0L,
+        val depthTimestampNs: Long = 0L,
+    ) {
+        /** Diagnostic timing mismatch only; new Raw Depth is detected against the previous image. */
+        val depthTimestampDiffersFromFrame: Boolean
+            get() = depthTimestampNs > 0L && frameTimestampNs > 0L && depthTimestampNs != frameTimestampNs
+    }
 
     private var lastStats = Stats()
     private var cachedDroppedFrames = 0
 
     val stats: Stats get() = lastStats
+    val droppedFrames: Int get() = cachedDroppedFrames
 
     /**
-     * Acquires depth + confidence and packages them for the worker.
+     * Acquires the requested depth source and packages it for the worker.
      *
-     * @param minConfidence pixels below this are zeroed so the mesher never integrates them.
-     * @return snapshot, or null when the device has no depth or ARCore has no frame yet.
+     * @param minConfidence pixels below this are zeroed in the fused depth selection.
+     * @param mode raw-first production policy, or an explicit source for controlled A/B capture.
+     * @return snapshot, or null when the selected source has no frame yet or acquisition fails.
      */
-    fun capture(frame: Frame, minConfidence: Int): DepthFrameSnapshot? {
-        val depthImage = try {
-            frame.acquireDepthImage16Bits()
-        } catch (error: NotYetAvailableException) {
-            // Normal on the very first frames, and on devices where depth warms up slowly.
+    fun capture(
+        frame: Frame,
+        minConfidence: Int,
+        mode: DepthAcquisitionMode = DepthAcquisitionMode.PREFER_RAW,
+    ): DepthFrameSnapshot? {
+        var depthImage: Image? = null
+        var source = DepthSource.FULL
+        for (candidate in acquisitionOrder(mode)) {
+            try {
+                depthImage = when (candidate) {
+                    DepthSource.RAW -> frame.acquireRawDepthImage16Bits()
+                    DepthSource.FULL -> frame.acquireDepthImage16Bits()
+                }
+                source = candidate
+                break
+            } catch (_: NotYetAvailableException) {
+                // Warm-up is normal. PREFER_RAW may try Full Depth; explicit modes fail closed.
+            } catch (error: Throwable) {
+                Log.w(TAG, "${candidate.name.lowercase()} depth acquisition failed", error)
+                return null
+            }
+        }
+        if (depthImage == null) {
             cachedDroppedFrames++
-            return null
-        } catch (error: Throwable) {
-            Log.w(TAG, "depth acquisition failed", error)
             return null
         }
 
@@ -83,43 +111,49 @@ class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity 
             val buffer = plane.buffer
             val rowStrideElements = plane.rowStride / 2
 
-            // Compact copy: the destination is always tightly packed (rowStride == width),
-            // which simplifies every consumer downstream.
+            // Compact copy: downstream consumers always see rowStride == width.
             val target = pool.acquire(width * height)
             val shorts = buffer.asShortBuffer()
             copyRows(shorts, width, height, rowStrideElements, target)
 
-            // Confidence (160×120 on every ARCore device).
+            // Raw Confidence corresponds exclusively to Raw Depth, never to smoothed Full Depth.
             var confidenceBytes: ByteArray? = null
             var confidenceWidth = 0
             var confidenceHeight = 0
             var confidenceRowStride = 0
-            try {
-                frame.acquireRawDepthConfidenceImage().use { image ->
-                    val confPlane = image.planes[0]
-                    confidenceWidth = image.width
-                    confidenceHeight = image.height
-                    confidenceRowStride = confPlane.rowStride
-                    // Pooled like the depth plane: 19 kB per frame is not free in the render
-                    // loop, and this class's whole reason to exist is to not allocate here
-                    // (finding 172).
-                    val conf = pool.acquireConfidence(confidenceRowStride * confidenceHeight)
-                    copyBytes(confPlane.buffer, confidenceRowStride, confidenceHeight, conf)
-                    confidenceBytes = conf
+            if (source == DepthSource.RAW) {
+                try {
+                    frame.acquireRawDepthConfidenceImage().use { image ->
+                        val confPlane = image.planes[0]
+                        confidenceWidth = image.width
+                        confidenceHeight = image.height
+                        confidenceRowStride = confPlane.rowStride
+                        val conf = pool.acquireConfidence(confidenceRowStride * confidenceHeight)
+                        copyBytes(confPlane.buffer, confidenceRowStride, confidenceHeight, conf)
+                        confidenceBytes = conf
+                    }
+                } catch (error: Throwable) {
+                    Log.d(TAG, "no raw confidence image: ${error.message}")
                 }
-            } catch (error: Throwable) {
-                // Depth confidence is optional (only DEPTH-mode devices lack RAW_DEPTH).
-                Log.d(TAG, "no confidence image: ${error.message}")
             }
 
             val intrinsics = depthIntrinsics(frame.camera, width, height)
             val pose = FloatArray(16)
             frame.camera.pose.toMatrix(pose, 0)
+            val frameTimestampNs = frame.timestamp
+            val depthTimestampNs = depthImage.timestamp
 
-            lastStats = computeStats(target, width, height, confidenceBytes, confidenceWidth, confidenceHeight, confidenceRowStride, minConfidence)
+            lastStats = computeStats(
+                target, width, height, confidenceBytes,
+                confidenceWidth, confidenceHeight, confidenceRowStride, minConfidence,
+            ).copy(
+                source = source,
+                confidenceAvailable = source == DepthSource.RAW && confidenceBytes != null,
+                frameTimestampNs = frameTimestampNs,
+                depthTimestampNs = depthTimestampNs,
+            )
 
-            // Read once, so the release below cannot see a different plane than the one this
-            // snapshot was built with.
+            // Read once, so release below cannot see a different plane than this snapshot used.
             val confidence = confidenceBytes
             return DepthFrameSnapshot(
                 depthMm = target,
@@ -132,14 +166,12 @@ class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity 
                 confidenceRowStride = confidenceRowStride,
                 intrinsics = intrinsics,
                 cameraToWorld = pose,
-                timestampNs = frame.timestamp,
-                // The depth image is already in sensor orientation; the display rotation only
-                // matters when mapping a *screen* tap to a depth pixel, which the caller does.
+                timestampNs = frameTimestampNs,
+                depthTimestampNs = depthTimestampNs,
+                source = source,
+                // Depth pixels are in sensor orientation; display rotation is applied by screen mapping.
                 displayRotationDegrees = 0,
                 minDepthMm = 180,
-                // The pool is bound here, not at the point of return: the last holder of the
-                // snapshot knows nothing about pools, and the frame that replaced it is not
-                // necessarily the last holder (finding 168).
                 onLastRelease = {
                     pool.release(target)
                     confidence?.let(pool::releaseConfidence)
@@ -150,15 +182,9 @@ class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity 
         }
     }
 
-    /**
-     * Scales the colour-camera intrinsics to the depth image. ARCore only exposes
-     * `Camera.getImageIntrinsics(width, height)`, so we ask for exactly the depth resolution
-     * (depth is a cropped/rescaled view of the same optical centre).
-     */
+    /** Scales colour-camera intrinsics to the acquired depth image dimensions. */
     private fun depthIntrinsics(camera: Camera, width: Int, height: Int): DepthIntrinsics {
-        val image = camera.imageIntrinsics // colour-resolution intrinsics
-        // `CameraIntrinsics` reports its resolution as a two-element `int[]` (`[width, height]`);
-        // there is no `imageWidth`/`imageHeight`/`Size` accessor on it.
+        val image = camera.imageIntrinsics
         val dimensions = image.imageDimensions
         val colorWidth = dimensions[0]
         val colorHeight = dimensions[1]
@@ -200,7 +226,6 @@ class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity 
         var nearest = Float.MAX_VALUE
         var confidenceSum = 0L
         var confidenceCount = 0
-        // Sample on a coarse grid: full-frame statistics twice per second is plenty.
         val step = 4
         for (y in 0 until height step step) {
             for (x in 0 until width step step) {
@@ -229,11 +254,7 @@ class DepthCapture(private val pool: DepthBufferPool = DepthBufferPool(capacity 
 
     companion object {
         private const val TAG = "DepthCapture"
-
-        /** Integration stride used at nominal temperature. */
         const val PIXEL_STEP_NOMINAL = 3
-
-        /** Integration stride when the device is thermally throttled. */
         const val PIXEL_STEP_THROTTLED = 5
     }
 }

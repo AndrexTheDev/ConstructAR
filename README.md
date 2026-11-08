@@ -198,9 +198,28 @@ room measured".
 **Depth fusion policy.** ARCore depth is metric but holey; the network is dense but only
 relative. `AiDepthFusion` therefore lets the network **fill holes only** — a confident ARCore
 sample is never overwritten — after `MetricDepthCalibrator` fits `1/z = s·d + t` against
-ARCore's metric samples with IRLS + Huber weights. If the fit's inlier ratio is below 55 % the
-fusion is refused and the app uses ARCore depth alone. A fused frame older than 800 ms is
-discarded rather than integrated into geometry the camera has already left.
+ARCore's metric samples with deterministic RANSAC, MAD scale and Tukey-biweight IRLS. If the fit's
+inlier ratio is below 55 % the fusion is refused and the app uses ARCore depth alone. A separate
+4×3 regional guard then vetoes network fills only where at least 12 local anchors, six conflicts,
+a strict minority of inliers and regional RMS above 0.08 m⁻¹ demonstrate local model failure;
+per-anchor tolerance is `max(0.06, 2 × global inlier RMS)`. Sparse regions and the exact 50 % boundary
+stay neutral, and confident ARCore pixels are always preserved before this veto. A fused frame
+older than 800 ms is discarded rather than integrated into geometry the camera has already left.
+Before that deadline, a bounded reprojection check compares the old hypothesis with the newest
+confident ARCore samples in 3D. At least six comparisons, three conflicts and a conflict ratio over
+20 % reject the complete stale candidate (8 cm minimum tolerance, plus 3 % of depth); an isolated
+outlier or a view with no overlapping measurements does not claim a temporal verdict. Rejection is
+terminal for that candidate and falls back to the complete current acquisition. It does not rewrite
+an already integrated mesh or a measured run.
+
+**Deterministic guard A/B.** `gradle :ar-engine:testDebugUnitTest --tests
+"com.constructar.arengine.scan.DepthGuardBenchmarkTest"` runs the actual calibrator, fusion and
+integration selector twice on fixture `depth-guard-ab-v1`, requiring byte-identical metrics. The
+spatial case has one locally wrong region among twelve; the moving-camera case covers two consistent
+views, vanished foreground and a new occluder, including terminal candidate removal. Each publishes
+its guard-disabled control beside the guarded result in `build/reports/tests/depth-guard-benchmark.json`.
+Android CI parses that JSON and uploads the `depth-guard-benchmark` artifact with the exact commit
+and run ID. These are functional synthetic counts, not wall-clock, device-accuracy or thermal results.
 
 ---
 
@@ -381,12 +400,12 @@ Six locales ship as resources, and **no user-facing text is hardcoded**: the eng
 
 | Directory | Locale | Keys |
 |-----------|--------|------|
-| `app/src/main/res/values/` | English (default) | 552 strings + 13 plurals |
-| `app/src/main/res/values-de/` | Deutsch | 552 strings + 13 plurals |
-| `app/src/main/res/values-es/` | Español | 552 strings + 13 plurals |
-| `app/src/main/res/values-fr/` | Français | 552 strings + 13 plurals |
-| `app/src/main/res/values-it/` | Italiano | 552 strings + 13 plurals |
-| `app/src/main/res/values-pl/` | Polski | 552 strings + 13 plurals (`few`/`many` included) |
+| `app/src/main/res/values/` | English (default) | 551 strings + 13 plurals |
+| `app/src/main/res/values-de/` | Deutsch | 551 strings + 13 plurals |
+| `app/src/main/res/values-es/` | Español | 551 strings + 13 plurals |
+| `app/src/main/res/values-fr/` | Français | 551 strings + 13 plurals |
+| `app/src/main/res/values-it/` | Italiano | 551 strings + 13 plurals |
+| `app/src/main/res/values-pl/` | Polski | 551 strings + 13 plurals (`few`/`many` included) |
 
 `scripts/verify_sources.py` fails on a missing key, an untranslated extra key, or a mismatched
 format placeholder — so a half-translated release cannot ship. That includes the exported
@@ -586,23 +605,24 @@ Known limitations, deliberately documented rather than hidden:
   is measured on. How much of the *room* was captured is what the scan-limit warning in the HUD
   (finding 97) and the protocol's scan note (finding 100) report; the app never computes a room's
   total surface, so it does not print a room percentage anywhere.
-* **Drift.** ARCore drift is ~1 % of travelled distance and the shipped pipeline does not
-  correct it: the pose graph that would redistribute a closure over the whole trajectory is
-  host-tested but never fed (see *Optional pieces*), so a long run accumulates the error instead
-  of folding it back. Re-measure a run longer than ~8 m, or measure it as two runs from a shared
-  corner.
+* **Drift.** ARCore trajectories can accumulate drift. The fed pose graph can report a verified
+  closure correction, but it deliberately does not rewrite measured taps, stored routes or the
+  TSDF. A long measured run therefore keeps its original acquisition error rather than silently
+  becoming an inferred one. Re-measure a long run, or split it at a shared surveyed corner.
 
 ---
 
 ## Testing
 
-* **Native (C++) — 332 assertions, all green**, exercised with plain `g++` (no Android SDK; the
-  binary reports 336 passes because four of them sit inside the loop over the tag's rotations):
+* **Native (C++) — 377 assertions, all green**, exercised with plain `g++` (no Android SDK; the
+  binary reports 381 passes because four of them sit inside the loop over the tag's rotations):
   SE(3) exp/log round trip, TSDF integration on synthetic depth, sphere/wall reconstruction
   areas and extents, a 30°-tilted plane (which pins the depth convention), free-space carving
   (a ghost disappears, the real wall does not), triangle budget, invalid input, pose-graph
-  closure, proximity loop closure, every observation the integration counted is still in the
-  volume's weights, and the Manhattan-World frame (finding 187): a 4 x 3 x 2.5 m room with one
+  closure, newest-loop pairwise cycle consistency (including exact rollback and a 90° outlier),
+  confidence- and local-incidence-scaled TSDF evidence (including an analytic 60° plane, padded
+  stride, discontinuities and unknown-normal fallbacks), proximity loop closure, every observation the integration
+  counted is still in the volume's weights, and the Manhattan-World frame (finding 187): a 4 x 3 x 2.5 m room with one
   wall 8° off square and a 35° bay window comes back square to a fifth of a degree, the crooked
   wall is squared and stays where its points are, the bay is returned untouched, a set of parallel
   walls is refused rather than guessed at, and a room turned 30° yields the turned frame.
@@ -647,7 +667,7 @@ Known limitations, deliberately documented rather than hidden:
   `ArMeasureController.finalFloorplan()` hands the payload on, and
   `ProjectViewModel.saveFloorplanThumbnail` writes the room's outline and its SVG (see *Room
   thumbnails* above and ARCHITECTURE §5b for the four links of that chain).
-* **Semantic masking and distance-weighted fusion** — two pieces the slice needs to be usable. A
+* **Semantic masking and evidence-weighted fusion** — two pieces the slice needs to be usable. A
   waist-height cut crosses tables, counters and workbenches as well as walls, and a horizontal
   patch drawn as a wall puts a partition through the middle of the room: `maskVerticalSurfaces`
   keeps a point only when the surface normal is within 20° of vertical, which is the SDF gradient
@@ -656,10 +676,17 @@ Known limitations, deliberately documented rather than hidden:
   synthetic frame: a vertical wall keeps all 2 580 of its points, the same plane seen by a camera
   looking straight up is 100 % dropped. And observations are now weighted by **1/Z²**, so a reading
   at 1 m carries sixteen times the authority of the same pixel at 4 m in the voxel's running
-  average (clamped to [1/36, 4]); the evidence a frame deposits per voxel write is asserted to be
-  exactly that number, so a helper that never reaches the integrator fails. Fractional weights are
-  why the block's 16-bit weight array became fixed point in 1/256ths (`kWeightScale`) instead of a
-  count. Both are host-tested and **not yet wired**: no JNI symbol, no caller.
+  average (clamped to [1/36, 4]). Accepted samples with a confidence plane are additionally
+  scaled by **confidence / 255**; network fills stay at the acceptance floor and missing confidence
+  keeps a neutral unit confidence multiplier. A bounded four-neighbour depth normal adds the third
+  factor **max(|normal · cameraRay|, 0.20)**: opposite pairs average noise, one-sided pairs handle
+  plain borders, and depth jumps or low-confidence neighbours cannot manufacture a tangent. An
+  isolated pixel or otherwise unknown normal stays neutral rather than being rejected. The native
+  `weightByIncidence=false` control isolates this factor in tests and future device benchmarks.
+  The evidence a frame deposits per voxel write is asserted, so
+  a helper that never reaches the integrator fails. Fractional weights are why the block's 16-bit
+  weight array became fixed point in 1/256ths (`kWeightScale`) instead of a count. These are native
+  pipeline contracts with synthetic host regressions, not a claim of measured phone accuracy.
 * **AprilTag — the decoder is vendored, the wiring is not.** AprilTag 3.1.0's C core (BSD-2-Clause,
   unmodified, one family: tag36h11) sits in `native-slam/src/main/cpp/third_party/apriltag/` with
   its `VENDORED.md`, its entry in `NOTICE`, its licence text in `licenses/` and its row on the Help
@@ -831,7 +858,8 @@ Known limitations, deliberately documented rather than hidden:
 The pre-release gate (device matrix, measurement verification against a laser, licensing,
 performance) is [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md). How each layer is run,
 what it can and cannot prove, and the defect log of the systematic beta test are in
-[docs/TESTING.md](docs/TESTING.md).
+[docs/TESTING.md](docs/TESTING.md). The licence-aware open-source survey, candidate matrix and
+staged AR-pipeline plan are in [docs/AR_PIPELINE_RESEARCH.md](docs/AR_PIPELINE_RESEARCH.md).
 
 ---
 
@@ -847,10 +875,10 @@ errors:
 | `tools/i18n_audit.py` / `tools/consistency_audit.py` | pass — no English left in a locale, one address form per surface, no price or address drift |
 | `:core` / `:export` unit tests | pass |
 | `:ar-engine` unit tests | pass |
-| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1278 tests in the app+core+ar-engine+export+native-slam suites |
+| `:app` unit tests (incl. Robolectric storage and WCAG contrast) | pass — 1305 tests in the app+core+ar-engine+export+native-slam suites |
 | Kotlin compile of all five modules with `allWarningsAsErrors` | pass — no compiler diagnostics |
-| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 332 checks, 0 failures |
-| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 332 checks, 0 failures, no data race reported |
+| Host C++ suite, `tools/verify-native.sh` (`-O2 -Wall -Wextra -Werror`) | pass — 377 checks, 0 failures (381 runtime executions) |
+| Host C++ suite under ThreadSanitizer (`--tsan`) | pass — 377 checks, 0 failures, no data race reported (381 runtime executions) |
 | RTAB-Map layout probe (`cmake -P …/rtabmap-layout-check.cmake`) | pass — 6 checks, 0 failures |
 | NDK build, `arm64-v8a` + `x86_64` | pass — `libconstructar_slam.so` per ABI (16 KB page alignment requested via `android.experimental.nativeLibraryAlignmentPageSize=16k`) |
 | APK packaging + `lib/arm64-v8a/libconstructar_slam.so` check | pass — debug APK uploaded as an artifact |

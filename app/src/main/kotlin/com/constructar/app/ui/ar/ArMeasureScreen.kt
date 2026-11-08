@@ -352,8 +352,8 @@ fun ArMeasureScreen(
                     "closure",
                     "closed: residual ${state.optimisation.initialCost} -> ${state.optimisation.finalCost}, " +
                         "converged=${state.optimisation.converged}, " +
-                        "moved=${correction?.movedNodes ?: 0}/${correction?.nodes ?: 0} nodes, " +
-                        "max=${correction?.maxShiftMetres ?: 0f} m",
+                        "moved=${correction.movedNodes}/${correction.nodes} nodes, " +
+                        "max=${correction.maxShiftMetres} m",
                 )
             }
             ClosureState.Failed -> Diagnostics.event("closure", "optimisation failed")

@@ -7,9 +7,9 @@
 # Performance notes and measurements
 
 All numbers below were measured **in this repository's CI sandbox** (x86-64 VM, `g++ -O3`,
-3 worker threads) by running the native code standalone. They are not phone numbers. A modern
-arm64 phone is roughly **1.5–3× slower** per core for this workload, so treat the desktop
-figures as a lower bound and re-measure on the target device before shipping.
+3 worker threads) by running the native code standalone. They are not phone numbers and not a
+lower bound for one. A generic desktop-to-arm64 multiplier would depend on SoC, memory pressure,
+thermals and thread scheduling, so no such estimate is used here; re-measure on each target device.
 
 Reproduce with:
 
@@ -69,12 +69,32 @@ consume 8–14 ms on a mid-range device.
 | Mesh extraction | worker | — | ≤ 3.3 Hz (300 ms), 10–25 ms each |
 | Mesh upload to Filament | main/worker | — | only on change, ~2 ms per 30 k triangles |
 | Measurement + HUD string | main | 0.1 ms | `PolylineMetrics.measure` on ≤ 50 nodes |
-| Monocular depth (optional) | own worker | — | 2 Hz, all copies taken on the render thread (~0.25 ms); inference time is device-dependent and **must be measured on target hardware** (expect 40–90 ms for the int8 graph on XNNPACK with four threads) |
+| Monocular depth (optional) | own worker | — | 2 Hz, all copies taken on the render thread (~0.25 ms); inference time is device-dependent and **must be measured on target hardware**; no unmeasured phone-latency range is claimed |
+
+Raw/Full acquisition-order lists are allocated once, not per camera frame. Full Depth skips Raw
+Confidence acquisition and its copy entirely; Raw Depth retains the pooled confidence copy. The
+source and image timestamp are scalar metadata and do not add a pixel-buffer allocation.
+
+Temporal fused-depth rejection runs on the scan worker, not the render thread. Its source grid is
+bounded to 32×24 samples (768 maximum), uses scalar reprojection arithmetic and allocates neither
+world-point lists nor another depth/confidence image. Current-depth lookups reuse the published
+snapshot. This bounds work and garbage; it does not assert an unmeasured phone-latency figure.
+
+Spatial calibration rejection reuses the existing strided ARCore/network sample pass on the inference
+worker. It adds two tightly sized integer coordinate arrays and fixed 4×3 accumulators, then a
+12-entry Boolean veto mask — no second camera image, depth image or per-pixel mask. The guard runs
+before the already scheduled fusion pass; target-device inference and total worker latency still
+require measurement rather than an estimate.
+
+`DepthGuardBenchmarkTest` deliberately emits deterministic functional counts, not elapsed time.
+Shared host CI cannot establish phone latency or thermal behaviour. Its JSON therefore sets both
+`deviceMeasurement=false` and `wallClockBenchmark=false`; device runtime/RSS/thermal A/B remains a
+separate acceptance measurement with the same guard-on and guard-off scenes.
 
 Consequences that are enforced in code:
 
-* the integration channel holds **one** snapshot and drops the oldest — a slow device lowers
-  scan *coverage*, never frame rate;
+* the integration channel holds **one** snapshot and refuses the newest offer when full — a slow
+  device lowers scan *coverage*, never frame rate, and the refused buffer is released immediately;
 * `ScanState.framesDropped` is surfaced — `ScanHint.BEHIND` above one offered frame in six, with
   the share in the sentence (finding 170) — so "sparse scan" can be diagnosed rather than guessed;
 * nothing in the frame callback allocates after warm-up (pooled depth, cached plane list,
@@ -90,6 +110,8 @@ Consequences that are enforced in code:
 | `TsdfConfig.truncationVoxels` | 4 | 8 cm tolerates ARCore's ±3 cm depth noise; lower values sharpen detail and add holes |
 | `TsdfConfig.maxBlocks` | 160 000 | ≈ 655 m³ of mapped volume at 2 cm (160 000 blocks × 8³ voxels × 0.02³ m³ = 655.36 m³); the budget hit is reported in the HUD |
 | integration `pixelStep` | 3 (2 at 3 cm voxels) | Linear cost; 3 keeps 640×480 at ~34 k rays (214 × 160 samples) |
+| `TsdfConfig.minConfidence` | 96 | Hard rejection below the floor; accepted evidence scales by confidence/255 in the existing fusion loop. AI fills use the floor; absent confidence keeps unit weight |
+| Native `weightByIncidence` / `minIncidenceWeight` | true / 0.20 | At most four immediate depth neighbours and their confidence samples per accepted ray; no normal buffer or allocation. Grazing evidence is softened, unknown normals stay neutral. Measure target-SoC integration p50/p95 against `weightByIncidence=false`; no phone timing is asserted here |
 | `TsdfConfig.carveFreeSpace` | false | Ghost removal (one-shot clean-up pass): 7.3 ms → 55.9 ms per 320×240 frame at `pixelStep = 2`, single worker, i.e. ~7.7× — sampled per voxel, because a coarser stride shreds a ghost into stripes instead of removing it (finding 111). Never allocates a block |
 | `EXTRACT_INTERVAL_MS` | 300 | Required by the brief; below 150 ms it dominates the worker |
 | Thermal mode | auto | SEVERE → 700 ms extraction, stride 5, every other frame |

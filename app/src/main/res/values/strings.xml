@@ -88,9 +88,8 @@
     <string name="loop_confirm">Same place</string>
     <string name="loop_none">No loop found.</string>
     <string name="loop_closed">Loop closed: residual %1$s → %2$s.</string>
-    <string name="loop_failed">The graph could not be optimised.</string>
+    <string name="loop_failed">Closure rejected. The original graph was restored.</string>
     <string name="loop_shift">Moved %1$d of %2$d nodes, up to %3$s.</string>
-    <string name="loop_unfinished">The optimiser hit its iteration limit: the edge is set, but there is no result. These numbers are a snapshot, not a correction.</string>
     <string name="ar_step_scan">1 Scan</string>
     <string name="ar_step_points">2 Set points</string>
     <string name="ar_step_finish">3 Save</string>

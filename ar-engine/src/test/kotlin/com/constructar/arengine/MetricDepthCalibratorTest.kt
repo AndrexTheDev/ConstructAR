@@ -85,6 +85,36 @@ class MetricDepthCalibratorTest {
     }
 
     @Test
+    fun `ransac and redescending IRLS reject a quarter of gross outliers deterministically`() {
+        val random = Random(23)
+        val count = 2_000
+        val relative = FloatArray(count)
+        val metric = FloatArray(count)
+        for (i in 0 until count) {
+            val depth = 0.4f + random.nextFloat() * 4f
+            var network = 0.9f / depth + 0.05f + (random.nextFloat() - 0.5f) * 0.002f
+            if (i % 4 == 0) {
+                val sign = if (i % 8 == 0) 1f else -1f
+                network += sign * (1.5f + random.nextFloat())
+            }
+            relative[i] = network
+            metric[i] = depth
+        }
+
+        val calibrator = MetricDepthCalibrator()
+        val calibration = calibrator.calibrate(relative, metric)
+        val repeated = calibrator.calibrate(relative, metric)
+
+        assertTrue(calibration.isUsable)
+        assertEquals(1f / 0.9f, calibration.scale, 0.02f)
+        assertEquals(-0.05f / 0.9f, calibration.shift, 0.01f)
+        assertEquals(0.75f, calibration.inlierRatio, 0.03f)
+        assertTrue(calibration.inlierRmsDisparity < 0.01f)
+        assertEquals(calibration.scale, repeated.scale, 0f)
+        assertEquals(calibration.shift, repeated.shift, 0f)
+    }
+
+    @Test
     fun `depth clamp never returns a non-positive or infinite depth`() {
         val calibration = MetricDepthCalibrator.Calibration(scale = 1f, shift = -10f, 1f, 0f, 100, isUsable = true)
         val depth = calibration.depthMeters(0.1f)

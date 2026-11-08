@@ -67,8 +67,13 @@ struct DepthFrameView {
   int64_t timestampNs = 0;
 
   bool isValid() const {
+    // A non-null confidence pointer with impossible geometry is not "no confidence": accepting
+    // it would either read outside the plane or silently promote uncertain samples to weight 1.
+    const bool confidenceValid =
+        confidence == nullptr ||
+        (confidenceWidth > 0 && confidenceHeight > 0 && confidenceRowStride >= confidenceWidth);
     return depth != nullptr && width > 0 && height > 0 && rowStrideElements >= width &&
-           intrinsics.isValid() && cameraToWorld.isFinite();
+           confidenceValid && intrinsics.isValid() && cameraToWorld.isFinite();
   }
 };
 
@@ -83,6 +88,13 @@ struct TsdfConfig {
   float maxDepth = 6.0f;
   /** Raw-depth confidence below this is discarded (ARCore: 0 = worst, 255 = best). */
   uint8_t minConfidence = 96;
+  /**
+   * Discount grazing observations using a normal estimated from accepted local depth neighbours.
+   * Unknown normals (isolated pixels, discontinuities, borders without a local basis) stay neutral.
+   */
+  bool weightByIncidence = true;
+  /** Lower evidence bound for a measured grazing angle; 0.2 keeps a graze useful but discounted. */
+  float minIncidenceWeight = 0.2f;
   /** Per-voxel weight cap; keeps a static surface from freezing out new observations. */
   float maxWeight = 64.f;
   /**
@@ -119,9 +131,10 @@ struct IntegrationStats {
   /**
    * Sum of the weights this frame's observations added, i.e. the evidence gained.
    *
-   * Not the same as `voxelUpdates`: observations are weighted by 1/Z² (see
-   * [observationWeight]), so a frame at 4 m adds a sixteenth of what the same frame adds at 1 m,
-   * and a voxel already at `maxWeight` adds nothing at all. The volume's
+   * Not the same as `voxelUpdates`: observations are weighted by 1/Z², source confidence and
+   * locally measured incidence, so a frame at 4 m adds a sixteenth of the range evidence of the
+   * same frame at 1 m before the other factors, and a voxel already at `maxWeight` adds nothing.
+   * The volume's
    * `totalVoxelWeightExact()` equals the sum of this over every frame that was never reset - the
    * identity the host suite asserts.
    */
@@ -209,6 +222,19 @@ class TsdfVolume {
    * something, and a reading at half a metre cannot outvote the whole frame.
    */
   static float observationWeight(float depthMetres);
+
+  /**
+   * Soft evidence multiplier for an already accepted confidence sample (0…1).
+   * The hard `minConfidence` gate remains separate; frames without a confidence plane retain
+   * a neutral unit confidence multiplier rather than inventing a confidence value.
+   */
+  static float confidenceWeight(uint8_t confidence);
+
+  /**
+   * Soft incidence multiplier for |dot(localNormal, cameraRay)|. Normal orientation is irrelevant,
+   * non-finite/unknown input is neutral, and the configurable floor prevents a hard grazing gate.
+   */
+  static float incidenceWeight(float cosine, float floor = 0.2f);
 
   void reset();
 
@@ -320,6 +346,9 @@ class TsdfVolume {
   Touch findOrCreateBlockLocked(int32_t bx, int32_t by, int32_t bz, Shard& shard, int64_t key);
   /** Existing block, or null. Read-only, for the gather paths. */
   const Block* findBlock(int32_t bx, int32_t by, int32_t bz) const;
+
+  /** |cosine| between a filtered local depth normal and this pixel's ray; 1 when unknown. */
+  float incidenceCosine(const DepthFrameView& frame, int u, int v, float centreDepth) const;
 
   void integrateRows(const DepthFrameView& frame, int pixelStep, int rowBegin, int rowEnd,
                      IntegrationStats& stats);

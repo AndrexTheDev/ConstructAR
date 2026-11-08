@@ -10,6 +10,7 @@ import com.constructar.core.slam.ClosureCandidate
 import com.constructar.core.slam.ClosureOffer
 import com.constructar.core.slam.ClosurePolicy
 import com.constructar.core.slam.CorrectionReport
+import kotlin.math.abs
 
 /**
  * The three things the pose graph can be asked, as a seam a test can fake.
@@ -51,6 +52,8 @@ interface NodeHistory {
 data class ClosureOptimisation(
     val initialCost: Float,
     val finalCost: Float,
+    val rmsTranslationMeters: Float = 0f,
+    val rmsRotationRadians: Float = 0f,
     val converged: Boolean,
     /** Column-major camera-to-world, one per node, as the optimiser left them. */
     val poses: List<FloatArray> = emptyList(),
@@ -69,20 +72,15 @@ sealed interface ClosureState {
     data class Offered(val offer: ClosureOffer) : ClosureState
 
     /**
-     * The closure was applied and the graph optimised - with what it did to the trajectory.
-     *
-     * [correction] is `null` when the solver stopped without converging. That is not a missing
-     * value, it is the absence of a result: the poses of a run that hit its iteration budget are a
-     * snapshot halfway down the cost, and a shift computed from them would be a movement the
-     * optimiser never finished deciding on (finding 247). The type carries the difference so the
-     * screen cannot print a correction it does not have.
+     * The closure was accepted and the graph converged, with its actual trajectory correction.
+     * Unfinished, non-finite, worse-cost and rolled-back attempts are [Failed], never this state.
      */
     data class Closed(
         val optimisation: ClosureOptimisation,
-        val correction: CorrectionReport?,
+        val correction: CorrectionReport,
     ) : ClosureState
 
-    /** The closure was applied but there is no graph to optimise - counted, not hidden. */
+    /** The attempt was unavailable, non-finite, non-converged or rolled back - never hidden. */
     data object Failed : ClosureState
 }
 
@@ -96,7 +94,8 @@ sealed interface ClosureState {
  *    apart and be different corners of the same doorway - and a closure that is wrong cannot be
  *    seen afterwards: the optimiser simply distributes the error over the whole loop.
  *  * **The confirmation is an assumption and is treated as one.** The closure edge says "these
- *    nodes coincide"; its weight is high enough to move the trajectory, which is the point.
+ *    nodes coincide"; pairwise cycle consistency, GNC/TLS and an odometry-deformation gate can
+ *    still reject that hypothesis without deleting older accepted loops.
  *  * **What the optimiser produced is reported, not stored.** The corrected poses are *not*
  *    written back into the measured runs here: a run's metres were measured with taps the
  *    operator made, and silently moving them would replace a measurement with an inference
@@ -130,20 +129,24 @@ class PoseGraphCloser(
         // Same bookkeeping as a refusal: the pair is done for this run. Without it the detector
         // would re-propose the two nodes that now coincide, on every lookup, forever.
         policy.dismiss(offer, nowMillis)
-        val result = source.optimise() ?: run {
+        val result = source.optimise()
+        val tolerance = result?.let { maxOf(1e-4f, abs(it.initialCost) * 1e-5f) } ?: 0f
+        val usable = result != null && result.converged &&
+            result.initialCost.isFinite() && result.finalCost.isFinite() &&
+            result.rmsTranslationMeters.isFinite() && result.rmsRotationRadians.isFinite() &&
+            result.poses.all { pose -> pose.size == 16 && pose.all { value -> value.isFinite() } } &&
+            result.finalCost <= result.initialCost + tolerance
+        if (!usable) {
+            // The native optimiser is transactional: this verdict means it restored every input
+            // pose. A half-descent or a worse graph is never presented as a correction.
             state = ClosureState.Failed
             return state
         }
-        // What the closure did, in metres. The corrected poses are *not* stored anywhere: this is
-        // the report the operator gets instead of a silently moved room (finding 246) - and only
-        // when the solver actually converged, because `finalCost` below a falling curve proves an
-        // iteration ran, not that it arrived (finding 247).
-        val correction = if (result.converged) {
-            CorrectionReport.of(result.poses) { index -> history.originalPose(index) }
-        } else {
-            null
-        }
-        state = ClosureState.Closed(result, correction)
+        // What the closure did, in metres. Corrected poses are diagnostic output only; measured
+        // runs are not rewritten.
+        val accepted = requireNotNull(result)
+        val correction = CorrectionReport.of(accepted.poses) { index -> history.originalPose(index) }
+        state = ClosureState.Closed(accepted, correction)
         return state
     }
 

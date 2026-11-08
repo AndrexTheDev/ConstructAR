@@ -88,9 +88,8 @@
     <string name="loop_confirm">Derselbe Ort</string>
     <string name="loop_none">Keine Schleife gefunden.</string>
     <string name="loop_closed">Schleife geschlossen: Restfehler %1$s → %2$s.</string>
-    <string name="loop_failed">Der Graph konnte nicht optimiert werden.</string>
+    <string name="loop_failed">Schleife verworfen. Der ursprüngliche Graph wurde wiederhergestellt.</string>
     <string name="loop_shift">Bewegt: %1$d von %2$d Knoten, bis zu %3$s.</string>
-    <string name="loop_unfinished">Der Optimierer hat sein Iterationslimit erreicht: die Kante ist gesetzt, aber es gibt kein Ergebnis. Die Zahlen sind ein Zwischenstand, keine Korrektur.</string>
     <string name="ar_step_scan">1 Scannen</string>
     <string name="ar_step_points">2 Punkte setzen</string>
     <string name="ar_step_finish">3 Speichern</string>

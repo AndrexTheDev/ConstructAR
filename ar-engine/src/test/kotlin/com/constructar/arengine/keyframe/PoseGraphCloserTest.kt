@@ -12,7 +12,6 @@ import com.constructar.core.slam.ClosureCandidate
 import com.constructar.core.slam.ClosurePolicyConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -187,7 +186,7 @@ class PoseGraphCloserTest {
         closer.look(nodeCount = 200, nowMillis = 0L)
 
         val closed = closer.confirm(nowMillis = 1_000L) as ClosureState.Closed
-        val correction = requireNotNull(closed.correction) { "a converged run has a report" }
+        val correction = closed.correction
         assertEquals(2, correction.nodes)
         assertEquals("only the second node moved", 1, correction.movedNodes)
         assertEquals(0.25f, correction.maxShiftMetres, 1e-4f)
@@ -210,13 +209,13 @@ class PoseGraphCloserTest {
         closer.look(nodeCount = 200, nowMillis = 0L)
 
         val closed = closer.confirm(nowMillis = 1_000L) as ClosureState.Closed
-        val correction = requireNotNull(closed.correction) { "a converged run has a report" }
+        val correction = closed.correction
         assertEquals(1, correction.nodes)
         assertEquals(0f, correction.maxShiftMetres, 1e-6f)
     }
 
     @Test
-    fun `a run that did not converge reports no correction at all`() {
+    fun `a run that did not converge fails instead of publishing a half descent`() {
         val source = FakeSource(
             found = listOf(ClosureCandidate(0, 1, 0.2f)),
             result = ClosureOptimisation(
@@ -229,10 +228,35 @@ class PoseGraphCloserTest {
         val closer = closer(source, history = FakeHistory(mapOf(0 to poseAt(0f), 1 to poseAt(0f))))
         closer.look(nodeCount = 200, nowMillis = 0L)
 
-        val closed = closer.confirm(nowMillis = 1_000L) as ClosureState.Closed
-        // The graph was touched - the edge is in it - but the poses are a snapshot halfway down
-        // the cost curve, so there is nothing to compare the operator's measurements against.
-        assertFalse("a run that stopped early has no result", closed.optimisation.converged)
-        assertNull("a half-descent is not a correction", closed.correction)
+        val state = closer.confirm(nowMillis = 1_000L)
+        assertEquals(ClosureState.Failed, state)
+        assertEquals(1, source.optimiseCalls)
+    }
+
+    @Test
+    fun `a converged result that increases cost is rejected`() {
+        val source = FakeSource(
+            found = listOf(ClosureCandidate(0, 1, 0.2f)),
+            result = ClosureOptimisation(initialCost = 0.2f, finalCost = 0.3f, converged = true),
+        )
+        val closer = closer(source)
+        closer.look(nodeCount = 200, nowMillis = 0L)
+        assertEquals(ClosureState.Failed, closer.confirm(nowMillis = 1_000L))
+    }
+
+    @Test
+    fun `a non finite corrected pose is rejected`() {
+        val source = FakeSource(
+            found = listOf(ClosureCandidate(0, 1, 0.2f)),
+            result = ClosureOptimisation(
+                initialCost = 1f,
+                finalCost = 0f,
+                converged = true,
+                poses = listOf(FloatArray(16) { Float.NaN }),
+            ),
+        )
+        val closer = closer(source)
+        closer.look(nodeCount = 200, nowMillis = 0L)
+        assertEquals(ClosureState.Failed, closer.confirm(nowMillis = 1_000L))
     }
 }

@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import com.constructar.arengine.depth.DepthFrameSnapshot
+import com.constructar.arengine.depth.DepthSource
 import com.constructar.arengine.keyframe.KeyframeApplier
 import com.constructar.arengine.keyframe.KeyframeFeed
 import com.constructar.arengine.keyframe.KeyframeQueue
@@ -88,6 +89,8 @@ class TsdfScanPipeline(
         .newSingleThreadExecutor { runnable -> Thread(runnable, "tsdf-worker").apply { isDaemon = true } }
         .asCoroutineDispatcher(),
     private val onMesh: ((ScanMesh) -> Unit)? = null,
+    /** Session remains raw-first; explicit source modes are available for controlled A/B runs. */
+    private val depthAcquisitionMode: DepthAcquisitionMode = DepthAcquisitionMode.PREFER_RAW,
 ) {
     /**
      * Live state for the HUD: the detail budget, the frame queue, the volume limit, the thermal
@@ -114,7 +117,19 @@ class TsdfScanPipeline(
         val hitBlockBudget: Boolean = false,
         val throttleMode: ThrottleMode = ThrottleMode.NOMINAL,
         val meshVersion: Int = 0,
+        /** Actual source and image timing of the last selected integration input. */
+        val lastDepthSource: DepthSource? = null,
+        val lastDepthTimestampNs: Long = 0L,
+        val lastFrameTimestampNs: Long = 0L,
+        /** Bounded reprojection diagnostics and terminal rejection count for fused candidates. */
+        val fusedDepthTemporalRejections: Int = 0,
+        val lastTemporalComparedSamples: Int = 0,
+        val lastTemporalConflictingSamples: Int = 0,
     ) {
+        /** Diagnostic timing mismatch only; Raw Depth freshness uses consecutive image timestamps. */
+        val lastDepthTimestampDiffersFromFrame: Boolean
+            get() = lastDepthTimestampNs > 0L && lastFrameTimestampNs > 0L &&
+                lastDepthTimestampNs != lastFrameTimestampNs
         /**
          * How much of the reference **detail** budget the mesh fills, 0..1 (68 k triangles ≈ a
          * busy room).
@@ -267,18 +282,7 @@ class TsdfScanPipeline(
 
     private var workerJob: kotlinx.coroutines.Job? = null
 
-    private val fusedDepth = java.util.concurrent.atomic.AtomicReference<FusedDepth?>(null)
-
-    /**
-     * Depth produced by the monocular path (AI holes filled), with the moment it was produced.
-     * Copied on submission so the producer can reuse its buffer.
-     */
-    private class FusedDepth(
-        val depthMm: ShortArray,
-        val width: Int,
-        val height: Int,
-        val receivedAtMillis: Long,
-    )
+    private val fusedDepth = java.util.concurrent.atomic.AtomicReference<FusedDepthFrame?>(null)
     private var extractIntervalMs = EXTRACT_INTERVAL_MS
     private var lastExtractNanos = 0L
     private var lastThermalCheckNanos = 0L
@@ -333,7 +337,7 @@ class TsdfScanPipeline(
             ThrottleMode.WARM -> DepthCapture.PIXEL_STEP_NOMINAL + 1
             ThrottleMode.THROTTLED -> DepthCapture.PIXEL_STEP_THROTTLED
         }
-        val snapshot = capture.capture(frame, config.minConfidence) ?: return
+        val snapshot = capture.capture(frame, config.minConfidence, depthAcquisitionMode) ?: return
         maybeUpdateThermalStatus(thermalStatus)
 
         // Down-sample in time as well as in space when the device is hot. Counted, not read off
@@ -374,13 +378,30 @@ class TsdfScanPipeline(
      * Hands a densified depth frame to the integrator.
      *
      * ARCore's own depth stays authoritative *inside* the fused frame (the fusion only fills
-     * holes), so this is a strictly larger measured region, not a replacement. The frame is
-     * dropped after [FUSION_TTL_MS] so a stale network result can never be integrated into
-     * geometry the camera has already moved past.
+     * holes). Filled pixels travel with floor-level confidence, so their larger coverage never
+     * masquerades as equally strong measured evidence. The frame is dropped after [FUSION_TTL_MS]
+     * so a stale network result cannot be integrated into geometry the camera has moved past.
      */
-    fun submitFusedDepth(depthMm: ShortArray, width: Int, height: Int) {
+    fun submitFusedDepth(
+        depthMm: ShortArray,
+        confidence: ByteArray,
+        width: Int,
+        height: Int,
+        source: DepthFrameSnapshot,
+    ) {
         fusedDepth.set(
-            FusedDepth(depthMm.copyOf(), width, height, android.os.SystemClock.elapsedRealtime()),
+            FusedDepthFrame(
+                depthMm = depthMm.copyOf(),
+                confidence = confidence.copyOf(),
+                width = width,
+                height = height,
+                timestampNs = source.timestampNs,
+                intrinsics = source.intrinsics,
+                cameraToWorld = source.cameraToWorld.copyOf(),
+                receivedAtMillis = android.os.SystemClock.elapsedRealtime(),
+                depthTimestampNs = source.depthTimestampNs,
+                source = source.source,
+            ),
         )
     }
 
@@ -409,26 +430,37 @@ class TsdfScanPipeline(
         val startedNanos = System.nanoTime()
         // Read the stride once: the render thread may update `pendingPixelStep` concurrently.
         val pixelStep = pendingPixelStep
-        // Prefer the AI-densified frame when it matches this resolution and is fresh. Its
-        // pixels already passed the confidence filter during fusion, so no confidence image is
-        // applied on top (that would throw away exactly the filled holes).
-        val fusion = fusedDepth.get()?.takeIf {
-            it.width == snapshot.width && it.height == snapshot.height &&
-                android.os.SystemClock.elapsedRealtime() - it.receivedAtMillis < FUSION_TTL_MS
+        // Prefer the AI-densified frame when it matches this resolution and is fresh. Crucially,
+        // its own timestamp, intrinsics and camera pose win too: inference completes after the
+        // camera has moved, and pairing old pixels with the newest pose creates ghost geometry.
+        // Its fused confidence plane preserves measured ARCore values and marks network fills at
+        // the acceptance floor, so native soft weighting can discount them without discarding them.
+        val fusedCandidate = fusedDepth.get()
+        val selected = DepthIntegrationSelector.select(
+            snapshot = snapshot,
+            fused = fusedCandidate,
+            nowMillis = android.os.SystemClock.elapsedRealtime(),
+            fusionTtlMillis = FUSION_TTL_MS,
+            minConfidence = config.minConfidence,
+        )
+        // Contradiction is terminal for this candidate: do not let the same stale inference return
+        // on a later camera view while it is still inside the wall-clock TTL.
+        if (selected.temporalReport?.rejected == true) {
+            fusedDepth.compareAndSet(fusedCandidate, null)
         }
         val result = try {
             active.integrateDepth(
-                depthMm = fusion?.depthMm ?: snapshot.depthMm,
-                width = snapshot.width,
-                height = snapshot.height,
-                rowStrideElements = snapshot.rowStride,
-                confidence = if (fusion != null) null else snapshot.confidence,
-                confidenceWidth = if (fusion != null) 0 else snapshot.confidenceWidth,
-                confidenceHeight = if (fusion != null) 0 else snapshot.confidenceHeight,
-                confidenceRowStride = if (fusion != null) 0 else snapshot.confidenceRowStride,
-                intrinsics = snapshot.intrinsics,
-                cameraToWorld = snapshot.cameraToWorld,
-                timestampNs = snapshot.timestampNs,
+                depthMm = selected.depthMm,
+                width = selected.width,
+                height = selected.height,
+                rowStrideElements = selected.rowStrideElements,
+                confidence = selected.confidence,
+                confidenceWidth = selected.confidenceWidth,
+                confidenceHeight = selected.confidenceHeight,
+                confidenceRowStride = selected.confidenceRowStride,
+                intrinsics = selected.intrinsics,
+                cameraToWorld = selected.cameraToWorld,
+                timestampNs = selected.timestampNs,
                 pixelStep = pixelStep,
             )
         } catch (error: Throwable) {
@@ -436,7 +468,17 @@ class TsdfScanPipeline(
             null
         }
         val integrationMillis = ((System.nanoTime() - startedNanos) / 1_000_000L).toInt()
-        mutableState.value = mutableState.value.afterIntegration(result, integrationMillis)
+        val previousState = mutableState.value
+        val temporalReport = selected.temporalReport
+        mutableState.value = previousState.afterIntegration(result, integrationMillis).copy(
+            lastDepthSource = selected.source,
+            lastDepthTimestampNs = selected.depthTimestampNs,
+            lastFrameTimestampNs = selected.timestampNs,
+            fusedDepthTemporalRejections = previousState.fusedDepthTemporalRejections +
+                if (temporalReport?.rejected == true) 1 else 0,
+            lastTemporalComparedSamples = temporalReport?.comparedSamples ?: 0,
+            lastTemporalConflictingSamples = temporalReport?.conflictingSamples ?: 0,
+        )
 
         // ── Extraction, throttled to 300 ms (700 ms when throttled) ─────────────────────
         val now = System.nanoTime()
@@ -671,14 +713,15 @@ class TsdfScanPipeline(
                 ClosureAction.DISMISS -> closer.dismiss(now)
             }
             if (next is ClosureState.Closed) {
-                // The edge is in the graph whether or not the solver finished, so the count is
-                // every confirmation - but only a converged run has a report to keep, and the
-                // report of an *earlier* closure must not stand in for this one's (finding 252:
-                // assigning through `let` left the previous numbers on screen as if they were
-                // the last closure's).
+                // Only an accepted, converged transaction reaches this state. A failed or rejected
+                // hypothesis has already been removed by `optimizeLastLoop` and is not counted.
                 closedLoops += 1
                 lastClosureConverged = next.optimisation.converged
                 lastCorrection = next.correction
+            } else if (next is ClosureState.Failed) {
+                // Do not leave an earlier correction looking like the result of this failed attempt.
+                lastClosureConverged = false
+                lastCorrection = null
             }
             mutableClosureState.value = next
         }

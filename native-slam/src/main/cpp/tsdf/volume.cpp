@@ -61,6 +61,9 @@ TsdfVolume::TsdfVolume(const TsdfConfig& config) : config_(config) {
   config_.voxelSize = std::max(config_.voxelSize, 0.005f);
   config_.truncationVoxels = std::max(config_.truncationVoxels, 1.f);
   config_.maxDepth = std::max(config_.maxDepth, config_.minDepth + 0.1f);
+  config_.minIncidenceWeight = std::isfinite(config_.minIncidenceWeight)
+                                   ? clampf(config_.minIncidenceWeight, 0.f, 1.f)
+                                   : 0.2f;
   shards_.resize(kShardCount);
   for (auto& shard : shards_) shard = std::make_unique<Shard>();
 }
@@ -149,6 +152,17 @@ float TsdfVolume::observationWeight(float depthMetres) {
   return std::min(std::max(weight, 1.f / 36.f), 4.f);
 }
 
+float TsdfVolume::confidenceWeight(uint8_t confidence) {
+  return static_cast<float>(confidence) / 255.f;
+}
+
+float TsdfVolume::incidenceWeight(float cosine, float floor) {
+  // Unknown geometry must not turn into either certain or rejected evidence.
+  if (!std::isfinite(cosine)) return 1.f;
+  const float safeFloor = std::isfinite(floor) ? clampf(floor, 0.f, 1.f) : 0.2f;
+  return std::max(clampf(std::fabs(cosine), 0.f, 1.f), safeFloor);
+}
+
 const TsdfVolume::Block* TsdfVolume::findBlock(int32_t bx, int32_t by, int32_t bz) const {
   const int64_t key = blockKey(bx, by, bz);
   const Shard& shard = *shards_[shardFor(key)];
@@ -205,6 +219,81 @@ TsdfVolume::Fusion TsdfVolume::fuseVoxel(int32_t ix, int32_t iy, int32_t iz, flo
   return result;
 }
 
+float TsdfVolume::incidenceCosine(const DepthFrameView& frame, int u, int v, float centreDepth) const {
+  // Four immediate neighbours are enough for a local tangent basis and bound the extra work per
+  // accepted ray. Opposite pairs average sensor noise; a one-sided pair keeps plain image borders
+  // usable. A depth discontinuity is not a tangent, so those neighbours are rejected rather than
+  // manufacturing a steep normal at a silhouette.
+  Vec3 neighbour[4];  // left, right, up, down
+  bool valid[4] = {false, false, false, false};
+  const int x[4] = {u - 1, u + 1, u, u};
+  const int y[4] = {v, v, v - 1, v + 1};
+  const float maxDepthJump = std::max(2.f * truncationMeters(), 0.05f * centreDepth);
+  const float confScaleX = frame.confidence
+                               ? static_cast<float>(frame.confidenceWidth) / static_cast<float>(frame.width)
+                               : 0.f;
+  const float confScaleY = frame.confidence
+                               ? static_cast<float>(frame.confidenceHeight) / static_cast<float>(frame.height)
+                               : 0.f;
+
+  for (int i = 0; i < 4; ++i) {
+    if (x[i] < 0 || x[i] >= frame.width || y[i] < 0 || y[i] >= frame.height) continue;
+    const uint16_t raw = frame.depth[static_cast<int64_t>(y[i]) * frame.rowStrideElements + x[i]];
+    if (raw == 0) continue;
+    const float depth = static_cast<float>(raw) * 0.001f;
+    if (depth < config_.minDepth || depth > config_.maxDepth ||
+        std::fabs(depth - centreDepth) > maxDepthJump) {
+      continue;
+    }
+    if (frame.confidence) {
+      const int confX = std::min(frame.confidenceWidth - 1,
+                                 static_cast<int>(static_cast<float>(x[i]) * confScaleX));
+      const int confY = std::min(frame.confidenceHeight - 1,
+                                 static_cast<int>(static_cast<float>(y[i]) * confScaleY));
+      const uint8_t confidence =
+          frame.confidence[static_cast<int64_t>(confY) * frame.confidenceRowStride + confX];
+      if (confidence < config_.minConfidence) continue;
+    }
+    const float px = (static_cast<float>(x[i]) + 0.5f - frame.intrinsics.cx) / frame.intrinsics.fx;
+    const float py = (static_cast<float>(y[i]) + 0.5f - frame.intrinsics.cy) / frame.intrinsics.fy;
+    neighbour[i] = Vec3(px * depth, py * depth, -depth);
+    valid[i] = true;
+  }
+
+  const float centrePx = (static_cast<float>(u) + 0.5f - frame.intrinsics.cx) / frame.intrinsics.fx;
+  const float centrePy = (static_cast<float>(v) + 0.5f - frame.intrinsics.cy) / frame.intrinsics.fy;
+  const Vec3 centre(centrePx * centreDepth, centrePy * centreDepth, -centreDepth);
+
+  Vec3 tangentX;
+  if (valid[0] && valid[1]) {
+    tangentX = (neighbour[1] - neighbour[0]) * 0.5f;
+  } else if (valid[0]) {
+    tangentX = centre - neighbour[0];
+  } else if (valid[1]) {
+    tangentX = neighbour[1] - centre;
+  } else {
+    return 1.f;
+  }
+
+  Vec3 tangentY;
+  if (valid[2] && valid[3]) {
+    tangentY = (neighbour[3] - neighbour[2]) * 0.5f;
+  } else if (valid[2]) {
+    tangentY = centre - neighbour[2];
+  } else if (valid[3]) {
+    tangentY = neighbour[3] - centre;
+  } else {
+    return 1.f;
+  }
+
+  const Vec3 normal = tangentX.cross(tangentY);
+  const float normalLength = normal.length();
+  const float rayLength = centre.length();
+  if (!normal.isFinite() || !(normalLength > 1e-12f) || !(rayLength > 1e-8f)) return 1.f;
+  const float cosine = std::fabs(normal.dot(centre)) / (normalLength * rayLength);
+  return std::isfinite(cosine) ? clampf(cosine, 0.f, 1.f) : 1.f;
+}
+
 void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int rowBegin, int rowEnd,
                                IntegrationStats& stats) {
   const float vs = config_.voxelSize;
@@ -238,10 +327,19 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
       if (rawDepth == 0) continue;
       const float d = static_cast<float>(rawDepth) * 0.001f;
       if (d < minDepth || d > maxDepth) continue;
+      float confidenceScale = 1.f;
       if (confRow) {
         const int confX = std::min(frame.confidenceWidth - 1, static_cast<int>(static_cast<float>(u) * confScaleX));
-        if (confRow[confX] < config_.minConfidence) continue;
+        const uint8_t confidence = confRow[confX];
+        if (confidence < config_.minConfidence) continue;
+        confidenceScale = confidenceWeight(confidence);
       }
+      const float incidenceScale = config_.weightByIncidence
+                                       ? incidenceWeight(incidenceCosine(frame, u, v, d),
+                                                         config_.minIncidenceWeight)
+                                       : 1.f;
+      const float weight = observationWeight(d) * confidenceScale * incidenceScale;
+      if (!(weight > 0.f)) continue;
       ++rays;
 
       // Camera-space ray through the pixel centre. ARCore's camera looks down −Z and raw
@@ -271,7 +369,7 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
           // behaviour - spent 40 % of the voxels in the volume on empty air: 444 blocks for a
           // single wall became 1 196 and every later gather walked them (finding 111).
           // Free space is fully outside: sdf = +1 in normalised units.
-          if (fuseVoxel(ix, iy, iz, 1.f, 1.f, /*existingOnly=*/true).written) ++updates;
+          if (fuseVoxel(ix, iy, iz, 1.f, weight, /*existingOnly=*/true).written) ++updates;
         }
       }
       const int steps = std::max(2, static_cast<int>(std::ceil((zEnd - zStart) / vs)));
@@ -299,10 +397,11 @@ void TsdfVolume::integrateRows(const DepthFrameView& frame, int pixelStep, int r
         const float sdf = d - z;
         const float clamped = clampf(sdf / trunc, -1.f, 1.f);
 
-        const float weight = observationWeight(d);
-        // Lookup, allocation and fusion in one locked step (finding 181). The observation is
-        // weighted by its range: a depth reading's error grows with Z, so the same pixel at 4 m
-        // is worth a sixteenth of one at 1 m in the running average.
+        // Lookup, allocation and fusion in one locked step (finding 181). Range, source confidence
+        // and local incidence scale the observation: a pixel at 4 m is worth a sixteenth of one at
+        // 1 m, an AI fill at the 96/255 floor carries less evidence than a certain ARCore hit, and
+        // a locally measured graze is discounted without becoming a hard rejection. Missing
+        // confidence or an unknowable normal retains its neutral unit multiplier.
         const Fusion fused = fuseVoxel(ix, iy, iz, clamped, weight);
         if (fused.allocated) ++allocated;
         if (fused.written) {
@@ -351,6 +450,7 @@ IntegrationStats TsdfVolume::integrate(const DepthFrameView& frame, int pixelSte
       stats.raysProcessed += p.raysProcessed;
       stats.voxelUpdates += p.voxelUpdates;
       stats.blocksAllocated += p.blocksAllocated;
+      stats.voxelWeight += p.voxelWeight;
     }
   }
 

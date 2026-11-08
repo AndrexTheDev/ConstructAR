@@ -88,9 +88,8 @@
     <string name="loop_confirm">To samo miejsce</string>
     <string name="loop_none">Nie znaleziono pętli.</string>
     <string name="loop_closed">Pętla zamknięta: błąd resztkowy %1$s → %2$s.</string>
-    <string name="loop_failed">Nie udało się zoptymalizować grafu.</string>
+    <string name="loop_failed">Zamknięcie odrzucone. Przywrócono pierwotny graf.</string>
     <string name="loop_shift">Przesunięto %1$d z %2$d węzłów, do %3$s.</string>
-    <string name="loop_unfinished">Optymalizator wykorzystał limit iteracji: krawędź jest dodana, ale nie ma wyniku. Te liczby to stan pośredni, nie korekta.</string>
     <string name="ar_step_scan">1 Skanuj</string>
     <string name="ar_step_points">2 Zaznacz punkty</string>
     <string name="ar_step_finish">3 Zapisz</string>

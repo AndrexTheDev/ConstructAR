@@ -53,6 +53,7 @@ class AiDepthFusionTest {
             relative = flatRelative(),
             calibration = usableCalibration(),
             out = out,
+            confidenceOut = ByteArray(width * height),
         )
         assertEquals(width * height / 2, result.measuredPixels)
         assertEquals(width * height / 2, result.filledPixels)
@@ -62,6 +63,8 @@ class AiDepthFusionTest {
             val column = index % width
             if (column < width / 2) assertEquals(2000, out[index].toInt() and 0xFFFF)
             else assertEquals(1000, out[index].toInt() and 0xFFFF) // 1 m from the calibration
+            val expectedConfidence = if (column < width / 2) 255 else 96
+            assertEquals(expectedConfidence, result.confidence[index].toInt() and 0xFF)
         }
     }
 
@@ -80,9 +83,48 @@ class AiDepthFusionTest {
             relative = flatRelative(),
             calibration = usableCalibration(),
             out = out,
+            confidenceOut = ByteArray(width * height),
         )
         assertEquals(0, result.measuredPixels)
         assertEquals(width * height, result.filledPixels)
+    }
+
+    @Test
+    fun `malformed or aliased confidence planes are refused instead of promoted`() {
+        val source = ByteArray(width * height) { 0x7f }
+        val invalidLayout = runCatching {
+            AiDepthFusion.fuse(
+                arcoreMm = halfMeasured(),
+                confidence = source,
+                confidenceWidth = 0,
+                confidenceHeight = height,
+                confidenceRowStride = width,
+                width = width,
+                height = height,
+                relative = flatRelative(),
+                calibration = usableCalibration(),
+                out = ShortArray(width * height),
+                confidenceOut = ByteArray(width * height),
+            )
+        }.exceptionOrNull()
+        assertTrue(invalidLayout is IllegalArgumentException)
+
+        val aliased = runCatching {
+            AiDepthFusion.fuse(
+                arcoreMm = halfMeasured(),
+                confidence = source,
+                confidenceWidth = width,
+                confidenceHeight = height,
+                confidenceRowStride = width,
+                width = width,
+                height = height,
+                relative = flatRelative(),
+                calibration = usableCalibration(),
+                out = ShortArray(width * height),
+                confidenceOut = source,
+            )
+        }.exceptionOrNull()
+        assertTrue(aliased is IllegalArgumentException)
     }
 
     @Test
@@ -99,11 +141,42 @@ class AiDepthFusionTest {
             relative = flatRelative(),
             calibration = MetricDepthCalibrator.Calibration.IDENTITY,
             out = out,
+            confidenceOut = ByteArray(width * height),
         )
         assertFalse(result.usedNetwork)
         assertEquals(0, result.filledPixels)
         for (index in 0 until width * height) {
             assertEquals(halfMeasured()[index].toInt() and 0xFFFF, out[index].toInt() and 0xFFFF)
+        }
+    }
+
+    @Test
+    fun `an unusable calibration does not smuggle low confidence samples into a fused frame`() {
+        val out = ShortArray(width * height) { (-1).toShort() }
+        val confidenceOut = ByteArray(width * height) { 0x7f } // pooled stale evidence must be cleared
+        val confidence = ByteArray(width * height) { index -> if (index % 2 == 0) 10 else 0xFF.toByte() }
+        val result = AiDepthFusion.fuse(
+            arcoreMm = ShortArray(width * height) { 2_000 },
+            confidence = confidence,
+            confidenceWidth = width,
+            confidenceHeight = height,
+            confidenceRowStride = width,
+            width = width,
+            height = height,
+            relative = flatRelative(),
+            calibration = MetricDepthCalibrator.Calibration.IDENTITY,
+            out = out,
+            confidenceOut = confidenceOut,
+        )
+
+        assertFalse(result.usedNetwork)
+        assertEquals(width * height / 2, result.measuredPixels)
+        assertEquals(0, result.filledPixels)
+        for (index in out.indices) {
+            val expected = if (index % 2 == 0) 0 else 2_000
+            assertEquals("pixel $index", expected, out[index].toInt() and 0xFFFF)
+            val expectedConfidence = if (index % 2 == 0) 0 else 255
+            assertEquals("confidence $index", expectedConfidence, confidenceOut[index].toInt() and 0xFF)
         }
     }
 
@@ -123,6 +196,7 @@ class AiDepthFusionTest {
             relative = farRelative,
             calibration = calibration,
             out = out,
+            confidenceOut = ByteArray(width * height),
         )
         assertTrue(result.usedNetwork)
         // 1/0.0001 = 10 000 m → clamped to 8 m.

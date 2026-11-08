@@ -9,6 +9,7 @@ package com.constructar.arengine.ai
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.random.Random
 
 /**
  * Turns Depth Anything V2's **relative** depth into metric depth using ARCore's sparse
@@ -39,10 +40,11 @@ import kotlin.math.min
  *
  * ARCore depth is noisy on glass, mirrors and dark cable trays, and it is *wrong* wherever the
  * reflection of a corridor appears behind a window. A plain least-squares fit lets those
- * outliers bend the scale. [calibrate] therefore runs iteratively reweighted least squares
- * (IRLS) with a Huber weight, seeded by a confidence-weighted fit, and reports the inlier
- * ratio so the caller can refuse the result ("re-scan, depth too weak here") instead of
- * silently measuring 8 % long.
+ * outliers bend the scale. [calibrate] therefore starts with deterministic RANSAC, estimates a
+ * data-dependent residual scale from the median absolute deviation (MAD), and refines with
+ * Tukey-biweight IRLS. Gross outliers get zero weight instead of merely a smaller one. The final
+ * inlier ratio is measured independently so the caller can refuse the result ("re-scan, depth
+ * too weak here") instead of silently measuring 8 % long.
  *
  * The class is pure Kotlin with no Android imports so it runs in host unit tests.
  */
@@ -56,10 +58,18 @@ class MetricDepthCalibrator(private val config: Config = Config()) {
         val maxDepthMeters: Float = 8f,
         /** Samples whose confidence is below this are ignored outright. */
         val minConfidence: Int = 96,
-        /** IRLS iterations after the initial fit. */
+        /** Deterministic affine RANSAC attempts before IRLS. */
+        val ransacIterations: Int = 64,
+        /** Minimum relative-output separation of a RANSAC pair; avoids ill-conditioned seeds. */
+        val ransacMinPairSeparation: Float = 0.02f,
+        /** IRLS iterations after the RANSAC seed. */
         val irlsIterations: Int = 4,
-        /** Huber threshold in normalised-residual units. */
+        /** Inlier threshold in robust-standard-deviation units. */
         val huberK: Float = 1.5f,
+        /** Tukey's standard redescending tuning constant; residuals beyond this get zero weight. */
+        val tukeyK: Float = 4.685f,
+        /** Sensor/model-noise floor in inverse-depth units; prevents a zero MAD degenerating IRLS. */
+        val minResidualScaleDisparity: Float = 0.02f,
         /** Refuse the calibration when fewer samples survive as inliers. */
         val minInlierRatio: Float = 0.55f,
         /** Refuse when the inlier RMS in disparity units exceeds this. */
@@ -132,36 +142,36 @@ class MetricDepthCalibrator(private val config: Config = Config()) {
         }
         if (count < config.minSamples) return Calibration.IDENTITY
 
-        // 2. Weighted affine fit inv ≈ s·rel + t, then IRLS with Huber weights.
-        // Non-nullable from here on: `fit` is reassigned inside the `repeat` lambda below, and a
-        // smart cast on a captured nullable local does not survive that.
-        var fit: Pair<Float, Float> = weightedAffine(rel, inv, weights, count)
+        // 2. RANSAC finds the dominant affine basin before any least-squares fit can be bent by
+        // gross outliers. Tukey IRLS then refines it; unlike plain Huber IRLS, its redescending
+        // weight is exactly zero beyond the tuning cutoff and cannot walk back into that basin.
+        var fit: Pair<Float, Float> = ransacSeed(rel, inv, weights, count)
             ?: return Calibration.IDENTITY
-
         val robust = FloatArray(count)
-        System.arraycopy(weights, 0, robust, 0, count)
-        var rms = Float.MAX_VALUE
+        val residuals = FloatArray(count)
         repeat(max(0, config.irlsIterations)) {
-            val current = weightedAffine(rel, inv, robust, count) ?: return Calibration.IDENTITY
-            fit = current
-            // Residuals → Huber weights.
-            var sumSquared = 0.0
+            for (i in 0 until count) residuals[i] = fit.first * rel[i] + fit.second - inv[i]
+            val scale = robustScale(residuals)
+            val tukeyScale = max(1e-6f, config.tukeyK * scale)
             for (i in 0 until count) {
-                val residual = abs(current.first * rel[i] + current.second - inv[i])
-                sumSquared += residual.toDouble() * residual
-                val scale = max(1e-4f, residual)
-                robust[i] = weights[i] * if (scale <= config.huberK * 0.02f) 1f
-                else (config.huberK * 0.02f) / scale
+                val u = abs(residuals[i]) / tukeyScale
+                robust[i] = if (u >= 1f) 0f else {
+                    val oneMinusSquare = 1f - u * u
+                    weights[i] * oneMinusSquare * oneMinusSquare
+                }
             }
-            rms = kotlin.math.sqrt(sumSquared / count).toFloat()
+            fit = weightedAffine(rel, inv, robust, count) ?: return Calibration.IDENTITY
         }
 
-        // 3. Final inlier statistics on the unweighted residuals.
+        // 3. Final inlier statistics on the unweighted residuals. The scale comes from the MAD,
+        // never from an all-sample RMS: a few metre-sized errors must not define their own gate.
+        for (i in 0 until count) residuals[i] = fit.first * rel[i] + fit.second - inv[i]
+        val inlierCutoff = max(1e-6f, config.huberK * robustScale(residuals))
         var inliers = 0
         var squared = 0.0
         for (i in 0 until count) {
-            val residual = abs(fit.first * rel[i] + fit.second - inv[i])
-            if (residual <= max(config.huberK * 0.02f, 2f * rms)) {
+            val residual = abs(residuals[i])
+            if (residual <= inlierCutoff) {
                 inliers++
                 squared += residual.toDouble() * residual
             }
@@ -181,6 +191,78 @@ class MetricDepthCalibrator(private val config: Config = Config()) {
                 inlierRatio >= config.minInlierRatio &&
                 inlierRms <= config.maxInlierRmsDisparity,
         )
+    }
+
+    /** Deterministic two-point RANSAC for the affine inverse-depth model. */
+    private fun ransacSeed(
+        rel: FloatArray,
+        inv: FloatArray,
+        baseWeights: FloatArray,
+        count: Int,
+    ): Pair<Float, Float>? {
+        if (config.ransacIterations <= 0) return weightedAffine(rel, inv, baseWeights, count)
+        val random = Random(RANSAC_SEED)
+        val cutoff = max(1e-6f, config.huberK * config.minResidualScaleDisparity)
+        var bestCost = Double.POSITIVE_INFINITY
+        var bestInlierWeight = -1.0
+        var best: Pair<Float, Float>? = null
+
+        repeat(config.ransacIterations) {
+            val first = random.nextInt(count)
+            var second = random.nextInt(count)
+            var attempts = 0
+            while ((second == first || abs(rel[second] - rel[first]) < config.ransacMinPairSeparation) &&
+                attempts < 11
+            ) {
+                second = random.nextInt(count)
+                attempts++
+            }
+            if (second == first || abs(rel[second] - rel[first]) < config.ransacMinPairSeparation) {
+                return@repeat
+            }
+            val scale = (inv[second] - inv[first]) / (rel[second] - rel[first])
+            val shift = inv[first] - scale * rel[first]
+            if (!scale.isFinite() || !shift.isFinite() || scale <= 1e-5f || scale >= config.maxAbsScale) {
+                return@repeat
+            }
+
+            // Truncated least squares: every gross outlier has the same bounded cost, so a pair
+            // sampled from a 25 % contamination tail cannot outscore the dominant surface model.
+            var cost = 0.0
+            var inlierWeight = 0.0
+            for (i in 0 until count) {
+                val residual = scale * rel[i] + shift - inv[i]
+                val normalised = residual / cutoff
+                val weight = baseWeights[i].toDouble()
+                if (abs(normalised) <= 1f) {
+                    cost += weight * normalised * normalised
+                    inlierWeight += weight
+                } else {
+                    cost += weight
+                }
+            }
+            if (cost < bestCost || (cost == bestCost && inlierWeight > bestInlierWeight)) {
+                bestCost = cost
+                bestInlierWeight = inlierWeight
+                best = scale to shift
+            }
+        }
+        return best ?: weightedAffine(rel, inv, baseWeights, count)
+    }
+
+    /** 1.4826·MAD, with a declared model-noise floor for an almost noiseless synthetic field. */
+    private fun robustScale(residuals: FloatArray): Float {
+        val centre = median(residuals)
+        val deviations = FloatArray(residuals.size) { abs(residuals[it] - centre) }
+        return max(config.minResidualScaleDisparity, MAD_TO_SIGMA * median(deviations))
+    }
+
+    private fun median(values: FloatArray): Float {
+        val sorted = values.copyOf()
+        sorted.sort()
+        val middle = sorted.size / 2
+        return if (sorted.size % 2 == 0) (sorted[middle - 1] + sorted[middle]) * 0.5f
+        else sorted[middle]
     }
 
     /** Weighted least squares for `y = a·x + b`; null when degenerate. */
@@ -211,6 +293,9 @@ class MetricDepthCalibrator(private val config: Config = Config()) {
     }
 
     companion object {
+        private const val RANSAC_SEED = 0x5EED
+        private const val MAD_TO_SIGMA = 1.4826f
+
         /**
          * Applies a calibration to a whole relative-depth map, in place, and returns the
          * metric depth map (metres). Values outside [Calibration.MIN_DEPTH_METERS,

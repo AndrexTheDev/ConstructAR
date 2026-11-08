@@ -23,9 +23,10 @@ import java.util.concurrent.atomic.AtomicReference
  * throttle to every 500 ms            YUV → ARGB → Bitmap
  * copy YUV planes  (memcpy)           Depth Anything V2 (XNNPACK, 4 threads)
  * copy depth + confidence             sample ARCore↔network pairs
- * submit ───────────────────────────► MetricDepthCalibrator (IRLS + Huber)
+ * submit ───────────────────────────► MetricDepthCalibrator (RANSAC + MAD + Tukey IRLS)
+ *                                     SpatialCalibrationGuard → regional fill veto
  *                                     AiDepthFusion → fused millimetre depth
- *                                     onFused(depth, w, h, timestamp)
+ *                                     onFused(depth, confidence, w, h, source geometry)
  * ```
  *
  * Why the copies: the ARCore `Image` and the pipeline's pooled depth buffer both become
@@ -44,8 +45,18 @@ class MonocularDepthSource(
     private val config: MonocularDepthEstimator.Config = MonocularDepthEstimator.Config(),
     private val intervalMillis: Long = 500L,
     private val minConfidence: Int = 96,
-    /** Called on the worker thread when a fused depth frame is ready. */
-    private val onFused: (depthMm: ShortArray, width: Int, height: Int, timestampNs: Long) -> Unit,
+    /**
+     * Called on the worker thread when a fused depth frame is ready. [DepthFrameSnapshot] is the
+     * immutable acquisition metadata of the exact frame used for inference; the consumer copies
+     * its pose/intrinsics before the next integration. Its pooled pixel arrays are not read here.
+     */
+    private val onFused: (
+        depthMm: ShortArray,
+        confidence: ByteArray,
+        width: Int,
+        height: Int,
+        source: DepthFrameSnapshot,
+    ) -> Unit,
     /**
      * Called once, on the worker thread, with whether the model loaded.
      *
@@ -66,6 +77,7 @@ class MonocularDepthSource(
     /** Reused copies of the frame's depth and confidence planes (finding 173). */
     private val scratch = ScratchPlanes()
     @Volatile private var fusedBuffer = ShortArray(640 * 480)
+    @Volatile private var fusedConfidenceBuffer = ByteArray(640 * 480)
 
     @Volatile private var lastRunMillis = 0L
 
@@ -74,6 +86,12 @@ class MonocularDepthSource(
         private set
 
     @Volatile var lastFillRatio: Float = 0f
+        private set
+
+    @Volatile var lastSpatiallyRejectedPixels: Int = 0
+        private set
+
+    @Volatile var lastSpatialRejectedRegions: Int = 0
         private set
 
     /** True once the model has been loaded and at least one inference succeeded. */
@@ -159,7 +177,7 @@ class MonocularDepthSource(
             bitmap.recycle()
         } ?: return
 
-        val (relativeSamples, metricSamples) = AiDepthFusion.calibrationSamples(
+        val samples = AiDepthFusion.calibrationSamples(
             arcoreMm = arcoreMm,
             confidence = confidence,
             confidenceWidth = snapshot.confidenceWidth,
@@ -171,16 +189,22 @@ class MonocularDepthSource(
             minConfidence = minConfidence,
         )
 
-        val calibration = MetricDepthCalibrator().calibrate(relativeSamples, metricSamples)
+        val calibration = MetricDepthCalibrator().calibrate(samples.relativeValues, samples.metricMeters)
         lastCalibration = calibration
         if (!calibration.isUsable) {
+            lastFillRatio = 0f
+            lastSpatiallyRejectedPixels = 0
+            lastSpatialRejectedRegions = 0
             Log.i(TAG, "calibration refused (inliers=${(calibration.inlierRatio * 100).toInt()} %) — ARCore depth only")
             return
         }
+        val spatialMask = SpatialCalibrationGuard.evaluate(samples, calibration)
+        lastSpatialRejectedRegions = spatialMask.rejectedRegionCount
 
         if (fusedBuffer.size < width * height) {
-            // Only reallocates when the device switches depth resolution; then it keeps it.
+            // Only reallocates when the device switches depth resolution; then it keeps both.
             fusedBuffer = ShortArray(width * height)
+            fusedConfidenceBuffer = ByteArray(width * height)
         }
 
         val result = AiDepthFusion.fuse(
@@ -194,12 +218,15 @@ class MonocularDepthSource(
             relative = relative,
             calibration = calibration,
             out = fusedBuffer,
+            confidenceOut = fusedConfidenceBuffer,
             minConfidence = minConfidence,
+            spatialMask = spatialMask,
         )
         lastFillRatio = result.fillRatio
+        lastSpatiallyRejectedPixels = result.spatiallyRejectedPixels
         isRunning = true
         if (result.usedNetwork) {
-            onFused(fusedBuffer, width, height, yuv.timestampNs)
+            onFused(fusedBuffer, fusedConfidenceBuffer, width, height, snapshot)
         }
     }
 
